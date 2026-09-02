@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "자연어에서 코드를 생성하고, 작업을 자동화하며, 터미널 명령을 실행하는 오픈소스 AI 코딩 에이전트입니다. 인라인 자동 완성, 브라우저 자동화, 자동 리팩토링, 계획, 코딩 및 디버깅을 위한 사용자 정의 모드를 제공합니다. Claude (Anthropic), Gemini, Grok, GPT, Codex, GLM을 포함한 500개 이상의 AI 모델을 지원합니다.",
+	"extension.description": "v5.16.2 코드베이스를 기반으로 한 안정적인 오픈 소스 AI 코딩 에이전트입니다. OpenAI 호환 API, OpenAI Codex, Claude Code, Ollama, LM Studio를 지원하며 모델을 빠르게 전환할 수 있습니다.",
 	"command.newTask.title": "새 작업",
 	"command.explainCode.title": "코드 설명",
 	"command.fixCode.title": "코드 수정",
@@ -16,7 +16,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: 터미널 명령어 생성",
 	"command.acceptInput.title": "입력/제안 수락",
 	"command.toggleAutoApprove.title": "자동 승인 전환",
-	"command.generateCommitMessage.title": "Kilo로 커밋 메시지 생성",
+	"command.generateCommitMessage.title": "IVOL Code로 커밋 메시지 생성",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",

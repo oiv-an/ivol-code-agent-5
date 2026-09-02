@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Musisz z nami porozmawiać? Napisz"
 		},
-		"community": "Chcesz wskazówek lub po prostu porozmawiać z innymi użytkownikami IVOL Code? Dołącz do <redditLink>reddit.com/r/kilocode</redditLink> lub <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Wskazówki i aktualności dotyczące IVOL Code znajdziesz w naszym projekcie GitHub: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "Kontakt i Społeczność",
 		"manageSettings": "Zarządzaj Ustawieniami",
 		"debugMode": {
@@ -625,7 +625,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Limit błędów i powtórzeń",
-			"description": "Liczba kolejnych błędów lub powtórzonych akcji przed wyświetleniem okna dialogowego 'Kilo ma problemy'. Ustaw na 0, aby wyłączyć ten mechanizm bezpieczeństwa (nigdy się nie uruchomi).",
+			"description": "Liczba kolejnych błędów lub powtórzonych akcji przed wyświetleniem okna dialogowego 'IVOL Code ma problemy'. Ustaw na 0, aby wyłączyć ten mechanizm bezpieczeństwa (nigdy się nie uruchomi).",
 			"unlimitedDescription": "Włączono nieograniczone próby (automatyczne kontynuowanie). Okno dialogowe nigdy się nie pojawi.",
 			"warning": "⚠️ Ustawienie na 0 pozwala na nieograniczone próby, co może zużyć znaczną ilość API"
 		},
@@ -1042,7 +1042,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Włącz niestandardowe narzędzia",
-			"description": "Gdy włączone, Kilo może ładować i używać niestandardowych narzędzi TypeScript/JavaScript z katalogu .kilocode/tools Twojego projektu lub ~/.kilocode/tools dla narzędzi globalnych. Uwaga: te narzędzia będą automatycznie zatwierdzane.",
+			"description": "Gdy włączone, IVOL Code może ładować i używać niestandardowych narzędzi TypeScript/JavaScript z katalogu .kilocode/tools Twojego projektu lub ~/.kilocode/tools dla narzędzi globalnych. Uwaga: te narzędzia będą automatycznie zatwierdzane.",
 			"toolsHeader": "Dostępne niestandardowe narzędzia",
 			"noTools": "Nie załadowano niestandardowych narzędzi. Dodaj pliki .ts lub .js do katalogu .kilocode/tools swojego projektu lub ~/.kilocode/tools dla narzędzi globalnych.",
 			"refreshButton": "Odśwież",
@@ -1094,7 +1094,7 @@
 		"allModels": "Wszystkie modele"
 	},
 	"footer": {
-		"feedback": "Jeśli masz jakiekolwiek pytania lub opinie, śmiało otwórz zgłoszenie na <githubLink>github.com/Kilo-Org/kilocode</githubLink> lub dołącz do <redditLink>reddit.com/r/kilocode</redditLink> lub <discordLink>kilo.ai/discord</discordLink>",
+		"feedback": "Jeśli masz pytanie lub opinię, otwórz zgłoszenie na <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "W sprawach finansowych skontaktuj się z Obsługą Klienta pod adresem <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Zezwól na anonimowe raportowanie błędów i użycia",

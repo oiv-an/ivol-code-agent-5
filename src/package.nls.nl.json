@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Open Source AI codeer-agent die code genereert uit natuurlijke taal, taken automatiseert en terminal-commando's uitvoert. Met inline automatisch aanvullen, browser-automatisering, automatische refactoring en aangepaste modi voor planning, codering en debugging. Ondersteunt 500+ AI-modellen waaronder Claude (Anthropic), Gemini, Grok, GPT, Codex en GLM.",
+	"extension.description": "Stabiele open-source AI-codeeragent op de v5.16.2-codebasis. Ondersteunt OpenAI-compatibele API's, OpenAI Codex, Claude Code, Ollama en LM Studio, met snel wisselen tussen modellen.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.sidebar.name": "IVOL Code Agent 5",
@@ -28,7 +28,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Genereer Terminal Commando",
 	"command.acceptInput.title": "Invoer/Suggestie Accepteren",
 	"command.toggleAutoApprove.title": "Auto-Goedkeuring Schakelen",
-	"command.generateCommitMessage.title": "Genereer commit bericht met Kilo",
+	"command.generateCommitMessage.title": "Genereer commit bericht met IVOL Code",
 	"command.profile.title": "Profiel",
 	"configuration.title": "IVOL Code Agent 5",
 	"commands.allowedCommands.description": "Commando's die automatisch kunnen worden uitgevoerd wanneer 'Altijd goedkeuren uitvoerbewerkingen' is ingeschakeld",

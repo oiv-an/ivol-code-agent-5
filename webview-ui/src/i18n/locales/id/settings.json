@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Perlu bicara dengan kami? Tulis"
 		},
-		"community": "Ingin tips atau hanya nongkrong dengan pengguna IVOL Code lainnya? Bergabunglah dengan <redditLink>reddit.com/r/kilocode</redditLink> atau <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Untuk mendapatkan tips dan kabar terbaru IVOL Code, kunjungi proyek kami di GitHub: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "Kontak & Komunitas",
 		"manageSettings": "Kelola Pengaturan",
 		"debugMode": {
@@ -625,7 +625,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Batas Kesalahan & Pengulangan",
-			"description": "Jumlah kesalahan berturut-turut atau tindakan berulang sebelum menampilkan dialog 'Kilo mengalami masalah'. Atur ke 0 untuk menonaktifkan mekanisme keamanan ini (tidak akan pernah terpicu).",
+			"description": "Jumlah kesalahan berturut-turut atau tindakan berulang sebelum menampilkan dialog 'IVOL Code mengalami masalah'. Atur ke 0 untuk menonaktifkan mekanisme keamanan ini (tidak akan pernah terpicu).",
 			"unlimitedDescription": "Percobaan ulang tak terbatas diaktifkan (lanjut otomatis). Dialog tidak akan pernah muncul.",
 			"warning": "⚠️ Mengatur ke 0 memungkinkan percobaan ulang tak terbatas yang dapat menghabiskan penggunaan API yang signifikan"
 		},
@@ -863,11 +863,11 @@
 		},
 		"outputLineLimit": {
 			"label": "Batas keluaran terminal",
-			"description": "Menyimpan baris pertama dan terakhir dan membuang yang tengah agar tetap di bawah batas. Turunkan untuk menghemat token; naikkan untuk memberi Kilo lebih banyak detail tengah. Kilo melihat placeholder di mana konten dilewati.<0>Pelajari lebih lanjut</0>"
+			"description": "Menyimpan baris pertama dan terakhir dan membuang yang tengah agar tetap di bawah batas. Turunkan untuk menghemat token; naikkan untuk memberi IVOL Code lebih banyak detail tengah. IVOL Code melihat placeholder di mana konten dilewati.<0>Pelajari lebih lanjut</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "Batas karakter terminal",
-			"description": "Override batas baris untuk mencegah masalah memori dengan memberlakukan cap keras pada ukuran output. Jika terlampaui, simpan awal dan akhir lalu tampilkan placeholder ke Kilo di mana konten dilewati. <0>Pelajari lebih lanjut</0>"
+			"description": "Override batas baris untuk mencegah masalah memori dengan memberlakukan cap keras pada ukuran output. Jika terlampaui, simpan awal dan akhir lalu tampilkan placeholder ke IVOL Code di mana konten dilewati. <0>Pelajari lebih lanjut</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "Timeout integrasi shell terminal",
@@ -875,7 +875,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "Gunakan Terminal Inline (disarankan)",
-			"description": "Jalankan perintah di Terminal Inline (obrolan) untuk melewati profil/integrasi shell untuk proses lebih cepat dan andal. Saat dinonaktifkan, Kilo menggunakan terminal VS Code dengan profil shell, prompt, dan plugin Anda. <0>Pelajari lebih lanjut</0>"
+			"description": "Jalankan perintah di Terminal Inline (obrolan) untuk melewati profil/integrasi shell untuk proses lebih cepat dan andal. Saat dinonaktifkan, IVOL Code menggunakan terminal VS Code dengan profil shell, prompt, dan plugin Anda. <0>Pelajari lebih lanjut</0>"
 		},
 		"commandDelay": {
 			"label": "Delay perintah terminal",
@@ -1063,7 +1063,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Aktifkan tool kustom",
-			"description": "Ketika diaktifkan, Kilo dapat memuat dan menggunakan tool kustom TypeScript/JavaScript dari direktori .kilocode/tools proyek kamu atau ~/.kilocode/tools untuk tool global. Catatan: tool ini akan otomatis disetujui.",
+			"description": "Ketika diaktifkan, IVOL Code dapat memuat dan menggunakan tool kustom TypeScript/JavaScript dari direktori .kilocode/tools proyek kamu atau ~/.kilocode/tools untuk tool global. Catatan: tool ini akan otomatis disetujui.",
 			"toolsHeader": "Tool Kustom yang Tersedia",
 			"noTools": "Tidak ada tool kustom yang dimuat. Tambahkan file .ts atau .js ke direktori .kilocode/tools proyek kamu atau ~/.kilocode/tools untuk tool global.",
 			"refreshButton": "Refresh",
@@ -1115,7 +1115,7 @@
 		"allModels": "Semua model"
 	},
 	"footer": {
-		"feedback": "Jika kamu punya pertanyaan atau feedback, jangan ragu untuk membuka issue di <githubLink>github.com/Kilo-Org/kilocode</githubLink> atau bergabung <redditLink>reddit.com/r/kilocode</redditLink> atau <discordLink>kilo.ai/discord</discordLink>",
+		"feedback": "Jika kamu memiliki pertanyaan atau masukan, buka issue di <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "Untuk pertanyaan keuangan, silakan hubungi Customer Support di <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Izinkan pelaporan error dan penggunaan",

@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "وكيل برمجة ذكاء اصطناعي مفتوح المصدر يولّد الكود من اللغة الطبيعية، ويؤتمت المهام، وينفذ أوامر الطرفية. يتميز بالإكمال التلقائي المضمّن، وأتمتة المتصفح، وإعادة الهيكلة الآلية، وأنماط مخصصة للتخطيط والبرمجة وتصحيح الأخطاء. يدعم أكثر من 500 نموذج ذكاء اصطناعي بما في ذلك Claude (Anthropic) و Gemini و Grok و GPT و Codex و GLM.",
+	"extension.description": "وكيل AI مستقر ومفتوح المصدر للبرمجة، مبني على قاعدة الشفرة v5.16.2. يدعم واجهات API المتوافقة مع OpenAI وOpenAI Codex وClaude Code وOllama وLM Studio، مع تبديل سريع بين النماذج.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.activitybar.title": "IVOL Code Agent 5",
@@ -27,7 +27,7 @@
 	"command.terminal.explainCommand.title": "شرح هذا الأمر",
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: إنشاء أمر الطرفية",
 	"command.acceptInput.title": "اعتماد الإدخال أو الاقتراح",
-	"command.generateCommitMessage.title": "توليد رسالة الاعتماد بواسطة Kilo",
+	"command.generateCommitMessage.title": "توليد رسالة الاعتماد بواسطة IVOL Code",
 	"command.profile.title": "الملف الشخصي",
 	"command.toggleAutoApprove.title": "تبديل الموافقة التلقائية",
 	"configuration.title": "IVOL Code Agent 5",

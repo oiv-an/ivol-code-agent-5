@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "开源 AI 编码代理，可从自然语言生成代码、自动化任务并运行终端命令。具有内联自动补全、浏览器自动化、自动重构以及用于规划、编码和调试的自定义模式。支持 500 多种 AI 模型，包括 Claude (Anthropic)、Gemini、Grok、GPT、Codex 和 GLM。",
+	"extension.description": "基于 v5.16.2 代码库的稳定开源 AI 编程代理。支持 OpenAI 兼容 API、OpenAI Codex、Claude Code、Ollama 和 LM Studio，并可在模型之间快速切换。",
 	"command.newTask.title": "新建任务",
 	"command.explainCode.title": "解释代码",
 	"command.fixCode.title": "修复代码",
@@ -16,7 +16,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: 生成终端命令",
 	"command.acceptInput.title": "接受输入/建议",
 	"command.toggleAutoApprove.title": "切换自动批准",
-	"command.generateCommitMessage.title": "使用 Kilo 生成提交消息",
+	"command.generateCommitMessage.title": "使用 IVOL Code 生成提交消息",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",

@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "需要联系我们？请发送邮件至"
 		},
-		"community": "想要获取使用技巧或与其他 IVOL Code 用户交流？加入 <redditLink>reddit.com/r/kilocode</redditLink> 或 <discordLink>kilo.ai/discord</discordLink>",
+		"community": "如需 IVOL Code 使用技巧和最新动态，请访问我们的 GitHub 项目：<redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>。",
 		"contactAndCommunity": "联系与社区",
 		"manageSettings": "管理设置",
 		"debugMode": {
@@ -625,7 +625,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "错误和重复限制",
-			"description": "在显示“Kilo遇到问题”对话框前允许的连续错误或重复操作次数。设置为 0 可禁用此安全机制（它将永远不会触发）。",
+			"description": "在显示“IVOL Code遇到问题”对话框前允许的连续错误或重复操作次数。设置为 0 可禁用此安全机制（它将永远不会触发）。",
 			"unlimitedDescription": "已启用无限重试（自动继续）。对话框将永远不会出现。",
 			"warning": "⚠️ 设置为 0 允许无限重试，这可能会消耗大量 API 使用量"
 		},
@@ -863,11 +863,11 @@
 		},
 		"outputLineLimit": {
 			"label": "终端输出限制",
-			"description": "保留首尾行并丢弃中间行以保持在限制内。降低可节省 token；提高可为 Kilo 提供更多中间细节。Kilo 看到内容被跳过的占位符。<0>了解更多</0>"
+			"description": "保留首尾行并丢弃中间行以保持在限制内。降低可节省 token；提高可为 IVOL Code 提供更多中间细节。IVOL Code 看到内容被跳过的占位符。<0>了解更多</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "终端字符限制",
-			"description": "通过强制限制输出大小来覆盖行限制以防止内存问题。如果超出，保留开头和结尾并向 Kilo 显示内容被跳过的占位符。<0>了解更多</0>"
+			"description": "通过强制限制输出大小来覆盖行限制以防止内存问题。如果超出，保留开头和结尾并向 IVOL Code 显示内容被跳过的占位符。<0>了解更多</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "终端 shell 集成超时",
@@ -875,7 +875,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "使用内联终端（推荐）",
-			"description": "在内联终端（聊天）中运行命令以绕过 shell 配置文件/集成，实现更快、更可靠的运行。禁用时，Kilo 使用 VS Code 终端及您的 shell 配置文件、提示和插件。<0>了解更多</0>"
+			"description": "在内联终端（聊天）中运行命令以绕过 shell 配置文件/集成，实现更快、更可靠的运行。禁用时，IVOL Code 使用 VS Code 终端及您的 shell 配置文件、提示和插件。<0>了解更多</0>"
 		},
 		"commandDelay": {
 			"label": "终端命令延迟",
@@ -1046,7 +1046,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "启用自定义工具",
-			"description": "启用后 Kilo 可从项目中的 .kilocode/tools 目录或全局工具目录 ~/.kilocode/tools 加载并使用自定义 TypeScript/JavaScript 工具。注意：这些工具将自动获批。",
+			"description": "启用后 IVOL Code 可从项目中的 .kilocode/tools 目录或全局工具目录 ~/.kilocode/tools 加载并使用自定义 TypeScript/JavaScript 工具。注意：这些工具将自动获批。",
 			"toolsHeader": "可用自定义工具",
 			"noTools": "未加载自定义工具。请向项目的 .kilocode/tools 目录或全局工具目录 ~/.kilocode/tools 添加 .ts 或 .js 文件。",
 			"refreshButton": "刷新",
@@ -1098,7 +1098,7 @@
 		"allModels": "全部模型"
 	},
 	"footer": {
-		"feedback": "如果您有任何问题或反馈，请随时在 <githubLink>github.com/Kilo-Org/kilocode</githubLink> 上提出问题或加入 <redditLink>reddit.com/r/kilocode</redditLink> 或 <discordLink>kilo.ai/discord</discordLink>",
+		"feedback": "如有问题或反馈，请在 <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink> 提交 Issue。",
 		"support": "如有财务问题，请联系客户支持 <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "允许错误和使用情况报告",

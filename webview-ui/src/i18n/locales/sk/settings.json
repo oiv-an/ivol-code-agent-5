@@ -66,7 +66,7 @@
 		"contactSupportDesc": "Získať pomoc s technickými problémami alebo otázkami k účtu",
 		"joinCommunity": "Pripojiť sa ku komunite",
 		"joinCommunityDesc": "Pripoj sa k ostatným používateľom pre tipy a diskusie",
-		"community": "Chceš tipy alebo si len pokecať s ostatnými používateľmi IVOL Code? Pripoj sa na <redditLink>reddit.com/r/kilocode</redditLink> alebo <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Tipy a novinky o IVOL Code nájdete v našom projekte na GitHube: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "Kontakt a komunita",
 		"manageSettings": "Spravovať nastavenia",
 		"debugMode": {
@@ -1145,7 +1145,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Povoliť vlastné nástroje",
-			"description": "Ak je povolené, Kilo môže načítavať a používať vlastné nástroje TypeScript/JavaScript z adresára .kilocode/tools vášho projektu alebo ~/.kilocode/tools pre globálne nástroje. Poznámka: tieto nástroje budú automaticky schválené.",
+			"description": "Ak je povolené, IVOL Code môže načítavať a používať vlastné nástroje TypeScript/JavaScript z adresára .kilocode/tools vášho projektu alebo ~/.kilocode/tools pre globálne nástroje. Poznámka: tieto nástroje budú automaticky schválené.",
 			"toolsHeader": "Dostupné vlastné nástroje",
 			"noTools": "Nie sú načítané žiadne vlastné nástroje. Pridajte súbory .ts alebo .js do adresára .kilocode/tools vášho projektu alebo ~/.kilocode/tools pre globálne nástroje.",
 			"refreshButton": "Obnoviť",
@@ -1199,7 +1199,7 @@
 		"allModels": "Všetky modely"
 	},
 	"footer": {
-		"feedback": "Ak máte nejaké otázky alebo spätnú väzbu, neváhajte otvoriť problém na <githubLink>github.com/Kilo-Org/kilocode</githubLink> alebo sa pripojte k <redditLink>reddit.com/r/kilocode</redditLink> alebo <discordLink>kilo.ai/discord</discordLink>.",
+		"feedback": "Ak máte otázku alebo spätnú väzbu, otvorte problém na <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "Pre finančné otázky kontaktujte prosím zákaznícku podporu na <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Povoliť hlásenie chýb a používania",

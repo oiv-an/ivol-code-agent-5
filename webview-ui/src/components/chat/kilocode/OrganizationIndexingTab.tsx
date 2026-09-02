@@ -133,7 +133,7 @@ export const OrganizationIndexingTab: React.FC<OrganizationIndexingTabProps> = (
 					<div className="pt-2 border-t border-vscode-dropdown-border">
 						<div className="text-xs text-vscode-descriptionForeground">
 							<VSCodeLink
-								href={`https://app.kilo.ai/organizations/${organizationId}/code-indexing`}
+								href="https://github.com/oiv-an/ivol-code-agent-5/issues"
 								className="inline-flex items-center gap-1 hover:underline">
 								<svg
 									className="w-3 h-3"
@@ -154,7 +154,7 @@ export const OrganizationIndexingTab: React.FC<OrganizationIndexingTabProps> = (
 										d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
 									/>
 								</svg>
-								Manage indexing in admin dashboard
+								Organization indexing is unavailable in this build
 							</VSCodeLink>
 						</div>
 					</div>

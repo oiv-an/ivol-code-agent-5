@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "เอเจนต์เขียนโค้ด AI แบบ Open Source ที่สร้างโค้ดจากภาษาธรรมชาติ ทำงานอัตโนมัติ และรันคำสั่ง Terminal มีฟีเจอร์เติมข้อความอัตโนมัติแบบ inline, ระบบอัตโนมัติของเบราว์เซอร์, การ refactor อัตโนมัติ และโหมดที่กำหนดเองสำหรับการวางแผน เขียนโค้ด และดีบัก รองรับโมเดล AI มากกว่า 500 รุ่น รวมถึง Claude (Anthropic), Gemini, Grok, GPT, Codex และ GLM",
+	"extension.description": "เอเจนต์ AI โอเพนซอร์สที่เสถียรสำหรับเขียนโค้ด พัฒนาจากฐานโค้ด v5.16.2 รองรับ API ที่เข้ากันได้กับ OpenAI, OpenAI Codex, Claude Code, Ollama และ LM Studio และสลับโมเดลได้รวดเร็ว",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.activitybar.title": "IVOL Code Agent 5",
@@ -26,7 +26,7 @@
 	"command.terminal.explainCommand.title": "อธิบายคำสั่งนี้",
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: สร้างคำสั่ง Terminal",
 	"command.acceptInput.title": "ยอมรับอินพุต/คำแนะนำ",
-	"command.generateCommitMessage.title": "สร้างข้อความ Commit ด้วย Kilo",
+	"command.generateCommitMessage.title": "สร้างข้อความ Commit ด้วย IVOL Code",
 	"command.profile.title": "โปรไฟล์",
 	"command.toggleAutoApprove.title": "สลับการอนุมัติอัตโนมัติ",
 	"configuration.title": "IVOL Code Agent 5",

@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Agente de programação com IA e código aberto que gera código a partir de linguagem natural, automatiza tarefas e executa comandos no terminal. Inclui autocompletar inline, automação de navegador, refatoração automática e modos personalizados para planejar, programar e depurar. Suporta mais de 500 modelos de IA, incluindo Claude (Anthropic), Gemini, Grok, GPT, Codex e GLM.",
+	"extension.description": "Agente estável de programação com IA e código aberto, baseado no código v5.16.2. Suporta APIs compatíveis com OpenAI, OpenAI Codex, Claude Code, Ollama e LM Studio, com troca rápida entre modelos.",
 	"command.newTask.title": "Nova Tarefa",
 	"command.explainCode.title": "Explicar Código",
 	"command.fixCode.title": "Corrigir Código",
@@ -16,7 +16,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Gerar Comando no Terminal",
 	"command.acceptInput.title": "Aceitar Entrada/Sugestão",
 	"command.toggleAutoApprove.title": "Alternar Aprovação Automática",
-	"command.generateCommitMessage.title": "Gerar Mensagem de Commit com o Kilo",
+	"command.generateCommitMessage.title": "Gerar Mensagem de Commit com o IVOL Code",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",

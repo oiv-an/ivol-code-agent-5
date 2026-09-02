@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "ओपन सोर्स AI कोडिंग एजेंट जो प्राकृतिक भाषा से कोड जेनरेट करता है, कार्यों को स्वचालित करता है और टर्मिनल कमांड चलाता है। इनलाइन ऑटोकम्पलीट, ब्राउज़र ऑटोमेशन, स्वचालित रीफैक्टरिंग और प्लानिंग, कोडिंग और डिबगिंग के लिए कस्टम मोड शामिल हैं। Claude (Anthropic), Gemini, Grok, GPT, Codex और GLM सहित 500+ AI मॉडल का समर्थन करता है।",
+	"extension.description": "v5.16.2 कोडबेस पर आधारित स्थिर, ओपन-सोर्स AI कोडिंग एजेंट। OpenAI-संगत API, OpenAI Codex, Claude Code, Ollama और LM Studio का समर्थन करता है और मॉडलों के बीच तेज़ी से स्विच करने की सुविधा देता है।",
 	"command.newTask.title": "नया कार्य",
 	"command.explainCode.title": "कोड समझाएं",
 	"command.fixCode.title": "कोड ठीक करें",
@@ -16,7 +16,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: टर्मिनल कमांड जेनरेट करें",
 	"command.acceptInput.title": "इनपुट/सुझाव स्वीकारें",
 	"command.toggleAutoApprove.title": "ऑटो-अनुमोदन टॉगल करें",
-	"command.generateCommitMessage.title": "Kilo के साथ कमिट संदेश जेनरेट करें",
+	"command.generateCommitMessage.title": "IVOL Code के साथ कमिट संदेश जेनरेट करें",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",

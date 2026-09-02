@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Agen pengkodean AI Open Source yang menghasilkan kode dari bahasa alami, mengotomatisasi tugas, dan menjalankan perintah terminal. Dilengkapi dengan pelengkapan otomatis inline, otomatisasi browser, refactoring otomatis, dan mode kustom untuk perencanaan, pengkodean, dan debugging. Mendukung 500+ model AI termasuk Claude (Anthropic), Gemini, Grok, GPT, Codex dan GLM.",
+	"extension.description": "Agen AI sumber terbuka yang stabil untuk pemrograman, berbasis kode v5.16.2. Mendukung API kompatibel OpenAI, OpenAI Codex, Claude Code, Ollama, dan LM Studio, dengan peralihan model cepat.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.activitybar.title": "IVOL Code Agent 5",
@@ -50,7 +50,7 @@
 	"settings.debugProxy.enabled.description": "**Aktifkan Debug Proxy** — Arahkan semua permintaan jaringan keluar lewat proxy untuk debugging MITM. Hanya aktif saat kamu berjalan dalam mode debug (F5).",
 	"settings.debugProxy.serverUrl.description": "URL proxy (mis. `http://127.0.0.1:8888`). Hanya digunakan ketika **Debug Proxy** diaktifkan.",
 	"settings.debugProxy.tlsInsecure.description": "Terima sertifikat self-signed dari proxy. **Diperlukan untuk inspeksi MITM.** ⚠️ Tidak aman — gunakan hanya untuk debugging lokal.",
-	"command.generateCommitMessage.title": "Buat Pesan Commit dengan Kilo",
+	"command.generateCommitMessage.title": "Buat Pesan Commit dengan IVOL Code",
 	"command.profile.title": "Profil",
 	"command.prompts.title": "Mode",
 	"autocomplete.input.title": "Tekan 'Enter' untuk konfirmasi atau 'Escape' untuk membatalkan",

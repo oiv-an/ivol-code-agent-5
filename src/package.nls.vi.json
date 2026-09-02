@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Trợ lý lập trình AI nguồn mở tạo mã từ ngôn ngữ tự nhiên, tự động hóa tác vụ và chạy lệnh terminal. Bao gồm tự động hoàn thành inline, tự động hóa trình duyệt, tái cấu trúc tự động và các chế độ tùy chỉnh cho lập kế hoạch, lập trình và gỡ lỗi. Hỗ trợ hơn 500 mô hình AI bao gồm Claude (Anthropic), Gemini, Grok, GPT, Codex và GLM.",
+	"extension.description": "Tác nhân AI ổn định cho lập trình, mã nguồn mở, dựa trên mã nguồn v5.16.2. Hỗ trợ API tương thích OpenAI, OpenAI Codex, Claude Code, Ollama và LM Studio, đồng thời chuyển nhanh giữa các mô hình.",
 	"command.newTask.title": "Tác Vụ Mới",
 	"command.explainCode.title": "Giải Thích Mã",
 	"command.fixCode.title": "Sửa Mã",
@@ -16,7 +16,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Tạo Lệnh Terminal",
 	"command.acceptInput.title": "Chấp Nhận Đầu Vào/Gợi Ý",
 	"command.toggleAutoApprove.title": "Bật/Tắt Tự Động Phê Duyệt",
-	"command.generateCommitMessage.title": "Tạo Thông Điệp Commit với Kilo",
+	"command.generateCommitMessage.title": "Tạo Thông Điệp Commit với IVOL Code",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",

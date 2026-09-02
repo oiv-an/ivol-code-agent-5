@@ -81,6 +81,24 @@ describe("anthropicApiKeyWarning", () => {
 			)
 		})
 
+		it("should open the IVOL Claude Code guidance when More Info is selected", async () => {
+			process.env.ANTHROPIC_API_KEY = "test-key"
+
+			mockGetConfiguration.mockReturnValue({ get: vi.fn().mockReturnValue("claude-code") } as any)
+			mockShowWarningMessage.mockResolvedValue("More Info" as any)
+
+			const guidanceUrl = "https://github.com/oiv-an/ivol-code-agent-5#claude-code-account-access"
+			const guidanceUri = { toString: () => guidanceUrl } as vscode.Uri
+			vi.mocked(vscode.Uri.parse).mockReturnValue(guidanceUri)
+
+			checkAnthropicApiKeyConflict()
+
+			await vi.waitFor(() => {
+				expect(vscode.Uri.parse).toHaveBeenCalledWith(guidanceUrl)
+				expect(vscode.env.openExternal).toHaveBeenCalledWith(guidanceUri)
+			})
+		})
+
 		it("should handle undefined apiProvider gracefully", () => {
 			// Set environment variable
 			process.env.ANTHROPIC_API_KEY = "test-key"

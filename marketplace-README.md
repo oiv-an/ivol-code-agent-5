@@ -27,15 +27,19 @@ This build preserves the version 5 workflow while keeping it compatible with cur
 
 Other provider choices and Kilo subscription services are hidden in this build.
 
+## Claude Code account access
+
+If `ANTHROPIC_API_KEY` is set in the environment, it can conflict with Claude Code account access and cause requests to use that API key instead. Unset the variable and restart VS Code when you want to use your Claude account subscription.
+
 ## Data and network access
 
 When you submit a chat request, prompts, selected files, and other context are sent to the AI provider selected by the user. Provider credentials are kept in VS Code secure storage. Local providers can be used through Ollama or LM Studio. Browser, MCP, terminal, and similar tools may access services or files that the user explicitly selects or configures.
 
-See `PRIVACY.md`, included with the extension, for details.
+Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-agent-5/blob/stable-v5/PRIVACY.md) before using the extension.
 
 ## Versioning
 
-Version `5.16.210` corresponds to the upstream `5.16.2` base plus the tenth IVOL stability revision.
+Version `5.16.211` corresponds to the upstream `5.16.2` base plus the eleventh IVOL stability revision.
 
 ## License and attribution
 

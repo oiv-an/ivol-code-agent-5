@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.211
+
+### Patch Changes
+
+- Prepare the first Microsoft Marketplace release with accurate localized descriptions, a direct privacy-policy link, independent support destinations, and a smaller install package.
+
 ## 5.16.210
 
 ### Patch Changes

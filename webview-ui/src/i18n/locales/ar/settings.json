@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "تحتاج تتواصل معنا؟ راسلنا"
 		},
-		"community": "تبي نصائح أو تتسولف مع مستخدمين آخرين؟ انضم لـ <redditLink>reddit.com/r/kilocode</redditLink> أو <discordLink>kilo.ai/discord</discordLink>",
+		"community": "للحصول على النصائح والتواصل مع مستخدمي IVOL Code الآخرين، تفضل بزيارة مشروعنا على <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactSupport": "تواصل مع الدعم",
 		"contactSupportDesc": "احصل على مساعدة من فريق دعم العملاء",
 		"joinCommunity": "انضم للمجتمع",
@@ -1159,7 +1159,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "تفعيل الأدوات المخصصة",
-			"description": "عند التفعيل، يمكن لـ Kilo تحميل واستخدام أدوات TypeScript/JavaScript مخصصة من مجلد .kilocode/tools في مشروعك أو ~/.kilocode/tools للأدوات العامة. ملاحظة: سيتم الموافقة على هذه الأدوات تلقائياً.",
+			"description": "عند التفعيل، يمكن لـ IVOL Code تحميل واستخدام أدوات TypeScript/JavaScript مخصصة من مجلد .kilocode/tools في مشروعك أو ~/.kilocode/tools للأدوات العامة. ملاحظة: سيتم الموافقة على هذه الأدوات تلقائياً.",
 			"toolsHeader": "الأدوات المخصصة المتاحة",
 			"noTools": "لم يتم تحميل أدوات مخصصة. أضف ملفات .ts أو .js إلى مجلد .kilocode/tools في مشروعك أو ~/.kilocode/tools للأدوات العامة.",
 			"refreshButton": "تحديث",
@@ -1213,7 +1213,7 @@
 		"allModels": "جميع النماذج"
 	},
 	"footer": {
-		"feedback": "عندك سؤال أو ملاحظة؟ افتح تذكرة في <githubLink>github.com/Kilo-Org/kilocode</githubLink> أو انضم لـ <redditLink>r/kilocode</redditLink> أو <discordLink>kilo.ai/discord</discordLink>.",
+		"feedback": "إذا كان لديك سؤال أو ملاحظة، فافتح تذكرة على <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "للاستفسارات المالية: <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "السماح بتقارير الأخطاء والاستخدام",

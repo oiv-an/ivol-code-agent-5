@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Стабильный AI-агент с открытым исходным кодом на базе исходников версии 5.16.2. Включает быстрое переключение моделей, устойчивый каталог OpenAI-совместимых моделей, надёжную работу с длинными диалогами, доступ к Codex и Claude, Ollama и LM Studio.",
+	"extension.description": "Стабильный AI-агент для программирования с открытым кодом на базе кода v5.16.2. Поддерживает OpenAI-совместимые API, OpenAI Codex, Claude Code, Ollama и LM Studio и быстрое переключение моделей.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.sidebar.name": "IVOL Code Agent 5",

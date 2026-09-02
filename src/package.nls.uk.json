@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "AI-агент для кодування з відкритим кодом, який генерує код з природної мови, автоматизує завдання та виконує команди терміналу. Включає вбудоване автодоповнення, автоматизацію браузера, автоматичний рефакторинг та користувацькі режими для планування, кодування та налагодження. Підтримує понад 500 AI-моделей, включаючи Claude (Anthropic), Gemini, Grok, GPT, Codex та GLM.",
+	"extension.description": "Стабільний AI-агент для програмування з відкритим кодом на базі коду v5.16.2. Підтримує сумісні з OpenAI API, OpenAI Codex, Claude Code, Ollama, LM Studio і швидке перемикання моделей.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.activitybar.title": "IVOL Code Agent 5",
@@ -26,7 +26,7 @@
 	"command.terminal.explainCommand.title": "Пояснити цю команду",
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Генерувати команду терміналу",
 	"command.acceptInput.title": "Прийняти введення/пропозицію",
-	"command.generateCommitMessage.title": "Згенерувати повідомлення коміту за допомогою Kilo",
+	"command.generateCommitMessage.title": "Згенерувати повідомлення коміту за допомогою IVOL Code",
 	"command.profile.title": "Профіль",
 	"command.toggleAutoApprove.title": "Перемкнути автоматичне схвалення",
 	"configuration.title": "IVOL Code Agent 5",

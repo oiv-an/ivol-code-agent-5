@@ -31,15 +31,19 @@ The extension uses the independent ID `ivol.ivol-code-agent-5`, so an official u
 
 Other provider choices and Kilo subscription services are hidden.
 
+## Claude Code account access
+
+If `ANTHROPIC_API_KEY` is set in the environment, it can conflict with Claude Code account access and cause requests to use that API key instead. Unset the variable and restart VS Code when you want to use your Claude account subscription.
+
 See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 ## VS Code extension identity
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.210`
+- Version: `5.16.211`
 
-Version `5.16.210` corresponds to the upstream `5.16.2` base plus the tenth IVOL stability revision.
+Version `5.16.211` corresponds to the upstream `5.16.2` base plus the eleventh IVOL stability revision.
 
 ## Development
 

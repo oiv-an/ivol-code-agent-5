@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Doğal dilden kod üreten, görevleri otomatikleştiren ve terminal komutlarını çalıştıran açık kaynaklı AI kodlama ajanı. Satır içi otomatik tamamlama, tarayıcı otomasyonu, otomatik yeniden düzenleme ve planlama, kodlama ve hata ayıklama için özel modlar içerir. Claude (Anthropic), Gemini, Grok, GPT, Codex ve GLM dahil 500'den fazla AI modelini destekler.",
+	"extension.description": "v5.16.2 kod tabanlı, kararlı ve açık kaynaklı AI kodlama ajanı. OpenAI uyumlu API'leri, OpenAI Codex'i, Claude Code'u, Ollama'yı ve LM Studio'yu destekler; hızlı model geçişi sağlar.",
 	"command.newTask.title": "Yeni Görev",
 	"command.explainCode.title": "Kodu Açıkla",
 	"command.fixCode.title": "Kodu Düzelt",
@@ -15,7 +15,7 @@
 	"command.terminal.explainCommand.title": "Bu Komutu Açıkla",
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Terminal Komutu Oluştur",
 	"command.acceptInput.title": "Girişi/Öneriyi Kabul Et",
-	"command.generateCommitMessage.title": "Kilo ile Commit Mesajı Oluştur",
+	"command.generateCommitMessage.title": "IVOL Code ile Commit Mesajı Oluştur",
 	"command.toggleAutoApprove.title": "Otomatik Onayı Değiştir",
 	"views.activitybar.title": "IVOL Code Agent 5",
 	"views.contextMenu.label": "IVOL Code Agent 5",

@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "自然言語からコードを生成し、タスクを自動化し、ターミナルコマンドを実行するオープンソース AI コーディングエージェント。インライン自動補完、ブラウザ自動化、自動リファクタリング、計画・コーディング・デバッグ用のカスタムモードを搭載。Claude (Anthropic)、Gemini、Grok、GPT、Codex、GLM を含む 500 以上の AI モデルをサポート。",
+	"extension.description": "v5.16.2 のコードベースを基盤とする、安定したオープンソースの AI コーディングエージェント。OpenAI 互換 API、OpenAI Codex、Claude Code、Ollama、LM Studio をサポートし、モデルをすばやく切り替えられます。",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.sidebar.name": "IVOL Code Agent 5",
@@ -28,7 +28,7 @@
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: ターミナルコマンドを生成",
 	"command.acceptInput.title": "入力/提案を承認",
 	"command.toggleAutoApprove.title": "自動承認を切替",
-	"command.generateCommitMessage.title": "Kiloでコミットメッセージを生成",
+	"command.generateCommitMessage.title": "IVOL Codeでコミットメッセージを生成",
 	"command.profile.title": "プロフィール",
 	"configuration.title": "IVOL Code Agent 5",
 	"autocomplete.input.title": "IVOL Code Agent 5 ゴーストライター",

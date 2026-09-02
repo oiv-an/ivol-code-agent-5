@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Bizimle konuşmanız mı gerekiyor? Yazın"
 		},
-		"community": "İpuçları mı istiyorsunuz yoksa sadece diğer IVOL Code kullanıcılarıyla takılmak mı istiyorsunuz? <redditLink>reddit.com/r/kilocode</redditLink> veya <discordLink>kilo.ai/discord</discordLink>'a katılın",
+		"community": "IVOL Code ile ilgili ipuçları ve güncellemeler için GitHub projemizi ziyaret edin: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "İletişim ve Topluluk",
 		"manageSettings": "Ayarları Yönet",
 		"debugMode": {
@@ -599,7 +599,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Hata ve Tekrar Limiti",
-			"description": "'Kilo sorun yaşıyor' iletişim kutusunu göstermeden önceki ardışık hata veya tekrarlanan eylem sayısı. Bu güvenlik mekanizmasını devre dışı bırakmak için 0 olarak ayarlayın (asla tetiklenmez).",
+			"description": "'IVOL Code sorun yaşıyor' iletişim kutusunu göstermeden önceki ardışık hata veya tekrarlanan eylem sayısı. Bu güvenlik mekanizmasını devre dışı bırakmak için 0 olarak ayarlayın (asla tetiklenmez).",
 			"unlimitedDescription": "Sınırsız yeniden deneme etkin (otomatik devam et). Diyalog asla görünmeyecek.",
 			"warning": "⚠️ 0'a ayarlamak, önemli API kullanımına neden olabilecek sınırsız yeniden denemeye izin verir"
 		},
@@ -863,11 +863,11 @@
 		},
 		"outputLineLimit": {
 			"label": "Terminal çıktı sınırı",
-			"description": "Sınırın altında kalmak için ilk ve son satırları tutar ve ortadakileri atar. Jetonları kaydetmek için düşürün; Kilo'ya daha fazla orta ayrıntı vermek için yükseltin. Kilo, içeriğin atlandığı yerde bir yer tutucu görür.<0>Daha fazla bilgi edinin</0>"
+			"description": "Sınırın altında kalmak için ilk ve son satırları tutar ve ortadakileri atar. Jetonları kaydetmek için düşürün; IVOL Code'ya daha fazla orta ayrıntı vermek için yükseltin. IVOL Code, içeriğin atlandığı yerde bir yer tutucu görür.<0>Daha fazla bilgi edinin</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "Terminal karakter sınırı",
-			"description": "Çıktı boyutuna katı bir üst sınır uygulayarak bellek sorunlarını önlemek için satır sınırını geçersiz kılar. Aşılırsa, başlangıcı ve sonu tutar ve içeriğin atlandığı yerde Kilo'ya bir yer tutucu gösterir. <0>Daha fazla bilgi edinin</0>"
+			"description": "Çıktı boyutuna katı bir üst sınır uygulayarak bellek sorunlarını önlemek için satır sınırını geçersiz kılar. Aşılırsa, başlangıcı ve sonu tutar ve içeriğin atlandığı yerde IVOL Code'ya bir yer tutucu gösterir. <0>Daha fazla bilgi edinin</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "Terminal shell entegrasyon timeout",
@@ -875,7 +875,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "Satır İçi Terminal Kullan (önerilir)",
-			"description": "Daha hızlı, daha güvenilir çalıştırmalar için kabuk profillerini/entegrasyonunu atlamak için Satır İçi Terminal'de (sohbet) komutları çalıştırın. Devre dışı bırakıldığında Kilo, kabuk profiliniz, istemleriniz ve eklentilerinizle VS Code terminalini kullanır. <0>Daha fazla bilgi edinin</0>"
+			"description": "Daha hızlı, daha güvenilir çalıştırmalar için kabuk profillerini/entegrasyonunu atlamak için Satır İçi Terminal'de (sohbet) komutları çalıştırın. Devre dışı bırakıldığında IVOL Code, kabuk profiliniz, istemleriniz ve eklentilerinizle VS Code terminalini kullanır. <0>Daha fazla bilgi edinin</0>"
 		},
 		"commandDelay": {
 			"label": "Terminal komut delay",
@@ -1042,7 +1042,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Özel araçları etkinleştir",
-			"description": "Etkinleştirildiğinde, Kilo projenizin .kilocode/tools dizininden veya global araçlar için ~/.kilocode/tools dizininden özel TypeScript/JavaScript araçlarını yükleyebilir ve kullanabilir. Not: bu araçlar otomatik olarak onaylanacaktır.",
+			"description": "Etkinleştirildiğinde, IVOL Code projenizin .kilocode/tools dizininden veya global araçlar için ~/.kilocode/tools dizininden özel TypeScript/JavaScript araçlarını yükleyebilir ve kullanabilir. Not: bu araçlar otomatik olarak onaylanacaktır.",
 			"toolsHeader": "Kullanılabilir Özel Araçlar",
 			"noTools": "Özel araç yüklenmedi. Projenizin .kilocode/tools dizinine veya global araçlar için ~/.kilocode/tools dizinine .ts veya .js dosyaları ekleyin.",
 			"refreshButton": "Yenile",
@@ -1094,7 +1094,7 @@
 		"allModels": "Tüm modeller"
 	},
 	"footer": {
-		"feedback": "Herhangi bir sorunuz veya geri bildiriminiz varsa, <githubLink>github.com/Kilo-Org/kilocode</githubLink> adresinde bir konu açmaktan veya <redditLink>reddit.com/r/kilocode</redditLink> ya da <discordLink>kilo.ai/discord</discordLink>'a katılmaktan çekinmeyin",
+		"feedback": "Soru veya geri bildiriminiz varsa <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink> adresinde bir konu açın.",
 		"support": "Mali konular için lütfen <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink> adresinden Müşteri Desteği ile iletişime geçin",
 		"telemetry": {
 			"label": "Hata ve kullanım raporlamaya izin ver",

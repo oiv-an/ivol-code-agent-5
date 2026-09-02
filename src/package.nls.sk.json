@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "IVOL Code Agent 5",
-	"extension.description": "Open Source AI agent pre kódovanie, ktorý generuje kód z prirodzeného jazyka, automatizuje úlohy a spúšťa príkazy terminálu. Ponúka inline automatické dokončovanie, automatizáciu prehliadača, automatický refaktoring a vlastné režimy pre plánovanie, kódovanie a ladenie. Podporuje viac ako 500 AI modelov vrátane Claude (Anthropic), Gemini, Grok, GPT, Codex a GLM.",
+	"extension.description": "Stabilný open-source AI agent na programovanie na báze kódu v5.16.2. Podporuje API kompatibilné s OpenAI, OpenAI Codex, Claude Code, Ollama a LM Studio a rýchle prepínanie modelov.",
 	"views.contextMenu.label": "IVOL Code Agent 5",
 	"views.terminalMenu.label": "IVOL Code Agent 5",
 	"views.activitybar.title": "IVOL Code Agent 5",
@@ -26,7 +26,7 @@
 	"command.terminal.explainCommand.title": "Vysvetliť tento príkaz",
 	"command.terminal.generateCommand.title": "IVOL Code Agent 5: Generovať príkaz terminálu",
 	"command.acceptInput.title": "Prijať vstup/návrh",
-	"command.generateCommitMessage.title": "Vygenerovať správu commitu pomocou Kilo",
+	"command.generateCommitMessage.title": "Vygenerovať správu commitu pomocou IVOL Code",
 	"command.profile.title": "Profil",
 	"command.toggleAutoApprove.title": "Prepnúť automatické schválenie",
 	"configuration.title": "IVOL Code Agent 5",

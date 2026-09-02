@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "お問い合わせが必要ですか？メールを送信"
 		},
-		"community": "ヒントが欲しいですか、または他のIVOL Codeユーザーと交流したいですか？<redditLink>reddit.com/r/kilocode</redditLink>または<discordLink>kilo.ai/discord</discordLink>に参加してください",
+		"community": "IVOL Code のヒントや最新情報については、GitHub プロジェクト <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink> をご覧ください。",
 		"contactAndCommunity": "お問い合わせとコミュニティ",
 		"manageSettings": "設定を管理",
 		"debugMode": {
@@ -630,7 +630,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "エラーと繰り返しの制限",
-			"description": "「Kiloが問題を抱えています」ダイアログを表示するまでの連続エラーまたは繰り返しアクションの数。この安全機構を無効にするには0に設定します（トリガーされません）。",
+			"description": "「IVOL Codeが問題を抱えています」ダイアログを表示するまでの連続エラーまたは繰り返しアクションの数。この安全機構を無効にするには0に設定します（トリガーされません）。",
 			"unlimitedDescription": "無制限のリトライが有効です（自動進行）。ダイアログは表示されません。",
 			"warning": "⚠️ 0に設定すると無制限のリトライが可能になり、API使用量が大幅に増加する可能性があります"
 		},
@@ -868,11 +868,11 @@
 		},
 		"outputLineLimit": {
 			"label": "ターミナル出力制限",
-			"description": "制限内に収めるため最初と最後の行を保持し、中間を削除します。トークンを節約するには下げる；Kiloに中間の詳細を与えるには上げる。Kiloはコンテンツがスキップされた箇所にプレースホルダーを表示します。<0>詳細情報</0>"
+			"description": "制限内に収めるため最初と最後の行を保持し、中間を削除します。トークンを節約するには下げる；IVOL Codeに中間の詳細を与えるには上げる。IVOL Codeはコンテンツがスキップされた箇所にプレースホルダーを表示します。<0>詳細情報</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "ターミナル文字制限",
-			"description": "出力サイズにハードキャップを適用してメモリ問題を防ぐため、行制限を上書きします。超過した場合、最初と最後を保持し、コンテンツがスキップされた箇所にKiloにプレースホルダーを表示します。<0>詳細情報</0>"
+			"description": "出力サイズにハードキャップを適用してメモリ問題を防ぐため、行制限を上書きします。超過した場合、最初と最後を保持し、コンテンツがスキップされた箇所にIVOL Codeにプレースホルダーを表示します。<0>詳細情報</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "ターミナルシェル統合タイムアウト",
@@ -880,7 +880,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "インラインターミナルを使用（推奨）",
-			"description": "より高速で信頼性の高い実行のため、シェルプロファイル/統合をバイパスしてインラインターミナル（チャット）でコマンドを実行します。無効にすると、Kilo はシェルプロファイル、プロンプト、プラグインと共に VS Code ターミナルを使用します。<0>詳細情報</0>"
+			"description": "より高速で信頼性の高い実行のため、シェルプロファイル/統合をバイパスしてインラインターミナル（チャット）でコマンドを実行します。無効にすると、IVOL Code はシェルプロファイル、プロンプト、プラグインと共に VS Code ターミナルを使用します。<0>詳細情報</0>"
 		},
 		"commandDelay": {
 			"label": "ターミナルコマンド遅延",
@@ -929,7 +929,7 @@
 	"advanced": {
 		"diff": {
 			"label": "diff経由の編集を有効化",
-			"description": "有効にすると、Kiloはファイルをより迅速に編集でき、切り詰められた全ファイル書き込みを自動的に拒否します。",
+			"description": "有効にすると、IVOL Codeはファイルをより迅速に編集でき、切り詰められた全ファイル書き込みを自動的に拒否します。",
 			"strategy": {
 				"label": "Diff戦略",
 				"options": {
@@ -1047,7 +1047,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "カスタムツールを有効化",
-			"description": "有効にすると、Kiloはプロジェクトの .kilocode/tools ディレクトリまたはグローバルツール用の ~/.kilocode/tools からカスタム TypeScript/JavaScript ツールを読み込んで使用できます。注意：これらのツールは自動的に承認されます。",
+			"description": "有効にすると、IVOL Codeはプロジェクトの .kilocode/tools ディレクトリまたはグローバルツール用の ~/.kilocode/tools からカスタム TypeScript/JavaScript ツールを読み込んで使用できます。注意：これらのツールは自動的に承認されます。",
 			"toolsHeader": "利用可能なカスタムツール",
 			"noTools": "カスタムツールが読み込まれていません。プロジェクトの .kilocode/tools ディレクトリまたはグローバルツール用の ~/.kilocode/tools に .ts または .js ファイルを追加してください。",
 			"refreshButton": "更新",
@@ -1099,7 +1099,7 @@
 		"allModels": "すべてのモデル"
 	},
 	"footer": {
-		"feedback": "質問やフィードバックがある場合は、<githubLink>github.com/Kilo-Org/kilocode</githubLink>で問題を開くか、<redditLink>reddit.com/r/kilocode</redditLink>や<discordLink>kilo.ai/discord</discordLink>に参加してください",
+		"feedback": "ご質問やフィードバックがある場合は、<githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink> で Issue を作成してください。",
 		"support": "財務に関するご質問は、<supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>のカスタマーサポートまでお問い合わせください",
 		"telemetry": {
 			"label": "匿名のエラーと使用状況レポートを許可",

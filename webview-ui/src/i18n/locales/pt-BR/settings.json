@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Precisa falar conosco? Escreva"
 		},
-		"community": "Quer dicas ou apenas conversar com outros usuários do IVOL Code? Junte-se a <redditLink>reddit.com/r/kilocode</redditLink> ou <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Para ver dicas e novidades do IVOL Code, acesse nosso projeto no GitHub: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "Contato e Comunidade",
 		"manageSettings": "Gerenciar Configurações",
 		"debugMode": {
@@ -599,7 +599,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Limite de Erros e Repetições",
-			"description": "Número de erros consecutivos ou ações repetidas antes de exibir o diálogo 'Kilo está com problemas'. Defina como 0 para desativar este mecanismo de segurança (ele nunca será acionado).",
+			"description": "Número de erros consecutivos ou ações repetidas antes de exibir o diálogo 'IVOL Code está com problemas'. Defina como 0 para desativar este mecanismo de segurança (ele nunca será acionado).",
 			"unlimitedDescription": "Tentativas ilimitadas ativadas (prosseguimento automático). O diálogo nunca aparecerá.",
 			"warning": "⚠️ Definir como 0 permite tentativas ilimitadas, o que pode consumir um uso significativo da API"
 		},
@@ -863,11 +863,11 @@
 		},
 		"outputLineLimit": {
 			"label": "Limite de saída do terminal",
-			"description": "Mantém as primeiras e últimas linhas e descarta as do meio para ficar abaixo do limite. Diminua para economizar tokens; aumente para dar ao Kilo mais detalhes do meio. O Kilo vê um placeholder onde o conteúdo é pulado.<0>Saiba mais</0>"
+			"description": "Mantém as primeiras e últimas linhas e descarta as do meio para ficar abaixo do limite. Diminua para economizar tokens; aumente para dar ao IVOL Code mais detalhes do meio. O IVOL Code vê um placeholder onde o conteúdo é pulado.<0>Saiba mais</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "Limite de caracteres do terminal",
-			"description": "Substitui o limite de linhas para evitar problemas de memória, impondo um limite rígido no tamanho da saída. Se excedido, mantém o início e o fim e mostra um placeholder para o Kilo onde o conteúdo é pulado. <0>Saiba mais</0>"
+			"description": "Substitui o limite de linhas para evitar problemas de memória, impondo um limite rígido no tamanho da saída. Se excedido, mantém o início e o fim e mostra um placeholder para o IVOL Code onde o conteúdo é pulado. <0>Saiba mais</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "Tempo limite de integração do shell do terminal",
@@ -875,7 +875,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "Usar Terminal Inline (recomendado)",
-			"description": "Execute comandos no Terminal Inline (chat) para contornar perfis/integração de shell para execuções mais rápidas e confiáveis. Quando desativado, o Kilo usa o terminal do VS Code com seu perfil de shell, prompts e plugins. <0>Saiba mais</0>"
+			"description": "Execute comandos no Terminal Inline (chat) para contornar perfis/integração de shell para execuções mais rápidas e confiáveis. Quando desativado, o IVOL Code usa o terminal do VS Code com seu perfil de shell, prompts e plugins. <0>Saiba mais</0>"
 		},
 		"commandDelay": {
 			"label": "Atraso de comando do terminal",
@@ -1042,7 +1042,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Ativar ferramentas personalizadas",
-			"description": "Quando habilitado, o Kilo pode carregar e usar ferramentas TypeScript/JavaScript personalizadas do diretório .kilocode/tools do seu projeto ou ~/.kilocode/tools para ferramentas globais. Nota: estas ferramentas serão aprovadas automaticamente.",
+			"description": "Quando habilitado, o IVOL Code pode carregar e usar ferramentas TypeScript/JavaScript personalizadas do diretório .kilocode/tools do seu projeto ou ~/.kilocode/tools para ferramentas globais. Nota: estas ferramentas serão aprovadas automaticamente.",
 			"toolsHeader": "Ferramentas Personalizadas Disponíveis",
 			"noTools": "Nenhuma ferramenta personalizada carregada. Adicione arquivos .ts ou .js ao diretório .kilocode/tools do seu projeto ou ~/.kilocode/tools para ferramentas globais.",
 			"refreshButton": "Atualizar",
@@ -1094,7 +1094,7 @@
 		"allModels": "Todos os modelos"
 	},
 	"footer": {
-		"feedback": "Se tiver alguma dúvida ou feedback, sinta-se à vontade para abrir um problema em <githubLink>github.com/Kilo-Org/kilocode</githubLink> ou juntar-se a <redditLink>reddit.com/r/kilocode</redditLink> ou <discordLink>kilo.ai/discord</discordLink>",
+		"feedback": "Se tiver alguma dúvida ou sugestão, abra uma issue em <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "Para questões financeiras, entre em contato com o Suporte ao Cliente em <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Permitir relatórios de erros e uso",

@@ -13,10 +13,9 @@
 !package.nls.*
 
 # Include the built extension
-!dist
+!dist/**/!(*.map)
 
 # Include the built webview
-!**/*.map
 !webview-ui/audio
 !webview-ui/build/assets/*.js
 !webview-ui/build/assets/*.ttf
@@ -33,3 +32,6 @@
 !assets/vscode-material-icons/**
 !assets/icons/**
 !assets/images/**
+
+# Source maps are only needed for development and significantly increase the VSIX size.
+**/*.map

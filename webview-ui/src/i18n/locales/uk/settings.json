@@ -72,7 +72,7 @@
 		"contact": {
 			"label": "Потрібно поговорити з нами? Напиши"
 		},
-		"community": "Хочеш отримати поради або просто поспілкуватися з іншими користувачами Roo Code? Приєднуйся до <redditLink>reddit.com/r/kilocode</redditLink> або <discordLink>kilo.ai/discord</discordLink>"
+		"community": "Поради та новини IVOL Code доступні в нашому проєкті на GitHub: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>."
 	},
 	"slashCommands": {
 		"description": "Керуйте своїми slash командами для швидкого виконання власних робочих процесів та дій. <DocsLink>Дізнатися більше</DocsLink>"
@@ -1159,7 +1159,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Увімкнути власні інструменти",
-			"description": "Коли увімкнено, Kilo може завантажувати та використовувати власні інструменти TypeScript/JavaScript з каталогу .kilocode/tools вашого проекту або ~/.kilocode/tools для глобальних інструментів. Примітка: ці інструменти будуть автоматично схвалені.",
+			"description": "Коли увімкнено, IVOL Code може завантажувати та використовувати власні інструменти TypeScript/JavaScript з каталогу .kilocode/tools вашого проекту або ~/.kilocode/tools для глобальних інструментів. Примітка: ці інструменти будуть автоматично схвалені.",
 			"toolsHeader": "Доступні власні інструменти",
 			"noTools": "Жодних власних інструментів не завантажено. Додайте файли .ts або .js до каталогу .kilocode/tools вашого проекту або ~/.kilocode/tools для глобальних інструментів.",
 			"refreshButton": "Оновити",
@@ -1213,7 +1213,7 @@
 		"allModels": "Усі моделі"
 	},
 	"footer": {
-		"feedback": "Якщо у тебе є питання або відгуки, не соромся відкрити issue на <githubLink>github.com/Kilo-Org/kilocode</githubLink> або приєднатися до <redditLink>reddit.com/r/kilocode</redditLink> або <discordLink>kilo.ai/discord</discordLink>.",
+		"feedback": "Якщо у вас є запитання або відгук, створіть issue на <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "З фінансових питань звертайся до служби підтримки клієнтів за адресою <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Дозволити звітування про помилки та використання",

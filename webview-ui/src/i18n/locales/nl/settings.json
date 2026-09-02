@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Moet je met ons praten? Schrijf"
 		},
-		"community": "Wil je tips of gewoon even hangen met andere IVOL Code-gebruikers? Sluit je aan bij <redditLink>reddit.com/r/kilocode</redditLink> of <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Bezoek voor tips en nieuws over IVOL Code ons GitHub-project: <redditLink>https://github.com/oiv-an/ivol-code-agent-5</redditLink>.",
 		"contactAndCommunity": "Contact & Gemeenschap",
 		"manageSettings": "Instellingen Beheren",
 		"debugMode": {
@@ -625,7 +625,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Fout- & Herhalingslimiet",
-			"description": "Aantal opeenvolgende fouten of herhaalde acties voordat het dialoogvenster 'Kilo ondervindt problemen' wordt weergegeven. Zet op 0 om dit veiligheidsmechanisme uit te schakelen (wordt nooit geactiveerd).",
+			"description": "Aantal opeenvolgende fouten of herhaalde acties voordat het dialoogvenster 'IVOL Code ondervindt problemen' wordt weergegeven. Zet op 0 om dit veiligheidsmechanisme uit te schakelen (wordt nooit geactiveerd).",
 			"unlimitedDescription": "Onbeperkt aantal nieuwe pogingen ingeschakeld (automatisch doorgaan). Het dialoogvenster zal nooit verschijnen.",
 			"warning": "⚠️ Instellen op 0 staat onbeperkte nieuwe pogingen toe, wat aanzienlijk API-gebruik kan verbruiken"
 		},
@@ -863,11 +863,11 @@
 		},
 		"outputLineLimit": {
 			"label": "Terminaluitvoerlimiet",
-			"description": "Behoudt eerste en laatste regels en verwijdert middelste om onder de limiet te blijven. Verlaag om tokens te besparen; verhoog om Kilo meer tussendetails te geven. Kilo ziet een placeholder waar inhoud wordt overgeslagen.<0>Meer informatie</0>"
+			"description": "Behoudt eerste en laatste regels en verwijdert middelste om onder de limiet te blijven. Verlaag om tokens te besparen; verhoog om IVOL Code meer tussendetails te geven. IVOL Code ziet een placeholder waar inhoud wordt overgeslagen.<0>Meer informatie</0>"
 		},
 		"outputCharacterLimit": {
 			"label": "Terminal-tekenlimiet",
-			"description": "Overschrijft de regellimiet om geheugenproblemen te voorkomen door een harde limiet op uitvoergrootte af te dwingen. Bij overschrijding behoudt het begin en einde en toont een placeholder aan Kilo waar inhoud wordt overgeslagen. <0>Meer informatie</0>"
+			"description": "Overschrijft de regellimiet om geheugenproblemen te voorkomen door een harde limiet op uitvoergrootte af te dwingen. Bij overschrijding behoudt het begin en einde en toont een placeholder aan IVOL Code waar inhoud wordt overgeslagen. <0>Meer informatie</0>"
 		},
 		"shellIntegrationTimeout": {
 			"label": "Terminal-shell-integratie timeout",
@@ -875,7 +875,7 @@
 		},
 		"shellIntegrationDisabled": {
 			"label": "Inline Terminal gebruiken (aanbevolen)",
-			"description": "Voer commando's uit in de Inline Terminal (chat) om shell-profielen/integratie te omzeilen voor snellere, betrouwbaardere runs. Wanneer uitgeschakeld gebruikt Kilo de VS Code-terminal met je shell-profiel, prompts en plugins. <0>Meer informatie</0>"
+			"description": "Voer commando's uit in de Inline Terminal (chat) om shell-profielen/integratie te omzeilen voor snellere, betrouwbaardere runs. Wanneer uitgeschakeld gebruikt IVOL Code de VS Code-terminal met je shell-profiel, prompts en plugins. <0>Meer informatie</0>"
 		},
 		"commandDelay": {
 			"label": "Terminal-commandovertraging",
@@ -1042,7 +1042,7 @@
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Aangepaste tools inschakelen",
-			"description": "Indien ingeschakeld kan Kilo aangepaste TypeScript/JavaScript-tools laden en gebruiken uit de map .kilocode/tools van je project of ~/.kilocode/tools voor globale tools. Opmerking: deze tools worden automatisch goedgekeurd.",
+			"description": "Indien ingeschakeld kan IVOL Code aangepaste TypeScript/JavaScript-tools laden en gebruiken uit de map .kilocode/tools van je project of ~/.kilocode/tools voor globale tools. Opmerking: deze tools worden automatisch goedgekeurd.",
 			"toolsHeader": "Beschikbare aangepaste tools",
 			"noTools": "Geen aangepaste tools geladen. Voeg .ts- of .js-bestanden toe aan de map .kilocode/tools van je project of ~/.kilocode/tools voor globale tools.",
 			"refreshButton": "Vernieuwen",
@@ -1094,7 +1094,7 @@
 		"allModels": "Alle modellen"
 	},
 	"footer": {
-		"feedback": "Heb je vragen of feedback? Open gerust een issue op <githubLink>github.com/Kilo-Org/kilocode</githubLink> of sluit je aan bij <redditLink>reddit.com/r/kilocode</redditLink> of <discordLink>kilo.ai/discord</discordLink>",
+		"feedback": "Open voor vragen of feedback een issue op <githubLink>https://github.com/oiv-an/ivol-code-agent-5/issues</githubLink>.",
 		"support": "Voor financiële vragen kunt u contact opnemen met de klantenservice via <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Fout- en gebruiksrapportage toestaan",
