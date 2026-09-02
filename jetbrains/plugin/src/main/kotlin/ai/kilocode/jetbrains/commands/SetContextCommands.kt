@@ -48,8 +48,8 @@ fun registerSetContextCommands(project: Project, registry: CommandRegistry) {
  * feature availability and UI state.
  * 
  * Example context keys used by AutocompleteProvider:
- * - kilocode.autocomplete.enableQuickInlineTaskKeybinding
- * - kilocode.autocomplete.enableSmartInlineTaskKeybinding
+ * - ivol-code-agent-5.autocomplete.enableQuickInlineTaskKeybinding
+ * - ivol-code-agent-5.autocomplete.enableSmartInlineTaskKeybinding
  */
 class SetContextCommands(val project: Project) {
     private val logger = Logger.getInstance(SetContextCommands::class.java)
@@ -61,7 +61,7 @@ class SetContextCommands(val project: Project) {
      * This method is called when the setContext command is executed from the extension.
      * It stores the key-value pair in the ContextManager for later retrieval.
      * 
-     * @param key The context key to set (e.g., "kilocode.autocomplete.enableQuickInlineTaskKeybinding")
+     * @param key The context key to set (e.g., "ivol-code-agent-5.autocomplete.enableQuickInlineTaskKeybinding")
      * @param value The value to set (typically Boolean, but can be String, Number, etc.)
      * @return null (void return type)
      */

@@ -4,6 +4,7 @@ import { McpAuthorizationDiscovery, AuthorizationServerMetadata } from "./McpAut
 import { McpOAuthBrowserFlow, DEFAULT_AUTH_FLOW_PORT } from "./McpOAuthBrowserFlow"
 import { McpOAuthTokenStorage, OAuthTokens, StoredTokenData } from "./McpOAuthTokenStorage"
 import { generateCodeChallenge, generateCodeVerifier, generateState } from "./utils"
+import { Package } from "../../../shared/package" // kilocode_change
 
 // Buffer time before token expiration to trigger proactive refresh (5 minutes)
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000
@@ -169,7 +170,7 @@ export class McpOAuthService {
 		const redirectUris = [
 			"http://127.0.0.1/",
 			`http://127.0.0.1:${DEFAULT_AUTH_FLOW_PORT}/`,
-			"vscode://kilocode.kilo-code/oauth/callback",
+			`vscode://${Package.publisher}.${Package.name}/oauth/callback`, // kilocode_change
 		]
 		const clientCredentials = await this.getOrRegisterClient(authServerMetadata, redirectUris, options)
 
@@ -454,9 +455,10 @@ export class McpOAuthService {
 
 		// Client metadata according to RFC 7591
 		const clientMetadata = {
-			client_name: "Kilo Code",
-			client_uri: "https://kilocode.ai",
-			logo_uri: "https://kilocode.ai/logo.png",
+			client_name: "IVOL Code",
+			client_uri: "https://github.com/oiv-an/ivol-code-agent-5",
+			logo_uri:
+				"https://raw.githubusercontent.com/oiv-an/ivol-code-agent-5/main/src/assets/icons/ivol-code-agent-5.svg",
 			redirect_uris: redirectUris,
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -582,7 +584,7 @@ export class McpOAuthService {
 		// 4. Fall back to Client ID Metadata Document URL
 		console.log("[McpOAuthService] Using Client ID Metadata Document URL as client_id")
 		return {
-			clientId: "https://kilocode.ai/.well-known/oauth-client/vscode-extension.json",
+			clientId: "https://github.com/oiv-an/ivol-code-agent-5",
 		}
 	}
 

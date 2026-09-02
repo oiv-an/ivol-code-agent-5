@@ -1,12 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
 import * as vscode from "vscode"
-import {
-	GenerateImageParams,
-	IMAGE_GENERATION_MODEL_IDS,
-	IMAGE_GENERATION_MODELS,
-	getImageGenerationProvider,
-} from "@roo-code/types"
+import { GenerateImageParams, IMAGE_GENERATION_MODEL_IDS, IMAGE_GENERATION_MODELS } from "@roo-code/types"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -14,11 +9,9 @@ import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { OpenRouterHandler } from "../../api/providers/openrouter"
-import { KilocodeOpenrouterHandler } from "../../api/providers/kilocode-openrouter"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 
-import { RooHandler } from "../../api/providers/roo"
 import { t } from "../../i18n"
 
 export class GenerateImageTool extends BaseTool<"generate_image"> {
@@ -132,11 +125,10 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 
 		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
 
-		// Use shared utility for backwards compatibility logic
-		const imageProvider = getImageGenerationProvider(
-			state?.imageGenerationProvider,
-			!!state?.openRouterImageGenerationSelectedModel,
-		)
+		// Image generation in the personal build is always direct through the
+		// user's OpenRouter account. Ignore a persisted legacy `kilocode` value so
+		// restoring old settings cannot contact the retired gateway.
+		const imageProvider = "openrouter" as const
 
 		// Get the selected model
 		let selectedModel = state?.openRouterImageGenerationSelectedModel
@@ -159,17 +151,9 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			selectedModel = modelInfo?.value || IMAGE_GENERATION_MODEL_IDS[0]
 		}
 
-		// Use the provider selection
-		const modelProvider = imageProvider
-		const apiMethod = modelInfo?.apiMethod
-
 		// Validate API key for OpenRouter
 		const openRouterApiKey = state?.openRouterImageApiKey
-		const kiloCodeApiKey = state?.kiloCodeImageApiKey // kilocode_change
-
-		// kilocode_change start
-		if (imageProvider === "openrouter" && !openRouterApiKey && !kiloCodeApiKey) {
-			// kilocode_change end
+		if (!openRouterApiKey) {
 			const errorMessage = t("tools:generateImage.openRouterApiKeyRequired")
 			await task.say("error", errorMessage)
 			pushToolResult(formatResponse.toolError(errorMessage))
@@ -202,35 +186,14 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 				return
 			}
 
-			let result
-			// kilocode_change start: Updated from "roo" to "kilocode" provider
-			// Use Kilo Code Cloud provider (supports both chat completions and images API via OpenRouter)
-			// Use OpenRouter provider (only supports chat completions API)
-			const handler =
-				modelProvider === "kilocode"
-					? new KilocodeOpenrouterHandler({
-							kilocodeToken: kiloCodeApiKey,
-							kilocodeOrganizationId:
-								task.apiConfiguration.apiProvider === "kilocode" &&
-								task.apiConfiguration.kilocodeToken === kiloCodeApiKey
-									? task.apiConfiguration.kilocodeOrganizationId
-									: undefined,
-						})
-					: new OpenRouterHandler({})
-			result = await handler.generateImage(
+			const handler = new OpenRouterHandler({})
+			const result = await handler.generateImage(
 				prompt,
 				selectedModel,
-				openRouterApiKey ||
-					kiloCodeApiKey ||
-					(() => {
-						throw new Error("Unreachable because of earlier check.")
-					})(),
-
+				openRouterApiKey,
 				inputImageData,
 				task.taskId,
 			)
-
-			// kilocode_change end
 
 			if (!result.success) {
 				await task.say("error", result.error || "Failed to generate image")

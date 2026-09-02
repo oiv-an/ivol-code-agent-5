@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "歡迎使用 Kilo Code！",
-		"introText1": "Kilo Code 是一款免費、開放原始碼的 AI Coding Agent。",
+		"greeting": "歡迎使用 IVOL Code！",
+		"introText1": "IVOL Code 是一款免費、開放原始碼的 AI Coding Agent。",
 		"introText2": "可搭配最新的 AI 模型使用，如 Claude Opus 4.5、Gemini 3 Pro、GPT-5.2 以及其他 450 多種模型。",
 		"introText3": "建立免費帳戶即可開始使用。",
 		"ctaButton": "開始使用",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "增加額度",
-		"lowBalance": "Kilo Code 餘額不足",
+		"lowBalance": "IVOL Code 餘額不足",
 		"switchToFreeModel": "改為切換至免費模型"
 	},
 	"memoryWarning": {
@@ -76,10 +76,10 @@
 			"skills": "技能"
 		},
 		"provider": {
-			"account": "Kilo Code 帳戶",
-			"apiKey": "Kilo Code API 金鑰",
-			"login": "登入 Kilo Code",
-			"logout": "登出 Kilo Code",
+			"account": "IVOL Code 帳戶",
+			"apiKey": "Kilo API 金鑰",
+			"login": "登入 IVOL Code",
+			"logout": "登出 IVOL Code",
 			"loginForPremiumModels": "登入以存取進階模型與功能",
 			"providerRouting": {
 				"title": "供應商路由",
@@ -115,15 +115,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "允許讀取超大檔案",
-				"description": "啟用後，即使極有可能超出上下文視窗（內容大小 > 上下文視窗的 80%），Kilo Code 仍會讀取超大檔案或 MCP 輸出。"
+				"description": "啟用後，即使極有可能超出上下文視窗（內容大小 > 上下文視窗的 80%），IVOL Code 仍會讀取超大檔案或 MCP 輸出。"
 			}
 		},
 		"systemNotifications": {
 			"label": "啟用系統通知",
-			"description": "啟用後，Kilo Code 會發送系統通知，提醒任務完成或錯誤等重要事件。",
+			"description": "啟用後，IVOL Code 會發送系統通知，提醒任務完成或錯誤等重要事件。",
 			"testButton": "測試通知",
-			"testTitle": "Kilo Code",
-			"testMessage": "這是來自 Kilo Code 的測試通知。"
+			"testTitle": "IVOL Code",
+			"testMessage": "這是來自 IVOL Code 的測試通知。"
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -144,7 +144,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code 想要壓縮對話",
+			"wantsToCondense": "IVOL Code 想要壓縮對話",
 			"condenseConversation": "壓縮對話"
 		},
 		"seeNewChanges": "檢視新變更",
@@ -183,14 +183,14 @@
 			"modes": "模式",
 			"skills": "技能"
 		},
-		"ariaLabel": "Kilo Code 規則",
+		"ariaLabel": "IVOL Code 規則",
 		"tabs": {
 			"rules": "規則",
 			"workflows": "工作流程"
 		},
 		"description": {
-			"rules": "規則可讓 Kilo Code 在所有模式和所有提示中遵循指定的指示。這是在工作區或全域的所有對話中持續納入上下文和偏好設定的方式。",
-			"workflows": "工作流程是預先準備好的對話範本。工作流程可讓您定義經常使用的提示，並可包含一系列步驟，引導 Kilo Code 完成重複性任務，例如部署服務或提交 PR。若要叫用工作流程，請在聊天中輸入",
+			"rules": "規則可讓 IVOL Code 在所有模式和所有提示中遵循指定的指示。這是在工作區或全域的所有對話中持續納入上下文和偏好設定的方式。",
+			"workflows": "工作流程是預先準備好的對話範本。工作流程可讓您定義經常使用的提示，並可包含一系列步驟，引導 IVOL Code 完成重複性任務，例如部署服務或提交 PR。若要叫用工作流程，請在聊天中輸入",
 			"workflowsInChat": "。"
 		},
 		"sections": {
@@ -306,7 +306,7 @@
 			},
 			"noCredits": {
 				"title": "帳戶中沒有額度",
-				"description": "Kilo Code 帳戶沒有額度。若要使用 Autocomplete，請為帳戶儲值。",
+				"description": "IVOL Code 帳戶沒有額度。若要使用 Autocomplete，請為帳戶儲值。",
 				"buyCredits": "購買額度 →"
 			},
 			"configureAutocompleteProfile": "前往設定檔並設定一個類型為「Autocomplete」的設定檔，即可使用任何模型。"
@@ -349,7 +349,7 @@
 		"shareModesNewBanner": "新功能：建立組織以分享模式"
 	},
 	"deviceAuth": {
-		"title": "登入 Kilo Code",
+		"title": "登入 IVOL Code",
 		"step1": "在瀏覽器中開啟下列 URL",
 		"step2": "驗證代碼並在瀏覽器中授權此裝置",
 		"scanQr": "或用手機掃描此 QR Code",

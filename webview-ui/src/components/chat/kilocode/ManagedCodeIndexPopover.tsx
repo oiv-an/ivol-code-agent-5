@@ -10,7 +10,6 @@ import { useEscapeKey } from "@src/hooks/useEscapeKey"
 import { vscode } from "@src/utils/vscode"
 import { ManagedIndexerStatus } from "./ManagedIndexerStatus"
 import { type WorkspaceFolderState } from "./managedIndexerSchema"
-import { useExtensionState } from "../../../context/ExtensionStateContext"
 
 interface CodeIndexPopoverProps {
 	children: React.ReactNode
@@ -56,9 +55,7 @@ export const ManagedCodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({ child
 }
 
 const Content = () => {
-	const state = useExtensionState()
-	const orgId = state.apiConfiguration?.kilocodeOrganizationId
-	const href = `https://kilo.ai/organizations/${orgId}/code-indexing`
+	const href = "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	const [workspaceFolders, setWorkspaceFolders] = useState<WorkspaceFolderState[]>([])
 
 	// Request initial state when popover opens
@@ -86,7 +83,7 @@ const Content = () => {
 						<h4 className="m-0 pb-2 flex-1">Managed Code Indexing</h4>
 					</div>
 					<p className="my-0 pr-4 text-sm w-full mb-3">
-						<VSCodeLink href={href}>Configure on kilo.ai</VSCodeLink>
+						<VSCodeLink href={href}>IVOL Code documentation</VSCodeLink>
 					</p>
 				</div>
 
@@ -108,7 +105,7 @@ const Content = () => {
 					<h4 className="m-0 pb-2 flex-1">Managed Code Indexing</h4>
 				</div>
 				<p className="my-0 pr-4 text-sm w-full mb-3">
-					<VSCodeLink href={href}>Configure on kilo.ai</VSCodeLink>
+					<VSCodeLink href={href}>IVOL Code documentation</VSCodeLink>
 				</p>
 			</div>
 

@@ -139,17 +139,6 @@ export const KilocodeNotifications: React.FC = () => {
 								{action.actionText}
 							</VSCodeButton>
 						)}
-						{currentNotification.id === "kilo-new-extension-beta-march-11" && (
-							<VSCodeButton
-								appearance="primary"
-								onClick={() => {
-									vscode.postMessage({
-										type: "switchToPreRelease",
-									})
-								}}>
-								Try now
-							</VSCodeButton>
-						)}
 					</div>
 				)}
 			</div>

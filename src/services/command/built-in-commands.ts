@@ -8,7 +8,7 @@ interface BuiltInCommandDefinition {
 }
 
 const BUILT_IN_COMMANDS: Record<string, BuiltInCommandDefinition> = {
-	// kilocode_change start - Modified all .roo references to .kilocode for Kilo Code fork
+	// kilocode_change start - Modified all .roo references to .kilocode for IVOL Code fork
 	init: {
 		name: "init",
 		description: "Analyze codebase and create concise AGENTS.md files for AI assistants",

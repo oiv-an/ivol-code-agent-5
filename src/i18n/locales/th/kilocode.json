@@ -52,7 +52,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "ตัวสร้างข้อความคอมมิต Kilo Code เปิดใช้งานแล้ว",
+		"activated": "ตัวสร้างข้อความคอมมิต IVOL Code Agent 5 เปิดใช้งานแล้ว",
 		"gitNotFound": "⚠️ ไม่พบที่เก็บ Git หรือ git ไม่พร้อมใช้งาน",
 		"gitInitError": "⚠️ ข้อผิดพลาดในการเริ่มต้น Git: {{error}}",
 		"generating": "Kilo: กำลังสร้างข้อความคอมมิต...",
@@ -65,7 +65,7 @@
 		"errors": {
 			"noProject": "ไม่มีโครงการที่ใช้งานได้",
 			"timeout": "คำขอหมดเวลาหลังจาก 30 วินาที",
-			"connectionFailed": "ไม่สามารถเชื่อมต่อกับส่วนขยาย Kilo Code",
+			"connectionFailed": "ไม่สามารถเชื่อมต่อกับส่วนขยาย IVOL Code Agent 5",
 			"noChanges": "ไม่พบการเปลี่ยนแปลงที่จะคอมมิต",
 			"missingMessage": "ไม่ได้รับข้อความคอมมิตจากส่วนขยาย",
 			"invalidResponse": "ได้รับรูปแบบการตอบกลับที่ไม่ถูกต้องจากส่วนขยาย",
@@ -89,7 +89,7 @@
 		"progress": {
 			"analyzing": "กำลังวิเคราะห์การเปลี่ยนแปลง...",
 			"title": "กำลังสร้างข้อความคอมมิต",
-			"connecting": "กำลังเชื่อมต่อกับ Kilo Code...",
+			"connecting": "กำลังเชื่อมต่อกับ IVOL Code Agent 5...",
 			"generating": "กำลังสร้างข้อความคอมมิต..."
 		},
 		"ui": {
@@ -129,14 +129,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "หยุดชั่วคราว",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (ปิดใช้งาน)",
-				"noCredits": "**ไม่มีเครดิตในบัญชีของคุณ**\n\nบัญชี Kilo Code ของคุณไม่มีเครดิต หากต้องการใช้การเติมข้อความอัตโนมัติ กรุณาเพิ่มเครดิตในบัญชีของคุณ\n\n[เปิดการตั้งค่า](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**ไม่ได้กำหนดค่าโมเดลการเติมข้อความอัตโนมัติ**\n\nหากต้องการเปิดใช้งานการเติมข้อความอัตโนมัติ ให้เพิ่มโปรไฟล์กับผู้ให้บริการที่รองรับเหล่านี้: {{providers}}\n\n[เปิดการตั้งค่า](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (ปิดใช้งาน)",
+				"noCredits": "**ไม่มีเครดิตในบัญชีของคุณ**\n\nบัญชี IVOL Code Agent 5 ของคุณไม่มีเครดิต หากต้องการใช้การเติมข้อความอัตโนมัติ กรุณาเพิ่มเครดิตในบัญชีของคุณ\n\n[เปิดการตั้งค่า](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**ไม่ได้กำหนดค่าโมเดลการเติมข้อความอัตโนมัติ**\n\nหากต้องการเปิดใช้งานการเติมข้อความอัตโนมัติ ให้เพิ่มโปรไฟล์กับผู้ให้บริการที่รองรับเหล่านี้: {{providers}}\n\n[เปิดการตั้งค่า](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "ค่าใช้จ่ายรวมของเซสชัน:",
 				"provider": "ผู้ให้บริการ:",
 				"model": "โมเดล:",
@@ -150,36 +150,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "กำลังวิเคราะห์โค้ดของคุณ...",
 			"generating": "กำลังสร้างการแก้ไขที่แนะนำ...",
 			"processing": "กำลังประมวลผลการแก้ไขที่แนะนำ...",
 			"showing": "กำลังแสดงการแก้ไขที่แนะนำ..."
 		},
 		"input": {
-			"title": "Kilo Code: งานด่วน",
+			"title": "IVOL Code Agent 5: งานด่วน",
 			"placeholder": "เช่น 'ปรับโครงสร้างฟังก์ชันนี้ให้มีประสิทธิภาพมากขึ้น'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: สร้างการแก้ไขที่แนะนำ",
+			"generateSuggestions": "IVOL Code Agent 5: สร้างการแก้ไขที่แนะนำ",
 			"displaySuggestions": "แสดงการแก้ไขที่แนะนำ",
 			"cancelSuggestions": "ยกเลิกการแก้ไขที่แนะนำ",
 			"applyCurrentSuggestion": "ใช้การแก้ไขที่แนะนำปัจจุบัน",
 			"applyAllSuggestions": "ใช้การแก้ไขที่แนะนำทั้งหมด",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: การแก้ไขที่แนะนำ"
+			"title": "IVOL Code Agent 5: การแก้ไขที่แนะนำ"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "ฉันสามารถช่วยคุณในงานด่วนและการแก้ไขที่แนะนำได้"
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Kilo Code Autocomplete ถูกบล็อกโดยความขัดแย้งกับ GitHub Copilot เพื่อแก้ไขปัญหานี้ คุณต้องปิดใช้งานคำแนะนำแบบอินไลน์ของ Copilot",
+			"message": "IVOL Code Agent 5 Autocomplete ถูกบล็อกโดยความขัดแย้งกับ GitHub Copilot เพื่อแก้ไขปัญหานี้ คุณต้องปิดใช้งานคำแนะนำแบบอินไลน์ของ Copilot",
 			"disableCopilot": "ปิดใช้งาน Copilot",
 			"disableInlineAssist": "ปิดใช้งาน Autocomplete"
 		}
@@ -206,7 +206,7 @@
 		}
 	},
 	"configDiscovery": {
-		"added": "Kilo Code: เพิ่ม {{source}} {{configType}}: {{name}}{{modeStr}}",
-		"removed": "Kilo Code: ลบ {{source}} {{configType}}: {{name}}{{modeStr}}"
+		"added": "IVOL Code Agent 5: เพิ่ม {{source}} {{configType}}: {{name}}{{modeStr}}",
+		"removed": "IVOL Code Agent 5: ลบ {{source}} {{configType}}: {{name}}{{modeStr}}"
 	}
 }

@@ -1,8 +1,8 @@
 /**
  * @kilocode/agent-runtime
  *
- * Core agent runtime for Kilo Code - enables running agents without CLI.
- * This package provides the essential components for running the Kilo Code extension
+ * Core agent runtime for IVOL Code - enables running agents without CLI.
+ * This package provides the essential components for running the IVOL Code extension
  * in a Node.js environment without VS Code.
  */
 

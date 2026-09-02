@@ -7,13 +7,13 @@ object InlineCompletionConstants {
     /**
      * VSCode extension command ID for inline completion generation.
      */
-    const val EXTERNAL_COMMAND_ID = "kilo-code.jetbrains.getInlineCompletions"
+    const val EXTERNAL_COMMAND_ID = "ivol-code-agent-5.jetbrains.getInlineCompletions"
 
     /**
      * Command ID registered in the VSCode extension for tracking acceptance events.
      * This matches the command registered in AutocompleteInlineCompletionProvider.
      */
-    const val INLINE_COMPLETION_ACCEPTED_COMMAND = "kilocode.autocomplete.inline-completion.accepted"
+    const val INLINE_COMPLETION_ACCEPTED_COMMAND = "ivol-code-agent-5.autocomplete.inline-completion.accepted"
 
     /**
      * Default timeout in milliseconds for inline completion requests.

@@ -75,15 +75,17 @@ export class AutocompleteServiceManager {
 
 		this.settings = ContextProxy.instance.getGlobalState("ghostServiceSettings") ?? {
 			enableSmartInlineTaskKeybinding: true,
+			enableAutoTrigger: false,
+			enableChatAutocomplete: false,
 		}
-		// Auto-enable autocomplete by default
+		// Personal builds require an explicit opt-in before background autocomplete.
 		if (this.settings.enableAutoTrigger == undefined) {
-			this.settings.enableAutoTrigger = true
+			this.settings.enableAutoTrigger = false
 		}
 
-		// Auto-enable chat autocomplete by default
+		// Chat autocomplete is also opt-in to prevent implicit provider requests.
 		if (this.settings.enableChatAutocomplete == undefined) {
-			this.settings.enableChatAutocomplete = true
+			this.settings.enableChatAutocomplete = false
 		}
 
 		await this.updateGlobalContext()
@@ -92,7 +94,7 @@ export class AutocompleteServiceManager {
 		this.setupSnoozeTimerIfNeeded()
 		const settingsWithModelInfo = {
 			...this.settings,
-			provider: this.getCurrentProviderName(),
+			provider: this.getCurrentProviderKey(),
 			model: this.getCurrentModelName(),
 			hasKilocodeProfileWithNoBalance: this.model.hasKilocodeProfileWithNoBalance,
 		}
@@ -287,7 +289,7 @@ export class AutocompleteServiceManager {
 	private async updateGlobalContext() {
 		await vscode.commands.executeCommand(
 			"setContext",
-			"kilocode.autocomplete.enableSmartInlineTaskKeybinding",
+			"ivol-code-agent-5.autocomplete.enableSmartInlineTaskKeybinding",
 			this.settings?.enableSmartInlineTaskKeybinding || false,
 		)
 	}
@@ -310,7 +312,14 @@ export class AutocompleteServiceManager {
 		return this.model.getModelName()
 	}
 
-	private getCurrentProviderName(): string | undefined {
+	private getCurrentProviderKey(): string | undefined {
+		if (!this.model.loaded) {
+			return
+		}
+		return this.model.getProviderKey()
+	}
+
+	private getCurrentProviderDisplayName(): string | undefined {
 		if (!this.model.loaded) {
 			return
 		}
@@ -338,7 +347,7 @@ export class AutocompleteServiceManager {
 			enabled: this.settings?.enableAutoTrigger,
 			snoozed: this.isSnoozed(),
 			model: this.getCurrentModelName(),
-			provider: this.getCurrentProviderName(),
+			provider: this.getCurrentProviderDisplayName(),
 			profileName: this.model.profileName,
 			hasKilocodeProfileWithNoBalance: this.model.hasKilocodeProfileWithNoBalance,
 			hasNoUsableProvider: this.hasNoUsableProvider(),
@@ -357,7 +366,7 @@ export class AutocompleteServiceManager {
 		if (response === disableCopilot) {
 			await vscode.commands.executeCommand<any>("github.copilot.completions.disable")
 		} else if (response === disableInlineAssist) {
-			await vscode.commands.executeCommand<any>("kilo-code.autocomplete.disable")
+			await vscode.commands.executeCommand<any>("ivol-code-agent-5.autocomplete.disable")
 		}
 	}
 

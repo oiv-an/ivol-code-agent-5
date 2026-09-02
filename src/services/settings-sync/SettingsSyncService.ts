@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import { Package } from "../../shared/package"
 
 /**
- * Service for managing Kilo Code settings synchronization with VS Code Settings Sync
+ * Service for managing IVOL Code settings synchronization with VS Code Settings Sync
  */
 export class SettingsSyncService {
 	// Keys from global state that should be synchronized

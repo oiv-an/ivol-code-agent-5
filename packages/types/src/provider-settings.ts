@@ -184,6 +184,37 @@ export type ProviderName = z.infer<typeof providerNamesSchema>
 export const isProviderName = (key: unknown): key is ProviderName =>
 	typeof key === "string" && providerNames.includes(key as ProviderName)
 
+// kilocode_change start: personal build provider allowlist
+// Keep this policy in the shared types package so the extension host and every
+// webview model-discovery hook fail closed against the same source of truth.
+export const PERSONAL_PROVIDER_VALUES = [
+	"openai",
+	"openai-codex",
+	"claude-code",
+	"ollama",
+	"lmstudio",
+] as const satisfies readonly ProviderName[]
+
+export type PersonalProvider = (typeof PERSONAL_PROVIDER_VALUES)[number]
+
+const personalProviderValues = new Set<string>(PERSONAL_PROVIDER_VALUES)
+
+export const isPersonalProvider = (value: unknown): value is PersonalProvider =>
+	typeof value === "string" && personalProviderValues.has(value)
+
+// Only these personal providers have a router-style model catalog. OpenAI uses
+// its dedicated compatible-provider catalog; Codex Pro and Claude Code are
+// static; all remaining router providers are intentionally unavailable.
+export const PERSONAL_ROUTER_MODEL_PROVIDERS = ["ollama", "lmstudio"] as const satisfies readonly PersonalProvider[]
+
+export type PersonalRouterModelProvider = (typeof PERSONAL_ROUTER_MODEL_PROVIDERS)[number]
+
+const personalRouterModelProviders = new Set<string>(PERSONAL_ROUTER_MODEL_PROVIDERS)
+
+export const isPersonalRouterModelProvider = (value: unknown): value is PersonalRouterModelProvider =>
+	typeof value === "string" && personalRouterModelProviders.has(value)
+// kilocode_change end
+
 /**
  * ProviderSettingsEntry
  */

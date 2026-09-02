@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Welkom bij Kilo Code!",
-		"introText1": "Kilo Code is een gratis, open source AI coding agent.",
+		"greeting": "Welkom bij IVOL Code!",
+		"introText1": "IVOL Code is een gratis, open source AI coding agent.",
 		"introText2": "Het werkt met de nieuwste AI modellen zoals Claude Opus 4.5, Gemini 3 Pro, GPT-5.2, en meer dan 450 andere.",
 		"introText3": "Maak een gratis account aan om te beginnen.",
 		"ctaButton": "Aan de slag",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Krediet toevoegen",
-		"lowBalance": "Je Kilo Code-saldo is laag",
+		"lowBalance": "Je IVOL Code-saldo is laag",
 		"switchToFreeModel": "Schakel over naar een gratis model"
 	},
 	"pagination": {
@@ -68,10 +68,10 @@
 			"skills": "Skills"
 		},
 		"provider": {
-			"account": "Kilo Code Account",
-			"apiKey": "Kilo Code API-sleutel",
-			"login": "Inloggen bij Kilo Code",
-			"logout": "Uitloggen bij Kilo Code",
+			"account": "IVOL Code Account",
+			"apiKey": "Kilo API-sleutel",
+			"login": "Inloggen bij IVOL Code",
+			"logout": "Uitloggen bij IVOL Code",
 			"loginForPremiumModels": "Log in voor toegang tot premium modellen en functies",
 			"providerRouting": {
 				"title": "Provider Routing",
@@ -107,7 +107,7 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Sta zeer grote bestandslezingen toe",
-				"description": "Wanneer ingeschakeld, zal Kilo Code zeer grote bestands- of MCP-outputlezingen uitvoeren, zelfs als er een grote kans is dat het contextvenster overloopt (inhoudsgrootte >80% van het contextvenster)."
+				"description": "Wanneer ingeschakeld, zal IVOL Code zeer grote bestands- of MCP-outputlezingen uitvoeren, zelfs als er een grote kans is dat het contextvenster overloopt (inhoudsgrootte >80% van het contextvenster)."
 			}
 		},
 		"codeIndex": {
@@ -118,10 +118,10 @@
 		},
 		"systemNotifications": {
 			"label": "Systeemmeldingen inschakelen",
-			"description": "Wanneer ingeschakeld, zal Kilo Code systeemmeldingen sturen voor belangrijke gebeurtenissen zoals taakvoltooing of fouten.",
+			"description": "Wanneer ingeschakeld, zal IVOL Code systeemmeldingen sturen voor belangrijke gebeurtenissen zoals taakvoltooing of fouten.",
 			"testButton": "Testmelding",
-			"testTitle": "Kilo Code",
-			"testMessage": "Dit is een testmelding van Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Dit is een testmelding van IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -143,7 +143,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code wil je gesprek samenvatten",
+			"wantsToCondense": "IVOL Code wil je gesprek samenvatten",
 			"condenseConversation": "Gesprek samenvatten"
 		},
 		"seeNewChanges": "Toon Nieuwe Wijzigingen",
@@ -182,14 +182,14 @@
 			"modes": "Modi",
 			"skills": "Skills"
 		},
-		"ariaLabel": "Kilo Code Regels",
+		"ariaLabel": "IVOL Code Regels",
 		"tabs": {
 			"rules": "Regels",
 			"workflows": "Workflows"
 		},
 		"description": {
-			"rules": "Regels stellen je in staat om Kilo Code instructies te geven die het moet volgen in alle modi en voor alle prompts. Ze zijn een persistente manier om context en voorkeuren op te nemen voor alle gesprekken in je workspace of globaal.",
-			"workflows": "Workflows zijn een voorbereid sjabloon voor een gesprek. Workflows stellen je in staat om prompts te definiëren die je vaak gebruikt, en kunnen een reeks stappen bevatten om Kilo Code te begeleiden door repetitieve taken, zoals het implementeren van een service of het indienen van een PR. Om een workflow aan te roepen, typ",
+			"rules": "Regels stellen je in staat om IVOL Code instructies te geven die het moet volgen in alle modi en voor alle prompts. Ze zijn een persistente manier om context en voorkeuren op te nemen voor alle gesprekken in je workspace of globaal.",
+			"workflows": "Workflows zijn een voorbereid sjabloon voor een gesprek. Workflows stellen je in staat om prompts te definiëren die je vaak gebruikt, en kunnen een reeks stappen bevatten om IVOL Code te begeleiden door repetitieve taken, zoals het implementeren van een service of het indienen van een PR. Om een workflow aan te roepen, typ",
 			"workflowsInChat": "in de chat."
 		},
 		"sections": {
@@ -297,7 +297,7 @@
 			},
 			"noCredits": {
 				"title": "Geen tegoed op je account",
-				"description": "Je Kilo Code-account heeft geen tegoed. Om autocomplete te gebruiken, voeg tegoed toe aan je account.",
+				"description": "Je IVOL Code-account heeft geen tegoed. Om autocomplete te gebruiken, voeg tegoed toe aan je account.",
 				"buyCredits": "Tegoed kopen →"
 			},
 			"keybindingNotFound": "niet gevonden",
@@ -349,7 +349,7 @@
 		"shareModesNewBanner": "Nieuw: Deel modi door een organisatie aan te maken"
 	},
 	"deviceAuth": {
-		"title": "Inloggen bij Kilo Code",
+		"title": "Inloggen bij IVOL Code",
 		"step1": "Open de volgende URL in je browser",
 		"step2": "Verifieer de code en autoriseer dit apparaat in je browser",
 		"scanQr": "Of scan deze QR-code met je telefoon",

@@ -45,6 +45,7 @@ import {
 	lMStudioDefaultModelInfo,
 	BEDROCK_1M_CONTEXT_MODEL_IDS,
 	isDynamicProvider,
+	isPersonalProvider, // kilocode_change
 	getProviderDefaultModelId,
 	NATIVE_TOOL_DEFAULTS,
 } from "@roo-code/types"
@@ -55,16 +56,13 @@ import { useLmStudioModels } from "./useLmStudioModels"
 import { useExtensionState } from "@/context/ExtensionStateContext" // kilocode_change
 
 // kilocode_change start
-export const useModelProviders = (kilocodeDefaultModel: string, apiConfiguration?: ProviderSettings) => {
+export const useModelProviders = (_kilocodeDefaultModel: string, apiConfiguration?: ProviderSettings) => {
 	const provider = apiConfiguration?.apiProvider
+	const shouldFetchOpenRouterProviders = provider === "openrouter" && isPersonalProvider(provider)
 	return useOpenRouterModelProviders(
-		provider === "kilocode"
-			? (apiConfiguration?.kilocodeModel ?? kilocodeDefaultModel)
-			: provider === "openrouter"
-				? (apiConfiguration?.openRouterModelId ?? openRouterDefaultModelId)
-				: undefined,
-		provider === "openrouter" ? apiConfiguration?.openRouterBaseUrl : undefined,
-		apiConfiguration?.apiKey,
+		shouldFetchOpenRouterProviders ? (apiConfiguration?.openRouterModelId ?? openRouterDefaultModelId) : undefined,
+		shouldFetchOpenRouterProviders ? apiConfiguration?.openRouterBaseUrl : undefined,
+		shouldFetchOpenRouterProviders ? apiConfiguration?.apiKey : undefined,
 		apiConfiguration?.kilocodeOrganizationId ?? "personal",
 	)
 }
@@ -92,7 +90,7 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 	// kilocode_change end
 
 	// Only fetch router models for dynamic providers
-	const shouldFetchRouterModels = isDynamicProvider(provider)
+	const shouldFetchRouterModels = isPersonalProvider(provider) && isDynamicProvider(provider) // kilocode_change
 	const routerModels = useRouterModels(
 		//kilocode_change start
 		{
@@ -107,8 +105,8 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 		},
 		// kilocode_change end
 		{
-			provider: shouldFetchRouterModels ? provider : undefined,
-			enabled: shouldFetchRouterModels,
+			provider: shouldFetchRouterModels ? provider : undefined, // kilocode_change
+			enabled: shouldFetchRouterModels, // kilocode_change
 		},
 	)
 
@@ -366,7 +364,12 @@ function getSelectedModel({
 				supportsNativeTools: openAiModelInfoSaneDefaults.supportsNativeTools,
 				defaultToolProtocol: openAiModelInfoSaneDefaults.defaultToolProtocol,
 			}
-			const info = customInfo ? { ...nativeToolDefaults, ...customInfo } : openAiModelInfoSaneDefaults
+			// kilocode_change start: personal OpenAI-compatible profiles always report caching support
+			const info = {
+				...(customInfo ? { ...nativeToolDefaults, ...customInfo } : openAiModelInfoSaneDefaults),
+				supportsPromptCache: true,
+			}
+			// kilocode_change end
 			return { id, info }
 		}
 		// kilocode_change start
@@ -377,7 +380,12 @@ function getSelectedModel({
 				supportsNativeTools: openAiModelInfoSaneDefaults.supportsNativeTools,
 				defaultToolProtocol: openAiModelInfoSaneDefaults.defaultToolProtocol,
 			}
-			const info = customInfo ? { ...nativeToolDefaults, ...customInfo } : openAiModelInfoSaneDefaults
+			// kilocode_change start: Responses caching is automatic for supported endpoints
+			const info = {
+				...(customInfo ? { ...nativeToolDefaults, ...customInfo } : openAiModelInfoSaneDefaults),
+				supportsPromptCache: true,
+			}
+			// kilocode_change end
 			return { id, info }
 		}
 		// kilocode_change end
@@ -474,7 +482,7 @@ function getSelectedModel({
 			const invalidOrDefaultModel = apiConfiguration.kilocodeModel ?? kilocodeDefaultModel
 			return {
 				id: invalidOrDefaultModel,
-				info: routerModels["kilocode"][invalidOrDefaultModel],
+				info: routerModels["kilocode"]?.[invalidOrDefaultModel], // kilocode_change
 			}
 		}
 		case "virtual-quota-fallback": {

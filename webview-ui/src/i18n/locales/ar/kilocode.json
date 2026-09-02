@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "مرحبًا بك في Kilo Code!",
-		"introText1": "Kilo Code وكيل برمجة مدعوم بالذكاء ومفتوح المصدر ومجاني.",
+		"greeting": "مرحبًا بك في IVOL Code!",
+		"introText1": "IVOL Code وكيل برمجة مدعوم بالذكاء ومفتوح المصدر ومجاني.",
 		"introText2": "يعمل مع أحدث نماذج الذكاء الاصطناعي مثل Claude Opus 4.5 وGemini 3 Pro وGPT-5.2 وأكثر من 450 نموذج آخر.",
 		"introText3": "أنشئ حسابًا مجانيًا للبدء.",
 		"ctaButton": "ابدأ الآن",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "شحن الرصيد",
-		"lowBalance": "رصيدك في Kilo Code منخفض",
+		"lowBalance": "رصيدك في IVOL Code منخفض",
 		"switchToFreeModel": "التبديل إلى نموذج مجاني بدلاً من ذلك"
 	},
 	"memoryWarning": {
@@ -70,10 +70,10 @@
 			"scannerMaxBatchRetriesDescription": "الحد الأقصى لعدد المرات التي يتم فيها إعادة محاولة دفعة فاشلة أثناء فحص الدليل. القيم الأعلى تزيد من المرونة ضد الأخطاء المؤقتة لكنها قد تبطئ الفهرسة إذا استمرت الأخطاء. القيم الأقل تفشل بشكل أسرع لكنها قد تتخطى المحتوى عند حدوث مشاكل مؤقتة."
 		},
 		"provider": {
-			"account": "حساب Kilo Code",
-			"apiKey": "مفتاح Kilo Code API",
-			"login": "سجّل دخولك في Kilo Code",
-			"logout": "تسجيل الخروج من Kilo Code",
+			"account": "حساب IVOL Code",
+			"apiKey": "مفتاح Kilo API",
+			"login": "سجّل دخولك في IVOL Code",
+			"logout": "تسجيل الخروج من IVOL Code",
 			"loginForPremiumModels": "سجّل دخولك للوصول إلى النماذج والميزات المميزة",
 			"providerRouting": {
 				"title": "توجيه المزود",
@@ -109,15 +109,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "السماح بقراءة ملفات ضخمة",
-				"description": "إذا تم تفعيله، Kilo Code يقدر يقرأ ملفات ضخمة أو مخرجات MCP حتى لو فيه احتمال يتجاوز حجم السياق (إذا المحتوى تجاوز 80% من حجم السياق)."
+				"description": "إذا تم تفعيله، IVOL Code يقدر يقرأ ملفات ضخمة أو مخرجات MCP حتى لو فيه احتمال يتجاوز حجم السياق (إذا المحتوى تجاوز 80% من حجم السياق)."
 			}
 		},
 		"systemNotifications": {
 			"label": "تفعيل إشعارات النظام",
-			"description": "عند التفعيل، سيرسل Kilo Code إشعارات النظام للأحداث المهمة مثل إكمال المهام أو الأخطاء.",
+			"description": "عند التفعيل، سيرسل IVOL Code إشعارات النظام للأحداث المهمة مثل إكمال المهام أو الأخطاء.",
 			"testButton": "اختبار الإشعار",
-			"testTitle": "Kilo Code",
-			"testMessage": "هذا إشعار اختباري من Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "هذا إشعار اختباري من IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -139,7 +139,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code يقترح تلخيص المحادثة",
+			"wantsToCondense": "IVOL Code يقترح تلخيص المحادثة",
 			"condenseConversation": "تلخيص المحادثة"
 		},
 		"seeNewChanges": "عرض التغييرات الجديدة",
@@ -178,13 +178,13 @@
 			"modes": "الأوضاع",
 			"skills": "المهارات"
 		},
-		"ariaLabel": "قواعد Kilo Code",
+		"ariaLabel": "قواعد IVOL Code",
 		"tabs": {
 			"rules": "القواعد",
 			"workflows": "سير العمل"
 		},
 		"description": {
-			"rules": "القواعد تتيح لك تحديد تعليمات يلتزم بها Kilo Code في جميع الأنماط والموجهات. وسيلة ثابتة لإضافة تفضيلاتك وسياقك للمحادثات.",
+			"rules": "القواعد تتيح لك تحديد تعليمات يلتزم بها IVOL Code في جميع الأنماط والموجهات. وسيلة ثابتة لإضافة تفضيلاتك وسياقك للمحادثات.",
 			"workflows": "سير العمل هو قالب محادثة جاهز. تقدر تستخدمه لتكرار أوامر أو خطوات مثل رفع خدمة أو تقديم PR. لتشغيل سير عمل، اكتب",
 			"workflowsInChat": "في المحادثة."
 		},
@@ -293,7 +293,7 @@
 			},
 			"noCredits": {
 				"title": "لا يوجد رصيد في حسابك",
-				"description": "حساب Kilo Code الخاص بك لا يحتوي على رصيد. لاستخدام الإكمال التلقائي، يرجى إضافة رصيد إلى حسابك.",
+				"description": "حساب IVOL Code الخاص بك لا يحتوي على رصيد. لاستخدام الإكمال التلقائي، يرجى إضافة رصيد إلى حسابك.",
 				"buyCredits": "شراء رصيد ←"
 			},
 			"keybindingNotFound": "غير موجود",
@@ -349,7 +349,7 @@
 		"shareModesNewBanner": "جديد: مشاركة الأوضاع عن طريق إنشاء منظمة"
 	},
 	"deviceAuth": {
-		"title": "تسجيل الدخول إلى Kilo Code",
+		"title": "تسجيل الدخول إلى IVOL Code",
 		"step1": "افتح الرابط التالي في متصفحك",
 		"step2": "تحقق من الرمز وصرّح لهذا الجهاز في متصفحك",
 		"scanQr": "أو امسح رمز QR هذا بهاتفك",

@@ -41,7 +41,7 @@
 		"ui": "Používateľské rozhranie",
 		"experimental": "Experimentálne",
 		"language": "Jazyk",
-		"about": "O Kilo Code",
+		"about": "O IVOL Code",
 		"autoPurge": "Automatické čistenie",
 		"agentBehaviour": "Správanie agenta",
 		"autocomplete": "Automatické dokončovanie"
@@ -66,7 +66,7 @@
 		"contactSupportDesc": "Získať pomoc s technickými problémami alebo otázkami k účtu",
 		"joinCommunity": "Pripojiť sa ku komunite",
 		"joinCommunityDesc": "Pripoj sa k ostatným používateľom pre tipy a diskusie",
-		"community": "Chceš tipy alebo si len pokecať s ostatnými používateľmi Kilo Code? Pripoj sa na <redditLink>reddit.com/r/kilocode</redditLink> alebo <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Chceš tipy alebo si len pokecať s ostatnými používateľmi IVOL Code? Pripoj sa na <redditLink>reddit.com/r/kilocode</redditLink> alebo <discordLink>kilo.ai/discord</discordLink>",
 		"contactAndCommunity": "Kontakt a komunita",
 		"manageSettings": "Spravovať nastavenia",
 		"debugMode": {
@@ -88,7 +88,7 @@
 		}
 	},
 	"prompts": {
-		"description": "Nakonfigurujte podporné prompty, ktoré sa používajú pre rýchle akcie, ako je vylepšenie promptov, vysvetlenie kódu a oprava problémov. Tieto prompty pomáhajú Kilo Code poskytovať lepšiu pomoc pri bežných vývojových úlohách."
+		"description": "Nakonfigurujte podporné prompty, ktoré sa používajú pre rýchle akcie, ako je vylepšenie promptov, vysvetlenie kódu a oprava problémov. Tieto prompty pomáhajú IVOL Code poskytovať lepšiu pomoc pri bežných vývojových úlohách."
 	},
 	"codeIndex": {
 		"title": "Indexovanie kódovej bázy",
@@ -219,18 +219,18 @@
 	},
 	"autoApproval": {
 		"title": "Automatické schválenie",
-		"description": "Povoliť Kilo Code automaticky vykonávať operácie bez nutnosti schválenia. Povoľte tieto nastavenia iba v prípade, že plne dôverujete AI a rozumiete súvisiacim bezpečnostným rizikám."
+		"description": "Povoliť IVOL Code automaticky vykonávať operácie bez nutnosti schválenia. Povoľte tieto nastavenia iba v prípade, že plne dôverujete AI a rozumiete súvisiacim bezpečnostným rizikám."
 	},
 	"autoApprove": {
-		"description": "Povoliť Kilo Code automaticky vykonávať operácie bez nutnosti schválenia. Povoľte tieto nastavenia iba v prípade, že plne dôverujete AI a rozumiete súvisiacim bezpečnostným rizikám.",
+		"description": "Povoliť IVOL Code automaticky vykonávať operácie bez nutnosti schválenia. Povoľte tieto nastavenia iba v prípade, že plne dôverujete AI a rozumiete súvisiacim bezpečnostným rizikám.",
 		"toggleShortcut": "Môžete nakonfigurovať klávesovú skratku pre toto nastavenie <SettingsLink>v nastaveniach vášho IDE</SettingsLink>.",
 		"enabled": "Automatické schválenie povolené",
 		"readOnly": {
 			"label": "Čítať",
-			"description": "Ak je povolené, Kilo Code automaticky zobrazí obsah adresára a prečíta súbory bez toho, aby ste museli klikať na tlačidlo Schváliť.",
+			"description": "Ak je povolené, IVOL Code automaticky zobrazí obsah adresára a prečíta súbory bez toho, aby ste museli klikať na tlačidlo Schváliť.",
 			"outsideWorkspace": {
 				"label": "Zahrnúť súbory mimo pracovného priestoru",
-				"description": "Povoliť Kilo Code čítať súbory mimo aktuálneho pracovného priestoru bez nutnosti schválenia."
+				"description": "Povoliť IVOL Code čítať súbory mimo aktuálneho pracovného priestoru bez nutnosti schválenia."
 			}
 		},
 		"write": {
@@ -239,11 +239,11 @@
 			"delayLabel": "Oneskorenie po zápise, aby diagnostika mohla detekovať potenciálne problémy",
 			"outsideWorkspace": {
 				"label": "Zahrnúť súbory mimo pracovného priestoru",
-				"description": "Povoliť Kilo Code vytvárať a upravovať súbory mimo aktuálneho pracovného priestoru bez nutnosti schválenia."
+				"description": "Povoliť IVOL Code vytvárať a upravovať súbory mimo aktuálneho pracovného priestoru bez nutnosti schválenia."
 			},
 			"protected": {
 				"label": "Zahrnúť chránené súbory",
-				"description": "Povoliť Kilo Code vytvárať a upravovať chránené súbory (ako .kilocodeignore a konfiguračné súbory .kilocode/) bez nutnosti schválenia."
+				"description": "Povoliť IVOL Code vytvárať a upravovať chránené súbory (ako .kilocodeignore a konfiguračné súbory .kilocode/) bez nutnosti schválenia."
 			}
 		},
 		"browser": {
@@ -587,7 +587,7 @@
 			"draftModelDesc": "Model konceptu musí byť z rovnakej rodiny modelov, aby špekulatívne dekódovanie fungovalo správne.",
 			"selectDraftModel": "Vybrať model konceptu",
 			"noModelsFound": "Neboli nájdené žiadne modely konceptu. Uistite sa, že LM Studio beží s povoleným režimom servera.",
-			"description": "LM Studio vám umožňuje spúšťať modely lokálne na vašom počítači. Pokyny na začatie práce nájdete v ich <a>sprievodcovi rýchlym štartom</a>. Budete tiež musieť spustiť funkciu <b>lokálneho servera</b> LM Studio, aby ste ho mohli používať s týmto rozšírením. <span>Poznámka:</span> Kilo Code používa zložité prompty a najlepšie funguje s modelmi Claude. Menej schopné modely nemusia fungovať podľa očakávania."
+			"description": "LM Studio vám umožňuje spúšťať modely lokálne na vašom počítači. Pokyny na začatie práce nájdete v ich <a>sprievodcovi rýchlym štartom</a>. Budete tiež musieť spustiť funkciu <b>lokálneho servera</b> LM Studio, aby ste ho mohli používať s týmto rozšírením. <span>Poznámka:</span> IVOL Code používa zložité prompty a najlepšie funguje s modelmi Claude. Menej schopné modely nemusia fungovať podľa očakávania."
 		},
 		"ollama": {
 			"baseUrl": "Základná URL (voliteľné)",
@@ -599,7 +599,7 @@
 			"numCtx": "Veľkosť kontextového okna (num_ctx)",
 			"numCtxHelp": "Prepísať predvolenú veľkosť kontextového okna modelu. Ponechajte prázdne pre použitie konfigurácie Modelfile modelu. Minimálna hodnota je 128.",
 			"description": "Ollama vám umožňuje spúšťať modely lokálne na vašom počítači. Pokyny na začatie práce nájdete v ich sprievodcovi rýchlym štartom.",
-			"warning": "Poznámka: Kilo Code používa zložité prompty a najlepšie funguje s modelmi Claude. Menej schopné modely nemusia fungovať podľa očakávania."
+			"warning": "Poznámka: IVOL Code používa zložité prompty a najlepšie funguje s modelmi Claude. Menej schopné modely nemusia fungovať podľa očakávania."
 		},
 		"unboundApiKey": "Kľúč API Unbound",
 		"getUnboundApiKey": "Získať kľúč API Unbound",
@@ -610,8 +610,8 @@
 			"instructions": "Počas používania sa zobrazí dialógové okno a aktuálna správa sa automaticky skopíruje do schránky. Musíte ich vložiť do webových verzií AI (napríklad ChatGPT alebo Claude), potom skopírovať odpoveď AI späť do dialógového okna a kliknúť na tlačidlo potvrdiť."
 		},
 		"roo": {
-			"authenticatedMessage": "Bezpečne autentifikované prostredníctvom vášho účtu Kilo Code Cloud.",
-			"connectButton": "Pripojiť sa k Kilo Code Cloud"
+			"authenticatedMessage": "Bezpečne autentifikované prostredníctvom vášho účtu Kilo Cloud.",
+			"connectButton": "Pripojiť sa k Kilo Cloud"
 		},
 		"openRouter": {
 			"providerRouting": {
@@ -621,7 +621,7 @@
 			}
 		},
 		"customModel": {
-			"capabilities": "Nakonfigurujte schopnosti a ceny pre váš vlastný model kompatibilný s OpenAI. Pri zadávaní schopností modelu buďte opatrní, pretože môžu ovplyvniť výkon Kilo Code.",
+			"capabilities": "Nakonfigurujte schopnosti a ceny pre váš vlastný model kompatibilný s OpenAI. Pri zadávaní schopností modelu buďte opatrní, pretože môžu ovplyvniť výkon IVOL Code.",
 			"maxTokens": {
 				"label": "Maximálny počet výstupných tokenov",
 				"description": "Maximálny počet tokenov, ktoré môže model vygenerovať v odpovedi. (Zadajte -1, aby server mohol nastaviť maximálny počet tokenov.)"
@@ -672,7 +672,7 @@
 		},
 		"consecutiveMistakeLimit": {
 			"label": "Limit chýb a opakovaní",
-			"description": "Počet po sebe idúcich chýb alebo opakovaných akcií pred zobrazením dialógu 'Kilo Code má problémy'",
+			"description": "Počet po sebe idúcich chýb alebo opakovaných akcií pred zobrazením dialógu 'IVOL Code má problémy'",
 			"unlimitedDescription": "Neobmedzené opakovanie povolené (automatické pokračovanie). Dialóg sa nikdy nezobrazí.",
 			"warning": "⚠️ Nastavenie na 0 umožňuje neobmedzené opakovanie, čo môže spotrebovať značné množstvo API využitia"
 		},
@@ -746,7 +746,7 @@
 	"browser": {
 		"enable": {
 			"label": "Povoliť nástroj prehliadača",
-			"description": "Ak je povolené, Kilo Code môže používať prehliadač na interakciu s webovými stránkami pri používaní modelov, ktoré podporujú používanie počítača. <0>Dozvedieť sa viac</0>"
+			"description": "Ak je povolené, IVOL Code môže používať prehliadač na interakciu s webovými stránkami pri používaní modelov, ktoré podporujú používanie počítača. <0>Dozvedieť sa viac</0>"
 		},
 		"viewport": {
 			"label": "Veľkosť zobrazenia",
@@ -778,7 +778,7 @@
 		},
 		"enable": {
 			"label": "Povoliť automatické kontrolné body",
-			"description": "Ak je povolené, Kilo Code automaticky vytvorí kontrolné body počas vykonávania úlohy, čo uľahčí kontrolu zmien alebo návrat do predchádzajúcich stavov. <0>Dozvedieť sa viac</0>"
+			"description": "Ak je povolené, IVOL Code automaticky vytvorí kontrolné body počas vykonávania úlohy, čo uľahčí kontrolu zmien alebo návrat do predchádzajúcich stavov. <0>Dozvedieť sa viac</0>"
 		}
 	},
 	"autoPurge": {
@@ -846,12 +846,12 @@
 	"notifications": {
 		"sound": {
 			"label": "Povoliť zvukové efekty",
-			"description": "Ak je povolené, Kilo Code bude prehrávať zvukové efekty pre oznámenia a udalosti.",
+			"description": "Ak je povolené, IVOL Code bude prehrávať zvukové efekty pre oznámenia a udalosti.",
 			"volumeLabel": "Hlasitosť"
 		},
 		"tts": {
 			"label": "Povoliť prevod textu na reč",
-			"description": "Ak je povolené, Kilo Code bude nahlas čítať svoje odpovede pomocou prevodu textu na reč.",
+			"description": "Ak je povolené, IVOL Code bude nahlas čítať svoje odpovede pomocou prevodu textu na reč.",
 			"speedLabel": "Rýchlosť"
 		}
 	},
@@ -859,7 +859,7 @@
 		"description": "Kontrolujte, aké informácie sú zahrnuté v kontextovom okne AI, čo ovplyvňuje využitie tokenov a kvalitu odpovede",
 		"autoCondenseContextPercent": {
 			"label": "Prahová hodnota pre spustenie inteligentného zhusťovania kontextu",
-			"description": "Keď kontextové okno dosiahne túto prahovú hodnotu, Kilo Code ho automaticky zhustí."
+			"description": "Keď kontextové okno dosiahne túto prahovú hodnotu, IVOL Code ho automaticky zhustí."
 		},
 		"condensingApiConfiguration": {
 			"label": "Konfigurácia API pre zhusťovanie kontextu",
@@ -875,7 +875,7 @@
 		},
 		"autoCondenseContext": {
 			"name": "Automaticky spúšťať inteligentné zhusťovanie kontextu",
-			"description": "Ak je povolené, Kilo Code automaticky zhustí kontext, keď je dosiahnutá prahová hodnota. Ak je zakázané, môžete stále ručne spúšťať zhusťovanie kontextu."
+			"description": "Ak je povolené, IVOL Code automaticky zhustí kontext, keď je dosiahnutá prahová hodnota. Ak je zakázané, môžete stále ručne spúšťať zhusťovanie kontextu."
 		},
 		"openTabs": {
 			"label": "Limit kontextu otvorených kariet",
@@ -903,7 +903,7 @@
 		},
 		"maxReadFile": {
 			"label": "Prahová hodnota automatického skrátenia pri čítaní súboru",
-			"description": "Kilo Code načíta tento počet riadkov, keď model vynechá počiatočné/koncové hodnoty. Ak je toto číslo menšie ako celkový počet riadkov súboru, Kilo Code vygeneruje index čísel riadkov definícií kódu. Špeciálne prípady: -1 inštruuje Kilo Code, aby prečítal celý súbor (bez indexovania), a 0 ho inštruuje, aby nenačítal žiadne riadky a poskytoval iba indexy riadkov pre minimálny kontext. Nižšie hodnoty minimalizujú počiatočné využitie kontextu, čo umožňuje presné následné čítanie rozsahu riadkov. Explicitné požiadavky na začiatok/koniec nie sú týmto nastavením obmedzené.",
+			"description": "IVOL Code načíta tento počet riadkov, keď model vynechá počiatočné/koncové hodnoty. Ak je toto číslo menšie ako celkový počet riadkov súboru, IVOL Code vygeneruje index čísel riadkov definícií kódu. Špeciálne prípady: -1 inštruuje IVOL Code, aby prečítal celý súbor (bez indexovania), a 0 ho inštruuje, aby nenačítal žiadne riadky a poskytoval iba indexy riadkov pre minimálny kontext. Nižšie hodnoty minimalizujú počiatočné využitie kontextu, čo umožňuje presné následné čítanie rozsahu riadkov. Explicitné požiadavky na začiatok/koniec nie sú týmto nastavením obmedzené.",
 			"lines": "riadky",
 			"always_full_read": "Vždy čítať celý súbor"
 		},
@@ -1027,7 +1027,7 @@
 		"maxTokensDescription": "Maximálny počet tokenov v odpovedi",
 		"diff": {
 			"label": "Povoliť úpravy prostredníctvom diffov",
-			"description": "Ak je povolené, Kilo Code bude môcť rýchlejšie upravovať súbory a automaticky odmietne skrátené zápisy celých súborov. Najlepšie funguje s najnovším modelom Claude 4 Sonnet.",
+			"description": "Ak je povolené, IVOL Code bude môcť rýchlejšie upravovať súbory a automaticky odmietne skrátené zápisy celých súborov. Najlepšie funguje s najnovším modelom Claude 4 Sonnet.",
 			"strategy": {
 				"label": "Stratégia diff",
 				"options": {
@@ -1048,7 +1048,7 @@
 		},
 		"todoList": {
 			"label": "Povoliť nástroj zoznamu úloh",
-			"description": "Ak je povolené, Kilo Code môže vytvárať a spravovať zoznamy úloh pre sledovanie priebehu úlohy. To pomáha organizovať zložité úlohy do zvládnuteľných krokov."
+			"description": "Ak je povolené, IVOL Code môže vytvárať a spravovať zoznamy úloh pre sledovanie priebehu úlohy. To pomáha organizovať zložité úlohy do zvládnuteľných krokov."
 		}
 	},
 	"experimental": {
@@ -1058,7 +1058,7 @@
 		},
 		"MORPH_FAST_APPLY": {
 			"name": "Povoliť Fast Apply",
-			"description": "Ak je povolené, Kilo Code môže upravovať súbory pomocou Fast Apply so špecializovanými modelmi optimalizovanými pre úpravy kódu. Vyžaduje Kilo Gateway Provider, OpenRouter alebo kľúč API Morph.",
+			"description": "Ak je povolené, IVOL Code môže upravovať súbory pomocou Fast Apply so špecializovanými modelmi optimalizovanými pre úpravy kódu. Vyžaduje Kilo Gateway Provider, OpenRouter alebo kľúč API Morph.",
 			"apiProvider": "Poskytovateľ API",
 			"apiProviderList": {
 				"current": "Aktuálny"
@@ -1076,19 +1076,19 @@
 		},
 		"INSERT_BLOCK": {
 			"name": "Použiť experimentálny nástroj vkladania obsahu",
-			"description": "Povoliť experimentálny nástroj vkladania obsahu, ktorý umožňuje Kilo Code vkladať obsah na konkrétne čísla riadkov bez nutnosti vytvárať diff."
+			"description": "Povoliť experimentálny nástroj vkladania obsahu, ktorý umožňuje IVOL Code vkladať obsah na konkrétne čísla riadkov bez nutnosti vytvárať diff."
 		},
 		"POWER_STEERING": {
 			"name": "Použiť experimentálny režim \"posilňovača riadenia\"",
-			"description": "Ak je povolené, Kilo Code bude modelu častejšie pripomínať podrobnosti jeho aktuálnej definície režimu. To povedie k silnejšiemu dodržiavaniu definícií rolí a vlastných inštrukcií, ale použije viac tokenov na správu."
+			"description": "Ak je povolené, IVOL Code bude modelu častejšie pripomínať podrobnosti jeho aktuálnej definície režimu. To povedie k silnejšiemu dodržiavaniu definícií rolí a vlastných inštrukcií, ale použije viac tokenov na správu."
 		},
 		"CONCURRENT_FILE_READS": {
 			"name": "Povoliť súbežné čítanie súborov",
-			"description": "Ak je povolené, Kilo Code môže čítať viac súborov v jednej požiadavke. Ak je zakázané, Kilo Code musí čítať súbory jeden po druhom. Zakázanie môže pomôcť pri práci s menej schopnými modelmi alebo keď chcete mať väčšiu kontrolu nad prístupom k súborom."
+			"description": "Ak je povolené, IVOL Code môže čítať viac súborov v jednej požiadavke. Ak je zakázané, IVOL Code musí čítať súbory jeden po druhom. Zakázanie môže pomôcť pri práci s menej schopnými modelmi alebo keď chcete mať väčšiu kontrolu nad prístupom k súborom."
 		},
 		"MULTI_SEARCH_AND_REPLACE": {
 			"name": "Použiť experimentálny nástroj diff s viacerými blokmi",
-			"description": "Ak je povolené, Kilo Code bude používať nástroj diff s viacerými blokmi. To sa pokúsi aktualizovať viac blokov kódu v súbore v jednej požiadavke."
+			"description": "Ak je povolené, IVOL Code bude používať nástroj diff s viacerými blokmi. To sa pokúsi aktualizovať viac blokov kódu v súbore v jednej požiadavke."
 		},
 		"MARKETPLACE": {
 			"name": "Povoliť Marketplace",
@@ -1096,11 +1096,11 @@
 		},
 		"MULTI_FILE_APPLY_DIFF": {
 			"name": "Povoliť súbežné úpravy súborov",
-			"description": "Ak je povolené, Kilo Code môže upravovať viac súborov v jednej požiadavke. Ak je zakázané, Kilo Code musí upravovať súbory jeden po druhom. Zakázanie môže pomôcť pri práci s menej schopnými modelmi alebo keď chcete mať väčšiu kontrolu nad úpravami súborov."
+			"description": "Ak je povolené, IVOL Code môže upravovať viac súborov v jednej požiadavke. Ak je zakázané, IVOL Code musí upravovať súbory jeden po druhom. Zakázanie môže pomôcť pri práci s menej schopnými modelmi alebo keď chcete mať väčšiu kontrolu nad úpravami súborov."
 		},
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Úpravy na pozadí",
-			"description": "Zabrániť narušeniu zamerania editora, keď je povolené. Úpravy súborov prebiehajú na pozadí bez otvárania diff zobrazenia alebo krádeže zamerania. Môžete pokračovať v práci bez prerušenia, zatiaľ čo Kilo Code vykonáva zmeny. Súbory môžu byť otvorené bez zamerania pre zachytenie diagnostiky alebo zostať úplne zatvorené."
+			"description": "Zabrániť narušeniu zamerania editora, keď je povolené. Úpravy súborov prebiehajú na pozadí bez otvárania diff zobrazenia alebo krádeže zamerania. Môžete pokračovať v práci bez prerušenia, zatiaľ čo IVOL Code vykonáva zmeny. Súbory môžu byť otvorené bez zamerania pre zachytenie diagnostiky alebo zostať úplne zatvorené."
 		},
 		"ASSISTANT_MESSAGE_PARSER": {
 			"name": "Použiť nový parser správ",
@@ -1112,15 +1112,15 @@
 		},
 		"IMAGE_GENERATION": {
 			"name": "Povoliť AI generovanie obrázkov",
-			"description": "Keď je povolené, Kilo Code môže generovať obrázky z textových podnetov. Vyžaduje Kilo Code alebo OpenRouter API kľúč.",
+			"description": "Keď je povolené, IVOL Code môže generovať obrázky z textových podnetov. Vyžaduje IVOL Code alebo OpenRouter API kľúč.",
 			"apiProvider": "Poskytovateľ API",
 			"providerLabel": "Poskytovateľ",
 			"providerDescription": "Vyberte poskytovateľa pre generovanie obrázkov.",
 			"openRouterApiKeyLabel": "OpenRouter API Key",
 			"openRouterApiKeyPlaceholder": "Zadajte svoj OpenRouter API kľúč",
-			"kiloCodeApiKeyLabel": "Kilo Code API kľúč",
-			"kiloCodeApiKeyPlaceholder": "Zadajte svoj Kilo Code API kľúč",
-			"kiloCodeApiKeyPaste": "Vložte aktuálny Kilo Code API kľúč",
+			"kiloCodeApiKeyLabel": "Kilo API kľúč",
+			"kiloCodeApiKeyPlaceholder": "Zadajte svoj Kilo API kľúč",
+			"kiloCodeApiKeyPaste": "Vložte aktuálny Kilo API kľúč",
 			"getApiKeyText": "Získajte API kľúč z",
 			"modelSelectionLabel": "Model pre generovanie obrázkov",
 			"modelSelectionDescription": "Vyberte model pre použitie pri generovaní obrázkov",
@@ -1129,7 +1129,7 @@
 		},
 		"RUN_SLASH_COMMAND": {
 			"name": "Povoliť slash príkazy iniciované modelom",
-			"description": "Keď je povolené, Kilo Code môže spúšťať vaše slash príkazy na vykonanie pracovných tokov."
+			"description": "Keď je povolené, IVOL Code môže spúšťať vaše slash príkazy na vykonanie pracovných tokov."
 		},
 		"INLINE_ASSIST": {
 			"name": "Autocomplete",
@@ -1141,7 +1141,7 @@
 		},
 		"SPEECH_TO_TEXT": {
 			"name": "Prevod reči na text (STT)",
-			"description": "Keď je povolené, Kilo Code môže prepísať váš hlas do textu pomocou modelu Whisper od OpenAI. Kliknite na tlačidlo mikrofónu v chate pre začatie nahrávania. Vyžaduje nainštalovaný FFmpeg a nakonfigurovaného poskytovateľa OpenAI API."
+			"description": "Keď je povolené, IVOL Code môže prepísať váš hlas do textu pomocou modelu Whisper od OpenAI. Kliknite na tlačidlo mikrofónu v chate pre začatie nahrávania. Vyžaduje nainštalovaný FFmpeg a nakonfigurovaného poskytovateľa OpenAI API."
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Povoliť vlastné nástroje",
@@ -1157,7 +1157,7 @@
 	},
 	"promptCaching": {
 		"label": "Zakázať ukladanie promptov do medzipamäte",
-		"description": "Ak je zaškrtnuté, Kilo Code nebude používať ukladanie promptov do medzipamäte pre tento model."
+		"description": "Ak je zaškrtnuté, IVOL Code nebude používať ukladanie promptov do medzipamäte pre tento model."
 	},
 	"temperature": {
 		"useCustom": "Použiť vlastnú teplotu",
@@ -1189,7 +1189,7 @@
 		}
 	},
 	"modelPicker": {
-		"automaticFetch": "Rozšírenie automaticky načítava najnovší zoznam modelov dostupných na <serviceLink>{{serviceName}}</serviceLink>. Ak si nie ste istí, ktorý model vybrať, Kilo Code funguje najlepšie s <defaultModelLink>{{defaultModelId}}</defaultModelLink>.",
+		"automaticFetch": "Rozšírenie automaticky načítava najnovší zoznam modelov dostupných na <serviceLink>{{serviceName}}</serviceLink>. Ak si nie ste istí, ktorý model vybrať, IVOL Code funguje najlepšie s <defaultModelLink>{{defaultModelId}}</defaultModelLink>.",
 		"label": "Model",
 		"searchPlaceholder": "Hľadať",
 		"noMatchFound": "Nebola nájdená žiadna zhoda",
@@ -1200,10 +1200,10 @@
 	},
 	"footer": {
 		"feedback": "Ak máte nejaké otázky alebo spätnú väzbu, neváhajte otvoriť problém na <githubLink>github.com/Kilo-Org/kilocode</githubLink> alebo sa pripojte k <redditLink>reddit.com/r/kilocode</redditLink> alebo <discordLink>kilo.ai/discord</discordLink>.",
-		"support": "Pre finančné otázky kontaktujte prosím zákaznícku podporu na <supportLink>https://kilo.ai/support</supportLink>",
+		"support": "Pre finančné otázky kontaktujte prosím zákaznícku podporu na <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Povoliť hlásenie chýb a používania",
-			"description": "Pomôžte vylepšiť Kilo Code odosielaním dát o používaní a hlásení chýb. Nikdy sa neodosiela žiadny kód, prompty ani osobné informácie. Ďalšie podrobnosti nájdete v našich zásadách ochrany osobných údajov."
+			"description": "Pomôžte vylepšiť IVOL Code odosielaním dát o používaní a hlásení chýb. Nikdy sa neodosiela žiadny kód, prompty ani osobné informácie. Ďalšie podrobnosti nájdete v našich zásadách ochrany osobných údajov."
 		},
 		"settings": {
 			"import": "Importovať",
@@ -1289,7 +1289,7 @@
 	},
 	"toolProtocol": {
 		"label": "Protokol volania nástrojov",
-		"description": "Vyberte, ako Kilo Code komunikuje s API. Natívny používa API pre volanie funkcií poskytovateľa, zatiaľ čo XML používa definície nástrojov vo formáte XML.",
+		"description": "Vyberte, ako IVOL Code komunikuje s API. Natívny používa API pre volanie funkcií poskytovateľa, zatiaľ čo XML používa definície nástrojov vo formáte XML.",
 		"toolProtocolDesc": "Riadi spôsob, akým AI komunikuje s nástrojmi a API",
 		"toolProtocolAuto": "Automatické",
 		"toolProtocolAutoDesc": "Nechať systém automaticky vybrať najlepší protokol",

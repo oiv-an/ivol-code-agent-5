@@ -1,7 +1,7 @@
 {
-	"extension.displayName": "Kilo Code Nightly",
-	"views.contextMenu.label": "Kilo Code Nightly",
-	"views.terminalMenu.label": "Kilo Code Nightly",
-	"views.activitybar.title": "Kilo Code Nightly",
-	"configuration.title": "Kilo Code Nightly"
+	"extension.displayName": "IVOL Code Nightly",
+	"views.contextMenu.label": "IVOL Code Nightly",
+	"views.terminalMenu.label": "IVOL Code Nightly",
+	"views.activitybar.title": "IVOL Code Nightly",
+	"configuration.title": "IVOL Code Nightly"
 }

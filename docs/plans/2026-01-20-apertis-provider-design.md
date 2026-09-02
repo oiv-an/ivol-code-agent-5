@@ -1,4 +1,4 @@
-# Apertis Provider Design for Kilo Code
+# Apertis Provider Design for IVOL Code
 
 **Date:** 2026-01-20
 **Status:** Approved
@@ -6,7 +6,7 @@
 
 ## Overview
 
-Apertis is a unified AI API platform providing access to 450+ models from multiple providers (OpenAI, Anthropic, Google, etc.). This document outlines the design for integrating Apertis as a model provider in Kilo Code.
+Apertis is a unified AI API platform providing access to 450+ models from multiple providers (OpenAI, Anthropic, Google, etc.). This document outlines the design for integrating Apertis as a model provider in IVOL Code.
 
 ## API Endpoints
 

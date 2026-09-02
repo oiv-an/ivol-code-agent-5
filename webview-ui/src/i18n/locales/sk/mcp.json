@@ -2,16 +2,16 @@
 	"title": "MCP Servery",
 	"done": "Hotovo",
 	"marketplace": "MCP Trhovisko",
-	"description": "<0>Model Context Protocol</0> umožňuje komunikáciu s lokálnymi MCP servermi, ktoré poskytujú ďalšie nástroje a zdroje pre rozšírenie schopností Kilo Code. Môžeš používať <1>servery vytvorené komunitou</1> alebo požiadať Kilo Code o vytvorenie nových nástrojov špecifických pre tvoj pracovný postup (napr. \"pridaj nástroj, ktorý načíta najnovšie npm docs\").",
+	"description": "<0>Model Context Protocol</0> umožňuje komunikáciu s lokálnymi MCP servermi, ktoré poskytujú ďalšie nástroje a zdroje pre rozšírenie schopností IVOL Code. Môžeš používať <1>servery vytvorené komunitou</1> alebo požiadať IVOL Code o vytvorenie nových nástrojov špecifických pre tvoj pracovný postup (napr. \"pridaj nástroj, ktorý načíta najnovšie npm docs\").",
 	"instructions": "Pokyny",
 	"enableToggle": {
 		"title": "Povoliť MCP Servery",
-		"description": "Zapni toto, aby Kilo Code mohol používať nástroje z pripojených MCP serverov. To dáva Kilo Code ďalšie schopnosti. Ak neplánuješ používať tieto dodatočné nástroje, vypni to pre zníženie nákladov na API tokeny."
+		"description": "Zapni toto, aby IVOL Code mohol používať nástroje z pripojených MCP serverov. To dáva IVOL Code ďalšie schopnosti. Ak neplánuješ používať tieto dodatočné nástroje, vypni to pre zníženie nákladov na API tokeny."
 	},
 	"enableServerCreation": {
 		"title": "Povoliť vytváranie MCP Servera",
-		"description": "Zapni toto, aby ti Kilo Code mohol pomôcť vytvárať <1>nové</1> vlastné MCP servery. <0>Zisti viac o vytváraní serverov</0>",
-		"hint": "Tip: Pre zníženie nákladov na API tokeny vypni toto nastavenie, keď aktívne nežiadaš Kilo Code o vytvorenie nových MCP serverov."
+		"description": "Zapni toto, aby ti IVOL Code mohol pomôcť vytvárať <1>nové</1> vlastné MCP servery. <0>Zisti viac o vytváraní serverov</0>",
+		"hint": "Tip: Pre zníženie nákladov na API tokeny vypni toto nastavenie, keď aktívne nežiadaš IVOL Code o vytvorenie nových MCP serverov."
 	},
 	"editGlobalMCP": "Upraviť Global MCP",
 	"editProjectMCP": "Upraviť Project MCP",

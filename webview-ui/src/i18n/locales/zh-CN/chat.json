@@ -1,5 +1,5 @@
 {
-	"greeting": "Kilo Code 能为您做什么？",
+	"greeting": "IVOL Code 能为您做什么？",
 	"task": {
 		"title": "任务",
 		"expand": "展开任务",
@@ -22,7 +22,7 @@
 		"sharePublicly": "公开分享",
 		"sharePubliclyDescription": "任何拥有链接的人都可访问",
 		"connectToCloud": "连接到云端",
-		"connectToCloudDescription": "登录 Kilo Code Cloud 以分享任务",
+		"connectToCloudDescription": "登录 Kilo Cloud 以分享任务",
 		"sharingDisabledByOrganization": "组织已禁用分享功能",
 		"shareSuccessOrganization": "组织链接已复制到剪贴板",
 		"shareSuccessPublic": "公开链接已复制到剪贴板",
@@ -101,7 +101,7 @@
 	"scrollToBottom": "滚动到聊天底部",
 	"about": "通过 AI 辅助生成、重构和调试代码。查看我们的 <DocsLink>文档</DocsLink> 了解更多。",
 	"docs": "查看我们的 <DocsLink>文档</DocsLink> 了解更多信息。",
-	"onboarding": "<strong>此工作区中的任务列表为空。</strong> 请在下方输入任务开始。 不确定如何开始？ 在 <DocsLink>文档</DocsLink> 中阅读更多关于 Kilo Code 可以为您做什么的信息。",
+	"onboarding": "<strong>此工作区中的任务列表为空。</strong> 请在下方输入任务开始。 不确定如何开始？ 在 <DocsLink>文档</DocsLink> 中阅读更多关于 IVOL Code 可以为您做什么的信息。",
 	"rooTips": {
 		"customizableModes": {
 			"title": "可自定义模式",
@@ -130,7 +130,7 @@
 		"title": "模式",
 		"marketplace": "模式市场",
 		"settings": "模式设置",
-		"description": "专门定制Kilo Code行为的角色。",
+		"description": "专门定制IVOL Code行为的角色。",
 		"searchPlaceholder": "搜索模式...",
 		"noResults": "未找到结果",
 		"organizationModes": "组织模式"
@@ -145,7 +145,7 @@
 	"diffError": {
 		"title": "编辑失败"
 	},
-	"troubleMessage": "Kilo Code遇到问题...",
+	"troubleMessage": "IVOL Code遇到问题...",
 	"apiRequest": {
 		"title": "API请求",
 		"failed": "API请求失败",
@@ -188,7 +188,7 @@
 		"current": "当前"
 	},
 	"instructions": {
-		"wantsToFetch": "Kilo Code 想要获取详细指示以协助当前任务"
+		"wantsToFetch": "IVOL Code 想要获取详细指示以协助当前任务"
 	},
 	"fileOperations": {
 		"wantsToRead": "需要读取文件",
@@ -204,10 +204,10 @@
 		"wantsToInsertWithLineNumber": "需要在第 {{lineNumber}} 行插入内容",
 		"wantsToInsertAtEnd": "需要在文件末尾添加内容",
 		"wantsToDelete": "需要删除文件",
-		"wantsToDeleteDirectory": "Kilo Code 想要删除此目录",
-		"wantsToReadAndXMore": "Kilo Code 想读取此文件以及另外 {{count}} 个文件",
-		"wantsToReadMultiple": "Kilo Code 想要读取多个文件",
-		"wantsToApplyBatchChanges": "Kilo Code 想要对多个文件应用更改",
+		"wantsToDeleteDirectory": "IVOL Code 想要删除此目录",
+		"wantsToReadAndXMore": "IVOL Code 想读取此文件以及另外 {{count}} 个文件",
+		"wantsToReadMultiple": "IVOL Code 想要读取多个文件",
+		"wantsToApplyBatchChanges": "IVOL Code 想要对多个文件应用更改",
 		"wantsToGenerateImage": "需要生成图片",
 		"wantsToGenerateImageOutsideWorkspace": "需要在工作区外生成图片",
 		"wantsToGenerateImageProtected": "需要在受保护位置生成图片",
@@ -218,8 +218,8 @@
 		"didViewTopLevel": "已查看目录文件列表",
 		"wantsToViewRecursive": "需要查看目录所有文件",
 		"didViewRecursive": "已查看目录所有文件",
-		"wantsToViewDefinitions": "Kilo Code想查看此目录中使用的源代码定义名称",
-		"didViewDefinitions": "Kilo Code已查看此目录中使用的源代码定义名称",
+		"wantsToViewDefinitions": "IVOL Code想查看此目录中使用的源代码定义名称",
+		"didViewDefinitions": "IVOL Code已查看此目录中使用的源代码定义名称",
 		"wantsToSearch": "需要搜索内容: {{regex}}",
 		"didSearch": "已完成内容搜索: {{regex}}",
 		"wantsToSearchOutsideWorkspace": "需要搜索内容（工作区外）: {{regex}}",
@@ -228,8 +228,8 @@
 		"didViewTopLevelOutsideWorkspace": "已查看目录文件列表（工作区外）",
 		"wantsToViewRecursiveOutsideWorkspace": "需要查看目录所有文件（工作区外）",
 		"didViewRecursiveOutsideWorkspace": "已查看目录所有文件（工作区外）",
-		"wantsToViewDefinitionsOutsideWorkspace": "Kilo Code想查看此目录中使用的源代码定义名称（工作区外）",
-		"didViewDefinitionsOutsideWorkspace": "Kilo Code已查看此目录中使用的源代码定义名称（工作区外）"
+		"wantsToViewDefinitionsOutsideWorkspace": "IVOL Code想查看此目录中使用的源代码定义名称（工作区外）",
+		"didViewDefinitionsOutsideWorkspace": "IVOL Code已查看此目录中使用的源代码定义名称（工作区外）"
 	},
 	"commandOutput": "命令输出",
 	"commandExecution": {
@@ -258,8 +258,8 @@
 		"youSaid": "你说"
 	},
 	"mcp": {
-		"wantsToUseTool": "Kilo Code想在{{serverName}} MCP上使用工具",
-		"wantsToAccessResource": "Kilo Code想访问{{serverName}} MCP服务上的资源"
+		"wantsToUseTool": "IVOL Code想在{{serverName}} MCP上使用工具",
+		"wantsToAccessResource": "IVOL Code想访问{{serverName}} MCP服务上的资源"
 	},
 	"modes": {
 		"wantsToSwitch": "即将切换至{{mode}}模式",
@@ -268,8 +268,8 @@
 		"didSwitchWithReason": "已切换至{{mode}}模式（原因：{{reason}}）"
 	},
 	"subtasks": {
-		"wantsToCreate": "Kilo Code想在<code>{{mode}}</code>模式下创建新子任务",
-		"wantsToFinish": "Kilo Code想完成此子任务",
+		"wantsToCreate": "IVOL Code想在<code>{{mode}}</code>模式下创建新子任务",
+		"wantsToFinish": "IVOL Code想完成此子任务",
 		"newTaskContent": "子任务说明",
 		"completionContent": "子任务已完成",
 		"resultContent": "子任务结果",
@@ -277,7 +277,7 @@
 		"completionInstructions": "子任务已完成！您可以查看结果并提出修改或下一步建议。如果一切正常，请确认以将结果返回给主任务。"
 	},
 	"questions": {
-		"hasQuestion": "Kilo Code有一个问题"
+		"hasQuestion": "IVOL Code有一个问题"
 	},
 	"taskCompleted": "任务完成",
 	"modelResponseIncomplete": "模型响应不完整",
@@ -362,7 +362,7 @@
 			"tryButton": "试用云代理"
 		},
 		"careers": "此外，<careersLink>我们正在招聘！</careersLink>",
-		"socialLinks": "在 <xLink>X</xLink>、<discordLink>Discord</discordLink> 或 <redditLink>r/KiloCode</redditLink> 上关注我们 🚀"
+		"socialLinks": "在 <xLink>X</xLink>、<discordLink>Discord</discordLink> 或 <redditLink>IVOL Code</redditLink> 上关注我们 🚀"
 	},
 	"costs": {
 		"totalWithSubtasks": "总成本（包括子任务）: ${{cost}}",
@@ -372,7 +372,7 @@
 	"browser": {
 		"session": "浏览器会话",
 		"active": "活动中",
-		"rooWantsToUse": "Kilo Code想使用浏览器",
+		"rooWantsToUse": "IVOL Code想使用浏览器",
 		"consoleLogs": "控制台日志",
 		"noNewLogs": "(没有新日志)",
 		"screenshot": "浏览器截图",
@@ -420,24 +420,24 @@
 	"profileViolationWarning": "当前配置文件与您的组织设置不兼容",
 	"shellIntegration": {
 		"title": "命令执行警告",
-		"description": "您的命令正在没有 VSCode 终端 shell 集成的情况下执行。要隐藏此警告，您可以在 <settingsLink>Kilo Code 设置</settingsLink>的 <strong>Terminal</strong> 部分禁用 shell 集成，或使用下方链接排查 VSCode 终端集成问题。",
+		"description": "您的命令正在没有 VSCode 终端 shell 集成的情况下执行。要隐藏此警告，您可以在 <settingsLink>IVOL Code 设置</settingsLink>的 <strong>Terminal</strong> 部分禁用 shell 集成，或使用下方链接排查 VSCode 终端集成问题。",
 		"troubleshooting": "点击此处查看 shell 集成文档。"
 	},
 	"ask": {
 		"autoApprovedRequestLimitReached": {
 			"title": "已达自动批准请求限制",
-			"description": "Kilo Code 已达到 {{count}} 次 API 请求的自动批准限制。您想重置计数并继续任务吗？",
+			"description": "IVOL Code 已达到 {{count}} 次 API 请求的自动批准限制。您想重置计数并继续任务吗？",
 			"button": "重置并继续"
 		},
 		"autoApprovedCostLimitReached": {
 			"title": "已达到自动批准的费用限额",
-			"description": "Kilo Code已经达到了${{count}}的自动批准成本限制。您想重置成本并继续任务吗？",
+			"description": "IVOL Code已经达到了${{count}}的自动批准成本限制。您想重置成本并继续任务吗？",
 			"button": "重置并继续"
 		}
 	},
 	"codebaseSearch": {
-		"wantsToSearch": "Kilo Code 需要搜索代码库: <code>{{query}}</code>",
-		"wantsToSearchWithPath": "Kilo Code 需要在 <code>{{path}}</code> 中搜索: <code>{{query}}</code>",
+		"wantsToSearch": "IVOL Code 需要搜索代码库: <code>{{query}}</code>",
+		"wantsToSearchWithPath": "IVOL Code 需要在 <code>{{path}}</code> 中搜索: <code>{{query}}</code>",
 		"didSearch_one": "找到 1 个结果",
 		"didSearch_other": "找到 {{count}} 个结果",
 		"resultTooltip": "相似度评分: {{score}} (点击打开文件)"
@@ -502,8 +502,8 @@
 		"clickToEdit": "点击编辑消息"
 	},
 	"slashCommand": {
-		"wantsToRun": "Kilo Code 想要运行斜杠命令",
-		"didRun": "Kilo Code 运行了斜杠命令"
+		"wantsToRun": "IVOL Code 想要运行斜杠命令",
+		"didRun": "IVOL Code 运行了斜杠命令"
 	},
 	"todo": {
 		"partial": "已完成 {{completed}} / {{total}} 个待办事项",

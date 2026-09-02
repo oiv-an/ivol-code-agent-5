@@ -8,6 +8,7 @@ vi.mock("posthog-js", () => ({
 		init: vi.fn(),
 		identify: vi.fn(),
 		capture: vi.fn(),
+		captureException: vi.fn(),
 	},
 }))
 
@@ -40,37 +41,15 @@ describe("TelemetryClient", () => {
 		expect(() => telemetryClient.capture("test_event", { key: "value" })).not.toThrow()
 	})
 
-	it("should reset PostHog when updating telemetry state", () => {
-		// Act
-		telemetryClient.updateTelemetryState("enabled")
+	it("should never initialize or capture PostHog telemetry in the personal build", () => {
+		telemetryClient.updateTelemetryState("enabled", "test-api-key", "test-user-id")
+		telemetryClient.capture("test_event", { key: "value" })
+		telemetryClient.captureException(new Error("test error"), { key: "value" })
 
-		// Assert
-		expect(posthog.reset).toHaveBeenCalled()
-	})
-
-	it("should initialize PostHog when telemetry is enabled with API key and distinctId", () => {
-		// Arrange
-		const API_KEY = "test-api-key"
-		const DISTINCT_ID = "test-user-id"
-
-		// Act
-		telemetryClient.updateTelemetryState("enabled", API_KEY, DISTINCT_ID)
-
-		// Assert
-		expect(posthog.init).toHaveBeenCalledWith(
-			API_KEY,
-			expect.objectContaining({
-				api_host: "https://us.i.posthog.com", // kilocode_change
-				persistence: "localStorage",
-				loaded: expect.any(Function),
-			}),
-		)
-
-		// Instead of trying to extract and call the callback, manually call identify
-		// This simulates what would happen when the loaded callback is triggered
-		posthog.identify(DISTINCT_ID)
-
-		// Now verify identify was called
-		expect(posthog.identify).toHaveBeenCalled()
+		expect(posthog.reset).not.toHaveBeenCalled()
+		expect(posthog.init).not.toHaveBeenCalled()
+		expect(posthog.identify).not.toHaveBeenCalled()
+		expect(posthog.capture).not.toHaveBeenCalled()
+		expect(posthog.captureException).not.toHaveBeenCalled()
 	})
 })

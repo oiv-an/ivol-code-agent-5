@@ -7,7 +7,7 @@ import { VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vsc
 import type { ProviderSettings, ExtensionMessage, ModelRecord } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { useRouterModels } from "@src/components/ui/hooks/useRouterModels"
+// kilocode_change: local catalogs use dedicated extension events instead of the aggregate router hook
 import { vscode } from "@src/utils/vscode"
 
 import { inputEventTransform } from "../transforms"
@@ -22,7 +22,7 @@ export const LMStudio = ({ apiConfiguration, setApiConfigurationField }: LMStudi
 	const { t } = useAppTranslation()
 
 	const [lmStudioModels, setLmStudioModels] = useState<ModelRecord>({})
-	const routerModels = useRouterModels({ lmStudioBaseUrl: apiConfiguration.lmStudioBaseUrl }) // kilocode_change: query key
+	// kilocode_change: no duplicate aggregate-router query for LM Studio
 
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
@@ -57,46 +57,24 @@ export const LMStudio = ({ apiConfiguration, setApiConfigurationField }: LMStudi
 	}, [])
 
 	// Check if the selected model exists in the fetched models
+	// kilocode_change start: validate only after the local catalog has loaded
 	const modelNotAvailable = useMemo(() => {
 		const selectedModel = apiConfiguration?.lmStudioModelId
 		if (!selectedModel) return false
 
-		// Check if model exists in local LM Studio models
-		if (Object.keys(lmStudioModels).length > 0 && selectedModel in lmStudioModels) {
-			return false // Model is available locally
-		}
-
-		// If we have router models data for LM Studio
-		if (routerModels.data?.lmstudio) {
-			const availableModels = Object.keys(routerModels.data.lmstudio)
-			// Show warning if model is not in the list (regardless of how many models there are)
-			return !availableModels.includes(selectedModel)
-		}
-
-		// If neither source has loaded yet, don't show warning
-		return false
-	}, [apiConfiguration?.lmStudioModelId, routerModels.data, lmStudioModels])
+		const hasLoadedModels = Object.keys(lmStudioModels).length > 0
+		return hasLoadedModels && !(selectedModel in lmStudioModels)
+	}, [apiConfiguration?.lmStudioModelId, lmStudioModels])
 
 	// Check if the draft model exists
 	const draftModelNotAvailable = useMemo(() => {
 		const draftModel = apiConfiguration?.lmStudioDraftModelId
 		if (!draftModel) return false
 
-		// Check if model exists in local LM Studio models
-		if (Object.keys(lmStudioModels).length > 0 && draftModel in lmStudioModels) {
-			return false // Model is available locally
-		}
-
-		// If we have router models data for LM Studio
-		if (routerModels.data?.lmstudio) {
-			const availableModels = Object.keys(routerModels.data.lmstudio)
-			// Show warning if model is not in the list (regardless of how many models there are)
-			return !availableModels.includes(draftModel)
-		}
-
-		// If neither source has loaded yet, don't show warning
-		return false
-	}, [apiConfiguration?.lmStudioDraftModelId, routerModels.data, lmStudioModels])
+		const hasLoadedModels = Object.keys(lmStudioModels).length > 0
+		return hasLoadedModels && !(draftModel in lmStudioModels)
+	}, [apiConfiguration?.lmStudioDraftModelId, lmStudioModels])
+	// kilocode_change end
 
 	return (
 		<>

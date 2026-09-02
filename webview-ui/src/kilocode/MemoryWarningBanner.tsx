@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { telemetryClient } from "../utils/TelemetryClient"
 import { TelemetryEventName } from "@roo-code/types"
@@ -6,7 +6,9 @@ import { getMemoryPercentage } from "./helpers"
 
 const warningThreshold = 90
 
-const resetCloseButtonThreshold = 50
+const resetCloseButtonThreshold = 70
+
+const requiredHighSamples = 3
 
 let warningReported = false
 
@@ -20,19 +22,31 @@ function reportWarning() {
 export const MemoryWarningBanner = () => {
 	const { t } = useAppTranslation()
 	const [enable, setEnabled] = useState(true)
-	const [memoryPercentage, setMemoryPercentage] = useState(getMemoryPercentage())
+	const [memoryPercentage, setMemoryPercentage] = useState(0)
+	const consecutiveHighSamples = useRef(0)
 
 	useEffect(() => {
-		const handle = setInterval(() => {
+		const sampleMemory = () => {
 			const percentage = getMemoryPercentage()
+
+			if (percentage >= warningThreshold) {
+				consecutiveHighSamples.current += 1
+				if (consecutiveHighSamples.current >= requiredHighSamples) {
+					reportWarning()
+					setMemoryPercentage(percentage)
+				}
+				return
+			}
+
+			consecutiveHighSamples.current = 0
+			setMemoryPercentage(percentage)
 			if (percentage < resetCloseButtonThreshold) {
 				setEnabled(true)
 			}
-			if (percentage >= warningThreshold) {
-				reportWarning()
-			}
-			setMemoryPercentage(percentage)
-		}, 10_000)
+		}
+
+		sampleMemory()
+		const handle = setInterval(sampleMemory, 10_000)
 		return () => clearInterval(handle)
 	}, [])
 

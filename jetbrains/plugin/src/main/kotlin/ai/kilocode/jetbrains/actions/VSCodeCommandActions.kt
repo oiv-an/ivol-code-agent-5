@@ -29,7 +29,7 @@ fun executeCommand(commandId: String, project: Project?) {
  */
 class PlusButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(PlusButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.plusButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.plusButtonClicked"
 
     /**
      * Performs the action when the Plus button is clicked.
@@ -48,7 +48,7 @@ class PlusButtonClickAction : AnAction() {
  */
 class PromptsButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(PromptsButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.promptsButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.promptsButtonClicked"
 
     /**
      * Performs the action when the Prompts button is clicked.
@@ -67,7 +67,7 @@ class PromptsButtonClickAction : AnAction() {
  */
 class HistoryButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(HistoryButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.historyButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.historyButtonClicked"
 
     /**
      * Performs the action when the History button is clicked.
@@ -82,7 +82,7 @@ class HistoryButtonClickAction : AnAction() {
 
 class ProfileButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(ProfileButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.profileButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.profileButtonClicked"
 
     /**
      * Performs the action when the Profile button is clicked.
@@ -101,7 +101,7 @@ class ProfileButtonClickAction : AnAction() {
  */
 class SettingsButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(SettingsButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.settingsButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.settingsButtonClicked"
 
     /**
      * Performs the action when the Settings button is clicked.
@@ -120,7 +120,7 @@ class SettingsButtonClickAction : AnAction() {
  */
 class MarketplaceButtonClickAction : AnAction() {
     private val logger: Logger = Logger.getInstance(MarketplaceButtonClickAction::class.java)
-    private val commandId: String = "kilo-code.marketplaceButtonClicked"
+    private val commandId: String = "ivol-code-agent-5.marketplaceButtonClicked"
 
     /**
      * Performs the action when the Marketplace button is clicked.

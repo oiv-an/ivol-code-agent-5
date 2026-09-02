@@ -26,7 +26,7 @@ const tmpDir = path.join(os.tmpdir(), "CheckpointService")
 
 const initWorkspaceRepo = async ({
 	workspaceDir,
-	userName = "Kilo Code",
+	userName = "IVOL Code",
 	userEmail = "support@kilo.ai",
 	testFileName = "test.txt",
 	textFileContent = "Hello, world!",

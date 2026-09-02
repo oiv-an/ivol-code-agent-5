@@ -46,7 +46,7 @@ vi.mock("@/utils/vscode", () => ({
 // Mock useKeybindings hook
 vi.mock("@/hooks/useKeybindings", () => ({
 	useKeybindings: () => ({
-		"kilo-code.autocomplete.generateSuggestions": "Cmd+Shift+G",
+		"ivol-code-agent-5.autocomplete.generateSuggestions": "Cmd+Shift+G",
 	}),
 }))
 
@@ -107,8 +107,8 @@ const defaultAutocompleteServiceSettings: AutocompleteServiceSettings = {
 	enableAutoTrigger: false,
 	enableSmartInlineTaskKeybinding: false,
 	enableChatAutocomplete: false,
-	provider: "openrouter",
-	model: "openai/gpt-4o-mini",
+	provider: "ollama", // kilocode_change
+	model: "qwen2.5-coder:7b", // kilocode_change
 }
 
 const renderComponent = (props = {}) => {
@@ -276,15 +276,15 @@ describe("AutocompleteServiceSettingsView", () => {
 		renderComponent({
 			ghostServiceSettings: {
 				...defaultAutocompleteServiceSettings,
-				provider: "openrouter",
-				model: "openai/gpt-4o-mini",
+				provider: "ollama", // kilocode_change
+				model: "qwen2.5-coder:7b", // kilocode_change
 			},
 		})
 
 		expect(screen.getByText(/kilocode:autocomplete.settings.provider/)).toBeInTheDocument()
-		expect(screen.getByText(/openrouter/)).toBeInTheDocument()
+		expect(screen.getByText(/ollama/)).toBeInTheDocument()
 		expect(screen.getAllByText(/kilocode:autocomplete.settings.model/).length).toBeGreaterThan(0)
-		expect(screen.getByText(/openai\/gpt-4o-mini/)).toBeInTheDocument()
+		expect(screen.getByText(/qwen2.5-coder:7b/)).toBeInTheDocument()
 	})
 
 	it("displays error message when provider and model are not configured", () => {
@@ -299,12 +299,27 @@ describe("AutocompleteServiceSettingsView", () => {
 		expect(screen.getByText(/kilocode:autocomplete.settings.noModelConfigured.title/)).toBeInTheDocument()
 	})
 
+	// kilocode_change start: cloud/router providers are not offered for personal autocomplete.
+	it("rejects a legacy OpenRouter autocomplete configuration", () => {
+		renderComponent({
+			ghostServiceSettings: {
+				...defaultAutocompleteServiceSettings,
+				provider: "openrouter",
+				model: "openai/gpt-4o-mini",
+			},
+		})
+
+		expect(screen.getByText(/kilocode:autocomplete.settings.noModelConfigured.title/)).toBeInTheDocument()
+		expect(screen.queryByText(/openai\/gpt-4o-mini/)).not.toBeInTheDocument()
+	})
+	// kilocode_change end
+
 	it("displays error message when only provider is missing", () => {
 		renderComponent({
 			ghostServiceSettings: {
 				...defaultAutocompleteServiceSettings,
 				provider: undefined,
-				model: "openai/gpt-4o-mini",
+				model: "qwen2.5-coder:7b", // kilocode_change
 			},
 		})
 
@@ -315,7 +330,7 @@ describe("AutocompleteServiceSettingsView", () => {
 		renderComponent({
 			ghostServiceSettings: {
 				...defaultAutocompleteServiceSettings,
-				provider: "openrouter",
+				provider: "ollama", // kilocode_change
 				model: undefined,
 			},
 		})
@@ -323,7 +338,8 @@ describe("AutocompleteServiceSettingsView", () => {
 		expect(screen.getByText(/kilocode:autocomplete.settings.noModelConfigured.title/)).toBeInTheDocument()
 	})
 
-	it("displays no credits message when kilocode profile exists but has no balance", () => {
+	// kilocode_change start: Kilo credit state is ignored in the local-only autocomplete flow.
+	it("shows local setup guidance instead of a Kilo credits message", () => {
 		renderComponent({
 			ghostServiceSettings: {
 				...defaultAutocompleteServiceSettings,
@@ -333,26 +349,27 @@ describe("AutocompleteServiceSettingsView", () => {
 			},
 		})
 
-		expect(screen.getByText(/kilocode:autocomplete.settings.noCredits.title/)).toBeInTheDocument()
-		expect(screen.getByText(/kilocode:autocomplete.settings.noCredits.description/)).toBeInTheDocument()
-		expect(screen.getByText(/kilocode:autocomplete.settings.noCredits.buyCredits/)).toBeInTheDocument()
+		expect(screen.getByText(/kilocode:autocomplete.settings.noModelConfigured.title/)).toBeInTheDocument()
+		expect(screen.getByText("LM Studio")).toBeInTheDocument()
+		expect(screen.getByText("Ollama")).toBeInTheDocument()
+		expect(screen.queryByText(/kilocode:autocomplete.settings.noCredits.title/)).not.toBeInTheDocument()
 	})
 
-	it("displays provider and model info even when hasKilocodeProfileWithNoBalance is true but model is configured", () => {
+	it("displays a configured local model even when a legacy Kilo no-balance flag remains", () => {
 		renderComponent({
 			ghostServiceSettings: {
 				...defaultAutocompleteServiceSettings,
-				provider: "openrouter",
-				model: "openai/gpt-4o-mini",
+				provider: "lmstudio",
+				model: "qwen2.5-coder-7b",
 				hasKilocodeProfileWithNoBalance: true,
 			},
 		})
 
-		// Should show provider/model info, not the no credits message
-		expect(screen.getByText(/openrouter/)).toBeInTheDocument()
-		expect(screen.getByText(/openai\/gpt-4o-mini/)).toBeInTheDocument()
+		expect(screen.getByText(/lmstudio/)).toBeInTheDocument()
+		expect(screen.getByText(/qwen2.5-coder-7b/)).toBeInTheDocument()
 		expect(screen.queryByText(/kilocode:autocomplete.settings.noCredits.title/)).not.toBeInTheDocument()
 	})
+	// kilocode_change end
 
 	describe("snooze status refresh", () => {
 		it("updates snooze status when timer fires and snooze expires", () => {

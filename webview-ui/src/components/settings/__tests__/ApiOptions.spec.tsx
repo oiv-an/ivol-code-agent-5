@@ -3,12 +3,7 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import {
-	type ModelInfo,
-	type ProviderSettings,
-	mainlandZAiDefaultModelId,
-	openAiModelInfoSaneDefaults,
-} from "@roo-code/types"
+import { type ModelInfo, type ProviderSettings, openAiModelInfoSaneDefaults } from "@roo-code/types"
 import { openAiCodexDefaultModelId } from "@roo-code/types"
 
 import * as ExtensionStateContext from "@src/context/ExtensionStateContext"
@@ -344,27 +339,18 @@ describe("ApiOptions", () => {
 		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("apiModelId", openAiCodexDefaultModelId, false)
 	})
 
-	// kilocode_change start
-	it("resets model to mainland Z.ai default when switching to Z.ai with china_api line", () => {
-		const mockSetApiConfigurationField = vi.fn()
-
+	// kilocode_change start: the personal build intentionally does not expose Z.ai.
+	it("does not expose Z.ai in the personal provider selector", () => {
 		renderApiOptions({
 			apiConfiguration: {
-				apiProvider: "anthropic",
-				apiModelId: "claude-3-5-sonnet-20241022",
-				zaiApiLine: "china_api",
+				apiProvider: "openai",
 			},
-			setApiConfigurationField: mockSetApiConfigurationField,
 		})
 
 		const providerSelectContainer = screen.getByTestId("provider-select")
 		const providerSelect = providerSelectContainer.querySelector("select") as HTMLSelectElement
 		expect(providerSelect).toBeInTheDocument()
-
-		fireEvent.change(providerSelect, { target: { value: "zai" } })
-
-		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("apiProvider", "zai")
-		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("apiModelId", mainlandZAiDefaultModelId, false)
+		expect(providerSelect.querySelector('option[value="zai"]')).not.toBeInTheDocument()
 	})
 	// kilocode_change end
 

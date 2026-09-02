@@ -52,7 +52,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Trình tạo thông báo commit Kilo Code đã được kích hoạt",
+		"activated": "Trình tạo thông báo commit IVOL Code Agent 5 đã được kích hoạt",
 		"gitNotFound": "⚠️ Không tìm thấy kho lưu trữ Git hoặc git không khả dụng",
 		"gitInitError": "⚠️ Lỗi khởi tạo Git: {{error}}",
 		"generating": "Kilo: Đang tạo thông báo commit...",
@@ -64,7 +64,7 @@
 		"providerRegistered": "Kilo: Nhà cung cấp thông báo commit đã được đăng ký",
 		"errors": {
 			"noProject": "Không có dự án nào",
-			"connectionFailed": "Không thể kết nối với tiện ích mở rộng Kilo Code",
+			"connectionFailed": "Không thể kết nối với tiện ích mở rộng IVOL Code Agent 5",
 			"timeout": "Yêu cầu đã hết thời gian sau 30 giây",
 			"invalidResponse": "Nhận được định dạng phản hồi không hợp lệ từ tiện ích mở rộng",
 			"noChanges": "Không tìm thấy thay đổi nào để commit",
@@ -89,7 +89,7 @@
 		"progress": {
 			"title": "Tạo Message Cam Kết",
 			"generating": "Đang tạo thông điệp commit...",
-			"connecting": "Đang kết nối tới Kilo Code...",
+			"connecting": "Đang kết nối tới IVOL Code Agent 5...",
 			"analyzing": "Đang phân tích các thay đổi..."
 		},
 		"ui": {
@@ -99,14 +99,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "tạm dừng",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (đã tắt)",
-				"noCredits": "**Không có tín dụng trong tài khoản của bạn**\n\nTài khoản Kilo Code của bạn không có tín dụng. Để sử dụng tự động hoàn thành, vui lòng thêm tín dụng vào tài khoản của bạn.\n\n[Mở Cài đặt](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**Chưa cấu hình mô hình tự động hoàn thành**\n\nĐể bật tự động hoàn thành, hãy thêm hồ sơ với một trong các nhà cung cấp được hỗ trợ sau: {{providers}}.\n\n[Mở Cài đặt](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (đã tắt)",
+				"noCredits": "**Không có tín dụng trong tài khoản của bạn**\n\nTài khoản IVOL Code Agent 5 của bạn không có tín dụng. Để sử dụng tự động hoàn thành, vui lòng thêm tín dụng vào tài khoản của bạn.\n\n[Mở Cài đặt](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**Chưa cấu hình mô hình tự động hoàn thành**\n\nĐể bật tự động hoàn thành, hãy thêm hồ sơ với một trong các nhà cung cấp được hỗ trợ sau: {{providers}}.\n\n[Mở Cài đặt](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "Tổng chi phí phiên:",
 				"provider": "Nhà cung cấp:",
 				"model": "Mô hình:",
@@ -120,36 +120,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "Đang phân tích mã của bạn...",
 			"generating": "Đang tạo các chỉnh sửa được đề xuất...",
 			"processing": "Đang xử lý các chỉnh sửa được đề xuất...",
 			"showing": "Đang hiển thị các chỉnh sửa được đề xuất..."
 		},
 		"input": {
-			"title": "Kilo Code: Tác Vụ Nhanh",
+			"title": "IVOL Code Agent 5: Tác Vụ Nhanh",
 			"placeholder": "ví dụ, 'tái cấu trúc hàm này để hiệu quả hơn'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: Tạo Các Chỉnh Sửa Được Đề Xuất",
+			"generateSuggestions": "IVOL Code Agent 5: Tạo Các Chỉnh Sửa Được Đề Xuất",
 			"displaySuggestions": "Hiển Thị Các Chỉnh Sửa Được Đề Xuất",
 			"cancelSuggestions": "Hủy Các Chỉnh Sửa Được Đề Xuất",
 			"applyCurrentSuggestion": "Áp Dụng Chỉnh Sửa Được Đề Xuất Hiện Tại",
 			"applyAllSuggestions": "Áp Dụng Tất Cả Các Chỉnh Sửa Được Đề Xuất",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: Các Chỉnh Sửa Được Đề Xuất"
+			"title": "IVOL Code Agent 5: Các Chỉnh Sửa Được Đề Xuất"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "Tôi có thể giúp bạn với các tác vụ nhanh và chỉnh sửa được đề xuất."
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Kilo Code Autocomplete đang bị chặn do xung đột với GitHub Copilot. Để khắc phục điều này, bạn phải tắt các gợi ý inline của Copilot.",
+			"message": "IVOL Code Agent 5 Autocomplete đang bị chặn do xung đột với GitHub Copilot. Để khắc phục điều này, bạn phải tắt các gợi ý inline của Copilot.",
 			"disableCopilot": "Tắt Copilot",
 			"disableInlineAssist": "Tắt Autocomplete"
 		}

@@ -13,27 +13,30 @@ export const registerAutocompleteProvider = (context: vscode.ExtensionContext, c
 
 	// Register AutocompleteServiceManager Commands
 	context.subscriptions.push(
-		vscode.commands.registerCommand("kilo-code.autocomplete.reload", async () => {
+		vscode.commands.registerCommand("ivol-code-agent-5.autocomplete.reload", async () => {
 			await autocompleteManager.load()
 		}),
 	)
 	context.subscriptions.push(
-		vscode.commands.registerCommand("kilo-code.autocomplete.codeActionQuickFix", async () => {
+		vscode.commands.registerCommand("ivol-code-agent-5.autocomplete.codeActionQuickFix", async () => {
 			return
 		}),
 	)
 	context.subscriptions.push(
-		vscode.commands.registerCommand("kilo-code.autocomplete.generateSuggestions", async () => {
+		vscode.commands.registerCommand("ivol-code-agent-5.autocomplete.generateSuggestions", async () => {
 			autocompleteManager.codeSuggestion()
 		}),
 	)
 	context.subscriptions.push(
-		vscode.commands.registerCommand("kilo-code.autocomplete.showIncompatibilityExtensionPopup", async () => {
-			await autocompleteManager.showIncompatibilityExtensionPopup()
-		}),
+		vscode.commands.registerCommand(
+			"ivol-code-agent-5.autocomplete.showIncompatibilityExtensionPopup",
+			async () => {
+				await autocompleteManager.showIncompatibilityExtensionPopup()
+			},
+		),
 	)
 	context.subscriptions.push(
-		vscode.commands.registerCommand("kilo-code.autocomplete.disable", async () => {
+		vscode.commands.registerCommand("ivol-code-agent-5.autocomplete.disable", async () => {
 			await autocompleteManager.disable()
 		}),
 	)

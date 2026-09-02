@@ -3,11 +3,8 @@ import {
 	useState, // kilocode_change
 } from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
-import { Trans } from "react-i18next"
 import { Info, Download, Upload, TriangleAlert } from "lucide-react"
-import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
-
-import type { TelemetrySetting } from "@roo-code/types"
+import { VSCodeLink } from "@vscode/webview-ui-toolkit/react" // kilocode_change
 
 import { Package } from "@roo/package"
 
@@ -20,18 +17,11 @@ import { Section } from "./Section"
 import { getMemoryPercentage } from "@/kilocode/helpers"
 
 type AboutProps = HTMLAttributes<HTMLDivElement> & {
-	telemetrySetting: TelemetrySetting
-	setTelemetrySetting: (setting: TelemetrySetting) => void
-	isVsCode: boolean // kilocode_change
+	// kilocode_change: personal builds expose no telemetry controls
 }
 
-export const About = ({
-	telemetrySetting,
-	setTelemetrySetting,
-	className,
-	isVsCode, // kilocode_change
-	...props
-}: AboutProps) => {
+// kilocode_change start: personal About view has no telemetry controls
+export const About = ({ className, ...props }: AboutProps) => {
 	const { t } = useAppTranslation()
 
 	const [kiloCodeBloat, setKiloCodeBloat] = useState<number[][]>([])
@@ -51,46 +41,14 @@ export const About = ({
 			</SectionHeader>
 
 			<Section>
-				<div style={{ display: isVsCode ? "none" : undefined }}>
-					<VSCodeCheckbox
-						checked={telemetrySetting !== "disabled"}
-						onChange={(e: any) => {
-							const checked = e.target.checked === true
-							setTelemetrySetting(checked ? "enabled" : "disabled")
-						}}>
-						{t("settings:footer.telemetry.label")}
-					</VSCodeCheckbox>
-					<p className="text-vscode-descriptionForeground text-sm mt-0">
-						<Trans
-							i18nKey="settings:footer.telemetry.description"
-							components={{
-								privacyLink: <VSCodeLink href="https://kilo.ai/privacy" />,
-							}}
-						/>
-					</p>
-				</div>
+				{/* kilocode_change: telemetry is permanently disabled and hidden in personal builds */}
 
 				<div>
-					<Trans
-						i18nKey="settings:footer.feedback"
-						components={{
-							githubLink: <VSCodeLink href="https://github.com/Kilo-Org/kilocode" />,
-							redditLink: <VSCodeLink href="https://reddit.com/r/kilocode" />,
-							discordLink: <VSCodeLink href="https://kilo.ai/discord" />,
-						}}
-					/>
+					{t("settings:about.bugReport.label")}{" "}
+					<VSCodeLink href="https://github.com/oiv-an/ivol-code-agent-5/issues">
+						{t("settings:about.bugReport.link")}
+					</VSCodeLink>
 				</div>
-
-				{/* kilocode_change start */}
-				<div>
-					<Trans
-						i18nKey="settings:footer.support"
-						components={{
-							supportLink: <VSCodeLink href="https://kilo.ai/support" />,
-						}}
-					/>
-				</div>
-				{/* kilocode_change end */}
 
 				<div className="flex flex-wrap items-center gap-2 mt-2">
 					<Button onClick={() => vscode.postMessage({ type: "exportSettings" })} className="w-28">
@@ -130,3 +88,4 @@ export const About = ({
 		</div>
 	)
 }
+// kilocode_change end

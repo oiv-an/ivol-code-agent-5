@@ -1,6 +1,7 @@
 import { logs } from "../utils/logger.js"
 import { createExtensionService, type ExtensionService } from "../services/extension.js"
 import type { ExtensionMessage, RouterModels, ProviderSettings } from "../types/index.js"
+import { isPersonalRouterModelProvider } from "@roo-code/types" // kilocode_change
 
 /** Default timeout for router models request (30 seconds) */
 const ROUTER_MODELS_TIMEOUT_MS = 30000
@@ -37,6 +38,13 @@ export interface FetchRouterModelsOptions {
  */
 export async function fetchRouterModels(options: FetchRouterModelsOptions): Promise<RouterModels | null> {
 	const { providerSettings, workspace, timeoutMs = ROUTER_MODELS_TIMEOUT_MS } = options
+	// kilocode_change start: fail closed for hidden provider catalogs
+	const provider = providerSettings.apiProvider
+	if (!isPersonalRouterModelProvider(provider)) {
+		logs.debug(`Skipping non-personal router-model runtime for provider: ${provider ?? "unset"}`, "ModelFetcher")
+		return null
+	}
+	// kilocode_change end
 	let service: ExtensionService | null = null
 
 	try {
@@ -102,6 +110,7 @@ export async function fetchRouterModels(options: FetchRouterModelsOptions): Prom
 		// Send requestRouterModels message
 		await service.sendWebviewMessage({
 			type: "requestRouterModels",
+			values: { provider }, // kilocode_change: request only the selected personal provider
 		})
 		logs.debug("Sent requestRouterModels message", "ModelFetcher")
 

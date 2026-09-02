@@ -646,8 +646,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
-			this.providerRef.deref()?.postStateToWebview()
-			this.emit("modelChanged") // kilocode_change: Emit modelChanged for virtual quota fallback UI updates
+			// kilocode_change start: queue changes only need a small task delta, not the full conversation
+			void this.postCurrentTaskStateToWebview().catch((error) => {
+				console.warn("Failed to post current task state:", error)
+			})
+			// kilocode_change end
 		}
 
 		this.messageQueueService.on("stateChanged", this.messageQueueStateChangedHandler)
@@ -1240,10 +1243,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
 
+	// kilocode_change start: incremental webview updates keep long tasks from repeatedly cloning the full chat
+	private async postCurrentTaskStateToWebview() {
+		await this.providerRef.deref()?.postMessageToWebview({
+			type: "currentTaskStateUpdated",
+			taskId: this.taskId,
+			taskState: {
+				currentTaskTodos: this.todoList,
+				currentTaskCumulativeCost: this.getCumulativeTotalCost(),
+				messageQueue: this.messageQueueService?.messages,
+			},
+		})
+	}
+	// kilocode_change end
+
 	private async addToClineMessages(message: ClineMessage) {
 		this.clineMessages.push(message)
 		const provider = this.providerRef.deref()
-		await provider?.postStateToWebview()
+		// kilocode_change start: append one message instead of retransmitting the complete conversation
+		await provider?.postMessageToWebview({ type: "messageCreated", taskId: this.taskId, clineMessage: message })
+		// kilocode_change end
 		this.emit(RooCodeEventName.Message, { action: "created", message })
 		await this.saveClineMessages()
 
@@ -1276,7 +1295,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async updateClineMessage(message: ClineMessage) {
 		const provider = this.providerRef.deref()
-		await provider?.postMessageToWebview({ type: "messageUpdated", clineMessage: message })
+		await provider?.postMessageToWebview({ type: "messageUpdated", taskId: this.taskId, clineMessage: message }) // kilocode_change
 		this.emit(RooCodeEventName.Message, { action: "updated", message })
 
 		// Check if we should sync to cloud and haven't already synced this message
@@ -1686,11 +1705,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			if (lastFollowUpIndex !== -1) {
 				// Mark this follow-up as answered
-				this.clineMessages[lastFollowUpIndex].isAnswered = true
-				// Save the updated messages
-				this.saveClineMessages().catch((error) => {
-					console.error("Failed to save answered follow-up state:", error)
-				})
+				// kilocode_change start: publish the answered state through the incremental channel
+				const answeredMessage = this.clineMessages[lastFollowUpIndex]
+				answeredMessage.isAnswered = true
+				// Persist and notify the incremental webview so it does not retain the
+				// previous unanswered version of this message.
+				void Promise.all([this.updateClineMessage(answeredMessage), this.saveClineMessages()]).catch(
+					(error) => {
+						console.error("Failed to save answered follow-up state:", error)
+					},
+				)
+				// kilocode_change end
 			}
 		}
 	}
@@ -1892,7 +1917,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		contextTruncation?: ContextTruncation,
 	): Promise<undefined> {
 		if (this.abort) {
-			throw new Error(`[Kilo Code#say] task ${this.taskId}.${this.instanceId} aborted`)
+			throw new Error(`[IVOL Code#say] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
 		if (partial !== undefined) {
@@ -2017,7 +2042,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		})()
 		await this.say(
 			"error",
-			`Kilo Code tried to use ${toolName}${
+			`IVOL Code tried to use ${toolName}${
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. ${kilocodeExtraText}Retrying...`,
 		)
@@ -2179,7 +2204,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.isInitialized = true
 
-		const { response, text, images } = await this.ask(askType) // Calls `postStateToWebview`.
+		// kilocode_change start: hydrate the webview once before incremental resume updates
+		// The saved conversation is loaded directly into this task. The following
+		// resume ask is sent as a lightweight messageCreated delta, so the webview
+		// must first know the active task id and the existing conversation.
+		await this.providerRef.deref()?.postStateToWebview()
+		const { response, text, images } = await this.ask(askType)
+		// kilocode_change end
 
 		let responseText: string | undefined
 		let responseImages: string[] | undefined
@@ -2840,7 +2871,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			} satisfies ClineApiReqInfo)
 
 			await this.saveClineMessages()
-			await this.providerRef.deref()?.postStateToWebview()
+			// kilocode_change start: only the placeholder changed
+			await this.updateClineMessage(this.clineMessages[lastApiReqIndex])
+			// kilocode_change end
 
 			try {
 				let cacheWriteTokens = 0
@@ -3722,7 +3755,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				await this.saveClineMessages()
-				await this.providerRef.deref()?.postStateToWebview()
+				// kilocode_change start: update the changed request row and lightweight task totals only
+				const completedApiRequestMessage = this.clineMessages[lastApiReqIndex]
+				if (completedApiRequestMessage) {
+					await this.updateClineMessage(completedApiRequestMessage)
+				}
+				await this.postCurrentTaskStateToWebview()
+				// kilocode_change end
 
 				// Reset parser after each complete conversation round (XML protocol only)
 				this.assistantMessageParser?.reset()

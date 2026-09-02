@@ -7,14 +7,14 @@ SPDX-License-Identifier: Apache-2.0
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
-    <id>ai.kilocode.jetbrains</id>
+    <id>pro.ivol.kilocode5.jetbrains</id>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-    <name>Kilo Code</name>
+    <name>Kilo Code 5 Personal</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor url="https://kilo.ai">Kilo Code</vendor>
+    <vendor>Ivol — fork of Kilo Code Legacy</vendor>
 
     <!-- Resource bundles for internationalization -->
     <resource-bundle>messages.JetbrainsBundle</resource-bundle>
@@ -24,8 +24,8 @@ SPDX-License-Identifier: Apache-2.0
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-        <h1>Kilo Code AI Agent</h1>
-        <p>Open Source AI coding assistant for planning, building, and fixing code.</p>
+        <h1>Kilo Code 5 Personal</h1>
+        <p>Personal stable fork of the open-source Kilo Code 5 AI coding assistant.</p>
    ]]></description>
    
    <!-- Change notes for the plugin -->
@@ -36,7 +36,9 @@ SPDX-License-Identifier: Apache-2.0
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.jcef</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
+    <incompatible-with>ai.kilocode.jetbrains</incompatible-with>
     
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->

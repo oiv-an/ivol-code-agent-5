@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>
 
 const defaultNotification = {
 	id: "1",
-	title: "Welcome to Kilo Code!",
+	title: "Welcome to IVOL Code!",
 	message: "Get started by setting up your API configuration in the settings.",
 	action: {
 		actionText: "Open Settings",

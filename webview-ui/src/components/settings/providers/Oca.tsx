@@ -52,7 +52,7 @@ export function OCA({
 		ocaErrorJustReceived.current = false
 		setError(null)
 		setModelsLoading(true)
-		requestRouterModels()
+		requestRouterModels({ provider: "oca", refresh: true }) // kilocode_change
 	}, [])
 
 	const activatedRef = React.useRef(activated)

@@ -8,7 +8,7 @@
 		"editModesConfig": "Upraviť konfiguráciu režimov",
 		"editGlobalModes": "Upraviť Global Modes",
 		"editProjectModes": "Upraviť Project Modes (.kilocodemodes)",
-		"createModeHelpText": "Režimy sú špecializované persony, ktoré prispôsobujú správanie Kilo Code. <0>Zisti viac o Používaní režimov</0> alebo <1>Prispôsobení režimov.</1>",
+		"createModeHelpText": "Režimy sú špecializované persony, ktoré prispôsobujú správanie IVOL Code. <0>Zisti viac o Používaní režimov</0> alebo <1>Prispôsobení režimov.</1>",
 		"selectMode": "Hľadať režimy",
 		"noMatchFound": "Žiadne režimy nenájdené"
 	},
@@ -18,7 +18,7 @@
 	},
 	"organizationMode": {
 		"title": "Režim organizácie",
-		"description": "Tento režim je poskytovaný tvojou organizáciou a nie je možné ho tu upravovať. Pre úpravu tohto režimu navštív <dashboardLink>Kilo Code Dashboard</dashboardLink>.",
+		"description": "Tento režim je poskytovaný tvojou organizáciou a nie je možné ho tu upravovať. Pre úpravu tohto režimu navštív <dashboardLink>Kilo Dashboard</dashboardLink>.",
 		"cannotEdit": "Režimy organizácie nie je možné upravovať"
 	},
 	"tools": {
@@ -39,7 +39,7 @@
 	"roleDefinition": {
 		"title": "Definícia roly",
 		"resetToDefault": "Obnoviť predvolené",
-		"description": "Definuj odbornosť a osobnosť Kilo Code pre tento režim. Tento popis formuje, ako sa Kilo Code prezentuje a ako pristupuje k úlohám."
+		"description": "Definuj odbornosť a osobnosť IVOL Code pre tento režim. Tento popis formuje, ako sa IVOL Code prezentuje a ako pristupuje k úlohám."
 	},
 	"description": {
 		"title": "Krátky popis (pre ľudí)",
@@ -110,7 +110,7 @@
 		"types": {
 			"ENHANCE": {
 				"label": "Vylepšiť Prompt",
-				"description": "Použi vylepšenie promptu na získanie prispôsobených návrhov alebo vylepšení pre tvoje vstupy. To zaisťuje, že Kilo Code rozumie tvojmu zámeru a poskytuje najlepšie možné odpovede. Dostupné cez ikonu ✨ v chate."
+				"description": "Použi vylepšenie promptu na získanie prispôsobených návrhov alebo vylepšení pre tvoje vstupy. To zaisťuje, že IVOL Code rozumie tvojmu zámeru a poskytuje najlepšie možné odpovede. Dostupné cez ikonu ✨ v chate."
 			},
 			"CONDENSE": {
 				"label": "Kondenzácia kontextu",
@@ -187,7 +187,7 @@
 		},
 		"roleDefinition": {
 			"label": "Definícia roly",
-			"description": "Definuj odbornosť a osobnosť Kilo Code pre tento režim."
+			"description": "Definuj odbornosť a osobnosť IVOL Code pre tento režim."
 		},
 		"description": {
 			"label": "Krátky popis (pre ľudí)",

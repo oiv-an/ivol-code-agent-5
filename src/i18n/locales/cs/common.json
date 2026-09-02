@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "Open source AI agent pro kódování, který generuje kód z přirozeného jazyka, automatizuje úlohy a spouští příkazy v terminálu. Nabízí inline automatické doplňování, automatizaci prohlížeče, automatický refaktoring a vlastní režimy pro plánování, kódování a ladění. Podporuje více než 500 AI modelů včetně Claude (Anthropic), Gemini, Grok, GPT, Codex a GLM."
 	},
 	"number_format": {
@@ -105,7 +105,7 @@
 			"processExitedWithError": "Proces Claude Code skončil s kódem {{exitCode}}. Chybový výstup: {{output}}",
 			"stoppedWithReason": "Claude Code se zastavil s důvodem: {{reason}}",
 			"apiKeyModelPlanMismatch": "API klíče a plány předplatného umožňují různé modely. Ujisti se, že vybraný model je zahrnut v tvém plánu.",
-			"notFound": "Spustitelný soubor Claude Code '{{claudePath}}' nebyl nalezen.\n\nNainstalujte prosím Claude Code CLI:\n1. Navštivte {{installationUrl}} pro stažení Claude Code\n2. Postupujte podle pokynů pro instalaci pro váš operační systém\n3. Ujistěte se, že příkaz 'claude' je dostupný v PATH\n4. Alternativně nakonfigurujte vlastní cestu v nastavení Kilo Code pod 'Cesta Claude Code'\n\nPůvodní chyba: {{originalError}}"
+			"notFound": "Spustitelný soubor Claude Code '{{claudePath}}' nebyl nalezen.\n\nNainstalujte prosím Claude Code CLI:\n1. Navštivte {{installationUrl}} pro stažení Claude Code\n2. Postupujte podle pokynů pro instalaci pro váš operační systém\n3. Ujistěte se, že příkaz 'claude' je dostupný v PATH\n4. Alternativně nakonfigurujte vlastní cestu v nastavení IVOL Code Agent 5 pod 'Cesta Claude Code'\n\nPůvodní chyba: {{originalError}}"
 		},
 		"qwenCode": {
 			"oauthLoadFailed": "Nepodařilo se načíst OAuth přihlašovací údaje. Nejprve se prosím autentizujte: {{error}}"
@@ -171,7 +171,7 @@
 	"warnings": {
 		"no_terminal_content": "Není vybrán žádný obsah terminálu",
 		"missing_task_files": "Soubory této úlohy chybí. Chceš ji odstranit ze seznamu úloh?",
-		"auto_import_failed": "Automatický import nastavení Kilo Code selhal: {{error}}"
+		"auto_import_failed": "Automatický import nastavení IVOL Code Agent 5 selhal: {{error}}"
 	},
 	"info": {
 		"no_changes": "Nebyly nalezeny žádné změny.",
@@ -180,7 +180,7 @@
 		"custom_storage_path_set": "Nastavena vlastní cesta úložiště: {{path}}",
 		"default_storage_path": "Návrat k použití výchozí cesty úložiště",
 		"settings_imported": "Nastavení byla úspěšně importována.",
-		"auto_import_success": "Nastavení Kilo Code byla automaticky importována ze souboru {{filename}}",
+		"auto_import_success": "Nastavení IVOL Code Agent 5 byla automaticky importována ze souboru {{filename}}",
 		"share_link_copied": "Odkaz pro sdílení zkopírován do schránky",
 		"organization_share_link_copied": "Odkaz pro sdílení organizace zkopírován do schránky!",
 		"public_share_link_copied": "Veřejný odkaz pro sdílení zkopírován do schránky!",
@@ -210,12 +210,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Zadej vlastní cestu úložiště historie konverzací, ponech prázdné pro použití výchozího umístění",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Prosím zadej absolutní cestu (např. D:\\KiloCodeStorage nebo /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Prosím zadej absolutní cestu (např. D:\\IVOLCodeStorage nebo /home/user/storage)",
 		"enter_valid_path": "Prosím zadej platnou cestu"
 	},
 	"input": {
-		"task_prompt": "Co by měl Kilo Code udělat?",
+		"task_prompt": "Co by měl IVOL Code Agent 5 udělat?",
 		"task_placeholder": "Vytvořit, najít, zeptat se na něco"
 	},
 	"customModes": {
@@ -242,8 +242,8 @@
 	},
 	"mdm": {
 		"errors": {
-			"cloud_auth_required": "Tvá organizace vyžaduje autentizaci Kilo Code Cloud. Prosím přihlas se pro pokračování.",
-			"organization_mismatch": "Musíš být autentizován s účtem Kilo Code Cloud tvé organizace.",
+			"cloud_auth_required": "Tvá organizace vyžaduje autentizaci Kilo Cloud. Prosím přihlas se pro pokračování.",
+			"organization_mismatch": "Musíš být autentizován s účtem Kilo Cloud tvé organizace.",
 			"verification_failed": "Nelze ověřit autentizaci organizace."
 		},
 		"info": {
@@ -270,7 +270,7 @@
 	},
 	"docsLink": {
 		"label": "Dokumentace",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Chyba",

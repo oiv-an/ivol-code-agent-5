@@ -82,13 +82,13 @@ const KiloRulesWorkflowsView = ({ type }: KiloRulesWorkflowsViewProps) => {
 			<div className="text-xs text-[var(--vscode-descriptionForeground)] mb-4">
 				{isRules ? (
 					<DescriptionWithLink
-						href="https://kilo.ai/docs/advanced-usage/custom-rules"
+						href="https://github.com/oiv-an/ivol-code-agent-5#readme"
 						linkText={t("kilocode:docs")}>
 						{t("kilocode:rules.description.rules")}
 					</DescriptionWithLink>
 				) : (
 					<DescriptionWithLink
-						href="https://kilo.ai/docs/features/slash-commands/workflows"
+						href="https://github.com/oiv-an/ivol-code-agent-5#readme"
 						linkText={t("kilocode:docs")}>
 						{t("kilocode:rules.description.workflows")}{" "}
 						<span className="text-[var(--vscode-foreground)] font-bold">/workflow-name</span>{" "}

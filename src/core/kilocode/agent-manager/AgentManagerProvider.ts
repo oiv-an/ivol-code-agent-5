@@ -40,7 +40,6 @@ import {
 } from "./telemetry"
 import type { ClineProvider } from "../../webview/ClineProvider"
 import { extractSessionConfigs, MAX_VERSION_COUNT } from "./multiVersionUtils"
-import { SessionManager } from "../../../shared/kilocode/cli-sessions/core/SessionManager"
 import { WorkspaceGitService } from "./WorkspaceGitService"
 import { SessionTerminalManager } from "./SessionTerminalManager"
 import { startSessionMessageSchema, type StartSessionMessage } from "./types"
@@ -67,7 +66,7 @@ interface StdinAskResponseMessage {
  * Each agent runs as a CLI process using `kilocode --auto --json`.
  */
 export class AgentManagerProvider implements vscode.Disposable {
-	public static readonly viewType = "kilo-code.AgentManagerPanel"
+	public static readonly viewType = "ivol-code-agent-5.AgentManagerPanel"
 
 	private panel: vscode.WebviewPanel | undefined
 	private disposables: vscode.Disposable[] = []
@@ -421,20 +420,9 @@ export class AgentManagerProvider implements vscode.Disposable {
 					void this.configureSetupScript()
 					break
 				case "agentManager.sessionShare":
-					SessionManager.init()
-						?.shareSession(message.sessionId as string)
-						.then((result) => {
-							const shareUrl = `https://app.kilo.ai/share/${result.share_id}`
-
-							void vscode.env.clipboard.writeText(shareUrl)
-							vscode.window.showInformationMessage(
-								t("common:info.session_share_link_copied_with_url", { url: shareUrl }),
-							)
-						})
-						.catch((error) => {
-							const errorMessage = error instanceof Error ? error.message : String(error)
-							vscode.window.showErrorMessage(`Failed to share session: ${errorMessage}`)
-						})
+					void vscode.window.showInformationMessage(
+						"Kilo cloud session sharing is disabled in this personal build.",
+					)
 					break
 				case "openImage":
 					// Handle image click from ImageThumbnail component
@@ -851,7 +839,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 					this.outputChannel.appendLine("[AgentManager] Passing OpenAI Codex credentials to agent process")
 				} else {
 					this.outputChannel.appendLine(
-						"[AgentManager] OpenAI Codex selected but no credentials found; sign in using the Kilo Code sidebar first.",
+						"[AgentManager] OpenAI Codex selected but no credentials found; sign in using the IVOL Code sidebar first.",
 					)
 				}
 			} catch (error) {
@@ -1668,8 +1656,8 @@ export class AgentManagerProvider implements vscode.Disposable {
 			const state = await this.provider.getState()
 			const { apiConfiguration } = state
 
-			// Determine the provider - default to "kilocode" if not set
-			const providerName = apiConfiguration.apiProvider || "kilocode"
+			// Personal builds must fail closed instead of falling back to a vendor gateway.
+			const providerName = apiConfiguration.apiProvider || "openai"
 
 			// Check if this provider supports model fetching via router
 			if (!isRouterName(providerName)) {
@@ -2018,7 +2006,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 		const actionLabel = t("kilocode:agentManager.actions.getHelp")
 		vscode.window.showErrorMessage(errorMessage, actionLabel).then((selection) => {
 			if (selection === actionLabel) {
-				void vscode.env.openExternal(vscode.Uri.parse("https://kilo.ai/docs"))
+				void vscode.env.openExternal(vscode.Uri.parse("https://github.com/oiv-an/ivol-code-agent-5#readme"))
 			}
 		})
 	}

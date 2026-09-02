@@ -1,24 +1,24 @@
-# Kilo Code Development Container
+# IVOL Code Development Container
 
-This development container provides a standardized environment for developing Kilo Code.
+This development container provides a standardized environment for developing IVOL Code.
 
 ## Persistence
 
-Kilo Code stores thread conversations, settings, and caches in the following locations:
+IVOL Code stores thread conversations, settings, and caches in the following locations:
 
-- **Threads/Conversations**: `~/.vscode-remote/data/User/globalStorage/kilocode.kilo-code/`
+- **Threads/Conversations**: `~/.vscode-remote/data/User/globalStorage/ivol.ivol-code-agent-5/`
 - **Settings**: `~/.vscode-remote/data/User/settings/`
-- **Cache**: `~/.vscode-remote/data/User/globalStorage/kilocode.kilo-code/cache/`
-- **Vector Store**: `~/.vscode-remote/data/User/globalStorage/kilocode.kilo-code/vector/`
+- **Cache**: `~/.vscode-remote/data/User/globalStorage/ivol.ivol-code-agent-5/cache/`
+- **Vector Store**: `~/.vscode-remote/data/User/globalStorage/ivol.ivol-code-agent-5/vector/`
 
 ### Volume Mounts
 
 The dev container is configured with named volumes to persist this data across container rebuilds:
 
-| Volume                    | Target                                                            | Purpose                      |
-| ------------------------- | ----------------------------------------------------------------- | ---------------------------- |
-| `kilocode-global-storage` | `/root/.vscode-remote/data/User/globalStorage/kilocode.kilo-code` | Threads, cache, vector store |
-| `kilocode-settings`       | `/root/.vscode-remote/data/User/settings`                         | VS Code settings             |
+| Volume                    | Target                                                                | Purpose                      |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------- |
+| `kilocode-global-storage` | `/root/.vscode-remote/data/User/globalStorage/ivol.ivol-code-agent-5` | Threads, cache, vector store |
+| `kilocode-settings`       | `/root/.vscode-remote/data/User/settings`                             | VS Code settings             |
 
 ### Preserving Threads Across Rebuilds
 
@@ -59,7 +59,7 @@ To back up your threads:
 1. Copy the global storage directory:
 
     ```bash
-    cp -r ~/.vscode-remote/data/User/globalStorage/kilocode.kilo-code ~/kilocode-backup
+    cp -r ~/.vscode-remote/data/User/globalStorage/ivol.ivol-code-agent-5 ~/kilocode-backup
     ```
 
 2. Store the backup outside the dev container environment.
@@ -69,7 +69,7 @@ To back up your threads:
 If you need threads stored in a different location, configure a custom storage path in VS Code settings:
 
 1. Open VS Code settings (`Ctrl+,` or `Cmd+,`)
-2. Search for "Kilo Code: Custom Storage Path"
+2. Search for "IVOL Code: Custom Storage Path"
 3. Enter an absolute path that's mounted into the container
 
 Example `devcontainer.json` mount for custom path:

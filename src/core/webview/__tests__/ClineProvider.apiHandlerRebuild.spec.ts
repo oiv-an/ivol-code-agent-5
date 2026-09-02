@@ -280,8 +280,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			const mockTask = new Task({
 				...defaultTaskOptions,
 				apiConfiguration: {
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 				},
 			})
 			mockTask.api = {
@@ -297,8 +297,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			await provider.upsertProviderProfile(
 				"test-config",
 				{
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 					// Other settings that might change
 					rateLimitSeconds: 5,
 					modelTemperature: 0.7,
@@ -309,14 +309,14 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			// Verify updateApiConfiguration was called because we force rebuild on explicit save/switch
 			expect(mockTask.updateApiConfiguration).toHaveBeenCalledWith(
 				expect.objectContaining({
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 					rateLimitSeconds: 5,
 					modelTemperature: 0.7,
 				}),
 			)
 			// Verify task.apiConfiguration was synchronized
-			expect((mockTask as any).apiConfiguration.openRouterModelId).toBe("openai/gpt-4")
+			expect((mockTask as any).apiConfiguration.openAiModelId).toBe("gpt-4")
 			expect((mockTask as any).apiConfiguration.rateLimitSeconds).toBe(5)
 			expect((mockTask as any).apiConfiguration.modelTemperature).toBe(0.7)
 		})
@@ -325,8 +325,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			const mockTask = new Task({
 				...defaultTaskOptions,
 				apiConfiguration: {
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 				},
 			})
 			mockTask.api = {
@@ -338,11 +338,11 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 
 			await provider.addClineToStack(mockTask)
 
-			// Change provider to anthropic
+			// Change provider to the direct Claude Code subscription
 			await provider.upsertProviderProfile(
 				"test-config",
 				{
-					apiProvider: "anthropic",
+					apiProvider: "claude-code",
 					apiModelId: "claude-3-5-sonnet-20241022",
 				},
 				true,
@@ -351,7 +351,7 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			// Verify updateApiConfiguration was called since provider changed
 			expect(mockTask.updateApiConfiguration).toHaveBeenCalledWith(
 				expect.objectContaining({
-					apiProvider: "anthropic",
+					apiProvider: "claude-code",
 					apiModelId: "claude-3-5-sonnet-20241022",
 				}),
 			)
@@ -361,8 +361,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			const mockTask = new Task({
 				...defaultTaskOptions,
 				apiConfiguration: {
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 				},
 			})
 			mockTask.api = {
@@ -378,8 +378,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			await provider.upsertProviderProfile(
 				"test-config",
 				{
-					apiProvider: "openrouter",
-					openRouterModelId: "anthropic/claude-3-5-sonnet-20241022",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4.1",
 				},
 				true,
 			)
@@ -387,8 +387,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			// Verify updateApiConfiguration was called since model changed
 			expect(mockTask.updateApiConfiguration).toHaveBeenCalledWith(
 				expect.objectContaining({
-					apiProvider: "openrouter",
-					openRouterModelId: "anthropic/claude-3-5-sonnet-20241022",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4.1",
 				}),
 			)
 		})
@@ -400,8 +400,8 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			await provider.upsertProviderProfile(
 				"test-config",
 				{
-					apiProvider: "openrouter",
-					openRouterModelId: "openai/gpt-4",
+					apiProvider: "openai",
+					openAiModelId: "gpt-4",
 				},
 				true,
 			)

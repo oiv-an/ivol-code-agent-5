@@ -7,23 +7,19 @@ const mockProvider = {
 	getState: vi.fn(),
 	postStateToWebview: vi.fn(),
 	postMessageToWebview: vi.fn(),
+	fetchMarketplaceData: vi.fn(),
 } as any
 
 const mockMarketplaceManager = {
 	updateWithFilteredItems: vi.fn(),
 } as any
 
-describe("Marketplace General Availability", () => {
+describe("Marketplace local-disable policy", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
 
-	it("should allow marketplace API calls (marketplace is generally available)", async () => {
-		// Mock state without marketplace experiment (since it's now generally available)
-		mockProvider.getState.mockResolvedValue({
-			experiments: {},
-		})
-
+	it("routes a stale filter request through the safe empty marketplace response", async () => {
 		const message = {
 			type: "filterMarketplaceItems" as const,
 			filters: { type: "mcp", search: "", tags: [] },
@@ -31,13 +27,8 @@ describe("Marketplace General Availability", () => {
 
 		await webviewMessageHandler(mockProvider, message, mockMarketplaceManager)
 
-		// Should call marketplace manager methods since marketplace is generally available
-		expect(mockMarketplaceManager.updateWithFilteredItems).toHaveBeenCalledWith({
-			type: "mcp",
-			search: "",
-			tags: [],
-		})
-		expect(mockProvider.postStateToWebview).toHaveBeenCalled()
+		expect(mockProvider.fetchMarketplaceData).toHaveBeenCalledOnce()
+		expect(mockMarketplaceManager.updateWithFilteredItems).not.toHaveBeenCalled()
 	})
 
 	it("should allow marketplace installation (marketplace is generally available)", async () => {

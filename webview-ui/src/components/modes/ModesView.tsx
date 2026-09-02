@@ -53,6 +53,7 @@ import { DeleteModeDialog } from "@src/components/modes/DeleteModeDialog"
 import { useEscapeKey } from "@src/hooks/useEscapeKey"
 import { OrganizationModeWarning } from "../kilocode/OrganizationModeWarning"
 import { SectionHeader } from "../settings/SectionHeader"
+import { isPersonalProvider } from "../settings/constants" // kilocode_change
 
 // Get all available groups that should show in prompts view
 const availableGroups = (Object.keys(TOOL_GROUPS) as ToolGroup[]).filter((group) => !TOOL_GROUPS[group].alwaysAvailable)
@@ -676,24 +677,6 @@ const ModesView = ({ hideHeader = false }: { hideHeader?: boolean }) => {
 									</div>
 								)}
 							</div>
-							<StandardTooltip content={t("chat:modeSelector.marketplace")}>
-								<Button
-									variant="ghost"
-									size="icon"
-									onClick={() => {
-										window.postMessage(
-											{
-												type: "action",
-												action: "marketplaceButtonClicked",
-												values: { marketplaceTab: "mode" },
-											},
-											"*",
-										)
-									}}>
-									<span className="codicon codicon-extensions"></span>
-								</Button>
-							</StandardTooltip>
-
 							<StandardTooltip content={t("prompts:modes.importMode")}>
 								<Button
 									variant="ghost"
@@ -952,11 +935,17 @@ const ModesView = ({ hideHeader = false }: { hideHeader?: boolean }) => {
 									<SelectValue placeholder={t("settings:common.select")} />
 								</SelectTrigger>
 								<SelectContent>
-									{(listApiConfigMeta || []).map((config) => (
-										<SelectItem key={config.id} value={config.name}>
-											{config.name}
-										</SelectItem>
-									))}
+									{/* kilocode_change start: hide unavailable provider profiles */}
+									{(listApiConfigMeta || [])
+										.filter(
+											(config) => !config.apiProvider || isPersonalProvider(config.apiProvider),
+										)
+										.map((config) => (
+											<SelectItem key={config.id} value={config.name}>
+												{config.name}
+											</SelectItem>
+										))}
+									{/* kilocode_change end */}
 								</SelectContent>
 							</Select>
 						</div>

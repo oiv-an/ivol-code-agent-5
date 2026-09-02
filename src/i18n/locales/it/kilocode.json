@@ -52,7 +52,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Generatore di messaggi di commit Kilo Code attivato",
+		"activated": "Generatore di messaggi di commit IVOL Code Agent 5 attivato",
 		"gitNotFound": "⚠️ Repository Git non trovato o git non disponibile",
 		"gitInitError": "⚠️ Errore di inizializzazione Git: {{error}}",
 		"generating": "Kilo: Generazione messaggio di commit...",
@@ -64,7 +64,7 @@
 		"providerRegistered": "Kilo: Provider di messaggi di commit registrato",
 		"errors": {
 			"noProject": "Nessun progetto disponibile",
-			"connectionFailed": "Impossibile connettersi all'estensione Kilo Code",
+			"connectionFailed": "Impossibile connettersi all'estensione IVOL Code Agent 5",
 			"invalidResponse": "Formato di risposta non valido ricevuto dall'estensione",
 			"timeout": "Richiesta scaduta dopo 30 secondi",
 			"noChanges": "Nessuna modifica da confermare",
@@ -87,7 +87,7 @@
 			"title": "Messaggio di Commit AI"
 		},
 		"progress": {
-			"connecting": "Connessione a Kilo Code in corso...",
+			"connecting": "Connessione a IVOL Code Agent 5 in corso...",
 			"title": "Generazione del messaggio di commit",
 			"analyzing": "Analizzando le modifiche...",
 			"generating": "Generazione del messaggio di commit..."
@@ -99,14 +99,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "in pausa",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (disabilitato)",
-				"noCredits": "**Nessun credito nel tuo account**\n\nIl tuo account Kilo Code non ha crediti. Per usare l'autocompletamento, aggiungi crediti al tuo account.\n\n[Apri Impostazioni](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**Nessun modello di autocompletamento configurato**\n\nPer abilitare l'autocompletamento, aggiungi un profilo con uno di questi provider supportati: {{providers}}.\n\n[Apri Impostazioni](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (disabilitato)",
+				"noCredits": "**Nessun credito nel tuo account**\n\nIl tuo account IVOL Code Agent 5 non ha crediti. Per usare l'autocompletamento, aggiungi crediti al tuo account.\n\n[Apri Impostazioni](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**Nessun modello di autocompletamento configurato**\n\nPer abilitare l'autocompletamento, aggiungi un profilo con uno di questi provider supportati: {{providers}}.\n\n[Apri Impostazioni](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "Costo totale della sessione:",
 				"provider": "Provider:",
 				"model": "Modello:",
@@ -120,36 +120,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "Analizzando il tuo codice...",
 			"generating": "Generando modifiche suggerite...",
 			"processing": "Elaborando modifiche suggerite...",
 			"showing": "Mostrando modifiche suggerite..."
 		},
 		"input": {
-			"title": "Kilo Code: Attività Rapida",
+			"title": "IVOL Code Agent 5: Attività Rapida",
 			"placeholder": "es., 'refactorizza questa funzione per renderla più efficiente'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: Genera Modifiche Suggerite",
+			"generateSuggestions": "IVOL Code Agent 5: Genera Modifiche Suggerite",
 			"displaySuggestions": "Mostra Modifiche Suggerite",
 			"cancelSuggestions": "Annulla Modifiche Suggerite",
 			"applyCurrentSuggestion": "Applica Modifica Suggerita Corrente",
 			"applyAllSuggestions": "Applica Tutte le Modifiche Suggerite",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: Modifiche Suggerite"
+			"title": "IVOL Code Agent 5: Modifiche Suggerite"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "Posso aiutarti con attività rapide e modifiche suggerite."
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Il Kilo Code Autocomplete è bloccato da un conflitto con GitHub Copilot. Per risolvere questo problema, devi disabilitare i suggerimenti in linea di Copilot.",
+			"message": "Il IVOL Code Agent 5 Autocomplete è bloccato da un conflitto con GitHub Copilot. Per risolvere questo problema, devi disabilitare i suggerimenti in linea di Copilot.",
 			"disableCopilot": "Disabilita Copilot",
 			"disableInlineAssist": "Disabilita Autocomplete"
 		}

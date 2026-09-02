@@ -56,6 +56,10 @@ class ExtensionProcessManager : Disposable {
     // Process monitor thread
     private var monitorThread: Thread? = null
 
+    // Process currently being stopped intentionally
+    @Volatile
+    private var closing: Process? = null
+
     // Whether running
     @Volatile
     private var isRunning = false
@@ -189,19 +193,21 @@ class ExtensionProcessManager : Disposable {
             // Redirect error stream to standard output
             builder.redirectErrorStream(true)
 
-            // Start process
-            process = builder.start()
-
-            // Start monitor thread
-            monitorThread = Thread {
-                monitorProcess()
+            val startedProcess = builder.start()
+            val startedMonitorThread = Thread {
+                monitorProcess(startedProcess)
             }.apply {
                 name = "ExtensionProcessMonitor"
                 isDaemon = true
-                start()
             }
 
-            isRunning = true
+            // Publish the complete process state before the monitor can observe it.
+            synchronized(this) {
+                process = startedProcess
+                monitorThread = startedMonitorThread
+                isRunning = true
+            }
+            startedMonitorThread.start()
             LOG.info("Extension process started")
             return true
         } catch (e: Exception) {
@@ -214,9 +220,7 @@ class ExtensionProcessManager : Disposable {
     /**
      * Monitor extension process
      */
-    private fun monitorProcess() {
-        val proc = process ?: return
-
+    private fun monitorProcess(proc: Process) {
         try {
             // Start log reading thread
             val logThread = Thread {
@@ -249,17 +253,49 @@ class ExtensionProcessManager : Disposable {
                 // Ignore
             }
             
-            // Handle unexpected crashes
-            if (exitCode != 0 && !Thread.currentThread().isInterrupted) {
+            val monitorWasInterrupted = Thread.currentThread().isInterrupted
+            val (wasCurrentProcess, wasExpectedStop) = synchronized(this) {
+                val wasCurrent = process === proc
+                val wasClosing = closing === proc
+
+                if (wasCurrent) {
+                    process = null
+                    isRunning = false
+                }
+                if (monitorThread === Thread.currentThread()) {
+                    monitorThread = null
+                }
+                if (wasClosing) {
+                    closing = null
+                }
+
+                wasCurrent to wasClosing
+            }
+
+            // Handle only an unexpected exit from the current process.
+            if (exitCode != 0 && wasCurrentProcess && !wasExpectedStop && !monitorWasInterrupted) {
                 handleProcessCrash(exitCode)
+            } else if (exitCode != 0 && wasExpectedStop) {
+                LOG.info("Extension process stopped as requested (exit code $exitCode)")
             }
         } catch (e: Exception) {
-            LOG.error("Error monitoring extension process", e)
+            val wasExpectedStop = synchronized(this) { closing === proc }
+            if (wasExpectedStop) {
+                LOG.info("Process monitor stopped during requested shutdown")
+            } else {
+                LOG.error("Error monitoring extension process", e)
+            }
         } finally {
             synchronized(this) {
                 if (process === proc) {
                     isRunning = false
                     process = null
+                }
+                if (monitorThread === Thread.currentThread()) {
+                    monitorThread = null
+                }
+                if (closing === proc) {
+                    closing = null
                 }
             }
         }
@@ -319,10 +355,6 @@ class ExtensionProcessManager : Disposable {
      * Stop extension process
      */
     fun stop() {
-        if (!isRunning) {
-            return
-        }
-
         stopInternal()
     }
 
@@ -330,38 +362,50 @@ class ExtensionProcessManager : Disposable {
      * Internal stop logic
      */
     private fun stopInternal() {
+        val (proc, thread) = synchronized(this) {
+            val currentProcess = process ?: return
+            val currentMonitorThread = monitorThread
+
+            // Detach first so the monitor cannot treat SIGTERM as a crash or restart it.
+            process = null
+            monitorThread = null
+            isRunning = false
+            closing = currentProcess
+
+            currentProcess to currentMonitorThread
+        }
+
         LOG.info("Stopping extension process")
 
-        val proc = process
-        if (proc != null) {
-            try {
-                // Try to close normally
-                if (proc.isAlive) {
-                    proc.destroy()
+        try {
+            // Try to close normally
+            if (proc.isAlive) {
+                proc.destroy()
 
-                    // Wait for process to end
-                    if (!proc.waitFor(5, TimeUnit.SECONDS)) {
-                        // Force terminate
-                        proc.destroyForcibly()
-                        proc.waitFor(2, TimeUnit.SECONDS)
-                    }
+                // Wait for process to end
+                if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                    // Force terminate
+                    proc.destroyForcibly()
+                    proc.waitFor(2, TimeUnit.SECONDS)
                 }
-            } catch (e: Exception) {
-                LOG.error("Error stopping extension process", e)
             }
+        } catch (e: Exception) {
+            LOG.error("Error stopping extension process", e)
         }
 
         // Interrupt monitor thread
-        monitorThread?.interrupt()
+        thread?.interrupt()
         try {
-            monitorThread?.join(1000)
+            thread?.join(1000)
         } catch (e: InterruptedException) {
             // Ignore
         }
 
-        process = null
-        monitorThread = null
-        isRunning = false
+        synchronized(this) {
+            if (closing === proc) {
+                closing = null
+            }
+        }
 
         LOG.info("Extension process stopped")
     }
@@ -517,7 +561,9 @@ class ExtensionProcessManager : Disposable {
      * Whether running
      */
     fun isRunning(): Boolean {
-        return isRunning && process?.isAlive == true
+        return synchronized(this) {
+            isRunning && process?.isAlive == true
+        }
     }
 
     override fun dispose() {

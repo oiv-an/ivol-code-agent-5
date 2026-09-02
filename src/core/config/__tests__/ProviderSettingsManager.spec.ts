@@ -4,6 +4,7 @@ import { ExtensionContext } from "vscode"
 
 import type { ProviderSettings } from "@roo-code/types"
 
+import { getOpenAiModelCatalogStorageKey } from "../../../api/providers/openai-model-cache" // kilocode_change
 import { ProviderSettingsManager, ProviderProfiles, SyncCloudProfilesResult } from "../ProviderSettingsManager"
 
 // Mock VSCode ExtensionContext
@@ -57,19 +58,19 @@ describe("ProviderSettingsManager", () => {
 	})
 
 	describe("initialize", () => {
-		// kilocode_change start: test updated to expect kilocode default profile for new users
-		it("should initialize kilocode default profile when secrets.get returns null", async () => {
+		// kilocode_change start: personal build starts with an inert OpenAI-compatible profile
+		it("should initialize the personal OpenAI default profile when secrets.get returns null", async () => {
 			// Mock readConfig to return null
 			mockSecrets.get.mockResolvedValueOnce(null)
 
 			await providerSettingsManager.initialize()
 
-			// Should write to storage with default kilocode profile for new users
+			// Should write to storage with the local personal default for new users
 			expect(mockSecrets.store).toHaveBeenCalled()
 			const calls = mockSecrets.store.mock.calls
 			const storedConfig = JSON.parse(calls[calls.length - 1][1])
-			expect(storedConfig.apiConfigs.default.apiProvider).toBe("kilocode")
-			expect(storedConfig.apiConfigs.default.kilocodeModel).toBe("minimax/minimax-m2.1:free")
+			expect(storedConfig.apiConfigs.default.apiProvider).toBe("openai")
+			expect(storedConfig.apiConfigs.default.openAiModelId).toBe("")
 		})
 		// kilocode_change end
 
@@ -705,6 +706,10 @@ describe("ProviderSettingsManager", () => {
 			expect(storedConfig.currentApiConfigName).toBe("default")
 			expect(Object.keys(storedConfig.apiConfigs)).toEqual(["default"])
 			expect(storedConfig.apiConfigs.default.id).toBeTruthy()
+			expect(mockGlobalState.update).toHaveBeenCalledWith(
+				getOpenAiModelCatalogStorageKey({ profileId: "test-id" }),
+				undefined,
+			)
 		})
 
 		it("should throw error when trying to delete non-existent config", async () => {
@@ -744,8 +749,8 @@ describe("ProviderSettingsManager", () => {
 				currentApiConfigName: "default",
 				apiConfigs: {
 					test: {
-						apiProvider: "anthropic",
-						apiKey: "test-key",
+						apiProvider: "openai",
+						openAiApiKey: "test-key",
 						id: "test-id",
 					},
 				},
@@ -760,7 +765,7 @@ describe("ProviderSettingsManager", () => {
 			const { name, ...providerSettings } = await providerSettingsManager.activateProfile({ name: "test" })
 
 			expect(name).toBe("test")
-			expect(providerSettings).toEqual({ apiProvider: "anthropic", apiKey: "test-key", id: "test-id" })
+			expect(providerSettings).toEqual({ apiProvider: "openai", openAiApiKey: "test-key", id: "test-id" })
 
 			// Get the stored config to check the structure.
 			const calls = mockSecrets.store.mock.calls
@@ -768,8 +773,8 @@ describe("ProviderSettingsManager", () => {
 			expect(storedConfig.currentApiConfigName).toBe("test")
 
 			expect(storedConfig.apiConfigs.test).toEqual({
-				apiProvider: "anthropic",
-				apiKey: "test-key",
+				apiProvider: "openai",
+				openAiApiKey: "test-key",
 				id: "test-id",
 			})
 		})
@@ -791,7 +796,7 @@ describe("ProviderSettingsManager", () => {
 			mockSecrets.get.mockResolvedValue(
 				JSON.stringify({
 					currentApiConfigName: "default",
-					apiConfigs: { test: { apiProvider: "anthropic", id: "test-id" } },
+					apiConfigs: { test: { apiProvider: "openai", id: "test-id" } },
 					migrations: {
 						rateLimitSecondsMigrated: true,
 						diffSettingsMigrated: true,
@@ -804,6 +809,24 @@ describe("ProviderSettingsManager", () => {
 			await expect(providerSettingsManager.activateProfile({ name: "test" })).rejects.toThrow(
 				"Failed to activate profile: Failed to write provider profiles to secrets: Error: Storage failed",
 			)
+		})
+
+		it("should reject a hidden legacy provider without changing the active profile", async () => {
+			mockSecrets.get.mockResolvedValue(
+				JSON.stringify({
+					currentApiConfigName: "personal",
+					apiConfigs: {
+						personal: { apiProvider: "openai", id: "personal-id" },
+						legacy: { apiProvider: "kilocode", id: "legacy-id", kilocodeToken: "saved-token" },
+					},
+					modeApiConfigs: { code: "personal-id" },
+				}),
+			)
+
+			await expect(providerSettingsManager.activateProfile({ name: "legacy" })).rejects.toThrow(
+				"Provider 'kilocode' is unavailable in this personal build",
+			)
+			expect(mockSecrets.store).not.toHaveBeenCalled()
 		})
 
 		it("should sanitize invalid/removed providers by resetting apiProvider to undefined", async () => {
@@ -900,6 +923,59 @@ describe("ProviderSettingsManager", () => {
 
 			expect(Object.keys(storedConfig.apiConfigs)).toEqual(["valid", "invalidProvider"])
 			expect(storedConfig.currentApiConfigName).toBe("valid")
+		})
+	})
+
+	describe("ensurePersonalActiveProfile", () => {
+		it("prefers an allowed subscription profile and preserves hidden profiles", async () => {
+			mockSecrets.get.mockResolvedValue(
+				JSON.stringify({
+					currentApiConfigName: "Legacy Kilo",
+					apiConfigs: {
+						"Legacy Kilo": {
+							id: "kilo-id",
+							apiProvider: "kilocode",
+							kilocodeToken: "saved-token",
+						},
+						Local: { id: "local-id", apiProvider: "lmstudio", lmStudioBaseUrl: "http://localhost:1234" },
+						Codex: { id: "codex-id", apiProvider: "openai-codex" },
+					},
+					modeApiConfigs: { code: "kilo-id", architect: "local-id" },
+				}),
+			)
+
+			const selected = await providerSettingsManager.ensurePersonalActiveProfile()
+
+			expect(selected).toMatchObject({ name: "Codex", id: "codex-id", apiProvider: "openai-codex" })
+			const storedConfig = JSON.parse(mockSecrets.store.mock.calls.at(-1)![1])
+			expect(storedConfig.currentApiConfigName).toBe("Codex")
+			expect(storedConfig.modeApiConfigs.code).toBe("codex-id")
+			expect(storedConfig.modeApiConfigs.architect).toBe("local-id")
+			expect(storedConfig.apiConfigs["Legacy Kilo"]).toEqual({
+				id: "kilo-id",
+				apiProvider: "kilocode",
+				kilocodeToken: "saved-token",
+			})
+		})
+
+		it("creates one inert OpenAI profile when storage contains only hidden providers", async () => {
+			mockSecrets.get.mockResolvedValue(
+				JSON.stringify({
+					currentApiConfigName: "Legacy Kilo",
+					apiConfigs: {
+						"Legacy Kilo": { id: "kilo-id", apiProvider: "kilocode", kilocodeToken: "saved-token" },
+					},
+					modeApiConfigs: { code: "kilo-id" },
+				}),
+			)
+
+			const selected = await providerSettingsManager.ensurePersonalActiveProfile()
+
+			expect(selected).toMatchObject({ name: "Personal OpenAI", apiProvider: "openai", openAiModelId: "" })
+			const storedConfig = JSON.parse(mockSecrets.store.mock.calls.at(-1)![1])
+			expect(storedConfig.apiConfigs["Legacy Kilo"].kilocodeToken).toBe("saved-token")
+			expect(storedConfig.currentApiConfigName).toBe("Personal OpenAI")
+			expect(storedConfig.modeApiConfigs.code).toBe(selected.id)
 		})
 	})
 

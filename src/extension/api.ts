@@ -373,6 +373,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	public async setConfiguration(values: RooCodeSettings) {
 		await this.sidebarProvider.contextProxy.setValues(values)
 		await this.sidebarProvider.providerSettingsManager.saveConfig(values.currentApiConfigName || "default", values)
+		await this.sidebarProvider.initializePersonalProviderProfile() // kilocode_change: restore an allowed active profile
 		await this.sidebarProvider.postStateToWebview()
 	}
 

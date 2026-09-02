@@ -1,9 +1,10 @@
-import { memo, useEffect, useRef, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react" // kilocode_change
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { AlertTriangle } from "lucide-react"
 
 import type { ProviderSettingsEntry, OrganizationAllowList, ProfileType } from "@roo-code/types" // kilocode_change - autocomplete profile type system
 import { MODEL_SELECTION_ENABLED } from "@roo-code/types"
+import { isPersonalProvider } from "./constants" // kilocode_change
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import {
@@ -57,6 +58,12 @@ const ApiConfigManager = ({
 	const [error, setError] = useState<string | null>(null)
 	const inputRef = useRef<any>(null)
 	const newProfileInputRef = useRef<any>(null)
+	// kilocode_change start: retain hidden profiles in storage but omit them from personal-build controls
+	const visibleApiConfigMeta = useMemo(
+		() => listApiConfigMeta.filter((config) => !config.apiProvider || isPersonalProvider(config.apiProvider)),
+		[listApiConfigMeta],
+	)
+	// kilocode_change end
 
 	// Check if a profile is valid based on the organization allow list
 	const isProfileValid = (profile: ProviderSettingsEntry): boolean => {
@@ -186,13 +193,13 @@ const ApiConfigManager = ({
 	}
 
 	const handleDelete = () => {
-		if (!currentApiConfigName || !listApiConfigMeta || listApiConfigMeta.length <= 1) return
+		if (!currentApiConfigName || visibleApiConfigMeta.length <= 1) return // kilocode_change
 
 		// Let the extension handle both deletion and selection.
 		onDeleteConfig(currentApiConfigName)
 	}
 
-	const isOnlyProfile = listApiConfigMeta?.length === 1
+	const isOnlyProfile = visibleApiConfigMeta.length === 1 // kilocode_change
 
 	const isEditingDifferentProfile = activeApiConfigName && currentApiConfigName !== activeApiConfigName // kilocode_change: Check if we're editing a different profile than the active one
 
@@ -250,10 +257,11 @@ const ApiConfigManager = ({
 			) : (
 				<>
 					<div className="flex items-center gap-1">
+						{/* kilocode_change start: show only personal provider profiles */}
 						<SearchableSelect
 							value={currentApiConfigName}
 							onValueChange={handleSelectConfig}
-							options={listApiConfigMeta.map((config) => {
+							options={visibleApiConfigMeta.map((config) => {
 								const valid = isProfileValid(config)
 								// kilocode_change start - autocomplete profile type system
 								const profileType = config.profileType || "chat"
@@ -283,6 +291,7 @@ const ApiConfigManager = ({
 							className="grow"
 							data-testid="select-component"
 						/>
+						{/* kilocode_change end */}
 						<StandardTooltip content={t("settings:providers.addProfile")}>
 							<Button variant="ghost" size="icon" onClick={handleAdd} data-testid="add-profile-button">
 								<span className="codicon codicon-add" />

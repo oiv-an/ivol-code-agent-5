@@ -75,6 +75,9 @@ export const ExperimentalSettings = ({
 				{Object.entries(experimentConfigsMap)
 					.filter(([key]) => key in EXPERIMENT_IDS)
 					.filter((config) => config[0] !== "MARKETPLACE") // kilocode_change: we have our own market place, filter this out for now
+					// kilocode_change start: hide experiments whose only backends are unavailable vendors
+					.filter(([key]) => key !== "MORPH_FAST_APPLY" && key !== "IMAGE_GENERATION")
+					// kilocode_change end
 					// Hide MULTIPLE_NATIVE_TOOL_CALLS - feature is on hold
 					.filter(([key]) => key !== "MULTIPLE_NATIVE_TOOL_CALLS")
 					.map((config) => {

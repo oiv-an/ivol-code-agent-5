@@ -35,19 +35,19 @@ object ActionNames {
  */
 object CommandIds {
     /** Command ID for explaining code */
-    const val EXPLAIN = "kilo-code.explainCode"
+    const val EXPLAIN = "ivol-code-agent-5.explainCode"
 
     /** Command ID for fixing code */
-    const val FIX = "kilo-code.fixCode"
+    const val FIX = "ivol-code-agent-5.fixCode"
 
     /** Command ID for improving code */
-    const val IMPROVE = "kilo-code.improveCode"
+    const val IMPROVE = "ivol-code-agent-5.improveCode"
 
     /** Command ID for adding to context */
-    const val ADD_TO_CONTEXT = "kilo-code.addToContext"
+    const val ADD_TO_CONTEXT = "ivol-code-agent-5.addToContext"
 
     /** Command ID for creating a new task */
-    const val NEW_TASK = "kilo-code.newTask"
+    const val NEW_TASK = "ivol-code-agent-5.newTask"
 }
 
 /** Type alias for prompt type identifiers */

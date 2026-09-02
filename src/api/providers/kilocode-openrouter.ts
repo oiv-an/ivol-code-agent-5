@@ -5,7 +5,7 @@ import type { CompletionUsage } from "./openrouter"
 import { getModelParams } from "../transform/model-params"
 import { getModels } from "./fetchers/modelCache"
 import { DEEP_SEEK_DEFAULT_TEMPERATURE, openRouterDefaultModelId, openRouterDefaultModelInfo } from "@roo-code/types"
-import { getKiloUrlFromToken } from "@roo-code/types"
+import { DISABLED_KILOCODE_URL, getKiloUrlFromToken } from "@roo-code/types"
 import type { ApiHandlerCreateMessageMetadata } from ".."
 import { getModelEndpoints } from "./fetchers/modelEndpointCache"
 import { getKilocodeDefaultModel } from "./kilocode/getKilocodeDefaultModel"
@@ -39,7 +39,7 @@ export class KilocodeOpenrouterHandler extends OpenRouterHandler {
 	}
 
 	constructor(options: ApiHandlerOptions) {
-		const baseApiUrl = getKiloUrlFromToken("https://api.kilo.ai/api/", options.kilocodeToken ?? "")
+		const baseApiUrl = getKiloUrlFromToken(`${DISABLED_KILOCODE_URL}/api/`, options.kilocodeToken ?? "")
 
 		options = {
 			...options,

@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "AI-агент для программирования с открытым исходным кодом, который генерирует код из естественного языка, автоматизирует задачи и выполняет команды терминала. Включает встроенное автодополнение, автоматизацию браузера, автоматический рефакторинг и пользовательские режимы для планирования, программирования и отладки. Поддерживает более 500 AI-моделей, включая Claude (Anthropic), Gemini, Grok, GPT, Codex и GLM."
 	},
 	"number_format": {
@@ -165,7 +165,7 @@
 	"warnings": {
 		"no_terminal_content": "Не выбрано содержимое терминала",
 		"missing_task_files": "Файлы этой задачи отсутствуют. Хотите удалить её из списка задач?",
-		"auto_import_failed": "Не удалось автоматически импортировать настройки Kilo Code: {{error}}"
+		"auto_import_failed": "Не удалось автоматически импортировать настройки IVOL Code Agent 5: {{error}}"
 	},
 	"info": {
 		"no_changes": "Изменения не найдены.",
@@ -174,7 +174,7 @@
 		"custom_storage_path_set": "Установлен пользовательский путь хранения: {{path}}",
 		"default_storage_path": "Возвращено использование пути хранения по умолчанию",
 		"settings_imported": "Настройки успешно импортированы.",
-		"auto_import_success": "Настройки Kilo Code автоматически импортированы из {{filename}}",
+		"auto_import_success": "Настройки IVOL Code Agent 5 автоматически импортированы из {{filename}}",
 		"share_link_copied": "Ссылка для совместного использования скопирована в буфер обмена",
 		"image_copied_to_clipboard": "URI данных изображения скопирован в буфер обмена",
 		"image_saved": "Изображение сохранено в {{path}}",
@@ -208,12 +208,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Введите пользовательский путь хранения истории разговоров, оставьте пустым для использования расположения по умолчанию",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Пожалуйста, введите абсолютный путь (например, D:\\KiloCodeStorage или /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Пожалуйста, введите абсолютный путь (например, D:\\IVOLCodeStorage или /home/user/storage)",
 		"enter_valid_path": "Пожалуйста, введите корректный путь"
 	},
 	"input": {
-		"task_prompt": "Что должен сделать Kilo Code?",
+		"task_prompt": "Что должен сделать IVOL Code Agent 5?",
 		"task_placeholder": "Введите вашу задачу здесь"
 	},
 	"settings": {
@@ -274,7 +274,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Ошибка",

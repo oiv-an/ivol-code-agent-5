@@ -1,6 +1,6 @@
 {
-	"greeting": "Cześć, jestem Kilo Code!",
-	"introduction": "<strong>Kilo Code to wiodący autonomiczny agent kodowania.</strong> Przygotuj się na projektowanie architektury, kodowanie, debugowanie i zwiększenie produktywności jak nigdy dotąd. Aby kontynuować, Kilo Code wymaga klucza API.",
+	"greeting": "Cześć, jestem IVOL Code!",
+	"introduction": "<strong>IVOL Code to wiodący autonomiczny agent kodowania.</strong> Przygotuj się na projektowanie architektury, kodowanie, debugowanie i zwiększenie produktywności jak nigdy dotąd. Aby kontynuować, IVOL Code wymaga klucza API.",
 	"notice": "Aby rozpocząć, to rozszerzenie potrzebuje dostawcy API.",
 	"start": "Zaczynajmy!",
 	"routers": {
@@ -16,7 +16,7 @@
 			"incentive": "Wypróbuj Roo bezpłatnie"
 		}
 	},
-	"chooseProvider": "Aby działać, Kilo Code potrzebuje klucza API.",
+	"chooseProvider": "Aby działać, IVOL Code potrzebuje klucza API.",
 	"landing": {
 		"greeting": "Witaj w Roo Code!",
 		"introduction": "Dzięki szerokiej gamie wbudowanych i rozszerzalnych Trybów, Roo Code pozwala planować, projektować architekturę, kodować, debugować i zwiększać produktywność jak nigdy dotąd.",
@@ -50,8 +50,8 @@
 	"startRouter": "Rekomendujemy użycie routera LLM:",
 	"startCustom": "Lub możesz przynieść swój własny klucz API:",
 	"telemetry": {
-		"helpImprove": "Pomóż ulepszyć Kilo Code",
-		"helpImproveMessage": "Kilo Code zbiera dane o błędach i użyciu, aby pomóc nam w naprawianiu błędów i ulepszaniu rozszerzenia. Ta telemetria nie zbiera kodu, promptów ani informacji osobistych. Możesz to wyłączyć w <settingsLink>ustawieniach</settingsLink>."
+		"helpImprove": "Pomóż ulepszyć IVOL Code",
+		"helpImproveMessage": "IVOL Code zbiera dane o błędach i użyciu, aby pomóc nam w naprawianiu błędów i ulepszaniu rozszerzenia. Ta telemetria nie zbiera kodu, promptów ani informacji osobistych. Możesz to wyłączyć w <settingsLink>ustawieniach</settingsLink>."
 	},
 	"importSettings": "Importuj ustawienia"
 }

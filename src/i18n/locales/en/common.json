@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "Open Source AI coding agent that generates code from natural language, automates tasks, and runs terminal commands. Features inline autocomplete, browser automation, automated refactoring, and custom modes for planning, coding, and debugging. Supports 500+ AI models including Claude (Anthropic), Gemini, Grok, GPT, Codex and GLM."
 	},
 	"number_format": {
@@ -165,7 +165,7 @@
 	"warnings": {
 		"no_terminal_content": "No terminal content selected",
 		"missing_task_files": "This task's files are missing. Would you like to remove it from the task list?",
-		"auto_import_failed": "Failed to auto-import Kilo Code settings: {{error}}"
+		"auto_import_failed": "Failed to auto-import IVOL Code Agent 5 settings: {{error}}"
 	},
 	"info": {
 		"no_changes": "No changes found.",
@@ -174,7 +174,7 @@
 		"custom_storage_path_set": "Custom storage path set: {{path}}",
 		"default_storage_path": "Reverted to using default storage path",
 		"settings_imported": "Settings imported successfully.",
-		"auto_import_success": "Kilo Code settings automatically imported from {{filename}}",
+		"auto_import_success": "IVOL Code Agent 5 settings automatically imported from {{filename}}",
 		"share_link_copied": "Share link copied to clipboard",
 		"organization_share_link_copied": "Organization share link copied to clipboard!",
 		"public_share_link_copied": "Public share link copied to clipboard!",
@@ -208,12 +208,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Enter custom conversation history storage path, leave empty to use default location",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Please enter an absolute path (e.g. D:\\KiloCodeStorage or /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Please enter an absolute path (e.g. D:\\IVOLCodeStorage or /home/user/storage)",
 		"enter_valid_path": "Please enter a valid path"
 	},
 	"input": {
-		"task_prompt": "What should Kilo Code do?",
+		"task_prompt": "What should IVOL Code Agent 5 do?",
 		"task_placeholder": "Build, find, ask something"
 	},
 	"customModes": {
@@ -240,8 +240,8 @@
 	},
 	"mdm": {
 		"errors": {
-			"cloud_auth_required": "Your organization requires Kilo Code Cloud authentication. Please sign in to continue.",
-			"organization_mismatch": "You must be authenticated with your organization's Kilo Code Cloud account.",
+			"cloud_auth_required": "Your organization requires Kilo Cloud authentication. Please sign in to continue.",
+			"organization_mismatch": "You must be authenticated with your organization's Kilo Cloud account.",
 			"verification_failed": "Unable to verify organization authentication."
 		},
 		"info": {
@@ -266,7 +266,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Error",

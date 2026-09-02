@@ -6,6 +6,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 
 import { SetCachedStateField } from "./types"
+import { isPersonalProvider } from "./constants" // kilocode_change
 
 type TerminalCommandGeneratorSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	terminalCommandApiConfigId?: string
@@ -52,14 +53,20 @@ export const TerminalCommandGeneratorSettings = ({
 									<SelectItem value="-">
 										{t("kilocode:settings.terminal.commandGenerator.apiConfigId.current")}
 									</SelectItem>
-									{(listApiConfigMeta || []).map((config) => (
-										<SelectItem
-											key={config.id}
-											value={config.id}
-											data-testid={`terminal-command-${config.id}-option`}>
-											{config.name} ({config.apiProvider})
-										</SelectItem>
-									))}
+									{/* kilocode_change start: hide unavailable provider profiles */}
+									{(listApiConfigMeta || [])
+										.filter(
+											(config) => !config.apiProvider || isPersonalProvider(config.apiProvider),
+										)
+										.map((config) => (
+											<SelectItem
+												key={config.id}
+												value={config.id}
+												data-testid={`terminal-command-${config.id}-option`}>
+												{config.name} ({config.apiProvider})
+											</SelectItem>
+										))}
+									{/* kilocode_change end */}
 								</SelectContent>
 							</Select>
 							<div className="text-sm text-vscode-descriptionForeground mt-1">

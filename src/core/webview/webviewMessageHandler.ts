@@ -6,12 +6,14 @@ import { getRooDirectoriesForCwd } from "../../services/roo-config/index.js"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 // kilocode_change start
-import axios from "axios"
-import { fastApplyApiProviderSchema, getKiloUrlFromToken, isGlobalStateKey } from "@roo-code/types"
-import { getAppUrl } from "@roo-code/types"
+import {
+	fastApplyApiProviderSchema,
+	isGlobalStateKey,
+	isPersonalProvider,
+	isPersonalRouterModelProvider,
+} from "@roo-code/types"
 import {
 	MaybeTypedWebviewMessage,
-	ProfileData,
 	SeeNewChangesPayload,
 	TaskHistoryRequestPayload,
 	TasksByIdRequestPayload,
@@ -23,12 +25,9 @@ import {
 	type Language,
 	type GlobalState,
 	type ClineMessage,
-	type TelemetrySetting,
-	type UserSettingsConfig,
 	type ModelRecord,
 	type WebviewMessage,
 	type EditQueuedMessagePayload,
-	TelemetryEventName,
 	// kilocode_change start
 	autocompleteServiceSettingsSchema,
 	fastApplyModelSchema,
@@ -41,7 +40,6 @@ import {
 	requestCheckpointRestoreApprovalPayloadSchema, // kilocode_change
 } from "@roo-code/types"
 import { customToolRegistry } from "@roo-code/core"
-import { CloudService } from "@roo-code/cloud"
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { type ApiMessage } from "../task-persistence/apiMessages"
@@ -72,7 +70,8 @@ import { singleCompletionHandler } from "../../utils/single-completion-handler" 
 import { searchCommits } from "../../utils/git"
 import { exportSettings, importSettingsWithFeedback } from "../config/importExport"
 import { getOpenAiModels } from "../../api/providers/openai"
-import { getVsCodeLmModels } from "../../api/providers/vscode-lm"
+import { OpenAiModelCatalogCache } from "../../api/providers/openai-model-cache" // kilocode_change
+// kilocode_change: personal build omits hidden-provider catalog fetchers
 import { openMention } from "../mentions"
 import { resolveImageMentions } from "../mentions/resolveImageMentions"
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
@@ -82,18 +81,11 @@ import { getModels, flushModels } from "../../api/providers/fetchers/modelCache"
 import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { getCommand } from "../../utils/commands"
-// kilocode_change start
-import { OcaTokenManager } from "../../api/providers/oca/OcaTokenManager"
-import { DEFAULT_OCA_BASE_URL } from "../../api/providers/oca/utils/constants"
-// kilocode_change end
+import { OcaTokenManager } from "../../api/providers/oca/OcaTokenManager" // kilocode_change
 import { toggleWorkflow, toggleRule, createRuleFile, deleteRuleFile } from "./kilorules"
 import { mermaidFixPrompt } from "../prompts/utilities/mermaid" // kilocode_change
 // kilocode_change start
-import {
-	editMessageHandler,
-	fetchKilocodeNotificationsHandler,
-	deviceAuthMessageHandler,
-} from "../kilocode/webview/webviewMessageHandlerUtils"
+import { editMessageHandler } from "../kilocode/webview/webviewMessageHandlerUtils"
 import { AutocompleteServiceManager } from "../../services/autocomplete/AutocompleteServiceManager"
 import { handleChatCompletionRequest } from "../../services/autocomplete/chat-autocomplete/handleChatCompletionRequest"
 import { handleChatCompletionAccepted } from "../../services/autocomplete/chat-autocomplete/handleChatCompletionAccepted"
@@ -101,27 +93,16 @@ import { handleChatCompletionAccepted } from "../../services/autocomplete/chat-a
 
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
-import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
+import { MarketplaceManager } from "../../services/marketplace"
 import { UsageTracker } from "../../utils/usage-tracker" // kilocode_change
 import { seeNewChanges } from "../checkpoints/kilocode/seeNewChanges" // kilocode_change
 import { getTaskHistory } from "../../shared/kilocode/getTaskHistory" // kilocode_change
-import { fetchAndRefreshOrganizationModesOnStartup, refreshOrganizationModes } from "./kiloWebviewMessgeHandlerHelpers" // kilocode_change
-import { getSapAiCoreDeployments } from "../../api/providers/fetchers/sap-ai-core" // kilocode_change
+// kilocode_change: personal build omits Kilo organization and SAP catalog refresh helpers
 import { AutoPurgeScheduler } from "../../services/auto-purge" // kilocode_change
 import { setPendingTodoList } from "../tools/UpdateTodoListTool"
 import { ManagedIndexer } from "../../services/code-index/managed/ManagedIndexer"
-import { SessionManager } from "../../shared/kilocode/cli-sessions/core/SessionManager" // kilocode_change
-import { getEffectiveTelemetrySetting } from "../kilocode/wrapper"
 
-async function switchToPreRelease() {
-	await vscode.commands.executeCommand("workbench.extensions.installExtension", "kilocode.kilo-code", {
-		installPreReleaseVersion: true,
-	})
-	vscode.window.showInformationMessage(
-		"Switching to the pre-release channel. VS Code will prompt you to reload once the update is installed.",
-	)
-}
-
+// kilocode_change: personal build intentionally has no pre-release updater command
 export const webviewMessageHandler = async (
 	provider: ClineProvider,
 	message: MaybeTypedWebviewMessage, // kilocode_change switch to MaybeTypedWebviewMessage for better type-safety
@@ -529,10 +510,7 @@ export const webviewMessageHandler = async (
 			const customModes = await provider.customModesManager.getCustomModes()
 			await updateGlobalState("customModes", customModes)
 
-			// kilocode_change start: Fetch organization modes on startup
-			// Fetch organization modes on startup if an organization is selected
-			await fetchAndRefreshOrganizationModesOnStartup(provider, updateGlobalState)
-			// kilocode_change end
+			// kilocode_change: personal build only refreshes Kilo organization modes after an explicit change
 
 			// Refresh workflow toggles
 			const { refreshWorkflowToggles } = await import("../context/instructions/workflows") // kilocode_change
@@ -599,13 +577,8 @@ export const webviewMessageHandler = async (
 					),
 				)
 
-			// If user already opted in to telemetry, enable telemetry service
-			provider.getStateToPostToWebview().then(async (/*kilocode_change*/ state) => {
-				const { telemetrySetting } = state
-				const isOptedIn = getEffectiveTelemetrySetting(telemetrySetting) === "enabled" // kilocode_change
-				TelemetryService.instance.updateTelemetryState(isOptedIn)
-				await TelemetryService.instance.updateIdentity(state.apiConfiguration.kilocodeToken ?? "") // kilocode_change
-			})
+			// Telemetry is permanently disabled in the personal build.
+			TelemetryService.instance.updateTelemetryState(false)
 
 			provider.isViewLaunched = true
 			break
@@ -777,52 +750,18 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "shareCurrentTask":
-			const shareTaskId = provider.getCurrentTask()?.taskId
-			const clineMessages = provider.getCurrentTask()?.clineMessages
-
-			if (!shareTaskId) {
-				vscode.window.showErrorMessage(t("common:errors.share_no_active_task"))
-				break
-			}
-
-			try {
-				const visibility = message.visibility || "organization"
-				const result = await CloudService.instance.shareTask(shareTaskId, visibility)
-
-				if (result.success && result.shareUrl) {
-					// Show success notification
-					const messageKey =
-						visibility === "public"
-							? "common:info.public_share_link_copied"
-							: "common:info.organization_share_link_copied"
-					vscode.window.showInformationMessage(t(messageKey))
-
-					// Send success feedback to webview for inline display
-					await provider.postMessageToWebview({
-						type: "shareTaskSuccess",
-						visibility,
-						text: result.shareUrl,
-					})
-				} else {
-					// Handle error
-					const errorMessage = result.error || "Failed to create share link"
-					if (errorMessage.includes("Authentication")) {
-						vscode.window.showErrorMessage(t("common:errors.share_auth_required"))
-					} else if (errorMessage.includes("sharing is not enabled")) {
-						vscode.window.showErrorMessage(t("common:errors.share_not_enabled"))
-					} else if (errorMessage.includes("not found")) {
-						vscode.window.showErrorMessage(t("common:errors.share_task_not_found"))
-					} else {
-						vscode.window.showErrorMessage(errorMessage)
-					}
-				}
-			} catch (error) {
-				provider.log(`[shareCurrentTask] Unexpected error: ${error}`)
-				vscode.window.showErrorMessage(t("common:errors.share_task_failed"))
-			}
+			vscode.window.showInformationMessage("Cloud task sharing is disabled in IVOL Code Agent 5.")
 			break
 		case "showTaskWithId":
-			provider.showTaskWithId(message.text!)
+			try {
+				await provider.showTaskWithId(message.text!)
+			} catch (error) {
+				provider.log(
+					`[showTaskWithId] Failed to open task ${message.text}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			}
 			break
 		case "condenseTaskContextRequest":
 			provider.condenseTaskContext(message.text!)
@@ -898,267 +837,78 @@ export const webviewMessageHandler = async (
 			break
 		case "flushRouterModels":
 			const routerNameFlush: RouterName = toRouterName(message.text)
+			// kilocode_change start: hidden providers cannot trigger model-catalog traffic
+			if (!isPersonalRouterModelProvider(routerNameFlush)) {
+				provider.log(`[Models] Ignored non-personal router-model flush for ${routerNameFlush}`)
+				break
+			}
+			// kilocode_change end
 			// Note: flushRouterModels is a generic flush without credentials
 			// For providers that need credentials, use their specific handlers
 			await flushModels({ provider: routerNameFlush } as GetModelsOptions, true)
 			break
+		// kilocode_change start: fail-closed personal provider catalog
 		case "requestRouterModels":
-			const { apiConfiguration } = await provider.getState()
-
 			// Optional single provider filter from webview
 			const requestedProvider = message?.values?.provider
 			const providerFilter = requestedProvider ? toRouterName(requestedProvider) : undefined
+			if (!providerFilter) {
+				provider.log("[Models] Ignored unfiltered router-model request in personal build")
+				provider.postMessageToWebview({
+					type: "routerModels",
+					routerModels: {} as Record<RouterName, ModelRecord>,
+				})
+				break
+			}
 
-			// Optional refresh flag to flush cache before fetching (useful for providers requiring credentials)
+			if (!isPersonalRouterModelProvider(providerFilter)) {
+				provider.log(`[Models] Ignored non-personal router-model request for ${providerFilter}`)
+				provider.postMessageToWebview({
+					type: "routerModels",
+					routerModels: { [providerFilter]: {} } as Record<RouterName, ModelRecord>,
+					values: { provider: providerFilter },
+				})
+				break
+			}
+
+			const { apiConfiguration } = await provider.getState()
+
+			// Only local discovery is available in the personal build. Keeping this
+			// list local-only makes future catalog additions fail closed by default.
 			const shouldRefresh = message?.values?.refresh === true
-
-			const routerModels: Record<RouterName, ModelRecord> = providerFilter
-				? ({} as Record<RouterName, ModelRecord>)
-				: {
-						// kilocode_change start
-						ovhcloud: {},
-						inception: {},
-						kilocode: {},
-						gemini: {},
-						apertis: {},
-						// kilocode_change end
-						openrouter: {},
-						"vercel-ai-gateway": {},
-						huggingface: {},
-						litellm: {},
-						deepinfra: {},
-						"io-intelligence": {},
-						requesty: {},
-						unbound: {},
-						glama: {}, // kilocode_change
-						ollama: {},
-						lmstudio: {},
-						oca: {}, // kilocode_change
-						roo: {},
-						synthetic: {}, // kilocode_change
-						"sap-ai-core": {}, // kilocode_change
-						chutes: {},
-						"nano-gpt": {}, // kilocode_change
-						poe: {}, // kilocode_change
-						aihubmix: {}, // kilocode_change
-						zenmux: {},
-					}
-			const safeGetModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
-				try {
-					return await getModels(options)
-				} catch (error) {
-					console.error(
-						`Failed to fetch models in webviewMessageHandler requestRouterModels for ${options.provider}:`,
-						error,
-					)
-
-					throw error // Re-throw to be caught by Promise.allSettled.
-				}
-			}
-
-			// kilocode_change start: openrouter auth, kilocode provider
-			const openRouterApiKey = apiConfiguration.openRouterApiKey || message?.values?.openRouterApiKey
-			const openRouterBaseUrl = apiConfiguration.openRouterBaseUrl || message?.values?.openRouterBaseUrl
-
-			// Base candidates (only those handled by this aggregate fetcher)
+			const routerModels = { [providerFilter]: {} } as Record<RouterName, ModelRecord>
 			const candidates: { key: RouterName; options: GetModelsOptions }[] = [
-				{
-					key: "openrouter",
-					options: { provider: "openrouter", apiKey: openRouterApiKey, baseUrl: openRouterBaseUrl },
-				},
-				{
-					key: "gemini",
-					options: {
-						provider: "gemini",
-						apiKey: apiConfiguration.geminiApiKey,
-						baseUrl: apiConfiguration.googleGeminiBaseUrl,
-					},
-				},
-				{
-					key: "requesty",
-					options: {
-						provider: "requesty",
-						apiKey: apiConfiguration.requestyApiKey,
-						baseUrl: apiConfiguration.requestyBaseUrl,
-					},
-				},
-				{ key: "glama", options: { provider: "glama" } }, // kilocode_change
-				{ key: "unbound", options: { provider: "unbound", apiKey: apiConfiguration.unboundApiKey } },
-				{
-					key: "kilocode",
-					options: {
-						provider: "kilocode",
-						kilocodeToken: apiConfiguration.kilocodeToken,
-						kilocodeOrganizationId: apiConfiguration.kilocodeOrganizationId,
-					},
-				},
 				{ key: "ollama", options: { provider: "ollama", baseUrl: apiConfiguration.ollamaBaseUrl } },
-				{ key: "vercel-ai-gateway", options: { provider: "vercel-ai-gateway" } },
-				{
-					key: "deepinfra",
-					options: {
-						provider: "deepinfra",
-						apiKey: apiConfiguration.deepInfraApiKey,
-						baseUrl: apiConfiguration.deepInfraBaseUrl,
-					},
-				},
-				// kilocode_change start
-				{
-					key: "nano-gpt",
-					options: {
-						provider: "nano-gpt",
-						apiKey: apiConfiguration.nanoGptApiKey,
-						nanoGptModelList: apiConfiguration.nanoGptModelList,
-					},
-				},
-				{
-					key: "aihubmix",
-					options: {
-						provider: "aihubmix",
-						apiKey: apiConfiguration.aihubmixApiKey,
-						baseUrl: apiConfiguration.aihubmixBaseUrl,
-					},
-				},
-				// kilocode_change end
-				{
-					key: "ovhcloud",
-					options: {
-						provider: "ovhcloud",
-						apiKey: apiConfiguration.ovhCloudAiEndpointsApiKey,
-						baseUrl: apiConfiguration.ovhCloudAiEndpointsBaseUrl,
-					},
-				},
-				{
-					key: "inception",
-					options: {
-						provider: "inception",
-						apiKey: apiConfiguration.inceptionLabsApiKey,
-						baseUrl: apiConfiguration.inceptionLabsBaseUrl,
-					},
-				},
-				{ key: "synthetic", options: { provider: "synthetic", apiKey: apiConfiguration.syntheticApiKey } }, // kilocode_change
-				{
-					key: "roo",
-					options: {
-						provider: "roo",
-						baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
-						apiKey: CloudService.hasInstance()
-							? CloudService.instance.authService?.getSessionToken()
-							: undefined,
-					},
-				},
-				{
-					key: "chutes",
-					options: { provider: "chutes", apiKey: apiConfiguration.chutesApiKey },
-				},
-				// kilocode_change start
-				{
-					key: "poe",
-					options: { provider: "poe", apiKey: apiConfiguration.poeApiKey },
-				},
-				// kilocode_change end
-				{
-					key: "zenmux",
-					options: {
-						provider: "zenmux",
-						apiKey: apiConfiguration.zenmuxApiKey,
-						baseUrl: apiConfiguration.zenmuxBaseUrl ?? "https://zenmux.ai/api/v1",
-					},
-				},
+				{ key: "lmstudio", options: { provider: "lmstudio", baseUrl: apiConfiguration.lmStudioBaseUrl } },
 			]
-			// kilocode_change end
+			const targetCandidate = candidates.find(({ key }) => key === providerFilter)
 
-			// kilocode_change start
-			try {
-				const valid = await OcaTokenManager.getValid()
-				if (valid?.access_token) {
-					candidates.push({
-						key: "oca",
-						options: {
-							provider: "oca",
-							apiKey: valid.access_token,
-							baseUrl: process.env.OCA_API_BASE ?? DEFAULT_OCA_BASE_URL,
-						} as GetModelsOptions,
-					})
-				} else {
-					console.debug("OCA model fetch skipped: user must Sign in.")
-				}
-			} catch (e) {
-				console.debug("OCA model fetch skipped: error occurred while validating IDCS token..", e)
-			}
-			// kilocode_change end
-
-			// IO Intelligence is conditional on api key
-			if (apiConfiguration.ioIntelligenceApiKey) {
-				candidates.push({
-					key: "io-intelligence",
-					options: { provider: "io-intelligence", apiKey: apiConfiguration.ioIntelligenceApiKey },
-				})
-			}
-
-			// LiteLLM is conditional on baseUrl+apiKey
-			const litellmApiKey = apiConfiguration.litellmApiKey || message?.values?.litellmApiKey
-			const litellmBaseUrl = apiConfiguration.litellmBaseUrl || message?.values?.litellmBaseUrl
-
-			if (litellmApiKey && litellmBaseUrl) {
-				// If explicit credentials are provided in message.values (from Refresh Models button),
-				// flush the cache first to ensure we fetch fresh data with the new credentials
-				if (message?.values?.litellmApiKey || message?.values?.litellmBaseUrl) {
-					await flushModels({ provider: "litellm", apiKey: litellmApiKey, baseUrl: litellmBaseUrl }, true)
-				}
-
-				candidates.push({
-					key: "litellm",
-					options: { provider: "litellm", apiKey: litellmApiKey, baseUrl: litellmBaseUrl },
-				})
-			}
-
-			// Apply single provider filter if specified
-			const modelFetchPromises = providerFilter
-				? candidates.filter(({ key }) => key === providerFilter)
-				: candidates
-
-			// If refresh flag is set and we have a specific provider, flush its cache first
-			if (shouldRefresh && providerFilter && modelFetchPromises.length > 0) {
-				const targetCandidate = modelFetchPromises[0]
+			if (shouldRefresh && targetCandidate) {
 				await flushModels(targetCandidate.options, true)
 			}
 
-			const results = await Promise.allSettled(
-				modelFetchPromises.map(async ({ key, options }) => {
-					const models = await safeGetModels(options)
-					return { key, models } // The key is `ProviderName` here.
-				}),
-			)
-
-			results.forEach((result, index) => {
-				const routerName = modelFetchPromises[index].key
-				if (result.status === "fulfilled") {
-					routerModels[routerName] = result.value.models
-
-					// Ollama and LM Studio settings pages still need these events. They are not fetched here.
-				} else {
-					// Handle rejection: Post a specific error message for this provider.
-					const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason)
-					console.error(`Error fetching models for ${routerName}:`, result.reason)
-
-					routerModels[routerName] = {} // Ensure it's an empty object in the main routerModels message.
-
+			if (targetCandidate) {
+				try {
+					routerModels[providerFilter] = await getModels(targetCandidate.options)
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error)
+					console.error(`Error fetching models for ${providerFilter}:`, error)
 					provider.postMessageToWebview({
 						type: "singleRouterModelFetchResponse",
 						success: false,
 						error: errorMessage,
-						values: { provider: routerName },
+						values: { provider: providerFilter },
 					})
 				}
-			})
+			}
 
 			provider.postMessageToWebview({
 				type: "routerModels",
 				routerModels,
-				values: providerFilter ? { provider: requestedProvider } : undefined,
+				values: { provider: requestedProvider },
 			})
 			break
+		// kilocode_change end
 		case "requestOllamaModels": {
 			// Specific handler for Ollama models only.
 			const { apiConfiguration: ollamaApiConfig } = await provider.getState()
@@ -1208,142 +958,131 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
+		// kilocode_change start: hidden remote providers return local empty responses
 		case "requestRooModels": {
-			// Specific handler for Roo models only - flushes cache to ensure fresh auth token is used
-			try {
-				const rooOptions = {
-					provider: "roo" as const,
-					baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
-					apiKey: CloudService.hasInstance()
-						? CloudService.instance.authService?.getSessionToken()
-						: undefined,
-				}
-				// Flush cache and refresh to ensure fresh models with current auth state
-				await flushModels(rooOptions, true)
-
-				const rooModels = await getModels(rooOptions)
-
-				// Always send a response, even if no models are returned
-				provider.postMessageToWebview({
-					type: "singleRouterModelFetchResponse",
-					success: true,
-					values: { provider: "roo", models: rooModels },
-				})
-			} catch (error) {
-				// Send error response
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.postMessageToWebview({
-					type: "singleRouterModelFetchResponse",
-					success: false,
-					error: errorMessage,
-					values: { provider: "roo" },
-				})
-			}
+			provider.log("[Models] Ignored Roo model request in personal build")
+			provider.postMessageToWebview({
+				type: "singleRouterModelFetchResponse",
+				success: true,
+				values: { provider: "roo", models: {} },
+			})
 			break
 		}
 		case "requestRooCreditBalance": {
-			// Fetch Roo credit balance using CloudAPI
-			const requestId = message.requestId
-			try {
-				if (!CloudService.hasInstance() || !CloudService.instance.cloudAPI) {
-					throw new Error("Cloud service not available")
-				}
-
-				const balance = await CloudService.instance.cloudAPI.creditBalance()
-
-				provider.postMessageToWebview({
-					type: "rooCreditBalance",
-					requestId,
-					values: { balance },
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.postMessageToWebview({
-					type: "rooCreditBalance",
-					requestId,
-					values: { error: errorMessage },
-				})
-			}
+			provider.log("[Models] Ignored Roo credit request in personal build")
+			provider.postMessageToWebview({
+				type: "rooCreditBalance",
+				requestId: message.requestId,
+				values: { error: "Roo provider is unavailable in this personal build" },
+			})
 			break
 		}
-		case "requestOpenAiModels":
-			if (message?.values?.baseUrl && message?.values?.apiKey) {
-				const openAiModels = await getOpenAiModels(
-					message?.values?.baseUrl,
-					message?.values?.apiKey,
-					message?.values?.openAiHeaders,
-				)
+		// kilocode_change end
+		case "requestOpenAiModels": {
+			let openAiModels: string[] = []
+			let backgroundRefreshPending = false
+			const baseUrl = typeof message?.values?.baseUrl === "string" ? message.values.baseUrl : undefined
+			const apiKey = typeof message?.values?.apiKey === "string" ? message.values.apiKey : undefined
+			const profileId = typeof message?.values?.profileId === "string" ? message.values.profileId.trim() : ""
+			const openAiHeaders = Object.entries(message?.values?.openAiHeaders ?? {}).reduce<Record<string, string>>(
+				(headers, [headerName, headerValue]) => {
+					if (typeof headerValue === "string") {
+						headers[headerName] = headerValue
+					}
 
-				provider.postMessageToWebview({ type: "openAiModels", openAiModels })
-			}
+					return headers
+				},
+				{},
+			)
 
-			break
-		case "requestVsCodeLmModels":
-			const vsCodeLmModels = await getVsCodeLmModels()
-			// TODO: Cache like we do for OpenRouter, etc?
-			provider.postMessageToWebview({ type: "vsCodeLmModels", vsCodeLmModels })
-			break
-		case "requestHuggingFaceModels":
-			// TODO: Why isn't this handled by `requestRouterModels` above?
-			try {
-				const { getHuggingFaceModelsWithMetadata } = await import("../../api/providers/fetchers/huggingface")
-				const huggingFaceModelsResponse = await getHuggingFaceModelsWithMetadata()
+			if (baseUrl && apiKey) {
+				const loadModels = async () => {
+					const authenticatedModels = await getOpenAiModels(baseUrl, apiKey, openAiHeaders)
 
-				provider.postMessageToWebview({
-					type: "huggingFaceModels",
-					huggingFaceModels: huggingFaceModelsResponse.models,
-				})
-			} catch (error) {
-				console.error("Failed to fetch Hugging Face models:", error)
-				provider.postMessageToWebview({ type: "huggingFaceModels", huggingFaceModels: [] })
-			}
-			break
-		// kilocode_change start
-		case "requestSapAiCoreModels": {
-			// Specific handler for SAP AI Core models only.
-			if (message?.values?.sapAiCoreServiceKey) {
-				try {
-					// Flush cache first to ensure fresh models.
-					await flushModels(
-						{
-							provider: "sap-ai-core",
+					if (authenticatedModels.length > 0) {
+						return authenticatedModels
+					}
+
+					// Some personal OpenAI-compatible gateways expose /models publicly
+					// while rejecting an otherwise valid completion API key on that route.
+					provider.log("[Models] Authenticated model catalog was empty; retrying the public catalog")
+					const publicHeaders = Object.entries(openAiHeaders).reduce<Record<string, string>>(
+						(headers, [headerName, headerValue]) => {
+							if (headerName.toLowerCase() !== "authorization") {
+								headers[headerName] = headerValue
+							}
+
+							return headers
 						},
-						true,
+						{},
 					)
 
-					const sapAiCoreModels = await getModels({
-						provider: "sap-ai-core",
+					return getOpenAiModels(baseUrl, undefined, publicHeaders)
+				}
+
+				if (profileId) {
+					const identity = { profileId, baseUrl }
+					const catalogCache = new OpenAiModelCatalogCache(provider.context.globalState, {
+						log: (logMessage) => provider.log(logMessage),
 					})
 
-					if (Object.keys(sapAiCoreModels).length > 0) {
-						provider.postMessageToWebview({ type: "sapAiCoreModels", sapAiCoreModels: sapAiCoreModels })
+					void catalogCache.purgeLegacyCache()
+					const savedModels = catalogCache.get(identity)
+
+					if (savedModels.length > 0) {
+						// Return the saved catalog immediately. Network refresh must never freeze the quick selector.
+						openAiModels = savedModels
+						backgroundRefreshPending = true
+						void catalogCache.refresh(identity, loadModels).then((refreshedModels) => {
+							provider.log(
+								`[Models] OpenAI-compatible catalog refreshed in background with ${refreshedModels.length} models`,
+							)
+							provider.postMessageToWebview({
+								type: "openAiModels",
+								openAiModels: refreshedModels,
+								requestId: message.requestId,
+								values: { backgroundRefresh: true },
+							})
+						})
+					} else {
+						openAiModels = await catalogCache.refresh(identity, loadModels)
 					}
-				} catch (error) {
-					console.error("SAP AI Core models fetch failed:", error)
+				} else {
+					openAiModels = await loadModels()
 				}
+
+				provider.log(`[Models] OpenAI-compatible catalog ready with ${openAiModels.length} models`)
 			}
+
+			// kilocode_change start: always finish and correlate quick model catalog requests
+			provider.postMessageToWebview({
+				type: "openAiModels",
+				openAiModels,
+				requestId: message.requestId,
+				...(backgroundRefreshPending ? { values: { backgroundRefreshPending: true } } : {}),
+			})
+			// kilocode_change end
+			break
+		}
+		// kilocode_change start: hidden catalogs cannot initiate provider discovery
+		case "requestVsCodeLmModels":
+			provider.log("[Models] Ignored VS Code LM model request in personal build")
+			provider.postMessageToWebview({ type: "vsCodeLmModels", vsCodeLmModels: [] })
+			break
+		case "requestHuggingFaceModels":
+			provider.log("[Models] Ignored Hugging Face model request in personal build")
+			provider.postMessageToWebview({ type: "huggingFaceModels", huggingFaceModels: [] })
+			break
+		// kilocode_change end
+		// kilocode_change start
+		case "requestSapAiCoreModels": {
+			provider.log("[Models] Ignored SAP AI Core model request in personal build")
+			provider.postMessageToWebview({ type: "sapAiCoreModels", sapAiCoreModels: {} })
 			break
 		}
 		case "requestSapAiCoreDeployments": {
-			if (message?.values?.sapAiCoreServiceKey) {
-				try {
-					const sapAiCoreDeployments = await getSapAiCoreDeployments(
-						message?.values?.sapAiCoreServiceKey,
-						message?.values?.sapAiCoreResourceGroup,
-					)
-
-					if (Object.keys(sapAiCoreDeployments).length > 0) {
-						provider.postMessageToWebview({
-							type: "sapAiCoreDeployments",
-							sapAiCoreDeployments:
-								// Cast to canonical type from @roo-code/types to avoid drift.
-								sapAiCoreDeployments as unknown as import("@roo-code/types").DeploymentRecord, // kilocode_change
-						})
-					}
-				} catch (error) {
-					console.error("SAP AI Core deployments fetch failed:", error)
-				}
-			}
+			provider.log("[Models] Ignored SAP AI Core deployment request in personal build")
+			provider.postMessageToWebview({ type: "sapAiCoreDeployments", sapAiCoreDeployments: {} })
 			break
 		}
 		// kilocode_change end
@@ -1766,7 +1505,10 @@ export const webviewMessageHandler = async (
 			break
 		// kilocode_change begin
 		case "openGlobalKeybindings":
-			vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", message.text ?? "kilo-code.")
+			vscode.commands.executeCommand(
+				"workbench.action.openGlobalKeybindings",
+				message.text ?? "ivol-code-agent-5.",
+			)
 			break
 		case "showSystemNotification":
 			const isSystemNotificationsEnabled = getGlobalState("systemNotificationsEnabled") ?? true
@@ -1782,40 +1524,19 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("systemNotificationsEnabled", systemNotificationsEnabled)
 			await provider.postStateToWebview()
 			break
-		case "switchToPreRelease":
-			await switchToPreRelease()
-			break
 		case "openInBrowser":
+			// kilocode_change: switchToPreRelease is intentionally unavailable in personal builds
 			if (message.url) {
 				vscode.env.openExternal(vscode.Uri.parse(message.url))
 			}
 			break
 		// kilocode_change end
 		case "remoteControlEnabled":
-			try {
-				await CloudService.instance.updateUserSettings({ extensionBridgeEnabled: message.bool ?? false })
-			} catch (error) {
-				provider.log(
-					`CloudService#updateUserSettings failed: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
+			vscode.window.showInformationMessage("Remote cloud control is disabled in IVOL Code Agent 5.")
 			break
 
 		case "taskSyncEnabled":
-			const enabled = message.bool ?? false
-			const updatedSettings: Partial<UserSettingsConfig> = { taskSyncEnabled: enabled }
-
-			// If disabling task sync, also disable remote control.
-			if (!enabled) {
-				updatedSettings.extensionBridgeEnabled = false
-			}
-
-			try {
-				await CloudService.instance.updateUserSettings(updatedSettings)
-			} catch (error) {
-				provider.log(`Failed to update cloud settings for task sync: ${error}`)
-			}
-
+			vscode.window.showInformationMessage("Cloud task sync is disabled in IVOL Code Agent 5.")
 			break
 
 		case "refreshAllMcpServers": {
@@ -1901,7 +1622,8 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "fastApplyApiProvider": {
-			const nextProvider = fastApplyApiProviderSchema.safeParse(message.text).data ?? "current"
+			const parsedProvider = fastApplyApiProviderSchema.safeParse(message.text).data ?? "current"
+			const nextProvider = parsedProvider === "kilocode" ? "current" : parsedProvider
 			await updateGlobalState("fastApplyApiProvider", nextProvider)
 			await provider.postStateToWebview()
 			break
@@ -2104,7 +1826,7 @@ export const webviewMessageHandler = async (
 			const validatedSettings = autocompleteServiceSettingsSchema.parse(message.values)
 			await updateGlobalState("ghostServiceSettings", validatedSettings)
 			await provider.postStateToWebview()
-			vscode.commands.executeCommand("kilo-code.autocomplete.reload")
+			vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
 			break
 		case "snoozeAutocomplete":
 			if (typeof message.value === "number" && message.value > 0) {
@@ -2233,23 +1955,15 @@ export const webviewMessageHandler = async (
 		// kilocode_change start
 		case "showFeedbackOptions": {
 			const githubIssuesText = t("common:feedback.githubIssues")
-			const discordText = t("common:feedback.discord")
-			const customerSupport = t("common:feedback.customerSupport")
 
 			const answer = await vscode.window.showInformationMessage(
 				t("common:feedback.description"),
 				{ modal: true },
 				githubIssuesText,
-				discordText,
-				customerSupport,
 			)
 
 			if (answer === githubIssuesText) {
-				await vscode.env.openExternal(vscode.Uri.parse("https://github.com/Kilo-Org/kilocode/issues"))
-			} else if (answer === discordText) {
-				await vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/fxrhCFGhkP"))
-			} else if (answer === customerSupport) {
-				await vscode.env.openExternal(vscode.Uri.parse(getAppUrl("/support")))
+				await vscode.env.openExternal(vscode.Uri.parse("https://github.com/oiv-an/ivol-code-agent-5/issues"))
 			}
 			break
 		}
@@ -2354,7 +2068,7 @@ export const webviewMessageHandler = async (
 					await provider.providerSettingsManager.saveConfig(message.text, message.apiConfiguration)
 					const listApiConfig = await provider.providerSettingsManager.listConfig()
 					await updateGlobalState("listApiConfigMeta", listApiConfig)
-					vscode.commands.executeCommand("kilo-code.autocomplete.reload") // kilocode_change: Reload autocomplete model when API provider settings change
+					vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload") // kilocode_change: Reload autocomplete model when API provider settings change
 				} catch (error) {
 					provider.log(
 						`Error save api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2387,27 +2101,9 @@ export const webviewMessageHandler = async (
 						currentConfig.kilocodeOrganizationId !== message.apiConfiguration.kilocodeOrganizationId
 
 					if (organizationChanged) {
-						// Fetch organization-specific custom modes
-						await refreshOrganizationModes(message, provider, updateGlobalState)
-
-						// Flush and refetch models
-						await flushModels(
-							{
-								provider: "kilocode",
-								kilocodeOrganizationId: message.apiConfiguration.kilocodeOrganizationId,
-								kilocodeToken: message.apiConfiguration.kilocodeToken,
-							},
-							true,
+						provider.log(
+							"[Models] Stored Kilo organization change without vendor refresh in personal build",
 						)
-						const models = await getModels({
-							provider: "kilocode",
-							kilocodeOrganizationId: message.apiConfiguration.kilocodeOrganizationId,
-							kilocodeToken: message.apiConfiguration.kilocodeToken,
-						})
-						provider.postMessageToWebview({
-							type: "routerModels",
-							routerModels: { kilocode: models } as Record<RouterName, ModelRecord>,
-						})
 					}
 				} catch (error) {
 					// Config might not exist yet, that's fine
@@ -2417,7 +2113,7 @@ export const webviewMessageHandler = async (
 				const currentApiConfigName = getGlobalState("currentApiConfigName") || "default"
 				const isActiveProfile = message.text === currentApiConfigName
 				await provider.upsertProviderProfile(message.text, configToSave, isActiveProfile) // Activate if it's the current active profile
-				vscode.commands.executeCommand("kilo-code.autocomplete.reload")
+				vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
 				// kilocode_change end
 
 				// Ensure state is posted to webview after profile update to reflect organization mode changes
@@ -2426,7 +2122,7 @@ export const webviewMessageHandler = async (
 				}
 
 				// kilocode_change: Reload autocomplete model when API provider settings change
-				vscode.commands.executeCommand("kilo-code.autocomplete.reload")
+				vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
 			}
 			// kilocode_change end: check for kilocodeToken change to remove organizationId and fetch organization modes
 			break
@@ -2453,7 +2149,7 @@ export const webviewMessageHandler = async (
 					await provider.activateProviderProfile({ name: newName })
 
 					// kilocode_change: Reload autocomplete model when API provider settings change
-					vscode.commands.executeCommand("kilo-code.autocomplete.reload")
+					vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
 				} catch (error) {
 					provider.log(
 						`Error rename api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2516,9 +2212,11 @@ export const webviewMessageHandler = async (
 
 				const oldName = message.text
 
-				const newName = (await provider.providerSettingsManager.listConfig()).filter(
-					(c) => c.name !== oldName,
-				)[0]?.name
+				// kilocode_change start: activate only an allowed replacement after deletion
+				const newName = (await provider.providerSettingsManager.listConfig()).find(
+					(c) => c.name !== oldName && isPersonalProvider(c.apiProvider),
+				)?.name
+				// kilocode_change end
 
 				if (!newName) {
 					vscode.window.showErrorMessage(t("common:errors.delete_api_config"))
@@ -2530,7 +2228,7 @@ export const webviewMessageHandler = async (
 					await provider.activateProviderProfile({ name: newName })
 
 					// kilocode_change: Reload autocomplete model when API provider settings change
-					vscode.commands.executeCommand("kilo-code.autocomplete.reload")
+					vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
 				} catch (error) {
 					provider.log(
 						`Error delete api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2917,190 +2615,22 @@ export const webviewMessageHandler = async (
 			}
 			break
 
-		// kilocode_change_start
+		// Legacy cloud account requests are retained only for message compatibility.
+		// They intentionally return local disabled responses and never access Kilo.
 		case "fetchProfileDataRequest":
-			try {
-				const { apiConfiguration, currentApiConfigName } = await provider.getState()
-				const kilocodeToken = apiConfiguration?.kilocodeToken
-
-				if (!kilocodeToken) {
-					provider.log("KiloCode token not found in extension state.")
-					provider.postMessageToWebview({
-						type: "profileDataResponse",
-						payload: { success: false, error: "KiloCode API token not configured." },
-					})
-					break
-				}
-
-				// Changed to /api/profile
-				const headers: Record<string, string> = {
-					Authorization: `Bearer ${kilocodeToken}`,
-					"Content-Type": "application/json",
-				}
-
-				// Add X-KILOCODE-TESTER: SUPPRESS header if the setting is enabled
-				if (
-					apiConfiguration.kilocodeTesterWarningsDisabledUntil &&
-					apiConfiguration.kilocodeTesterWarningsDisabledUntil > Date.now()
-				) {
-					headers["X-KILOCODE-TESTER"] = "SUPPRESS"
-				}
-
-				const url = getKiloUrlFromToken("https://api.kilo.ai/api/profile", kilocodeToken)
-				const response = await axios.get<Omit<ProfileData, "kilocodeToken">>(url, { headers })
-
-				// Go back to Personal when no longer part of the current set organization
-				const organizationExists = (response.data.organizations ?? []).some(
-					({ id }: { id: string }) => id === apiConfiguration?.kilocodeOrganizationId,
-				)
-				if (apiConfiguration?.kilocodeOrganizationId && !organizationExists) {
-					provider.upsertProviderProfile(currentApiConfigName ?? "default", {
-						...apiConfiguration,
-						kilocodeOrganizationId: undefined,
-					})
-				}
-
-				try {
-					// Skip auto-switch in YOLO mode (cloud agents, CI) to prevent usage billing issues
-					const shouldAutoSwitch =
-						!getGlobalState("yoloMode") &&
-						response.data.organizations &&
-						response.data.organizations.length > 0 &&
-						!apiConfiguration.kilocodeOrganizationId &&
-						!getGlobalState("hasPerformedOrganizationAutoSwitch")
-
-					if (shouldAutoSwitch) {
-						const firstOrg = response.data.organizations![0]
-						provider.log(
-							`[Auto-switch] Performing automatic organization switch to: ${firstOrg.name} (${firstOrg.id})`,
-						)
-
-						const upsertMessage: WebviewMessage = {
-							type: "upsertApiConfiguration",
-							text: currentApiConfigName ?? "default",
-							apiConfiguration: {
-								...apiConfiguration,
-								kilocodeOrganizationId: firstOrg.id,
-							},
-						}
-
-						await webviewMessageHandler(provider, upsertMessage)
-						await updateGlobalState("hasPerformedOrganizationAutoSwitch", true)
-
-						vscode.window.showInformationMessage(`Automatically switched to organization: ${firstOrg.name}`)
-
-						provider.log(`[Auto-switch] Successfully switched to organization: ${firstOrg.name}`)
-					}
-				} catch (error) {
-					provider.log(
-						`[Auto-switch] Error during automatic organization switch: ${error instanceof Error ? error.message : String(error)}`,
-					)
-				}
-
-				provider.postMessageToWebview({
-					type: "profileDataResponse",
-					payload: { success: true, data: { kilocodeToken, ...response.data } },
-				})
-			} catch (error: any) {
-				const errorMessage =
-					error.response?.data?.message ||
-					error.message ||
-					"Failed to fetch general profile data from backend."
-				provider.log(`Error fetching general profile data: ${errorMessage}`)
-				provider.postMessageToWebview({
-					type: "profileDataResponse",
-					payload: { success: false, error: errorMessage },
-				})
-			}
+			provider.postMessageToWebview({
+				type: "profileDataResponse",
+				payload: { success: false, error: "Kilo cloud accounts are disabled in this personal build." },
+			})
 			break
-		case "fetchBalanceDataRequest": // New handler
-			try {
-				const { apiConfiguration } = await provider.getState()
-				const { kilocodeToken, kilocodeOrganizationId } = apiConfiguration ?? {}
-
-				if (!kilocodeToken) {
-					provider.log("KiloCode token not found in extension state for balance data.")
-					provider.postMessageToWebview({
-						type: "balanceDataResponse", // New response type
-						payload: { success: false, error: "KiloCode API token not configured." },
-					})
-					break
-				}
-
-				const headers: Record<string, string> = {
-					Authorization: `Bearer ${kilocodeToken}`,
-					"Content-Type": "application/json",
-				}
-
-				if (kilocodeOrganizationId) {
-					headers["X-KiloCode-OrganizationId"] = kilocodeOrganizationId
-				}
-
-				// Add X-KILOCODE-TESTER: SUPPRESS header if the setting is enabled
-				if (
-					apiConfiguration.kilocodeTesterWarningsDisabledUntil &&
-					apiConfiguration.kilocodeTesterWarningsDisabledUntil > Date.now()
-				) {
-					headers["X-KILOCODE-TESTER"] = "SUPPRESS"
-				}
-
-				const url = getKiloUrlFromToken("https://api.kilo.ai/api/profile/balance", kilocodeToken)
-				const response = await axios.get(url, { headers })
-				provider.postMessageToWebview({
-					type: "balanceDataResponse", // New response type
-					payload: { success: true, data: response.data },
-				})
-			} catch (error: any) {
-				const errorMessage =
-					error.response?.data?.message || error.message || "Failed to fetch balance data from backend."
-				provider.log(`Error fetching balance data: ${errorMessage}`)
-				provider.postMessageToWebview({
-					type: "balanceDataResponse", // New response type
-					payload: { success: false, error: errorMessage },
-				})
-			}
+		case "fetchBalanceDataRequest":
+			provider.postMessageToWebview({
+				type: "balanceDataResponse",
+				payload: { success: false, error: "Kilo cloud balances are disabled in this personal build." },
+			})
 			break
-		case "shopBuyCredits": // New handler
-			try {
-				const { apiConfiguration } = await provider.getState()
-				const kilocodeToken = apiConfiguration?.kilocodeToken
-				if (!kilocodeToken) {
-					provider.log("KiloCode token not found in extension state for buy credits.")
-					break
-				}
-				const credits = message.values?.credits || 50
-				const uriScheme = message.values?.uriScheme || "vscode"
-				const uiKind = message.values?.uiKind || "Desktop"
-				const source = uiKind === "Web" ? "web" : uriScheme
-
-				const url = getKiloUrlFromToken(
-					`https://api.kilo.ai/payments/topup?origin=extension&source=${source}&amount=${credits}`,
-					kilocodeToken,
-				)
-				const response = await axios.post(
-					url,
-					{},
-					{
-						headers: {
-							Authorization: `Bearer ${kilocodeToken}`,
-							"Content-Type": "application/json",
-						},
-						maxRedirects: 0, // Prevent axios from following redirects automatically
-						validateStatus: (status) => status < 400, // Accept 3xx status codes
-					},
-				)
-				if (response.status !== 303 || !response.headers.location) {
-					return
-				}
-				await vscode.env.openExternal(vscode.Uri.parse(response.headers.location))
-			} catch (error: any) {
-				const errorMessage = error?.message || "Unknown error"
-				const errorStack = error?.stack ? ` Stack: ${error.stack}` : ""
-				provider.log(`Error redirecting to payment page: ${errorMessage}.${errorStack}`)
-				provider.postMessageToWebview({
-					type: "updateProfileData",
-				})
-			}
+		case "shopBuyCredits":
+			provider.log("Ignored legacy Kilo credit purchase request in personal build.")
 			break
 
 		case "fetchMcpMarketplace": {
@@ -3195,29 +2725,8 @@ export const webviewMessageHandler = async (
 			break
 		// end kilocode_change
 		case "telemetrySetting": {
-			const telemetrySetting = message.text as TelemetrySetting
-			const previousSetting = getGlobalState("telemetrySetting") || "unset"
-			const isOptedIn = getEffectiveTelemetrySetting(telemetrySetting) === "enabled" // kilocode_change
-			const wasPreviouslyOptedIn = previousSetting !== "disabled"
-
-			// If turning telemetry OFF, fire event BEFORE disabling
-			if (wasPreviouslyOptedIn && !isOptedIn && TelemetryService.hasInstance()) {
-				TelemetryService.instance.captureTelemetrySettingsChanged(previousSetting, telemetrySetting)
-			}
-
-			// Update the telemetry state
-			await updateGlobalState("telemetrySetting", telemetrySetting)
-
-			if (TelemetryService.hasInstance()) {
-				TelemetryService.instance.updateTelemetryState(isOptedIn)
-			}
-
-			// If turning telemetry ON, fire event AFTER enabling
-			if (!wasPreviouslyOptedIn && isOptedIn && TelemetryService.hasInstance()) {
-				TelemetryService.instance.captureTelemetrySettingsChanged(previousSetting, telemetrySetting)
-			}
-
-			TelemetryService.instance.updateTelemetryState(isOptedIn)
+			await updateGlobalState("telemetrySetting", "disabled")
+			TelemetryService.instance.updateTelemetryState(false)
 			await provider.postStateToWebview()
 			break
 		}
@@ -3229,43 +2738,19 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "cloudButtonClicked": {
-			// Navigate to the cloud tab.
-			provider.postMessageToWebview({ type: "action", action: "cloudButtonClicked" })
+			vscode.window.showInformationMessage("Cloud services are disabled in IVOL Code Agent 5.")
 			break
 		}
 		case "rooCloudSignIn": {
-			try {
-				TelemetryService.instance.captureEvent(TelemetryEventName.AUTHENTICATION_INITIATED)
-				// Use provider signup flow if useProviderSignup is explicitly true
-				await CloudService.instance.login(undefined, message.useProviderSignup ?? false)
-			} catch (error) {
-				provider.log(`AuthService#login failed: ${error}`)
-				vscode.window.showErrorMessage("Sign in failed.")
-			}
-
+			vscode.window.showInformationMessage("Roo cloud sign-in is disabled in IVOL Code Agent 5.")
 			break
 		}
 		case "cloudLandingPageSignIn": {
-			try {
-				const landingPageSlug = message.text || "supernova"
-				TelemetryService.instance.captureEvent(TelemetryEventName.AUTHENTICATION_INITIATED)
-				await CloudService.instance.login(landingPageSlug)
-			} catch (error) {
-				provider.log(`CloudService#login failed: ${error}`)
-				vscode.window.showErrorMessage("Sign in failed.")
-			}
+			vscode.window.showInformationMessage("Cloud sign-in is disabled in IVOL Code Agent 5.")
 			break
 		}
 		case "rooCloudSignOut": {
-			try {
-				await CloudService.instance.logout()
-				await provider.postStateToWebview()
-				provider.postMessageToWebview({ type: "authenticatedUser", userInfo: undefined })
-			} catch (error) {
-				provider.log(`AuthService#logout failed: ${error}`)
-				vscode.window.showErrorMessage("Sign out failed.")
-			}
-
+			provider.postMessageToWebview({ type: "authenticatedUser", userInfo: undefined })
 			break
 		}
 		case "claudeCodeSignIn": {
@@ -3347,45 +2832,7 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "rooCloudManualUrl": {
-			try {
-				if (!message.text) {
-					vscode.window.showErrorMessage(t("common:errors.manual_url_empty"))
-					break
-				}
-
-				// Parse the callback URL to extract parameters
-				const callbackUrl = message.text.trim()
-				const uri = vscode.Uri.parse(callbackUrl)
-
-				if (!uri.query) {
-					throw new Error(t("common:errors.manual_url_no_query"))
-				}
-
-				const query = new URLSearchParams(uri.query)
-				const code = query.get("code")
-				const state = query.get("state")
-				const organizationId = query.get("organizationId")
-
-				if (!code || !state) {
-					throw new Error(t("common:errors.manual_url_missing_params"))
-				}
-
-				// Reuse the existing authentication flow
-				await CloudService.instance.handleAuthCallback(
-					code,
-					state,
-					organizationId === "null" ? null : organizationId,
-				)
-
-				await provider.postStateToWebview()
-			} catch (error) {
-				provider.log(`ManualUrl#handleAuthCallback failed: ${error}`)
-				const errorMessage = error instanceof Error ? error.message : t("common:errors.manual_url_auth_failed")
-
-				// Show error message through VS Code UI
-				vscode.window.showErrorMessage(`${t("common:errors.manual_url_auth_error")}: ${errorMessage}`)
-			}
-
+			vscode.window.showInformationMessage("Roo cloud authentication is disabled in IVOL Code Agent 5.")
 			break
 		}
 		case "clearCloudAuthSkipModel": {
@@ -3395,35 +2842,12 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "switchOrganization": {
-			try {
-				const organizationId = message.organizationId ?? null
-
-				// Switch to the new organization context
-				await CloudService.instance.switchOrganization(organizationId)
-
-				// Refresh the state to update UI
-				await provider.postStateToWebview()
-
-				// Send success response back to webview
-				await provider.postMessageToWebview({
-					type: "organizationSwitchResult",
-					success: true,
-					organizationId: organizationId,
-				})
-			} catch (error) {
-				provider.log(`Organization switch failed: ${error}`)
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				// Send error response back to webview
-				await provider.postMessageToWebview({
-					type: "organizationSwitchResult",
-					success: false,
-					error: errorMessage,
-					organizationId: message.organizationId ?? null,
-				})
-
-				vscode.window.showErrorMessage(`Failed to switch organization: ${errorMessage}`)
-			}
+			await provider.postMessageToWebview({
+				type: "organizationSwitchResult",
+				success: false,
+				error: "Organization cloud services are disabled in IVOL Code Agent 5.",
+				organizationId: message.organizationId ?? null,
+			})
 			break
 		}
 
@@ -3867,19 +3291,9 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "filterMarketplaceItems": {
-			if (marketplaceManager && message.filters) {
-				try {
-					await marketplaceManager.updateWithFilteredItems({
-						type: message.filters.type as MarketplaceItemType | undefined,
-						search: message.filters.search,
-						tags: message.filters.tags,
-					})
-					await provider.postStateToWebview()
-				} catch (error) {
-					console.error("Marketplace: Error filtering items:", error)
-					vscode.window.showErrorMessage("Failed to filter marketplace items")
-				}
-			}
+			// The remote marketplace is disabled in the personal build. A stale
+			// webview must receive the same empty local-safe response as a fresh one.
+			await provider.fetchMarketplaceData()
 			break
 		}
 
@@ -4018,10 +3432,6 @@ export const webviewMessageHandler = async (
 		// kilocode_change start
 		case "editMessage": {
 			await editMessageHandler(provider, message)
-			break
-		}
-		case "fetchKilocodeNotifications": {
-			await fetchKilocodeNotificationsHandler(provider)
 			break
 		}
 		case "dismissNotificationId": {
@@ -4420,121 +3830,23 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "sessionShow": {
-			try {
-				const sessionService = SessionManager.init()
-
-				if (!sessionService?.sessionId) {
-					vscode.window.showErrorMessage("No active session. Start a new task to create a session.")
-					break
-				}
-
-				vscode.window.showInformationMessage(`Session ID: ${sessionService.sessionId}`)
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(`Failed to copy session ID: ${errorMessage}`)
-			}
+			vscode.window.showInformationMessage("Kilo cloud sessions are disabled in this personal build.")
 			break
 		}
 		case "sessionShare": {
-			try {
-				const sessionService = SessionManager.init()
-
-				const sessionId = message.sessionId || sessionService?.sessionId
-
-				if (!sessionId) {
-					vscode.window.showErrorMessage("No active session. Start a new task to create a session.")
-					break
-				}
-
-				const result = await sessionService?.shareSession(sessionId)
-
-				if (!result) {
-					throw new Error("SessionManager not initialized")
-				}
-
-				const shareUrl = `https://app.kilo.ai/share/${result.share_id}`
-
-				// Copy URL to clipboard and show success notification
-				await vscode.env.clipboard.writeText(shareUrl)
-				vscode.window.showInformationMessage(
-					t("common:info.session_share_link_copied_with_url", { url: shareUrl }),
-				)
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(`Failed to share session: ${errorMessage}`)
-			}
+			vscode.window.showInformationMessage("Kilo cloud session sharing is disabled in this personal build.")
 			break
 		}
 		case "shareTaskSession": {
-			try {
-				if (!message.text) {
-					vscode.window.showErrorMessage("Task ID is required for sharing a task session")
-					break
-				}
-
-				const taskId = message.text
-				const sessionService = SessionManager.init()
-
-				const sessionId = await sessionService?.getSessionFromTask(taskId, provider)
-
-				const result = await sessionService?.shareSession(sessionId)
-
-				if (!result) {
-					throw new Error("SessionManager not initialized")
-				}
-
-				const shareUrl = `https://app.kilo.ai/share/${result.share_id}`
-
-				await vscode.env.clipboard.writeText(shareUrl)
-				vscode.window.showInformationMessage(
-					t("common:info.session_share_link_copied_with_url", { url: shareUrl }),
-				)
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(`Failed to share task session: ${errorMessage}`)
-			}
+			vscode.window.showInformationMessage("Kilo cloud session sharing is disabled in this personal build.")
 			break
 		}
 		case "sessionFork": {
-			try {
-				if (!message.shareId) {
-					vscode.window.showErrorMessage("ID is required for forking a session")
-					break
-				}
-
-				const sessionService = SessionManager.init()
-
-				await provider.clearTask()
-
-				await sessionService?.forkSession(message.shareId, true)
-
-				await provider.postStateToWebview()
-
-				vscode.window.showInformationMessage(`Session forked successfully from ${message.shareId}`)
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(`Failed to fork session: ${errorMessage}`)
-			}
+			vscode.window.showInformationMessage("Kilo cloud session forking is disabled in this personal build.")
 			break
 		}
 		case "sessionSelect": {
-			try {
-				if (!message.sessionId) {
-					vscode.window.showErrorMessage("Session ID is required for selecting a session")
-					break
-				}
-
-				const sessionService = SessionManager.init()
-
-				await provider.clearTask()
-
-				await sessionService?.restoreSession(message.sessionId, true)
-
-				await provider.postStateToWebview()
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(`Failed to restore session: ${errorMessage}`)
-			}
+			vscode.window.showInformationMessage("Kilo cloud session restore is disabled in this personal build.")
 			break
 		}
 		case "singleCompletion": {
@@ -4721,14 +4033,22 @@ export const webviewMessageHandler = async (
 			break
 		}
 
-		// kilocode_change start - Device Auth handlers
-		case "startDeviceAuth":
-		case "cancelDeviceAuth":
-		case "deviceAuthCompleteWithProfile": {
-			await deviceAuthMessageHandler(provider, message)
+		// Legacy Kilo device authentication is disabled in the personal build.
+		case "startDeviceAuth": {
+			await provider.postMessageToWebview({
+				type: "deviceAuthFailed",
+				deviceAuthError: "Kilo cloud authentication is disabled in this personal build.",
+			})
 			break
 		}
-		// kilocode_change end
+		case "cancelDeviceAuth": {
+			provider.cancelDeviceAuth()
+			break
+		}
+		case "deviceAuthCompleteWithProfile": {
+			provider.log("Ignored legacy Kilo device-auth completion in personal build.")
+			break
+		}
 		case "downloadErrorDiagnostics": {
 			const currentTask = provider.getCurrentTask()
 			if (!currentTask) {

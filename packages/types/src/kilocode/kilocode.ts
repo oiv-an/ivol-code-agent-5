@@ -1,11 +1,5 @@
 import { z } from "zod"
 
-declare global {
-	interface Window {
-		KILOCODE_BACKEND_BASE_URL: string | undefined
-	}
-}
-
 export const autocompleteServiceSettingsSchema = z
 	.object({
 		enableAutoTrigger: z.boolean().optional(),
@@ -65,104 +59,51 @@ export const fastApplyApiProviderSchema = z.enum(["current", "morph", "kilocode"
 
 export type FastApplyApiProvider = z.infer<typeof fastApplyApiProviderSchema>
 
-export const DEFAULT_KILOCODE_BACKEND_URL = "https://kilo.ai"
+/**
+ * Deliberately non-routable base URL for removed Kilo cloud services.
+ * Keeping the URL helpers fail-closed prevents legacy callers from reaching a
+ * network service even if a saved setting unexpectedly reactivates them.
+ */
+export const DISABLED_KILOCODE_URL = "ivol-disabled://kilo"
 
-export function getKiloBaseUriFromToken(kilocodeToken?: string) {
-	if (kilocodeToken) {
-		try {
-			const payload_string = kilocodeToken.split(".")[1]
-			if (!payload_string) return "https://api.kilo.ai"
+// Retained for source compatibility with older consumers of the types package.
+export const DEFAULT_KILOCODE_BACKEND_URL = DISABLED_KILOCODE_URL
 
-			const payload_json =
-				typeof atob !== "undefined" ? atob(payload_string) : Buffer.from(payload_string, "base64").toString()
-			const payload = JSON.parse(payload_json)
-			//note: this is UNTRUSTED, so we need to make sure we're OK with this being manipulated by an attacker; e.g. we should not read uri's from the JWT directly.
-			// For dev tokens, check if KILOCODE_BACKEND_BASE_URL is set to a custom value
-			if (payload.env === "development") {
-				const baseUrl = getGlobalKilocodeBackendUrl()
-				// This allows pointing to custom dev backends beyond just those accessible on localhost
-				// (e.g., 192.168.x.x, staging servers)
-				if (baseUrl !== DEFAULT_KILOCODE_BACKEND_URL) {
-					return baseUrl
-				}
-				return "http://localhost:3000"
-			}
-		} catch (_error) {
-			console.warn("Failed to get base URL from Kilo Code token")
-		}
-	}
-	return "https://api.kilo.ai"
+export function getKiloBaseUriFromToken(_kilocodeToken?: string): string {
+	return DISABLED_KILOCODE_URL
 }
 
 /**
- * Helper function that combines token-based base URL resolution with URL construction.
- * Takes a token and a full URL, uses the token to get the appropriate base URL,
- * then constructs the final URL by replacing the domain in the target URL.
+ * Maps any legacy target URL to the disabled scheme while retaining only its
+ * path, query and fragment for diagnostics.
  *
  * @param targetUrl The target URL to transform
- * @param kilocodeToken The KiloCode authentication token
- * @returns Fully constructed KiloCode URL with proper backend mapping based on token
+ * @param kilocodeToken Ignored; tokens can never override the disabled target
+ * @returns A URL using the disabled scheme
  */
-export function getKiloUrlFromToken(targetUrl: string, kilocodeToken?: string): string {
-	const baseUrl = getKiloBaseUriFromToken(kilocodeToken)
-	const target = new URL(targetUrl)
-
-	const { protocol, host } = new URL(baseUrl)
-	Object.assign(target, { protocol, host })
-
-	return target.toString()
-}
-
-function getGlobalKilocodeBackendUrl(): string {
-	return (
-		(typeof window !== "undefined" ? window.KILOCODE_BACKEND_BASE_URL : undefined) ||
-		process.env.KILOCODE_BACKEND_BASE_URL ||
-		DEFAULT_KILOCODE_BACKEND_URL
-	)
-}
-
-/**
- * Gets the app/web URL for the current environment.
- * In development: http://localhost:3000
- * In production: https://kilo.ai
- */
-export function getAppUrl(path: string = ""): string {
-	return new URL(path, getGlobalKilocodeBackendUrl()).toString()
-}
-
-/**
- * Gets the API URL for the current environment.
- * Respects KILOCODE_BACKEND_BASE_URL environment variable for local development.
- * In development: http://localhost:3000
- * In production: https://api.kilo.ai
- */
-export function getApiUrl(path: string = ""): string {
-	const backend = getGlobalKilocodeBackendUrl()
-
-	// If using a custom backend (not the default production URL), use it directly
-	if (backend !== DEFAULT_KILOCODE_BACKEND_URL) {
-		return new URL(path, backend).toString()
-	}
-
-	// In production, use the api subdomain
-	return new URL(path, "https://api.kilo.ai").toString()
-}
-
-/**
- * Gets the extension config URL, which uses a legacy subdomain structure.
- * In development: http://localhost:3000/extension-config.json
- * In production: https://api.kilo.ai/extension-config.json
- */
-export function getExtensionConfigUrl(): string {
+export function getKiloUrlFromToken(targetUrl: string, _kilocodeToken?: string): string {
+	let path = targetUrl
 	try {
-		const backend = getGlobalKilocodeBackendUrl()
-		if (backend !== DEFAULT_KILOCODE_BACKEND_URL) {
-			return getAppUrl("/extension-config.json")
-		} else {
-			return "https://api.kilo.ai/extension-config.json"
-		}
-	} catch (error) {
-		console.warn("Failed to build extension config URL:", error)
-		return "https://api.kilo.ai/extension-config.json"
+		const target = new URL(targetUrl)
+		path = `${target.pathname}${target.search}${target.hash}`
+	} catch {
+		// Relative paths are handled directly by getDisabledKiloUrl.
 	}
+	return getDisabledKiloUrl(path)
+}
+
+function getDisabledKiloUrl(path: string = ""): string {
+	return new URL(path, `${DISABLED_KILOCODE_URL}/`).toString()
+}
+
+export function getAppUrl(path: string = ""): string {
+	return getDisabledKiloUrl(path)
+}
+
+export function getApiUrl(path: string = ""): string {
+	return getDisabledKiloUrl(path)
+}
+
+export function getExtensionConfigUrl(): string {
+	return getDisabledKiloUrl("/extension-config.json")
 }

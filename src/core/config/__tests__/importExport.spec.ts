@@ -481,6 +481,49 @@ describe("importExport", () => {
 			showErrorMessageSpy.mockRestore()
 		})
 
+		it("should normalize the active personal profile after a manual import", async () => {
+			const filePath = "/mock/path/settings.json"
+			;(fs.access as Mock).mockResolvedValue(undefined)
+			;(fs.readFile as Mock).mockResolvedValue(
+				JSON.stringify({
+					providerProfiles: {
+						currentApiConfigName: "Legacy Kilo",
+						apiConfigs: {
+							"Legacy Kilo": { apiProvider: "kilocode", id: "legacy-id" },
+							Personal: { apiProvider: "openai", id: "personal-id" },
+						},
+					},
+				}),
+			)
+			mockProviderSettingsManager.export.mockResolvedValue({
+				currentApiConfigName: "Personal",
+				apiConfigs: { Personal: { apiProvider: "openai", id: "personal-id" } },
+			})
+			mockProviderSettingsManager.listConfig.mockResolvedValue([
+				{ name: "Legacy Kilo", id: "legacy-id", apiProvider: "kilocode" },
+				{ name: "Personal", id: "personal-id", apiProvider: "openai" },
+			])
+			const initializePersonalProviderProfile = vi.fn().mockResolvedValue(undefined)
+			const mockProvider = {
+				settingsImportedAt: 0,
+				postStateToWebview: vi.fn().mockResolvedValue(undefined),
+				initializePersonalProviderProfile,
+			}
+
+			await importSettingsWithFeedback(
+				{
+					providerSettingsManager: mockProviderSettingsManager,
+					contextProxy: mockContextProxy,
+					customModesManager: mockCustomModesManager,
+					provider: mockProvider,
+				},
+				filePath,
+			)
+
+			expect(initializePersonalProviderProfile).toHaveBeenCalledTimes(1)
+			expect(mockProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		})
+
 		it("should handle import when reasoning budget fields are missing from config", async () => {
 			// This test verifies that import works correctly when reasoning budget fields are not present
 			// Using claude-code provider which doesn't support reasoning budgets

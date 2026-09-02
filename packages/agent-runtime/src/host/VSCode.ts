@@ -2611,7 +2611,8 @@ export function createVSCodeAPIMock(
 			all: [],
 			getExtension: (extensionId: string) => {
 				// Mock the extension object with extensionUri for theme loading
-				if (extensionId === "kilocode.kilo-code") {
+				// kilocode_change start: support the personal publisher ID
+				if (extensionId.endsWith(".kilo-code")) {
 					return {
 						id: extensionId,
 						extensionUri: context.extensionUri,
@@ -2622,6 +2623,7 @@ export function createVSCodeAPIMock(
 						activate: () => Promise.resolve(),
 					}
 				}
+				// kilocode_change end
 				return undefined
 			},
 			onDidChange: () => ({ dispose: () => {} }),

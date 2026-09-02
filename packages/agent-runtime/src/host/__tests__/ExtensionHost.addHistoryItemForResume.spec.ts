@@ -13,6 +13,7 @@ describe("ExtensionHost.addHistoryItemForResume", () => {
 		})
 
 	afterEach(() => {
+		vi.restoreAllMocks()
 		if (host) {
 			;(host as unknown as { removeGlobalErrorHandlers: () => void }).removeGlobalErrorHandlers()
 			host = undefined
@@ -89,5 +90,89 @@ describe("ExtensionHost.addHistoryItemForResume", () => {
 		expect(mergedItem.completionResultSummary).toBe("done")
 		expect(mergedItem.cacheWrites).toBe(3)
 		expect(mergedItem.cacheReads).toBe(4)
+	})
+
+	it("forwards two incremental messages created in the same millisecond", () => {
+		host = createHost()
+		;(host as unknown as { vscodeAPI: unknown }).vscodeAPI = { context: {} }
+		;(
+			host as unknown as {
+				setupExtensionMessageListener: () => void
+			}
+		).setupExtensionMessageListener()
+
+		vi.spyOn(Date, "now").mockReturnValue(1700000000000)
+		const forwarded: unknown[] = []
+		host.on("message", (message) => forwarded.push(message))
+
+		host.emit("extensionWebviewMessage", {
+			type: "messageCreated",
+			taskId: "task-123",
+			clineMessage: { ts: 1, type: "say", say: "text", text: "first" },
+		})
+		host.emit("extensionWebviewMessage", {
+			type: "messageCreated",
+			taskId: "task-123",
+			clineMessage: { ts: 2, type: "say", say: "text", text: "second" },
+		})
+
+		expect(forwarded).toHaveLength(2)
+		expect(forwarded).toEqual([
+			expect.objectContaining({ type: "messageCreated", chatMessage: expect.objectContaining({ ts: 1 }) }),
+			expect.objectContaining({ type: "messageCreated", chatMessage: expect.objectContaining({ ts: 2 }) }),
+		])
+	})
+
+	it("keeps getState synchronized with task-aware incremental updates", () => {
+		host = createHost()
+		;(host as unknown as { vscodeAPI: unknown }).vscodeAPI = { context: {} }
+		;(host as unknown as { currentState: unknown }).currentState = {
+			version: "1.0.0",
+			apiConfiguration: { apiProvider: "openai" },
+			chatMessages: [],
+			currentTaskId: "task-123",
+			mode: "code",
+			customModes: [],
+			taskHistoryFullLength: 0,
+			taskHistoryVersion: 0,
+			telemetrySetting: "disabled",
+			renderContext: "cli",
+		}
+		;(
+			host as unknown as {
+				setupExtensionMessageListener: () => void
+			}
+		).setupExtensionMessageListener()
+
+		host.emit("extensionWebviewMessage", {
+			type: "messageCreated",
+			taskId: "task-123",
+			clineMessage: { ts: 1, type: "say", say: "text", text: "draft" },
+		})
+		host.emit("extensionWebviewMessage", {
+			type: "messageUpdated",
+			taskId: "task-123",
+			clineMessage: { ts: 1, type: "say", say: "text", text: "final" },
+		})
+		host.emit("extensionWebviewMessage", {
+			type: "currentTaskStateUpdated",
+			taskId: "task-123",
+			taskState: {
+				currentTaskTodos: [{ id: "todo-1", content: "Finish", status: "pending" }],
+				currentTaskCumulativeCost: 1.25,
+				messageQueue: [{ id: "queued-1", text: "next", timestamp: 2 }],
+			},
+		})
+		host.emit("extensionWebviewMessage", {
+			type: "messageCreated",
+			taskId: "different-task",
+			clineMessage: { ts: 2, type: "say", say: "text", text: "wrong task" },
+		})
+
+		const state = host.getAPI().getState()
+		expect(state?.chatMessages).toEqual([{ ts: 1, type: "say", say: "text", text: "final" }])
+		expect(state?.currentTaskTodos).toEqual([{ id: "todo-1", content: "Finish", status: "pending" }])
+		expect(state?.currentTaskCumulativeCost).toBe(1.25)
+		expect(state?.messageQueue).toEqual([{ id: "queued-1", text: "next", timestamp: 2 }])
 	})
 })

@@ -37,7 +37,8 @@ export const getModelIdKey = ({
 		case "litellm": {
 			return "litellmModelId"
 		}
-		case "openai": {
+		case "openai":
+		case "openai-responses": {
 			return "openAiModelId"
 		}
 		case "ollama": {

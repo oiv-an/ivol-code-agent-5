@@ -1,5 +1,5 @@
 {
-	"greeting": "Що Kilo Code може зробити для тебе?",
+	"greeting": "Що IVOL Code може зробити для тебе?",
 	"task": {
 		"title": "Завдання",
 		"seeMore": "Дивитися більше",
@@ -20,7 +20,7 @@
 		"sharePublicly": "Поділитися публічно",
 		"sharePubliclyDescription": "Будь-хто з посиланням має доступ",
 		"connectToCloud": "Підключитися до Cloud",
-		"connectToCloudDescription": "Увійдіть до Kilo Code Cloud для обміну завданнями",
+		"connectToCloudDescription": "Увійдіть до Kilo Cloud для обміну завданнями",
 		"sharingDisabledByOrganization": "Обмін вимкнено організацією",
 		"shareSuccessOrganization": "Посилання організації скопійовано до буфера обміну",
 		"shareSuccessPublic": "Публічне посилання скопійовано до буфера обміну",
@@ -144,7 +144,7 @@
 		"title": "Режими",
 		"marketplace": "Ринок режимів",
 		"settings": "Налаштування режимів",
-		"description": "Спеціалізовані персони, які налаштовують поведінку Kilo Code.",
+		"description": "Спеціалізовані персони, які налаштовують поведінку IVOL Code.",
 		"searchPlaceholder": "Пошук режимів...",
 		"noResults": "Результатів не знайдено",
 		"organizationModes": "Режими організації"
@@ -233,52 +233,52 @@
 		"tokens": "токени"
 	},
 	"instructions": {
-		"wantsToFetch": "Kilo Code хоче отримати детальні інструкції для допомоги з поточним завданням"
+		"wantsToFetch": "IVOL Code хоче отримати детальні інструкції для допомоги з поточним завданням"
 	},
 	"fileOperations": {
-		"wantsToRead": "Kilo Code хоче прочитати цей файл:",
-		"wantsToReadMultiple": "Kilo Code хоче прочитати кілька файлів:",
-		"wantsToReadAndXMore": "Kilo Code хоче прочитати цей файл і ще {{count}}:",
-		"wantsToReadOutsideWorkspace": "Kilo Code хоче прочитати цей файл за межами робочого простору:",
-		"didRead": "Kilo Code прочитав цей файл:",
-		"wantsToEdit": "Kilo Code хоче редагувати цей файл:",
-		"wantsToEditOutsideWorkspace": "Kilo Code хоче редагувати цей файл за межами робочого простору:",
-		"wantsToEditProtected": "Kilo Code хоче редагувати захищений файл конфігурації:",
-		"wantsToApplyBatchChanges": "Kilo Code хоче застосувати зміни до кількох файлів:",
-		"wantsToGenerateImage": "Kilo Code хоче згенерувати зображення:",
-		"wantsToGenerateImageOutsideWorkspace": "Kilo Code хоче згенерувати зображення поза робочою областю:",
-		"wantsToGenerateImageProtected": "Kilo Code хоче згенерувати зображення у захищеному місці:",
-		"didGenerateImage": "Kilo Code згенерував зображення:",
-		"wantsToCreate": "Kilo Code хоче створити новий файл:",
-		"wantsToSearchReplace": "Kilo Code хоче шукати та замінити в цьому файлі:",
-		"didSearchReplace": "Kilo Code виконав пошук і заміну в цьому файлі:",
-		"wantsToInsert": "Kilo Code хоче вставити вміст у цей файл:",
-		"wantsToInsertWithLineNumber": "Kilo Code хоче вставити вміст у цей файл на рядку {{lineNumber}}:",
-		"wantsToInsertAtEnd": "Kilo Code хоче додати вміст в кінець цього файлу:",
-		"wantsToDelete": "Kilo Code хоче видалити цей файл",
-		"wantsToDeleteDirectory": "Kilo Code хоче видалити цю директорію"
+		"wantsToRead": "IVOL Code хоче прочитати цей файл:",
+		"wantsToReadMultiple": "IVOL Code хоче прочитати кілька файлів:",
+		"wantsToReadAndXMore": "IVOL Code хоче прочитати цей файл і ще {{count}}:",
+		"wantsToReadOutsideWorkspace": "IVOL Code хоче прочитати цей файл за межами робочого простору:",
+		"didRead": "IVOL Code прочитав цей файл:",
+		"wantsToEdit": "IVOL Code хоче редагувати цей файл:",
+		"wantsToEditOutsideWorkspace": "IVOL Code хоче редагувати цей файл за межами робочого простору:",
+		"wantsToEditProtected": "IVOL Code хоче редагувати захищений файл конфігурації:",
+		"wantsToApplyBatchChanges": "IVOL Code хоче застосувати зміни до кількох файлів:",
+		"wantsToGenerateImage": "IVOL Code хоче згенерувати зображення:",
+		"wantsToGenerateImageOutsideWorkspace": "IVOL Code хоче згенерувати зображення поза робочою областю:",
+		"wantsToGenerateImageProtected": "IVOL Code хоче згенерувати зображення у захищеному місці:",
+		"didGenerateImage": "IVOL Code згенерував зображення:",
+		"wantsToCreate": "IVOL Code хоче створити новий файл:",
+		"wantsToSearchReplace": "IVOL Code хоче шукати та замінити в цьому файлі:",
+		"didSearchReplace": "IVOL Code виконав пошук і заміну в цьому файлі:",
+		"wantsToInsert": "IVOL Code хоче вставити вміст у цей файл:",
+		"wantsToInsertWithLineNumber": "IVOL Code хоче вставити вміст у цей файл на рядку {{lineNumber}}:",
+		"wantsToInsertAtEnd": "IVOL Code хоче додати вміст в кінець цього файлу:",
+		"wantsToDelete": "IVOL Code хоче видалити цей файл",
+		"wantsToDeleteDirectory": "IVOL Code хоче видалити цю директорію"
 	},
 	"directoryOperations": {
-		"wantsToViewTopLevel": "Kilo Code хоче переглянути файли верхнього рівня в цій директорії:",
-		"didViewTopLevel": "Kilo Code переглянув файли верхнього рівня в цій директорії:",
-		"wantsToViewTopLevelOutsideWorkspace": "Kilo Code хоче переглянути файли верхнього рівня в цій директорії (за межами робочого простору):",
-		"didViewTopLevelOutsideWorkspace": "Kilo Code переглянув файли верхнього рівня в цій директорії (за межами робочого простору):",
-		"wantsToViewRecursive": "Kilo Code хоче рекурсивно переглянути всі файли в цій директорії:",
-		"didViewRecursive": "Kilo Code рекурсивно переглянув всі файли в цій директорії:",
-		"wantsToViewRecursiveOutsideWorkspace": "Kilo Code хоче рекурсивно переглянути всі файли в цій директорії (за межами робочого простору):",
-		"didViewRecursiveOutsideWorkspace": "Kilo Code рекурсивно переглянув всі файли в цій директорії (за межами робочого простору):",
-		"wantsToViewDefinitions": "Kilo Code хоче переглянути назви визначень вихідного коду, що використовуються в цій директорії:",
-		"didViewDefinitions": "Kilo Code переглянув назви визначень вихідного коду, що використовуються в цій директорії:",
-		"wantsToViewDefinitionsOutsideWorkspace": "Kilo Code хоче переглянути назви визначень вихідного коду, що використовуються в цій директорії (за межами робочого простору):",
-		"didViewDefinitionsOutsideWorkspace": "Kilo Code переглянув назви визначень вихідного коду, що використовуються в цій директорії (за межами робочого простору):",
-		"wantsToSearch": "Kilo Code хоче шукати в цій директорії <code>{{regex}}</code>:",
-		"didSearch": "Kilo Code шукав у цій директорії <code>{{regex}}</code>:",
-		"wantsToSearchOutsideWorkspace": "Kilo Code хоче шукати в цій директорії (за межами робочого простору) <code>{{regex}}</code>:",
-		"didSearchOutsideWorkspace": "Kilo Code шукав у цій директорії (за межами робочого простору) <code>{{regex}}</code>:"
+		"wantsToViewTopLevel": "IVOL Code хоче переглянути файли верхнього рівня в цій директорії:",
+		"didViewTopLevel": "IVOL Code переглянув файли верхнього рівня в цій директорії:",
+		"wantsToViewTopLevelOutsideWorkspace": "IVOL Code хоче переглянути файли верхнього рівня в цій директорії (за межами робочого простору):",
+		"didViewTopLevelOutsideWorkspace": "IVOL Code переглянув файли верхнього рівня в цій директорії (за межами робочого простору):",
+		"wantsToViewRecursive": "IVOL Code хоче рекурсивно переглянути всі файли в цій директорії:",
+		"didViewRecursive": "IVOL Code рекурсивно переглянув всі файли в цій директорії:",
+		"wantsToViewRecursiveOutsideWorkspace": "IVOL Code хоче рекурсивно переглянути всі файли в цій директорії (за межами робочого простору):",
+		"didViewRecursiveOutsideWorkspace": "IVOL Code рекурсивно переглянув всі файли в цій директорії (за межами робочого простору):",
+		"wantsToViewDefinitions": "IVOL Code хоче переглянути назви визначень вихідного коду, що використовуються в цій директорії:",
+		"didViewDefinitions": "IVOL Code переглянув назви визначень вихідного коду, що використовуються в цій директорії:",
+		"wantsToViewDefinitionsOutsideWorkspace": "IVOL Code хоче переглянути назви визначень вихідного коду, що використовуються в цій директорії (за межами робочого простору):",
+		"didViewDefinitionsOutsideWorkspace": "IVOL Code переглянув назви визначень вихідного коду, що використовуються в цій директорії (за межами робочого простору):",
+		"wantsToSearch": "IVOL Code хоче шукати в цій директорії <code>{{regex}}</code>:",
+		"didSearch": "IVOL Code шукав у цій директорії <code>{{regex}}</code>:",
+		"wantsToSearchOutsideWorkspace": "IVOL Code хоче шукати в цій директорії (за межами робочого простору) <code>{{regex}}</code>:",
+		"didSearchOutsideWorkspace": "IVOL Code шукав у цій директорії (за межами робочого простору) <code>{{regex}}</code>:"
 	},
 	"codebaseSearch": {
-		"wantsToSearch": "Kilo Code хоче шукати в кодовій базі <code>{{query}}</code>:",
-		"wantsToSearchWithPath": "Kilo Code хоче шукати в кодовій базі <code>{{query}}</code> в <code>{{path}}</code>:",
+		"wantsToSearch": "IVOL Code хоче шукати в кодовій базі <code>{{query}}</code>:",
+		"wantsToSearchWithPath": "IVOL Code хоче шукати в кодовій базі <code>{{query}}</code> в <code>{{path}}</code>:",
 		"didSearch_one": "Знайдено 1 результат",
 		"didSearch_other": "Знайдено {{count}} результатів",
 		"resultTooltip": "Оцінка схожості: {{score}} (клікни для відкриття файлу)"
@@ -311,18 +311,18 @@
 		"youSaid": "Ти сказав"
 	},
 	"mcp": {
-		"wantsToUseTool": "Kilo Code хоче використати інструмент на сервері MCP {{serverName}}:",
-		"wantsToAccessResource": "Kilo Code хоче отримати доступ до ресурсу на сервері MCP {{serverName}}:"
+		"wantsToUseTool": "IVOL Code хоче використати інструмент на сервері MCP {{serverName}}:",
+		"wantsToAccessResource": "IVOL Code хоче отримати доступ до ресурсу на сервері MCP {{serverName}}:"
 	},
 	"modes": {
-		"wantsToSwitch": "Kilo Code хоче перейти в режим {{mode}}",
-		"wantsToSwitchWithReason": "Kilo Code хоче перейти в режим {{mode}}, тому що: {{reason}}",
-		"didSwitch": "Kilo Code перейшов у режим {{mode}}",
-		"didSwitchWithReason": "Kilo Code перейшов у режим {{mode}}, тому що: {{reason}}"
+		"wantsToSwitch": "IVOL Code хоче перейти в режим {{mode}}",
+		"wantsToSwitchWithReason": "IVOL Code хоче перейти в режим {{mode}}, тому що: {{reason}}",
+		"didSwitch": "IVOL Code перейшов у режим {{mode}}",
+		"didSwitchWithReason": "IVOL Code перейшов у режим {{mode}}, тому що: {{reason}}"
 	},
 	"subtasks": {
-		"wantsToCreate": "Kilo Code хоче створити нове підзавдання в режимі {{mode}}:",
-		"wantsToFinish": "Kilo Code хоче завершити це підзавдання",
+		"wantsToCreate": "IVOL Code хоче створити нове підзавдання в режимі {{mode}}:",
+		"wantsToFinish": "IVOL Code хоче завершити це підзавдання",
 		"newTaskContent": "Інструкції підзавдання",
 		"completionContent": "Підзавдання завершено",
 		"resultContent": "Результати підзавдання",
@@ -330,7 +330,7 @@
 		"completionInstructions": "Підзавдання завершено! Ти можеш переглянути результати та запропонувати будь-які виправлення або наступні кроки. Якщо все виглядає добре, підтверди, щоб повернути результат до батьківського завдання."
 	},
 	"questions": {
-		"hasQuestion": "Kilo Code має питання:"
+		"hasQuestion": "IVOL Code має питання:"
 	},
 	"taskCompleted": "Завдання виконано",
 	"error": "Помилка",
@@ -352,14 +352,14 @@
 	"diffError": {
 		"title": "Редагування не вдалося"
 	},
-	"troubleMessage": "Kilo Code має проблеми...",
+	"troubleMessage": "IVOL Code має проблеми...",
 	"powershell": {
 		"issues": "Схоже, у тебе проблеми з Windows PowerShell, будь ласка, подивись це"
 	},
 	"autoApprove": {
 		"title": "Автосхвалення:",
 		"none": "Немає",
-		"description": "Автосхвалення дозволяє Kilo Code виконувати дії без запиту дозволу. Увімкни лише для дій, яким ти повністю довіряєш. Більш детальна конфігурація доступна в <settingsLink>Налаштуваннях</settingsLink>.",
+		"description": "Автосхвалення дозволяє IVOL Code виконувати дії без запиту дозволу. Увімкни лише для дій, яким ти повністю довіряєш. Більш детальна конфігурація доступна в <settingsLink>Налаштуваннях</settingsLink>.",
 		"selectOptionsFirst": "Спочатку вибери принаймні один варіант нижче, щоб увімкнути автосхвалення",
 		"toggleAriaLabel": "Перемкнути автосхвалення",
 		"disabledAriaLabel": "Автосхвалення вимкнено - спочатку вибери варіанти",
@@ -428,7 +428,7 @@
 	},
 	"browser": {
 		"session": "Сесія браузера",
-		"rooWantsToUse": "Kilo Code хоче використати браузер:",
+		"rooWantsToUse": "IVOL Code хоче використати браузер:",
 		"active": "Активний",
 		"consoleLogs": "Логи консолі",
 		"noNewLogs": "(Немає нових логів)",
@@ -497,18 +497,18 @@
 	"profileViolationWarning": "Поточний профіль несумісний з налаштуваннями твоєї організації",
 	"shellIntegration": {
 		"title": "Попередження про виконання команди",
-		"description": "Твоя команда виконується без інтеграції оболонки терміналу VSCode. Щоб прибрати це попередження, ти можеш вимкнути інтеграцію оболонки в розділі <strong>Terminal</strong> <settingsLink>налаштувань Kilo Code</settingsLink> або усунути проблеми з інтеграцією терміналу VSCode, використовуючи посилання нижче.",
+		"description": "Твоя команда виконується без інтеграції оболонки терміналу VSCode. Щоб прибрати це попередження, ти можеш вимкнути інтеграцію оболонки в розділі <strong>Terminal</strong> <settingsLink>налаштувань IVOL Code</settingsLink> або усунути проблеми з інтеграцією терміналу VSCode, використовуючи посилання нижче.",
 		"troubleshooting": "Натисни тут для документації з інтеграції оболонки."
 	},
 	"ask": {
 		"autoApprovedRequestLimitReached": {
 			"title": "Досягнуто ліміт автосхвалених запитів",
-			"description": "Kilo Code досяг автосхваленого ліміту {{count}} API запит(ів). Хочеш скинути лічильник і продовжити завдання?",
+			"description": "IVOL Code досяг автосхваленого ліміту {{count}} API запит(ів). Хочеш скинути лічильник і продовжити завдання?",
 			"button": "Скинути і продовжити"
 		},
 		"autoApprovedCostLimitReached": {
 			"title": "Досягнуто ліміт автоматично схвалених витрат",
-			"description": "Kilo Code досяг ліміту автоматично схвалених витрат ${{count}}. Хочете скинути витрати і продовжити завдання?",
+			"description": "IVOL Code досяг ліміту автоматично схвалених витрат ${{count}}. Хочете скинути витрати і продовжити завдання?",
 			"button": "Скинути і продовжити"
 		}
 	},
@@ -556,8 +556,8 @@
 	},
 	"generateCommitMessage": "Згенерувати повідомлення коміту",
 	"slashCommand": {
-		"wantsToRun": "Kilo Code хоче виконати slash команду:",
-		"didRun": "Kilo Code виконав slash команду:"
+		"wantsToRun": "IVOL Code хоче виконати slash команду:",
+		"didRun": "IVOL Code виконав slash команду:"
 	},
 	"contextMenu": {
 		"noResults": "Результатів немає",

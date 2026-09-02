@@ -81,7 +81,7 @@
 		"apiRequest": "API-запрос",
 		"taskCompleted": "Задача выполнена",
 		"error": "Ошибка",
-		"question": "У Kilo Code есть вопрос",
+		"question": "У IVOL Code есть вопрос",
 		"command": "Kilo хочет выполнить команду",
 		"tool": "Kilo хочет использовать инструмент",
 		"usingTool": "Использование инструмента: **{{tool}}** {{details}}",

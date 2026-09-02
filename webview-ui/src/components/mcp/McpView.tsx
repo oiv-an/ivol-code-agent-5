@@ -179,11 +179,6 @@ const McpView = ({ onDone, hideHeader = false }: McpViewProps) => {
 							</StandardTooltip>
 							*/}
 						</div>
-						{/* kilocode_change start */}
-						<div className="mt-5">
-							You can find the MCP Marketplace under Settings &gt; MCP Servers &gt; Marketplace
-						</div>
-						{/* kilocode_change end */}
 						<div
 							style={{
 								marginTop: "15px",

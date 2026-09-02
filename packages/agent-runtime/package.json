@@ -1,7 +1,7 @@
 {
 	"name": "@kilocode/agent-runtime",
 	"version": "0.0.1",
-	"description": "Core agent runtime for Kilo Code - enables running agents without CLI",
+	"description": "Core agent runtime for IVOL Code - enables running agents without CLI",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

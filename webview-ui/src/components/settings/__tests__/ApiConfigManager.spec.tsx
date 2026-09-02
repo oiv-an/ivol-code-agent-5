@@ -359,4 +359,38 @@ describe("ApiConfigManager", () => {
 		fireEvent.keyDown(input, { key: "Escape" })
 		expect(screen.queryByDisplayValue("New Name")).not.toBeInTheDocument()
 	})
+
+	it("hides unsupported saved profiles without mutating the source list", () => {
+		const profiles = [
+			{ id: "openai", name: "My API", apiProvider: "openai" as const },
+			{ id: "codex", name: "Codex Pro", apiProvider: "openai-codex" as const },
+			{ id: "kilo", name: "Old Kilo", apiProvider: "kilocode" as const },
+			{ id: "zai", name: "Old Z.ai", apiProvider: "zai" as const },
+		]
+		const snapshot = structuredClone(profiles)
+
+		render(<ApiConfigManager {...defaultProps} currentApiConfigName="My API" listApiConfigMeta={profiles} />)
+
+		const options = within(screen.getByTestId("select-component")).getAllByRole("option")
+		expect(options.map((option) => option.textContent)).toEqual(["settings:common.select", "My API", "Codex Pro"])
+		expect(profiles).toEqual(snapshot)
+	})
+
+	it("keeps hidden names reserved and treats one visible profile as the last one", () => {
+		const profiles = [
+			{ id: "openai", name: "My API", apiProvider: "openai" as const },
+			{ id: "kilo", name: "Reserved Hidden Name", apiProvider: "kilocode" as const },
+		]
+
+		render(<ApiConfigManager {...defaultProps} currentApiConfigName="My API" listApiConfigMeta={profiles} />)
+		expect(screen.getByTestId("delete-profile-button")).toBeDisabled()
+
+		fireEvent.click(screen.getByTestId("add-profile-button"))
+		fireEvent.input(screen.getByTestId("new-profile-input"), { target: { value: "Reserved Hidden Name" } })
+		fireEvent.click(screen.getByText("settings:providers.createProfile"))
+
+		expect(within(getDialogContent()).getByTestId("error-message")).toHaveTextContent(
+			"settings:providers.nameExists",
+		)
+	})
 })

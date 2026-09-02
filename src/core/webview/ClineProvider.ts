@@ -48,6 +48,7 @@ import {
 	DEFAULT_MODES,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	getModelId,
+	isPersonalProvider, // kilocode_change
 } from "@roo-code/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "./aggregateTaskCosts"
 import { TelemetryService } from "@roo-code/telemetry"
@@ -110,17 +111,14 @@ import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { validateAndFixToolResultIds } from "../task/validateToolResultIds"
 
 //kilocode_change start
-import { McpDownloadResponse, McpMarketplaceCatalog } from "../../shared/kilocode/mcp"
-import { McpServer } from "../../shared/mcp"
+import { McpMarketplaceCatalog } from "../../shared/kilocode/mcp"
 import { OpenRouterHandler } from "../../api/providers"
 import { stringifyError } from "../../shared/kilocode/errorUtils"
 import isWsl from "is-wsl"
-import { getKilocodeDefaultModel } from "../../api/providers/kilocode/getKilocodeDefaultModel"
 import { getEffectiveTelemetrySetting, getKiloCodeWrapperProperties } from "../../core/kilocode/wrapper"
 import { getKilocodeConfig, KilocodeConfig } from "../../utils/kilo-config-file"
 import { resolveToolProtocol } from "../../utils/resolveToolProtocol"
 import { kilo_execIfExtension } from "../../shared/kilocode/cli-sessions/extension/session-manager-utils"
-import { DeviceAuthHandler } from "../kilocode/webview/deviceAuthHandler"
 
 export type ClineProviderState = Awaited<ReturnType<ClineProvider["getState"]>>
 // kilocode_change end
@@ -169,7 +167,6 @@ export class ClineProvider
 	private taskEventListeners: WeakMap<Task, Array<() => void>> = new WeakMap()
 	private currentWorkspacePath: string | undefined
 	private autoPurgeScheduler?: any // kilocode_change - (Any) Prevent circular import
-	private deviceAuthHandler?: DeviceAuthHandler // kilocode_change - Device auth handler
 
 	private recentTasksCache?: string[]
 	private pendingOperations: Map<string, PendingEditOperation> = new Map()
@@ -1003,11 +1000,13 @@ export class ClineProvider
 							const fullProfile = await this.providerSettingsManager.getProfile({ name: profile.name })
 							const hasActualSettings = !!fullProfile.apiProvider
 
-							if (hasActualSettings) {
+							// kilocode_change start: do not restore a hidden mode profile
+							if (hasActualSettings && isPersonalProvider(fullProfile.apiProvider)) {
 								await this.activateProviderProfile({ name: profile.name })
 							} else {
 								// The task will continue with the current/default configuration.
 							}
+							// kilocode_change end
 						} catch (error) {
 							// Log the error but continue with task restoration.
 							this.log(
@@ -1033,10 +1032,19 @@ export class ClineProvider
 
 			if (profile?.name) {
 				try {
-					await this.activateProviderProfile(
-						{ name: profile.name },
-						{ persistModeConfig: false, persistTaskHistory: false },
-					)
+					// kilocode_change start: never restore a hidden provider from task history
+					const fullProfile = await this.providerSettingsManager.getProfile({ name: profile.name })
+					if (isPersonalProvider(fullProfile.apiProvider)) {
+						await this.activateProviderProfile(
+							{ name: profile.name },
+							{ persistModeConfig: false, persistTaskHistory: false },
+						)
+					} else {
+						this.log(
+							`Provider profile '${historyItem.apiConfigName}' is unavailable in this personal build. Using current configuration.`,
+						)
+					}
+					// kilocode_change end
 				} catch (error) {
 					// Log the error but continue with task restoration.
 					this.log(
@@ -1290,7 +1298,7 @@ export class ClineProvider
 						window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
 						window.KILOCODE_BACKEND_BASE_URL = "${process.env.KILOCODE_BACKEND_BASE_URL ?? ""}"
 					</script>
-					<title>Kilo Code</title>
+					<title>IVOL Code</title>
 				</head>
 				<body>
 					<div id="root"></div>
@@ -1373,7 +1381,7 @@ export class ClineProvider
 				window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
 				window.KILOCODE_BACKEND_BASE_URL = "${process.env.KILOCODE_BACKEND_BASE_URL ?? ""}"
 			</script>
-            <title>Kilo Code</title>
+            <title>IVOL Code</title>
           </head>
           <body>
             <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -1473,11 +1481,13 @@ export class ClineProvider
 				const fullProfile = await this.providerSettingsManager.getProfile({ name: profile.name })
 				const hasActualSettings = !!fullProfile.apiProvider
 
-				if (hasActualSettings) {
+				// kilocode_change start: do not restore a hidden mode profile
+				if (hasActualSettings && isPersonalProvider(fullProfile.apiProvider)) {
 					await this.activateProviderProfile({ name: profile.name })
 				} else {
 					// The task will continue with the current/default configuration.
 				}
+				// kilocode_change end
 			} else {
 				// The task will continue with the current/default configuration.
 			}
@@ -1568,12 +1578,39 @@ export class ClineProvider
 		return !!this.getProviderProfileEntry(name)
 	}
 
+	// kilocode_change start: personal build provider initialization
+	public async initializePersonalProviderProfile(): Promise<void> {
+		await this.providerSettingsManager.initialize()
+		const { name, id: _id, ...providerSettings } = await this.providerSettingsManager.ensurePersonalActiveProfile()
+		const fastApplyApiProvider =
+			this.contextProxy.getValue("fastApplyApiProvider") === "kilocode"
+				? "current"
+				: this.contextProxy.getValue("fastApplyApiProvider")
+
+		await Promise.all([
+			this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
+			this.contextProxy.setValue("currentApiConfigName", name),
+			this.contextProxy.setProviderSettings(providerSettings),
+			this.contextProxy.setValue("fastApplyApiProvider", fastApplyApiProvider),
+			this.contextProxy.setValue("imageGenerationProvider", "openrouter"),
+		])
+	}
+	// kilocode_change end
+
 	async upsertProviderProfile(
 		name: string,
 		providerSettings: ProviderSettings,
 		activate: boolean = true,
 	): Promise<string | undefined> {
 		try {
+			// kilocode_change start: hidden profiles may be stored but never activated
+			if (activate && !isPersonalProvider(providerSettings.apiProvider)) {
+				throw new Error(
+					`Provider '${providerSettings.apiProvider ?? "unset"}' is unavailable in this personal build`,
+				)
+			}
+			// kilocode_change end
+
 			// TODO: Do we need to be calling `activateProfile`? It's not
 			// clear to me what the source of truth should be; in some cases
 			// we rely on the `ContextProxy`'s data store and in other cases
@@ -1609,8 +1646,6 @@ export class ClineProvider
 					task.api = buildApiHandler(providerSettings)
 				}
 
-				await TelemetryService.instance.updateIdentity(providerSettings.kilocodeToken ?? "") // kilocode_change
-
 				this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true })
 
 				// Keep the current task's sticky provider profile in sync with the newly-activated profile.
@@ -1633,11 +1668,20 @@ export class ClineProvider
 
 	async deleteProviderProfile(profileToDelete: ProviderSettingsEntry) {
 		const globalSettings = this.contextProxy.getValues()
-		let profileToActivate: string | undefined = globalSettings.currentApiConfigName
+		// kilocode_change start: choose only an allowed replacement profile
+		const currentProfile = this.getProviderProfileEntries().find(
+			({ name }) => name === globalSettings.currentApiConfigName,
+		)
+		let profileToActivate: string | undefined = isPersonalProvider(currentProfile?.apiProvider)
+			? currentProfile?.name
+			: undefined
 
-		if (profileToDelete.name === profileToActivate) {
-			profileToActivate = this.getProviderProfileEntries().find(({ name }) => name !== profileToDelete.name)?.name
+		if (!profileToActivate || profileToDelete.name === profileToActivate) {
+			profileToActivate = this.getProviderProfileEntries().find(
+				({ name, apiProvider }) => name !== profileToDelete.name && isPersonalProvider(apiProvider),
+			)?.name
 		}
+		// kilocode_change end
 
 		if (!profileToActivate) {
 			throw new Error("You cannot delete the last profile")
@@ -1713,7 +1757,6 @@ export class ClineProvider
 		}
 
 		await this.postStateToWebview()
-		await TelemetryService.instance.updateIdentity(providerSettings.kilocodeToken ?? "") // kilocode_change
 
 		if (providerSettings.apiProvider) {
 			this.emit(RooCodeEventName.ProviderProfileChanged, { name, provider: providerSettings.apiProvider })
@@ -1852,42 +1895,20 @@ export class ClineProvider
 	}
 
 	// kilocode_change start
-	async handleKiloCodeCallback(token: string) {
-		const kilocode: ProviderName = "kilocode"
-		let { apiConfiguration, currentApiConfigName = "default" } = await this.getState()
-
-		await this.upsertProviderProfile(currentApiConfigName, {
-			...apiConfiguration,
-			apiProvider: "kilocode",
-			kilocodeToken: token,
-		})
-
-		vscode.window.showInformationMessage("Kilo Code successfully configured!")
-
-		if (this.getCurrentTask()) {
-			this.getCurrentTask()!.api = buildApiHandler({
-				apiProvider: kilocode,
-				kilocodeToken: token,
-			})
-		}
+	async handleKiloCodeCallback(_token: string) {
+		this.log("Ignored legacy Kilo authentication callback in personal build.")
 	}
 	// kilocode_change end
 
 	// kilocode_change start - Device Auth Flow
 	async startDeviceAuth() {
-		if (!this.deviceAuthHandler) {
-			this.deviceAuthHandler = new DeviceAuthHandler({
-				postMessageToWebview: (msg) => this.postMessageToWebview(msg),
-				log: (msg) => this.log(msg),
-				showInformationMessage: (msg) => vscode.window.showInformationMessage(msg),
-			})
-		}
-		await this.deviceAuthHandler.startDeviceAuth()
+		await this.postMessageToWebview({
+			type: "deviceAuthFailed",
+			deviceAuthError: "Kilo cloud authentication is disabled in this personal build.",
+		})
 	}
 
-	cancelDeviceAuth() {
-		this.deviceAuthHandler?.cancelDeviceAuth()
-	}
+	cancelDeviceAuth() {}
 	// kilocode_change end
 
 	// Task history
@@ -1967,6 +1988,10 @@ export class ClineProvider
 			// Non-current task.
 			const { historyItem } = await this.getTaskWithId(id)
 			await this.createTaskWithHistoryItem(historyItem) // Clears existing task.
+		} else {
+			// kilocode_change: recover a current task if the webview was recreated or
+			// missed its initial state before the user clicked the history item again.
+			await this.postStateToWebview()
 		}
 
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -2095,24 +2120,20 @@ export class ClineProvider
 	 */
 	async fetchMarketplaceData() {
 		try {
-			const [marketplaceResult, marketplaceInstalledMetadata] = await Promise.all([
-				this.marketplaceManager.getMarketplaceItems().catch((error) => {
-					console.error("Failed to fetch marketplace items:", error)
-					return { organizationMcps: [], marketplaceItems: [], errors: [error.message] }
-				}),
-				this.marketplaceManager.getInstallationMetadata().catch((error) => {
+			// The upstream marketplace is disabled in the personal build. Keep local
+			// installation metadata available without contacting api.kilo.ai.
+			const marketplaceInstalledMetadata = await this.marketplaceManager
+				.getInstallationMetadata()
+				.catch((error) => {
 					console.error("Failed to fetch installation metadata:", error)
 					return { project: {}, global: {} } as MarketplaceInstalledMetadata
-				}),
-			])
+				})
 
-			// Send marketplace data separately
 			this.postMessageToWebview({
 				type: "marketplaceData",
-				organizationMcps: marketplaceResult.organizationMcps || [],
-				marketplaceItems: marketplaceResult.marketplaceItems || [],
+				organizationMcps: [],
+				marketplaceItems: [],
 				marketplaceInstalledMetadata: marketplaceInstalledMetadata || { project: {}, global: {} },
-				errors: marketplaceResult.errors,
 			})
 		} catch (error) {
 			console.error("Failed to fetch marketplace data:", error)
@@ -2395,9 +2416,8 @@ export class ClineProvider
 			uriScheme: vscode.env.uriScheme,
 			uiKind: vscode.UIKind[vscode.env.uiKind], // kilocode_change
 			kiloCodeWrapperProperties, // kilocode_change wrapper information
-			kilocodeDefaultModel: (
-				await getKilocodeDefaultModel(apiConfiguration.kilocodeToken, apiConfiguration.kilocodeOrganizationId)
-			).defaultModel,
+			kilocodeDefaultModel: openRouterDefaultModelId, // kilocode_change: personal build has no automatic Kilo defaults request
+			currentTaskId: this.getCurrentTask()?.taskId, // kilocode_change: route incremental updates to the active task
 			currentTaskItem: this.getCurrentTask()?.taskId
 				? (taskHistory || []).find((item: HistoryItem) => item.id === this.getCurrentTask()?.taskId)
 				: undefined,
@@ -2601,8 +2621,10 @@ export class ClineProvider
 		const stateValues = this.contextProxy.getValues()
 		const customModes = await this.customModesManager.getCustomModes()
 
-		// Determine apiProvider with the same logic as before.
-		const apiProvider: ProviderName = stateValues.apiProvider ? stateValues.apiProvider : "kilocode" // kilocode_change: fall back to kilocode
+		// kilocode_change start: fail closed when provider state is incomplete
+		// Fail closed to the inert personal OpenAI-compatible profile when state is incomplete.
+		const apiProvider: ProviderName = stateValues.apiProvider ? stateValues.apiProvider : "openai"
+		// kilocode_change end
 
 		// Build the apiConfiguration object combining state values and secrets.
 		const providerSettings = this.contextProxy.getProviderSettings()
@@ -2691,9 +2713,7 @@ export class ClineProvider
 		// Return the same structure as before.
 		return {
 			apiConfiguration: providerSettings,
-			kilocodeDefaultModel: (
-				await getKilocodeDefaultModel(providerSettings.kilocodeToken, providerSettings.kilocodeOrganizationId)
-			).defaultModel, // kilocode_change
+			kilocodeDefaultModel: openRouterDefaultModelId, // kilocode_change: personal build has no automatic Kilo defaults request
 			lastShownAnnouncementId: stateValues.lastShownAnnouncementId,
 			customInstructions: stateValues.customInstructions,
 			apiModelId: stateValues.apiModelId,
@@ -2943,7 +2963,7 @@ export class ClineProvider
 			return
 		}
 
-		// Logout from Kilo Code provider before resetting (same approach as ProfileView logout)
+		// Logout from IVOL Code provider before resetting (same approach as ProfileView logout)
 		const { apiConfiguration, currentApiConfigName = "default" } = await this.getState()
 		if (apiConfiguration.kilocodeToken) {
 			await this.upsertProviderProfile(currentApiConfigName, {
@@ -3192,6 +3212,23 @@ export class ClineProvider
 		configuration: RooCodeSettings = {},
 	): Promise<Task> {
 		if (configuration) {
+			// kilocode_change start: public task API cannot reactivate a hidden provider
+			if (configuration.apiProvider && !isPersonalProvider(configuration.apiProvider)) {
+				throw new Error(`Provider '${configuration.apiProvider}' is unavailable in this personal build`)
+			}
+
+			if (configuration.currentApiConfigName) {
+				const requestedProfile = await this.providerSettingsManager.getProfile({
+					name: configuration.currentApiConfigName,
+				})
+				if (!isPersonalProvider(requestedProfile.apiProvider)) {
+					throw new Error(
+						`Provider '${requestedProfile.apiProvider ?? "unset"}' is unavailable in this personal build`,
+					)
+				}
+			}
+			// kilocode_change end
+
 			await this.setValues(configuration)
 
 			if (configuration.allowedCommands) {
@@ -3696,171 +3733,27 @@ export class ClineProvider
 
 	// kilocode_change:
 	// MCP Marketplace
-	private async fetchMcpMarketplaceFromApi(silent: boolean = false): Promise<McpMarketplaceCatalog | undefined> {
-		try {
-			const response = await axios.get("https://api.cline.bot/v1/mcp/marketplace", {
-				headers: {
-					"Content-Type": "application/json",
-				},
-			})
-
-			if (!response.data) {
-				throw new Error("Invalid response from MCP marketplace API")
-			}
-
-			const catalog: McpMarketplaceCatalog = {
-				items: (response.data || []).map((item: any) => ({
-					...item,
-					githubStars: item.githubStars ?? 0,
-					downloadCount: item.downloadCount ?? 0,
-					tags: item.tags ?? [],
-				})),
-			}
-
-			await this.updateGlobalState("mcpMarketplaceCatalog", catalog)
-			return catalog
-		} catch (error) {
-			console.error("Failed to fetch MCP marketplace:", error)
-			if (!silent) {
-				const errorMessage = error instanceof Error ? error.message : "Failed to fetch MCP marketplace"
-				await this.postMessageToWebview({
-					type: "mcpMarketplaceCatalog",
-					error: errorMessage,
-				})
-				vscode.window.showErrorMessage(errorMessage)
-			}
-			return undefined
-		}
+	private async getDisabledMcpMarketplace(): Promise<McpMarketplaceCatalog> {
+		const catalog: McpMarketplaceCatalog = { items: [] }
+		await this.updateGlobalState("mcpMarketplaceCatalog", catalog)
+		return catalog
 	}
 
 	async silentlyRefreshMcpMarketplace() {
-		try {
-			const catalog = await this.fetchMcpMarketplaceFromApi(true)
-			if (catalog) {
-				await this.postMessageToWebview({
-					type: "mcpMarketplaceCatalog",
-					mcpMarketplaceCatalog: catalog,
-				})
-			}
-		} catch (error) {
-			console.error("Failed to silently refresh MCP marketplace:", error)
-		}
+		const catalog = await this.getDisabledMcpMarketplace()
+		await this.postMessageToWebview({ type: "mcpMarketplaceCatalog", mcpMarketplaceCatalog: catalog })
 	}
 
-	async fetchMcpMarketplace(forceRefresh: boolean = false) {
-		try {
-			// Check if we have cached data
-			const cachedCatalog = (await this.getGlobalState("mcpMarketplaceCatalog")) as
-				| McpMarketplaceCatalog
-				| undefined
-			if (!forceRefresh && cachedCatalog?.items) {
-				await this.postMessageToWebview({
-					type: "mcpMarketplaceCatalog",
-					mcpMarketplaceCatalog: cachedCatalog,
-				})
-				return
-			}
-
-			const catalog = await this.fetchMcpMarketplaceFromApi(false)
-			if (catalog) {
-				await this.postMessageToWebview({
-					type: "mcpMarketplaceCatalog",
-					mcpMarketplaceCatalog: catalog,
-				})
-			}
-		} catch (error) {
-			console.error("Failed to handle cached MCP marketplace:", error)
-			const errorMessage = error instanceof Error ? error.message : "Failed to handle cached MCP marketplace"
-			await this.postMessageToWebview({
-				type: "mcpMarketplaceCatalog",
-				error: errorMessage,
-			})
-			vscode.window.showErrorMessage(errorMessage)
-		}
+	async fetchMcpMarketplace(_forceRefresh: boolean = false) {
+		const catalog = await this.getDisabledMcpMarketplace()
+		await this.postMessageToWebview({ type: "mcpMarketplaceCatalog", mcpMarketplaceCatalog: catalog })
 	}
 
-	async downloadMcp(mcpId: string) {
-		try {
-			// First check if we already have this MCP server installed
-			const servers = this.mcpHub?.getServers() || []
-			const isInstalled = servers.some((server: McpServer) => server.name === mcpId)
-
-			if (isInstalled) {
-				throw new Error("This MCP server is already installed")
-			}
-
-			// Fetch server details from marketplace
-			const response = await axios.post<McpDownloadResponse>(
-				"https://api.cline.bot/v1/mcp/download",
-				{ mcpId },
-				{
-					headers: { "Content-Type": "application/json" },
-					timeout: 10000,
-				},
-			)
-
-			if (!response.data) {
-				throw new Error("Invalid response from MCP marketplace API")
-			}
-
-			console.log("[downloadMcp] Response from download API", { response })
-
-			const mcpDetails = response.data
-
-			// Validate required fields
-			if (!mcpDetails.githubUrl) {
-				throw new Error("Missing GitHub URL in MCP download response")
-			}
-			if (!mcpDetails.readmeContent) {
-				throw new Error("Missing README content in MCP download response")
-			}
-
-			// Send details to webview
-			await this.postMessageToWebview({
-				type: "mcpDownloadDetails",
-				mcpDownloadDetails: mcpDetails,
-			})
-
-			// Create task with context from README and added guidelines for MCP server installation
-			const task = `Set up the MCP server from ${mcpDetails.githubUrl} while adhering to these MCP server installation rules:
-- Use "${mcpDetails.mcpId}" as the server name in ${GlobalFileNames.mcpSettings}.
-- Create the directory for the new MCP server before starting installation.
-- Use commands aligned with the user's shell and operating system best practices.
-- The following README may contain instructions that conflict with the user's OS, in which case proceed thoughtfully.
-- Once installed, demonstrate the server's capabilities by using one of its tools.
-Here is the project's README to help you get started:\n\n${mcpDetails.readmeContent}\n${mcpDetails.llmsInstallationContent}`
-
-			// Initialize task and show chat view
-			await this.createTask(task)
-			await this.postMessageToWebview({
-				type: "action",
-				action: "chatButtonClicked",
-			})
-		} catch (error) {
-			console.error("Failed to download MCP:", error)
-			let errorMessage = "Failed to download MCP"
-
-			if (axios.isAxiosError(error)) {
-				if (error.code === "ECONNABORTED") {
-					errorMessage = "Request timed out. Please try again."
-				} else if (error.response?.status === 404) {
-					errorMessage = "MCP server not found in marketplace."
-				} else if (error.response?.status === 500) {
-					errorMessage = "Internal server error. Please try again later."
-				} else if (!error.response && error.request) {
-					errorMessage = "Network error. Please check your internet connection."
-				}
-			} else if (error instanceof Error) {
-				errorMessage = error.message
-			}
-
-			// Show error in both notification and marketplace UI
-			vscode.window.showErrorMessage(errorMessage)
-			await this.postMessageToWebview({
-				type: "mcpDownloadDetails",
-				error: errorMessage,
-			})
-		}
+	async downloadMcp(_mcpId: string) {
+		await this.postMessageToWebview({
+			type: "mcpDownloadDetails",
+			error: "The remote MCP marketplace is disabled in this personal build.",
+		})
 	}
 	// end kilocode_change
 

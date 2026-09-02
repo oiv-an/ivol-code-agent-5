@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Setting up Kilo Code development environment..."
+echo "🚀 Setting up IVOL Code development environment..."
 
 # Ensure we're in the right directory
 cd /workspace

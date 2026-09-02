@@ -389,16 +389,10 @@ export const OpenAICompatible = ({
 					</div>
 				</div>
 
+				{/* kilocode_change start: prompt caching is always enabled in the personal build */}
 				<div>
 					<div className="flex items-center gap-1">
-						<Checkbox
-							checked={apiConfiguration?.openAiCustomModelInfo?.supportsPromptCache ?? false}
-							onChange={handleInputChange("openAiCustomModelInfo", (checked) => {
-								return {
-									...(apiConfiguration?.openAiCustomModelInfo || openAiModelInfoSaneDefaults),
-									supportsPromptCache: checked,
-								}
-							})}>
+						<Checkbox checked={true} disabled>
 							<span className="font-medium">{t("settings:providers.customModel.promptCache.label")}</span>
 						</Checkbox>
 						<StandardTooltip content={t("settings:providers.customModel.promptCache.description")}>
@@ -412,6 +406,7 @@ export const OpenAICompatible = ({
 						{t("settings:providers.customModel.promptCache.description")}
 					</div>
 				</div>
+				{/* kilocode_change end */}
 
 				<div>
 					<VSCodeTextField
@@ -501,100 +496,101 @@ export const OpenAICompatible = ({
 					</VSCodeTextField>
 				</div>
 
-				{apiConfiguration?.openAiCustomModelInfo?.supportsPromptCache && (
-					<>
-						<div>
-							<VSCodeTextField
-								value={apiConfiguration?.openAiCustomModelInfo?.cacheReadsPrice?.toString() ?? "0"}
-								type="text"
-								style={{
-									borderColor: (() => {
-										const value = apiConfiguration?.openAiCustomModelInfo?.cacheReadsPrice
+				{/* kilocode_change start: cache prices remain editable while caching is forced on */}
+				<>
+					<div>
+						<VSCodeTextField
+							value={apiConfiguration?.openAiCustomModelInfo?.cacheReadsPrice?.toString() ?? "0"}
+							type="text"
+							style={{
+								borderColor: (() => {
+									const value = apiConfiguration?.openAiCustomModelInfo?.cacheReadsPrice
 
-										if (!value && value !== 0) {
-											return "var(--vscode-input-border)"
-										}
-
-										return value >= 0
-											? "var(--vscode-charts-green)"
-											: "var(--vscode-errorForeground)"
-									})(),
-								}}
-								onChange={handleInputChange("openAiCustomModelInfo", (e) => {
-									const value = (e.target as HTMLInputElement).value
-									const parsed = parseFloat(value)
-
-									return {
-										...(apiConfiguration?.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
-										cacheReadsPrice: isNaN(parsed) ? 0 : parsed,
+									if (!value && value !== 0) {
+										return "var(--vscode-input-border)"
 									}
-								})}
-								placeholder={t("settings:placeholders.numbers.inputPrice")}
-								className="w-full">
-								<div className="flex items-center gap-1">
-									<span className="font-medium">
-										{t("settings:providers.customModel.pricing.cacheReads.label")}
-									</span>
-									<StandardTooltip
-										content={t("settings:providers.customModel.pricing.cacheReads.description")}>
-										<i
-											className="codicon codicon-info text-vscode-descriptionForeground"
-											style={{ fontSize: "12px" }}
-										/>
-									</StandardTooltip>
-								</div>
-							</VSCodeTextField>
-						</div>
-						<div>
-							<VSCodeTextField
-								value={apiConfiguration?.openAiCustomModelInfo?.cacheWritesPrice?.toString() ?? "0"}
-								type="text"
-								style={{
-									borderColor: (() => {
-										const value = apiConfiguration?.openAiCustomModelInfo?.cacheWritesPrice
 
-										if (!value && value !== 0) {
-											return "var(--vscode-input-border)"
-										}
+									return value >= 0 ? "var(--vscode-charts-green)" : "var(--vscode-errorForeground)"
+								})(),
+							}}
+							onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+								const value = (e.target as HTMLInputElement).value
+								const parsed = parseFloat(value)
 
-										return value >= 0
-											? "var(--vscode-charts-green)"
-											: "var(--vscode-errorForeground)"
-									})(),
-								}}
-								onChange={handleInputChange("openAiCustomModelInfo", (e) => {
-									const value = (e.target as HTMLInputElement).value
-									const parsed = parseFloat(value)
+								return {
+									...(apiConfiguration?.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
+									cacheReadsPrice: isNaN(parsed) ? 0 : parsed,
+								}
+							})}
+							placeholder={t("settings:placeholders.numbers.inputPrice")}
+							className="w-full">
+							<div className="flex items-center gap-1">
+								<span className="font-medium">
+									{t("settings:providers.customModel.pricing.cacheReads.label")}
+								</span>
+								<StandardTooltip
+									content={t("settings:providers.customModel.pricing.cacheReads.description")}>
+									<i
+										className="codicon codicon-info text-vscode-descriptionForeground"
+										style={{ fontSize: "12px" }}
+									/>
+								</StandardTooltip>
+							</div>
+						</VSCodeTextField>
+					</div>
+					<div>
+						<VSCodeTextField
+							value={apiConfiguration?.openAiCustomModelInfo?.cacheWritesPrice?.toString() ?? "0"}
+							type="text"
+							style={{
+								borderColor: (() => {
+									const value = apiConfiguration?.openAiCustomModelInfo?.cacheWritesPrice
 
-									return {
-										...(apiConfiguration?.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
-										cacheWritesPrice: isNaN(parsed) ? 0 : parsed,
+									if (!value && value !== 0) {
+										return "var(--vscode-input-border)"
 									}
-								})}
-								placeholder={t("settings:placeholders.numbers.cacheWritePrice")}
-								className="w-full">
-								<div className="flex items-center gap-1">
-									<label className="block font-medium mb-1">
-										{t("settings:providers.customModel.pricing.cacheWrites.label")}
-									</label>
-									<StandardTooltip
-										content={t("settings:providers.customModel.pricing.cacheWrites.description")}>
-										<i
-											className="codicon codicon-info text-vscode-descriptionForeground"
-											style={{ fontSize: "12px" }}
-										/>
-									</StandardTooltip>
-								</div>
-							</VSCodeTextField>
-						</div>
-					</>
-				)}
+
+									return value >= 0 ? "var(--vscode-charts-green)" : "var(--vscode-errorForeground)"
+								})(),
+							}}
+							onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+								const value = (e.target as HTMLInputElement).value
+								const parsed = parseFloat(value)
+
+								return {
+									...(apiConfiguration?.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
+									cacheWritesPrice: isNaN(parsed) ? 0 : parsed,
+								}
+							})}
+							placeholder={t("settings:placeholders.numbers.cacheWritePrice")}
+							className="w-full">
+							<div className="flex items-center gap-1">
+								<label className="block font-medium mb-1">
+									{t("settings:providers.customModel.pricing.cacheWrites.label")}
+								</label>
+								<StandardTooltip
+									content={t("settings:providers.customModel.pricing.cacheWrites.description")}>
+									<i
+										className="codicon codicon-info text-vscode-descriptionForeground"
+										style={{ fontSize: "12px" }}
+									/>
+								</StandardTooltip>
+							</div>
+						</VSCodeTextField>
+					</div>
+				</>
 
 				<Button
 					variant="secondary"
-					onClick={() => setApiConfigurationField("openAiCustomModelInfo", openAiModelInfoSaneDefaults)}>
+					onClick={() =>
+						setApiConfigurationField("openAiCustomModelInfo", {
+							...openAiModelInfoSaneDefaults,
+							supportsPromptCache: true,
+						})
+					}>
 					{t("settings:providers.customModel.resetDefaults")}
 				</Button>
+				{/* kilocode_change end */}
 			</div>
 		</>
 	)

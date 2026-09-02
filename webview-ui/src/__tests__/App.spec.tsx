@@ -222,6 +222,19 @@ describe("App", () => {
 		expect(chatView.getAttribute("data-hidden")).toBe("true")
 	})
 
+	// kilocode_change start: the personal build has no Kilo profile/auth view.
+	it("redirects the legacy profile action to provider settings", async () => {
+		render(<AppWithProviders />)
+
+		act(() => {
+			triggerMessage("profileButtonClicked")
+		})
+
+		expect(await screen.findByTestId("settings-view")).toBeInTheDocument()
+		expect(screen.getByTestId("chat-view").getAttribute("data-hidden")).toBe("true")
+	})
+	// kilocode_change end
+
 	it("switches to history view when receiving historyButtonClicked action", async () => {
 		render(<AppWithProviders />)
 

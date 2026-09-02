@@ -84,7 +84,7 @@ describe("OpenAiHandler", () => {
 		mockOptions = {
 			openAiApiKey: "test-api-key",
 			openAiModelId: "gpt-4",
-			openAiBaseUrl: "https://api.openai.com/v1",
+			openAiBaseUrl: "https://provider.example/v1",
 		}
 		handler = new OpenAiHandler(mockOptions)
 		mockCreate.mockClear()
@@ -111,10 +111,10 @@ describe("OpenAiHandler", () => {
 				baseURL: expect.any(String),
 				apiKey: expect.any(String),
 				defaultHeaders: {
-					"HTTP-Referer": "https://kilocode.ai",
-					"X-Title": "Kilo Code",
-					"X-KiloCode-Version": Package.version,
-					"User-Agent": `Kilo-Code/${Package.version}`,
+					"HTTP-Referer": "https://github.com/oiv-an/ivol-code-agent-5",
+					"X-Title": "IVOL Code",
+					"X-IVOL-Code-Version": Package.version,
+					"User-Agent": `IVOL-Code-Agent-5/${Package.version}`,
 				},
 				timeout: expect.any(Number),
 			})
@@ -156,6 +156,7 @@ describe("OpenAiHandler", () => {
 			expect(usageChunk).toBeDefined()
 			expect(usageChunk?.inputTokens).toBe(10)
 			expect(usageChunk?.outputTokens).toBe(5)
+			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
 		})
 
 		it("should handle tool calls in non-streaming mode", async () => {
@@ -218,6 +219,175 @@ describe("OpenAiHandler", () => {
 			const textChunks = chunks.filter((chunk) => chunk.type === "text")
 			expect(textChunks).toHaveLength(1)
 			expect(textChunks[0].text).toBe("Test response")
+			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
+		})
+
+		it("retries once without cache breakpoints when an endpoint explicitly rejects them", async () => {
+			mockCreate
+				.mockRejectedValueOnce({ status: 400, message: "Unknown field messages[0].content[0].cache_control" })
+				.mockResolvedValueOnce({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "Fallback response" }, index: 0 }] }
+					},
+				})
+
+			const chunks: any[] = []
+			for await (const chunk of handler.createMessage(systemPrompt, messages)) chunks.push(chunk)
+
+			expect(chunks.some((chunk) => chunk.type === "text" && chunk.text === "Fallback response")).toBe(true)
+			expect(mockCreate).toHaveBeenCalledTimes(2)
+			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
+			expect(JSON.stringify(mockCreate.mock.calls[1][0].messages)).not.toContain("cache_control")
+			expect(mockCreate.mock.calls[1][0].messages).toEqual([
+				{ role: "system", content: systemPrompt },
+				{ role: "user", content: [{ type: "text", text: "Hello!" }] },
+			])
+		})
+
+		// kilocode_change start: common gateway wording for rejected cache metadata
+		it.each(["cache_control is not allowed", "cache_control forbidden"])(
+			"retries without cache breakpoints for '%s'",
+			async (errorMessage) => {
+				mockCreate.mockRejectedValueOnce({ status: 400, message: errorMessage }).mockResolvedValueOnce({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "Fallback response" }, index: 0 }] }
+					},
+				})
+
+				for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+					// consume
+				}
+
+				expect(mockCreate).toHaveBeenCalledTimes(2)
+				expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
+				expect(JSON.stringify(mockCreate.mock.calls[1][0].messages)).not.toContain("cache_control")
+			},
+		)
+		// kilocode_change end
+
+		it("remembers an endpoint that rejected cache breakpoints", async () => {
+			mockCreate
+				.mockRejectedValueOnce({ status: 422, message: "cache_control is not permitted" })
+				.mockResolvedValueOnce({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "First fallback" }, index: 0 }] }
+					},
+				})
+				.mockResolvedValueOnce({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "Second request" }, index: 0 }] }
+					},
+				})
+
+			for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+				// consume
+			}
+			for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+				// consume
+			}
+
+			expect(mockCreate).toHaveBeenCalledTimes(3)
+			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
+			expect(JSON.stringify(mockCreate.mock.calls[1][0].messages)).not.toContain("cache_control")
+			expect(JSON.stringify(mockCreate.mock.calls[2][0].messages)).not.toContain("cache_control")
+		})
+
+		it("falls back to the untouched string payload when structured cache content is rejected", async () => {
+			mockCreate
+				.mockRejectedValueOnce({ status: 400, message: "messages[0].content must be a string" })
+				.mockResolvedValueOnce({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "Fallback response" }, index: 0 }] }
+					},
+				})
+
+			for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+				// consume
+			}
+
+			expect(mockCreate).toHaveBeenCalledTimes(2)
+			expect(mockCreate.mock.calls[1][0].messages).toEqual([
+				{ role: "system", content: systemPrompt },
+				{ role: "user", content: [{ type: "text", text: "Hello!" }] },
+			])
+		})
+
+		it("does not add synthetic text to image-only user messages", async () => {
+			const imageOnlyMessages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "user",
+					content: [
+						{
+							type: "image",
+							source: { type: "base64", media_type: "image/png", data: "AA==" },
+						},
+					],
+				},
+			]
+
+			for await (const _chunk of handler.createMessage(systemPrompt, imageOnlyMessages)) {
+				// consume
+			}
+
+			const userContent = mockCreate.mock.calls[0][0].messages[1].content
+			expect(userContent).toHaveLength(1)
+			expect(userContent[0].type).toBe("image_url")
+			expect(JSON.stringify(userContent)).not.toContain('"text":"..."')
+		})
+
+		it("does not retry cache-marked requests after a server error", async () => {
+			mockCreate.mockRejectedValueOnce({ status: 500, message: "cache_control server error" })
+
+			const consume = async () => {
+				for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+					// consume
+				}
+			}
+
+			await expect(consume()).rejects.toThrow()
+			expect(mockCreate).toHaveBeenCalledTimes(1)
+		})
+
+		it("reads OpenAI cache read and write token usage", async () => {
+			mockCreate.mockResolvedValueOnce({
+				[Symbol.asyncIterator]: async function* () {
+					yield {
+						choices: [{ delta: {}, index: 0 }],
+						usage: {
+							prompt_tokens: 100,
+							completion_tokens: 5,
+							prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 20 },
+						},
+					}
+				},
+			})
+
+			const chunks: any[] = []
+			for await (const chunk of handler.createMessage(systemPrompt, messages)) chunks.push(chunk)
+
+			expect(chunks.find((chunk) => chunk.type === "usage")).toMatchObject({
+				inputTokens: 100,
+				outputTokens: 5,
+				cacheReadTokens: 80,
+				cacheWriteTokens: 20,
+			})
+		})
+
+		it("uses OpenAI automatic prompt caching without legacy cache_control fields", async () => {
+			const officialHandler = new OpenAiHandler({
+				...mockOptions,
+				openAiBaseUrl: "https://api.openai.com/v1",
+			})
+
+			for await (const _chunk of officialHandler.createMessage(systemPrompt, messages)) {
+				// consume
+			}
+
+			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).not.toContain("cache_control")
+			expect(mockCreate.mock.calls[0][0].messages).toEqual([
+				{ role: "system", content: systemPrompt },
+				{ role: "user", content: [{ type: "text", text: "Hello!" }] },
+			])
 		})
 
 		it("should handle tool calls in streaming responses", async () => {
@@ -569,6 +739,18 @@ describe("OpenAiHandler", () => {
 	})
 
 	describe("getModel", () => {
+		it("forces prompt caching for personal OpenAI-compatible profiles", () => {
+			const handlerWithCachingDisabled = new OpenAiHandler({
+				...mockOptions,
+				openAiCustomModelInfo: {
+					...openAiModelInfoSaneDefaults,
+					supportsPromptCache: false,
+				},
+			})
+
+			expect(handlerWithCachingDisabled.getModel().info.supportsPromptCache).toBe(true)
+		})
+
 		it("should return model info with sane defaults", () => {
 			const model = handler.getModel()
 			expect(model.id).toBe(mockOptions.openAiModelId)
@@ -1214,6 +1396,7 @@ describe("getOpenAiModels", () => {
 		expect(axios.get).toHaveBeenCalledWith(
 			"https://api.example.com/v1/models",
 			expect.objectContaining({
+				timeout: 8_000,
 				headers: expect.objectContaining({
 					Authorization: "Bearer test-api-key",
 				}),

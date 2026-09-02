@@ -5,6 +5,7 @@ import { createAndOpenGitHubIssue } from "../../../utils/github-url-utils"
 import { formatResponse } from "../../prompts/responses"
 import * as vscode from "vscode"
 import * as os from "os"
+import { Package } from "../../../shared/package"
 
 export async function reportBugTool(
 	cline: Task,
@@ -49,7 +50,7 @@ export async function reportBugTool(
 			// Derive system information values algorithmically
 			const operatingSystem = os.platform() + " " + os.release()
 			const kilocodeVersion =
-				vscode.extensions.getExtension("kilocode.kilo-code")?.packageJSON.version || "Unknown"
+				vscode.extensions.getExtension(`${Package.publisher}.${Package.name}`)?.packageJSON.version || "Unknown"
 			const systemInfo = `VSCode: ${vscode.version}, Node.js: ${process.version}, Architecture: ${os.arch()}`
 			const providerAndModel = `${(await cline.providerRef.deref()?.contextProxy.getGlobalState("apiProvider")) as string} / ${cline.api.getModel().id}`
 
@@ -85,12 +86,12 @@ export async function reportBugTool(
 					params.set("title", title)
 					params.set(
 						"description",
-						`${description}\n\n**System Information:**\n- Provider & Model: ${providerAndModel}\n- Operating System: ${operatingSystem}\n- Kilo Code Version: ${kilocodeVersion}\n- ${systemInfo}`,
+						`${description}\n\n**System Information:**\n- Provider & Model: ${providerAndModel}\n- Operating System: ${operatingSystem}\n- IVOL Code Version: ${kilocodeVersion}\n- ${systemInfo}`,
 					)
 
 					// Use our utility function to create and open the GitHub issue URL
 					// This bypasses VS Code's URI handling issues with special characters
-					await createAndOpenGitHubIssue("Kilo-Org", "kilocode", "bug_report.yml", params)
+					await createAndOpenGitHubIssue("oiv-an", "ivol-code-agent-5", "bug_report.yml", params)
 				} catch (error) {
 					console.error(`An error occurred while attempting to report the bug: ${error}`)
 				}

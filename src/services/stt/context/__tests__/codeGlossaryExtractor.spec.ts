@@ -15,7 +15,7 @@ describe("extractCodeGlossary", () => {
 
 		// Core terms should always be present
 		expect(glossary.identifiers).toContain("Kilocode")
-		expect(glossary.identifiers).toContain("Kilo Code")
+		expect(glossary.identifiers).toContain("IVOL Code")
 		expect(glossary.identifiers).toContain("VSCode")
 		expect(glossary.identifiers).toContain("MCP")
 	})
@@ -166,7 +166,7 @@ describe("formatGlossaryAsPrompt", () => {
 
 	it("prioritizes core terms then limits to 50 total terms", () => {
 		// Create glossary with core terms + many extracted terms
-		const coreTerms = ["Kilocode", "Kilo Code", "VSCode", "MCP"]
+		const coreTerms = ["Kilocode", "IVOL Code", "VSCode", "MCP"]
 		const extractedTerms = Array(100)
 			.fill(0)
 			.map((_, i) => `id${i}`)

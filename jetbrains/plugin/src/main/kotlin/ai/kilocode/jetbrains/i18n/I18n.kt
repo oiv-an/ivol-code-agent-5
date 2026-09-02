@@ -2,6 +2,7 @@ package ai.kilocode.jetbrains.i18n
 
 import com.intellij.DynamicBundle
 import com.intellij.openapi.diagnostic.Logger
+import java.util.MissingResourceException
 
 /**
  * Dynamic translation system for Kilo Code JetBrains plugin
@@ -34,6 +35,12 @@ object I18n {
             val bundle = getOrCreateBundle(namespace)
             val template = bundle.getMessage(key)
             substituteNamedParams(template, params)
+        } catch (e: AssertionError) {
+            if (e.cause !is MissingResourceException) {
+                throw e
+            }
+            logger.warn("Translation bundle not found for key: $fullKey")
+            fullKey
         } catch (e: Exception) {
             logger.warn("Translation failed for key: $fullKey", e)
             fullKey // Fallback to key name

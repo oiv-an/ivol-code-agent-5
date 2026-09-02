@@ -56,7 +56,7 @@ describe("anthropicApiKeyWarning", () => {
 
 			checkAnthropicApiKeyConflict()
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("kilo-code")
+			expect(mockGetConfiguration).toHaveBeenCalledWith("ivol-code-agent-5")
 			expect(mockConfig.get).toHaveBeenCalledWith("apiProvider")
 			expect(mockShowWarningMessage).not.toHaveBeenCalled()
 		})
@@ -72,7 +72,7 @@ describe("anthropicApiKeyWarning", () => {
 
 			checkAnthropicApiKeyConflict()
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("kilo-code")
+			expect(mockGetConfiguration).toHaveBeenCalledWith("ivol-code-agent-5")
 			expect(mockConfig.get).toHaveBeenCalledWith("apiProvider")
 			expect(mockShowWarningMessage).toHaveBeenCalledWith(
 				"An ANTHROPIC_API_KEY environment variable was detected. This may conflict with your subscription login and cause errors. Please unset it to ensure your Claude Max/Pro plan is used.",
@@ -93,7 +93,7 @@ describe("anthropicApiKeyWarning", () => {
 
 			checkAnthropicApiKeyConflict()
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("kilo-code")
+			expect(mockGetConfiguration).toHaveBeenCalledWith("ivol-code-agent-5")
 			expect(mockConfig.get).toHaveBeenCalledWith("apiProvider")
 			expect(mockShowWarningMessage).not.toHaveBeenCalled()
 		})

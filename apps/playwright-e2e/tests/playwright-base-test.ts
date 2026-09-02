@@ -69,7 +69,7 @@ export const test = base.extend<TestFixtures>({
 				"--disable-crash-reporter",
 				"--enable-logging",
 				"--log-level=0",
-				"--disable-extensions-except=kilocode.kilo-code",
+				"--disable-extensions-except=ivol.ivol-code-agent-5",
 				"--disable-extension-recommendations",
 				"--disable-extension-update-check",
 				"--disable-default-apps",
@@ -79,7 +79,7 @@ export const test = base.extend<TestFixtures>({
 				`--extensionDevelopmentPath=${path.resolve(__dirname, "..", "..", "..", "src")}`,
 				`--extensions-dir=${path.join(defaultCachePath, "extensions")}`,
 				`--user-data-dir=${userDataDir}`,
-				"--enable-proposed-api=kilocode.kilo-code",
+				"--enable-proposed-api=ivol.ivol-code-agent-5",
 				await createProject(),
 			],
 		})

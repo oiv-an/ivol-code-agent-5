@@ -16,6 +16,7 @@ import com.intellij.diff.editor.DiffEditorTabFilesManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diff.DiffBundle
@@ -37,6 +38,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
@@ -65,6 +67,33 @@ class EditorAndDocManager(val project: Project) : Disposable {
     private var editorHandles = ConcurrentHashMap<String, EditorHolder>()
     private val ideaOpenedEditor = ConcurrentHashMap<String, Editor>()
     private var tabManager: TabStateManager = TabStateManager(project)
+
+    private suspend fun <T> runOnNonModalEdt(block: () -> T): T {
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread) {
+            return block()
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            application.invokeLater(
+                {
+                    if (continuation.isActive) {
+                        continuation.resumeWith(runCatching(block))
+                    }
+                },
+                ModalityState.nonModal(),
+            )
+        }
+    }
+
+    private fun runLaterOnNonModalEdt(block: () -> Unit) {
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread) {
+            block()
+        } else {
+            application.invokeLater(block, ModalityState.nonModal())
+        }
+    }
 
     private var job: Job? = null
     private val editorStateService: EditorStateService = EditorStateService(project)
@@ -282,9 +311,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
         val vfs = LocalFileSystem.getInstance()
         val file = vfs.findFileByPath(path)
         file?.let {
-            ApplicationManager.getApplication().invokeAndWait {
-                ideaEditor = fileEditorManager.openFile(it, true)
-            }
+            ideaEditor = runOnNonModalEdt { fileEditorManager.openFile(it, true) }
         }
         val eh = getEditorHandleByUri(documentUri, false)
         if (eh != null) {
@@ -310,16 +337,16 @@ class EditorAndDocManager(val project: Project) : Disposable {
         if (content1 != null && content2 != null) {
             val request = SimpleDiffRequest(title, content1, content2, left.path, documentUri.path)
             var ideaEditor: Array<out FileEditor?>? = null
-            ApplicationManager.getApplication().invokeAndWait {
+            ideaEditor = runOnNonModalEdt {
                 LocalFileSystem.getInstance().findFileByPath(documentUri.path)
                     ?.let {
-                        ApplicationManager.getApplication().runReadAction { FileEditorManager.getInstance(project).closeFile(it) }
+                        FileEditorManager.getInstance(project).closeFile(it)
                     }
 
                 val diffEditorTabFilesManager = DiffEditorTabFilesManager.getInstance(project)
                 val requestChain: DiffRequestChain = SimpleDiffRequestChain(request)
                 val diffFile = ChainDiffVirtualFile(requestChain, DiffBundle.message("label.default.diff.editor.tab.name", *arrayOfNulls<Any>(0)))
-                ideaEditor = diffEditorTabFilesManager.showDiffFile(diffFile, true)
+                diffEditorTabFilesManager.showDiffFile(diffFile, true)
             }
             ideaEditor?.let {
                 val handle = sync2ExtHost(documentUri, true, true, options)
@@ -448,12 +475,10 @@ class EditorAndDocManager(val project: Project) : Disposable {
                     state.activeEditorId = null
                 }
                 handler?.let { h ->
-                    if (h.ideaEditor != null) {
-                        ApplicationManager.getApplication().invokeAndWait {
+                    runLaterOnNonModalEdt {
+                        if (h.ideaEditor != null) {
                             h.ideaEditor?.dispose()
-                        }
-                    } else {
-                        ApplicationManager.getApplication().invokeAndWait {
+                        } else {
                             // Note: DiffRequestProcessorEditor is deprecated, but we need to handle existing diff editors
                             // The new API uses DiffEditorViewerFileEditors, but for compatibility we still check the old type
                             @Suppress("DEPRECATION")

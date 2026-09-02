@@ -85,7 +85,7 @@ describe("generateErrorDiagnostics", () => {
 		// taskId.slice(0, 8) = "test-tas" from "test-task-id"
 		expect(String(writtenPath)).toContain("kilo-diagnostics-test-tas")
 		expect(String(writtenContent)).toContain(
-			"// Please share this file with Kilo Code Support (support@kilo.ai) to diagnose the issue faster",
+			"// Please attach this file to a GitHub issue at https://github.com/oiv-an/ivol-code-agent-5/issues",
 		)
 		expect(String(writtenContent)).toContain('"error":')
 		expect(String(writtenContent)).toContain('"history":')

@@ -1,20 +1,20 @@
-# Kilo Code File Locations
+# IVOL Code File Locations
 
-Kilo Code stores configuration, data, and cache files in several locations depending on context (VS Code extension vs CLI) and operating system.
+IVOL Code stores configuration, data, and cache files in several locations depending on context (VS Code extension vs CLI) and operating system.
 
 ## VS Code Extension
 
-When running as a VS Code extension, Kilo Code uses VS Code's built-in `globalStorageUri` for data storage. The exact path depends on your OS and VS Code variant:
+When running as a VS Code extension, IVOL Code uses VS Code's built-in `globalStorageUri` for data storage. The exact path depends on your OS and VS Code variant:
 
-| OS      | Base path                                                                   |
-| ------- | --------------------------------------------------------------------------- |
-| Linux   | `~/.config/Code/User/globalStorage/kilocode.kilo-code/`                     |
-| macOS   | `~/Library/Application Support/Code/User/globalStorage/kilocode.kilo-code/` |
-| Windows | `%APPDATA%\Code\User\globalStorage\kilocode.kilo-code\`                     |
+| OS      | Base path                                                                       |
+| ------- | ------------------------------------------------------------------------------- |
+| Linux   | `~/.config/Code/User/globalStorage/ivol.ivol-code-agent-5/`                     |
+| macOS   | `~/Library/Application Support/Code/User/globalStorage/ivol.ivol-code-agent-5/` |
+| Windows | `%APPDATA%\Code\User\globalStorage\ivol.ivol-code-agent-5\`                     |
 
 > **Note:** If you use VS Code Insiders, VSCodium, Cursor, or another variant, replace `Code` with the appropriate directory name (e.g. `Code - Insiders`, `VSCodium`, `Cursor`).
 
-> **Remote contexts:** In remote sessions (Dev Containers, SSH, WSL), VS Code Server uses a different base path such as `~/.vscode-server/data/User/globalStorage/kilocode.kilo-code/`. The extension follows whatever path VS Code provides via `globalStorageUri`, so the paths above only apply to local desktop sessions.
+> **Remote contexts:** In remote sessions (Dev Containers, SSH, WSL), VS Code Server uses a different base path such as `~/.vscode-server/data/User/globalStorage/ivol.ivol-code-agent-5/`. The extension follows whatever path VS Code provides via `globalStorageUri`, so the paths above only apply to local desktop sessions.
 
 Within this directory:
 
@@ -28,7 +28,7 @@ Within this directory:
 | `vector/`                    | Local vector store for code indexing       |
 | `puppeteer/`                 | Downloaded Chromium for browser tool       |
 
-You can override the storage base path via the `kilo-code.customStoragePath` VS Code setting.
+You can override the storage base path via the `ivol-code-agent-5.customStoragePath` VS Code setting.
 
 ## CLI / Agent Runtime
 
@@ -65,7 +65,7 @@ Global rules and workflows can also be placed in your home directory:
 
 ## VS Code User Configuration
 
-Kilo Code reads VS Code's `settings.json` for extension settings. The location follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/) on Linux:
+IVOL Code reads VS Code's `settings.json` for extension settings. The location follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/) on Linux:
 
 | OS      | Path                                                                                      |
 | ------- | ----------------------------------------------------------------------------------------- |

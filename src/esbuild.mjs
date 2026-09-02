@@ -76,7 +76,8 @@ async function main() {
 							["../marketplace-README.md", "README.md"], // kilocode_change: use marketplace README without deprecation notice
 							["../CHANGELOG.md", "CHANGELOG.md"],
 							["../LICENSE", "LICENSE"],
-							["../.env", ".env", { optional: true }],
+							["../NOTICE", "NOTICE"],
+							["../PRIVACY.md", "PRIVACY.md"],
 							["node_modules/vscode-material-icons/generated", "assets/vscode-material-icons"],
 							["../webview-ui/audio", "webview-ui/audio"],
 						],
@@ -204,7 +205,8 @@ async function main() {
 	}
 	// kilocode_change end
 
-	const [extensionCtx, workerCtx, agentRuntimeCtx] = await Promise.all([ // kilocode_change
+	const [extensionCtx, workerCtx, agentRuntimeCtx] = await Promise.all([
+		// kilocode_change
 		esbuild.context(extensionConfig),
 		esbuild.context(workerConfig),
 		esbuild.context(agentRuntimeProcessConfig), // kilocode_change

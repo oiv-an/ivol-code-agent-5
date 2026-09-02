@@ -343,7 +343,7 @@ export class ExtensionHost extends EventEmitter {
 
 			// Forward message directly to the webview provider instead of emitting event
 			// This prevents duplicate handling (event listener + direct call)
-			const webviewProvider = this.webviewProviders.get("kilo-code.SidebarProvider")
+			const webviewProvider = this.webviewProviders.get("ivol-code-agent-5.SidebarProvider")
 
 			if (webviewProvider && typeof webviewProvider.handleCLIMessage === "function") {
 				await webviewProvider.handleCLIMessage(message)
@@ -646,21 +646,25 @@ export class ExtensionHost extends EventEmitter {
 					},
 				) => {
 					this.safeExecute(() => {
-						// Create a unique ID for this message to prevent loops
-						const messageId = `${message.type}_${Date.now()}_${JSON.stringify(message).slice(0, 50)}`
+						// kilocode_change start: incremental messages must never be dropped by the
+						// timestamp-based loop guard; two valid events can arrive in one millisecond.
+						if (message.type !== "messageCreated" && message.type !== "messageUpdated") {
+							const messageId = `${message.type}_${Date.now()}_${JSON.stringify(message).slice(0, 50)}`
 
-						if (processedMessageIds.has(messageId)) {
-							logs.debug(`Skipping duplicate message: ${message.type}`, "ExtensionHost")
-							return
+							if (processedMessageIds.has(messageId)) {
+								logs.debug(`Skipping duplicate message: ${message.type}`, "ExtensionHost")
+								return
+							}
+
+							processedMessageIds.add(messageId)
+
+							// Clean up old message IDs to prevent memory leaks
+							if (processedMessageIds.size > 100) {
+								const oldestIds = Array.from(processedMessageIds).slice(0, 50)
+								oldestIds.forEach((id) => processedMessageIds.delete(id))
+							}
 						}
-
-						processedMessageIds.add(messageId)
-
-						// Clean up old message IDs to prevent memory leaks
-						if (processedMessageIds.size > 100) {
-							const oldestIds = Array.from(processedMessageIds).slice(0, 50)
-							oldestIds.forEach((id) => processedMessageIds.delete(id))
-						}
+						// kilocode_change end
 
 						// Only forward specific message types that are important for CLI
 						switch (message.type) {
@@ -708,21 +712,45 @@ export class ExtensionHost extends EventEmitter {
 								}
 								break
 
+							// kilocode_change start: forward incremental message creation from long-running tasks
+							case "messageCreated": {
+								const chatMessage = message.clineMessage || message.chatMessage
+								if (chatMessage) {
+									this.applyIncrementalChatMessage(chatMessage, message.taskId, true)
+									this.emit("message", {
+										type: "messageCreated",
+										chatMessage,
+										taskId: message.taskId,
+									})
+								}
+								break
+							}
+							// kilocode_change end
+
 							case "messageUpdated": {
 								// Extension is sending an individual message update
 								// The extension uses 'clineMessage' property (legacy name)
 
 								const chatMessage = message.clineMessage || message.chatMessage
 								if (chatMessage) {
+									this.applyIncrementalChatMessage(chatMessage, message.taskId, false) // kilocode_change
 									// Forward the message update to the CLI
 									const emitMessage = {
 										type: "messageUpdated",
 										chatMessage: chatMessage,
+										taskId: message.taskId, // kilocode_change
 									}
 									this.emit("message", emitMessage)
 								}
 								break
 							}
+
+							// kilocode_change start: keep runtime task state synchronized incrementally
+							case "currentTaskStateUpdated":
+								this.applyIncrementalTaskState(message.taskState, message.taskId)
+								this.emit("message", message)
+								break
+							// kilocode_change end
 
 							case "taskHistoryResponse":
 								// Extension is sending task history data
@@ -772,15 +800,90 @@ export class ExtensionHost extends EventEmitter {
 		}
 	}
 
+	// kilocode_change start: apply incremental task messages without cloning full histories
+	private matchesCurrentTask(taskId: unknown): boolean {
+		if (!this.currentState || typeof taskId !== "string") {
+			return this.currentState !== null
+		}
+
+		const activeTaskId =
+			typeof this.currentState.currentTaskId === "string"
+				? this.currentState.currentTaskId
+				: this.currentState.currentTaskItem?.id
+		return !activeTaskId || activeTaskId === taskId
+	}
+
+	private applyIncrementalChatMessage(chatMessage: unknown, taskId: unknown, createIfMissing: boolean): void {
+		if (!this.currentState || !this.matchesCurrentTask(taskId) || !chatMessage || typeof chatMessage !== "object") {
+			return
+		}
+
+		const typedMessage = chatMessage as ExtensionState["chatMessages"][number]
+		let existingIndex = -1
+		for (let index = this.currentState.chatMessages.length - 1; index >= 0; index--) {
+			if (this.currentState.chatMessages[index]?.ts === typedMessage.ts) {
+				existingIndex = index
+				break
+			}
+		}
+		if (existingIndex === -1 && !createIfMissing) {
+			return
+		}
+
+		const chatMessages = [...this.currentState.chatMessages]
+		if (existingIndex === -1) {
+			chatMessages.push(typedMessage)
+		} else {
+			chatMessages[existingIndex] = typedMessage
+		}
+
+		this.currentState = {
+			...this.currentState,
+			chatMessages,
+			...(typeof taskId === "string" && !this.currentState.currentTaskId ? { currentTaskId: taskId } : {}),
+		}
+	}
+
+	private applyIncrementalTaskState(taskState: unknown, taskId: unknown): void {
+		if (!this.currentState || !this.matchesCurrentTask(taskId) || !taskState || typeof taskState !== "object") {
+			return
+		}
+
+		const delta = taskState as {
+			currentTaskTodos?: ExtensionState["currentTaskTodos"]
+			currentTaskCumulativeCost?: number
+			messageQueue?: unknown[]
+		}
+		const nextState: ExtensionState = { ...this.currentState }
+
+		if (Object.prototype.hasOwnProperty.call(delta, "currentTaskTodos")) {
+			nextState.currentTaskTodos = delta.currentTaskTodos
+		}
+		if (Object.prototype.hasOwnProperty.call(delta, "currentTaskCumulativeCost")) {
+			nextState.currentTaskCumulativeCost = delta.currentTaskCumulativeCost
+		}
+		if (Object.prototype.hasOwnProperty.call(delta, "messageQueue")) {
+			nextState.messageQueue = delta.messageQueue
+		}
+		if (typeof taskId === "string" && !nextState.currentTaskId) {
+			nextState.currentTaskId = taskId
+		}
+
+		this.currentState = nextState
+	}
+	// kilocode_change end
+
 	private initializeState(): void {
 		// Use provider settings if passed (from agent-manager), otherwise use empty defaults
 		const apiConfiguration = this.options.providerSettings
 			? (this.options.providerSettings as ExtensionState["apiConfiguration"])
 			: {
-					apiProvider: "kilocode" as const,
-					kilocodeToken: "",
-					kilocodeModel: "",
-					kilocodeOrganizationId: "",
+					// kilocode_change start: inert personal-build default provider
+					apiProvider: "openai" as const,
+					openAiBaseUrl: "",
+					openAiApiKey: "",
+					openAiModelId: "",
+					// kilocode_change end
 				}
 
 		const customModes = this.options.customModes || []

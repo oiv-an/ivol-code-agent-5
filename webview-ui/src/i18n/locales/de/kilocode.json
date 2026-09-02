@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Willkommen bei Kilo Code!",
-		"introText1": "Kilo Code ist ein kostenloser Open-Source-KI-Coding-Agent.",
+		"greeting": "Willkommen bei IVOL Code!",
+		"introText1": "IVOL Code ist ein kostenloser Open-Source-KI-Coding-Agent.",
 		"introText2": "Er funktioniert mit den neuesten KI-Modellen wie Claude Opus 4.5, Gemini 3 Pro, GPT-5.2 und über 450 weiteren.",
 		"introText3": "Erstelle ein kostenloses Konto, um loszulegen.",
 		"ctaButton": "Loslegen",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Guthaben hinzufügen",
-		"lowBalance": "Dein Kilo Code Guthaben ist niedrig",
+		"lowBalance": "Dein IVOL Code Guthaben ist niedrig",
 		"switchToFreeModel": "Wechsle stattdessen zu einem kostenlosen Modell"
 	},
 	"pagination": {
@@ -68,16 +68,16 @@
 			"skills": "Skills"
 		},
 		"provider": {
-			"account": "Kilo Code Konto",
-			"apiKey": "Kilo Code API-Schlüssel",
-			"login": "Bei Kilo Code anmelden",
-			"logout": "Von Kilo Code abmelden",
+			"account": "IVOL Code Konto",
+			"apiKey": "Kilo API-Schlüssel",
+			"login": "Bei IVOL Code anmelden",
+			"logout": "Von IVOL Code abmelden",
 			"loginForPremiumModels": "Melde dich an, um auf Premium-Modelle und -Funktionen zuzugreifen",
 			"providerRouting": {
 				"title": "Anbieter-Routing",
 				"managedByOrganization": "Anbieter-Routing auf Organisationsebene verwalten",
 				"createOrganization": "Organisation erstellen, um Anbieter-Routing zu verwalten",
-				"description": "Kilo Code leitet Anfragen an die besten verfügbaren Anbieter für dein Modell weiter. Standardmäßig werden Anfragen über die Top-Anbieter verteilt, um die Betriebszeit zu maximieren. Du kannst jedoch einen bestimmten Anbieter für dieses Modell auswählen.",
+				"description": "IVOL Code leitet Anfragen an die besten verfügbaren Anbieter für dein Modell weiter. Standardmäßig werden Anfragen über die Top-Anbieter verteilt, um die Betriebszeit zu maximieren. Du kannst jedoch einen bestimmten Anbieter für dieses Modell auswählen.",
 				"sorting": {
 					"default": "Standard-Anbieter-Sortierung",
 					"price": "Anbieter mit niedrigeren Preisen bevorzugen",
@@ -108,15 +108,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Sehr große Dateilesevorgänge erlauben",
-				"description": "Wenn aktiviert, führt Kilo Code sehr große Datei- oder MCP-Ausgabelesevorgänge durch, auch wenn eine hohe Wahrscheinlichkeit besteht, das Kontextfenster zu überschreiten (Inhaltsgröße >80% des Kontextfensters)."
+				"description": "Wenn aktiviert, führt IVOL Code sehr große Datei- oder MCP-Ausgabelesevorgänge durch, auch wenn eine hohe Wahrscheinlichkeit besteht, das Kontextfenster zu überschreiten (Inhaltsgröße >80% des Kontextfensters)."
 			}
 		},
 		"systemNotifications": {
 			"label": "Systembenachrichtigungen aktivieren",
-			"description": "Wenn aktiviert, sendet Kilo Code Systembenachrichtigungen für wichtige Ereignisse wie Aufgabenabschluss oder Fehler.",
+			"description": "Wenn aktiviert, sendet IVOL Code Systembenachrichtigungen für wichtige Ereignisse wie Aufgabenabschluss oder Fehler.",
 			"testButton": "Benachrichtigung testen",
-			"testTitle": "Kilo Code",
-			"testMessage": "Dies ist eine Testbenachrichtigung von Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Dies ist eine Testbenachrichtigung von IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -137,7 +137,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code möchte deine Unterhaltung zusammenfassen",
+			"wantsToCondense": "IVOL Code möchte deine Unterhaltung zusammenfassen",
 			"condenseConversation": "Unterhaltung zusammenfassen"
 		},
 		"seeNewChanges": "Neue Änderungen anzeigen",
@@ -176,14 +176,14 @@
 			"modes": "Modi",
 			"skills": "Skills"
 		},
-		"ariaLabel": "Kilo Code Regeln",
+		"ariaLabel": "IVOL Code Regeln",
 		"tabs": {
 			"rules": "Regeln",
 			"workflows": "Workflows"
 		},
 		"description": {
-			"rules": "Regeln ermöglichen es dir, Kilo Code Anweisungen zu geben, die es in allen Modi und für alle Prompts befolgen soll. Sie sind eine dauerhafte Möglichkeit, Kontext und Präferenzen für alle Unterhaltungen in deinem Arbeitsbereich oder global einzubeziehen.",
-			"workflows": "Workflows sind eine vorbereitete Vorlage für eine Unterhaltung. Workflows ermöglichen es dir, Prompts zu definieren, die du häufig verwendest, und können eine Reihe von Schritten enthalten, um Kilo Code durch sich wiederholende Aufgaben zu führen, wie das Bereitstellen eines Dienstes oder das Einreichen einer PR. Um einen Workflow aufzurufen, tippe",
+			"rules": "Regeln ermöglichen es dir, IVOL Code Anweisungen zu geben, die es in allen Modi und für alle Prompts befolgen soll. Sie sind eine dauerhafte Möglichkeit, Kontext und Präferenzen für alle Unterhaltungen in deinem Arbeitsbereich oder global einzubeziehen.",
+			"workflows": "Workflows sind eine vorbereitete Vorlage für eine Unterhaltung. Workflows ermöglichen es dir, Prompts zu definieren, die du häufig verwendest, und können eine Reihe von Schritten enthalten, um IVOL Code durch sich wiederholende Aufgaben zu führen, wie das Bereitstellen eines Dienstes oder das Einreichen einer PR. Um einen Workflow aufzurufen, tippe",
 			"workflowsInChat": "im Chat."
 		},
 		"sections": {
@@ -292,7 +292,7 @@
 			},
 			"noCredits": {
 				"title": "Kein Guthaben auf deinem Konto",
-				"description": "Dein Kilo Code Konto hat kein Guthaben. Um Autocomplete zu nutzen, füge bitte Guthaben zu deinem Konto hinzu.",
+				"description": "Dein IVOL Code Konto hat kein Guthaben. Um Autocomplete zu nutzen, füge bitte Guthaben zu deinem Konto hinzu.",
 				"buyCredits": "Guthaben kaufen →"
 			},
 			"configureAutocompleteProfile": "Verwende ein beliebiges Modell, indem du zu Profilen gehst und ein Profil vom Profiltyp Autocomplete konfigurierst."
@@ -350,7 +350,7 @@
 		"shareModesNewBanner": "Neu: Modi teilen durch Erstellen einer Organisation"
 	},
 	"deviceAuth": {
-		"title": "Bei Kilo Code anmelden",
+		"title": "Bei IVOL Code anmelden",
 		"step1": "Öffne die folgende URL in deinem Browser",
 		"step2": "Überprüfe den Code und autorisiere dieses Gerät in deinem Browser",
 		"scanQr": "Oder scanne diesen QR-Code mit deinem Handy",

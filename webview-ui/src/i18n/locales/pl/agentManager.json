@@ -81,7 +81,7 @@
 		"apiRequest": "Żądanie API",
 		"taskCompleted": "Zadanie ukończone",
 		"error": "Błąd",
-		"question": "Kilo Code ma pytanie",
+		"question": "IVOL Code ma pytanie",
 		"command": "Kilo chce wykonać polecenie",
 		"tool": "Kilo chce użyć narzędzia",
 		"usingTool": "Używanie narzędzia: **{{tool}}** {{details}}",

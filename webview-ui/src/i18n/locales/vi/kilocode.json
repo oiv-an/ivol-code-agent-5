@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Chào mừng bạn đến với Kilo Code!",
-		"introText1": "Kilo Code là một agent lập trình AI miễn phí và mã nguồn mở.",
+		"greeting": "Chào mừng bạn đến với IVOL Code!",
+		"introText1": "IVOL Code là một agent lập trình AI miễn phí và mã nguồn mở.",
 		"introText2": "Hoạt động với các mô hình AI mới nhất như Claude Opus 4.5, Gemini 3 Pro, GPT-5.2, và hơn 450 mô hình khác.",
 		"introText3": "Tạo tài khoản miễn phí để bắt đầu.",
 		"ctaButton": "Bắt đầu",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Thêm tín dụng",
-		"lowBalance": "Số dư Kilo Code của bạn thấp",
+		"lowBalance": "Số dư IVOL Code của bạn thấp",
 		"switchToFreeModel": "Chuyển sang mô hình miễn phí"
 	},
 	"pagination": {
@@ -70,7 +70,7 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Cho phép đọc tệp rất lớn",
-				"description": "Khi bật, Kilo Code sẽ thực hiện đọc tệp hoặc đầu ra MCP rất lớn ngay cả khi có khả năng cao làm tràn cửa sổ ngữ cảnh (kích thước nội dung >80% cửa sổ ngữ cảnh)."
+				"description": "Khi bật, IVOL Code sẽ thực hiện đọc tệp hoặc đầu ra MCP rất lớn ngay cả khi có khả năng cao làm tràn cửa sổ ngữ cảnh (kích thước nội dung >80% cửa sổ ngữ cảnh)."
 			}
 		},
 		"codeIndex": {
@@ -80,16 +80,16 @@
 			"scannerMaxBatchRetriesDescription": "Số lần tối đa thử lại một lô thất bại trong quá trình quét thư mục. Giá trị cao hơn tăng khả năng phục hồi trước các lỗi tạm thời nhưng có thể làm chậm lập chỉ mục nếu lỗi vẫn tồn tại. Giá trị thấp hơn thất bại nhanh hơn nhưng có thể bỏ qua nội dung khi gặp vấn đề tạm thời."
 		},
 		"provider": {
-			"account": "Tài khoản Kilo Code",
-			"apiKey": "Khóa API Kilo Code",
-			"login": "Đăng nhập vào Kilo Code",
-			"logout": "Đăng xuất khỏi Kilo Code",
+			"account": "Tài khoản IVOL Code",
+			"apiKey": "Khóa API Kilo",
+			"login": "Đăng nhập vào IVOL Code",
+			"logout": "Đăng xuất khỏi IVOL Code",
 			"loginForPremiumModels": "Đăng nhập để truy cập các mô hình và tính năng premium",
 			"providerRouting": {
 				"title": "Định tuyến nhà cung cấp",
 				"managedByOrganization": "Quản lý Định tuyến nhà cung cấp cấp tổ chức",
 				"createOrganization": "Tạo tổ chức để quản lý Định tuyến nhà cung cấp",
-				"description": "Kilo Code định tuyến các yêu cầu đến các nhà cung cấp tốt nhất có sẵn cho mô hình của bạn. Theo mặc định, các yêu cầu được cân bằng tải trên các nhà cung cấp hàng đầu để tối đa hóa thời gian hoạt động. Tuy nhiên, bạn có thể chọn một nhà cung cấp cụ thể để sử dụng cho mô hình này.",
+				"description": "IVOL Code định tuyến các yêu cầu đến các nhà cung cấp tốt nhất có sẵn cho mô hình của bạn. Theo mặc định, các yêu cầu được cân bằng tải trên các nhà cung cấp hàng đầu để tối đa hóa thời gian hoạt động. Tuy nhiên, bạn có thể chọn một nhà cung cấp cụ thể để sử dụng cho mô hình này.",
 				"sorting": {
 					"default": "Sắp xếp nhà cung cấp mặc định",
 					"price": "Ưu tiên nhà cung cấp có giá thấp hơn",
@@ -119,10 +119,10 @@
 		},
 		"systemNotifications": {
 			"label": "Bật thông báo hệ thống",
-			"description": "Khi bật, Kilo Code sẽ gửi thông báo hệ thống cho các sự kiện quan trọng như hoàn thành nhiệm vụ hoặc lỗi.",
+			"description": "Khi bật, IVOL Code sẽ gửi thông báo hệ thống cho các sự kiện quan trọng như hoàn thành nhiệm vụ hoặc lỗi.",
 			"testButton": "Kiểm tra thông báo",
-			"testTitle": "Kilo Code",
-			"testMessage": "Đây là thông báo kiểm tra từ Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Đây là thông báo kiểm tra từ IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -137,7 +137,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code muốn tóm tắt cuộc trò chuyện của bạn",
+			"wantsToCondense": "IVOL Code muốn tóm tắt cuộc trò chuyện của bạn",
 			"condenseConversation": "Tóm tắt cuộc trò chuyện"
 		},
 		"seeNewChanges": "Hiển thị thay đổi mới",
@@ -176,14 +176,14 @@
 			"modes": "Chế độ",
 			"skills": "Kỹ năng"
 		},
-		"ariaLabel": "Quy tắc Kilo Code",
+		"ariaLabel": "Quy tắc IVOL Code",
 		"tabs": {
 			"rules": "Quy tắc",
 			"workflows": "Quy trình làm việc"
 		},
 		"description": {
-			"rules": "Quy tắc cho phép bạn cung cấp hướng dẫn cho Kilo Code mà nó phải tuân theo trong tất cả các chế độ và cho tất cả các prompt. Chúng là một cách bền vững để bao gồm ngữ cảnh và tùy chọn cho tất cả các cuộc trò chuyện trong workspace của bạn hoặc toàn cầu.",
-			"workflows": "Quy trình làm việc là một mẫu được chuẩn bị cho một cuộc trò chuyện. Quy trình làm việc cho phép bạn xác định các prompt mà bạn sử dụng thường xuyên, và có thể bao gồm một loạt các bước để hướng dẫn Kilo Code thông qua các tác vụ lặp đi lặp lại, chẳng hạn như triển khai dịch vụ hoặc gửi PR. Để gọi quy trình làm việc, hãy nhập",
+			"rules": "Quy tắc cho phép bạn cung cấp hướng dẫn cho IVOL Code mà nó phải tuân theo trong tất cả các chế độ và cho tất cả các prompt. Chúng là một cách bền vững để bao gồm ngữ cảnh và tùy chọn cho tất cả các cuộc trò chuyện trong workspace của bạn hoặc toàn cầu.",
+			"workflows": "Quy trình làm việc là một mẫu được chuẩn bị cho một cuộc trò chuyện. Quy trình làm việc cho phép bạn xác định các prompt mà bạn sử dụng thường xuyên, và có thể bao gồm một loạt các bước để hướng dẫn IVOL Code thông qua các tác vụ lặp đi lặp lại, chẳng hạn như triển khai dịch vụ hoặc gửi PR. Để gọi quy trình làm việc, hãy nhập",
 			"workflowsInChat": "trong chat."
 		},
 		"sections": {
@@ -255,11 +255,11 @@
 			"keybindingDescription": "Các tính năng Autocomplete có thể được kích hoạt bằng lệnh. Bạn có thể cấu hình <DocsLink>Phím Tắt ở đây</DocsLink>.",
 			"enableAutoTrigger": {
 				"label": "Bật Autocomplete",
-				"description": "Khi được bật, Kilo Code sẽ tự động kích hoạt Autocomplete khi bạn ngừng gõ. Điều này có thể hữu ích cho các sửa chữa nhanh và gợi ý."
+				"description": "Khi được bật, IVOL Code sẽ tự động kích hoạt Autocomplete khi bạn ngừng gõ. Điều này có thể hữu ích cho các sửa chữa nhanh và gợi ý."
 			},
 			"autoTriggerDelay": {
 				"label": "Độ Trễ Kích Hoạt Tự Động",
-				"description": "Độ trễ tính bằng giây trước khi Kilo Code kích hoạt Autocomplete sau khi bạn ngừng gõ. Độ trễ ngắn hơn có nghĩa là gợi ý nhanh hơn, nhưng có thể tốn nhiều tài nguyên hơn."
+				"description": "Độ trễ tính bằng giây trước khi IVOL Code kích hoạt Autocomplete sau khi bạn ngừng gõ. Độ trễ ngắn hơn có nghĩa là gợi ý nhanh hơn, nhưng có thể tốn nhiều tài nguyên hơn."
 			},
 			"enableSmartInlineTaskKeybinding": {
 				"label": "Tự động hoàn thành thủ công ({{keybinding}})",
@@ -271,7 +271,7 @@
 			"provider": "Nhà cung cấp",
 			"enableChatAutocomplete": {
 				"label": "Gợi ý Tự động Hoàn thành Trong Trò chuyện",
-				"description": "Khi được bật, Kilo Code sẽ đề xuất các gợi ý hoàn thành khi bạn nhập trong ô chat. Nhấn Tab để chấp nhận các gợi ý."
+				"description": "Khi được bật, IVOL Code sẽ đề xuất các gợi ý hoàn thành khi bạn nhập trong ô chat. Nhấn Tab để chấp nhận các gợi ý."
 			},
 			"snooze": {
 				"label": "Tạm dừng Autocomplete",
@@ -294,7 +294,7 @@
 			},
 			"noCredits": {
 				"title": "Tài khoản của bạn không có tín dụng",
-				"description": "Tài khoản Kilo Code của bạn không có tín dụng. Để sử dụng tự động hoàn thành, vui lòng nạp tín dụng vào tài khoản.",
+				"description": "Tài khoản IVOL Code của bạn không có tín dụng. Để sử dụng tự động hoàn thành, vui lòng nạp tín dụng vào tài khoản.",
 				"buyCredits": "Mua tín dụng →"
 			}
 		}
@@ -351,7 +351,7 @@
 		"shareModesNewBanner": "Mới: Chia sẻ chế độ bằng cách tạo một tổ chức"
 	},
 	"deviceAuth": {
-		"title": "Đăng nhập vào Kilo Code",
+		"title": "Đăng nhập vào IVOL Code",
 		"step1": "Mở URL sau trên trình duyệt của bạn",
 		"step2": "Xác minh mã và ủy quyền thiết bị này trên trình duyệt của bạn",
 		"scanQr": "Hoặc quét mã QR này bằng điện thoại của bạn",

@@ -9,9 +9,13 @@ import io.ktor.http.decodeURLPart
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.callback.CefCallback
+import org.cef.callback.CefResourceReadCallback
+import org.cef.callback.CefResourceSkipCallback
 import org.cef.handler.CefResourceHandler
 import org.cef.handler.CefResourceRequestHandlerAdapter
+import org.cef.misc.BoolRef
 import org.cef.misc.IntRef
+import org.cef.misc.LongRef
 import org.cef.misc.StringRef
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
@@ -95,6 +99,11 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
         return true
     }
 
+    override fun open(p0: CefRequest?, handleRequest: BoolRef?, callback: CefCallback?): Boolean {
+        handleRequest?.set(true)
+        return true
+    }
+
     /**
      * Get MIME type according to file path
      */
@@ -134,6 +143,14 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
     }
 
     override fun readResponse(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?, callback: CefCallback?): Boolean {
+        return readContent(dataOut, bytesToRead, bytesRead)
+    }
+
+    override fun read(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?, callback: CefResourceReadCallback?): Boolean {
+        return readContent(dataOut, bytesToRead, bytesRead)
+    }
+
+    private fun readContent(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?): Boolean {
         if (fileContent == null || dataOut == null || bytesRead == null) {
             return false
         }
@@ -149,6 +166,25 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
         bytesRead.set(readSize)
 
         return offset <= fileContent!!.size
+    }
+
+    override fun skip(bytesToSkip: Long, bytesSkipped: LongRef?, callback: CefResourceSkipCallback?): Boolean {
+        val content = fileContent
+        if (content == null || bytesSkipped == null || bytesToSkip < 0) {
+            bytesSkipped?.set(-2)
+            return false
+        }
+
+        val remaining = content.size - offset
+        if (remaining <= 0 && bytesToSkip > 0) {
+            bytesSkipped.set(-2)
+            return false
+        }
+
+        val skipped = minOf(bytesToSkip, remaining.toLong())
+        offset += skipped.toInt()
+        bytesSkipped.set(skipped)
+        return true
     }
 
     override fun cancel() {

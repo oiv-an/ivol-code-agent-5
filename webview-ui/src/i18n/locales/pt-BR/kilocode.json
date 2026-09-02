@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Bem-vindo ao Kilo Code!",
-		"introText1": "Kilo Code é um agente de codificação AI gratuito e de código aberto.",
+		"greeting": "Bem-vindo ao IVOL Code!",
+		"introText1": "IVOL Code é um agente de codificação AI gratuito e de código aberto.",
 		"introText2": "Funciona com os mais recentes modelos de IA como Claude Opus 4.5, Gemini 3 Pro, GPT-5.2, e mais de 450 outros.",
 		"introText3": "Crie uma conta gratuita para começar.",
 		"ctaButton": "Começar",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Adicionar crédito",
-		"lowBalance": "Seu saldo do Kilo Code está baixo",
+		"lowBalance": "Seu saldo do IVOL Code está baixo",
 		"switchToFreeModel": "Mudar para um modelo gratuito"
 	},
 	"pagination": {
@@ -68,16 +68,16 @@
 			"skills": "Habilidades"
 		},
 		"provider": {
-			"account": "Conta Kilo Code",
-			"apiKey": "Chave de API do Kilo Code",
-			"login": "Entrar no Kilo Code",
-			"logout": "Sair do Kilo Code",
+			"account": "Conta IVOL Code",
+			"apiKey": "Chave de API do Kilo",
+			"login": "Entrar no IVOL Code",
+			"logout": "Sair do IVOL Code",
 			"loginForPremiumModels": "Faça login para acessar modelos e recursos premium",
 			"providerRouting": {
 				"title": "Roteamento de Provedor",
 				"managedByOrganization": "Gerenciar roteamento de provedor em nível de organização",
 				"createOrganization": "Criar organização para gerenciar roteamento de provedor",
-				"description": "O Kilo Code roteia as solicitações para os melhores provedores disponíveis para o seu modelo. Por padrão, as solicitações são balanceadas em carga entre os principais provedores para maximizar o tempo de atividade. No entanto, você pode escolher um provedor específico para usar para este modelo.",
+				"description": "O IVOL Code roteia as solicitações para os melhores provedores disponíveis para o seu modelo. Por padrão, as solicitações são balanceadas em carga entre os principais provedores para maximizar o tempo de atividade. No entanto, você pode escolher um provedor específico para usar para este modelo.",
 				"sorting": {
 					"default": "Ordenação padrão do provedor",
 					"price": "Preferir provedores com menor preço",
@@ -108,15 +108,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Permitir leituras de arquivos muito grandes",
-				"description": "Quando ativado, o Kilo Code realizará leituras de arquivos ou saídas MCP muito grandes mesmo que haja uma alta probabilidade de exceder a janela de contexto (tamanho do conteúdo >80% da janela de contexto)."
+				"description": "Quando ativado, o IVOL Code realizará leituras de arquivos ou saídas MCP muito grandes mesmo que haja uma alta probabilidade de exceder a janela de contexto (tamanho do conteúdo >80% da janela de contexto)."
 			}
 		},
 		"systemNotifications": {
 			"label": "Ativar notificações do sistema",
-			"description": "Quando ativado, o Kilo Code enviará notificações do sistema para eventos importantes como conclusão de tarefas ou erros.",
+			"description": "Quando ativado, o IVOL Code enviará notificações do sistema para eventos importantes como conclusão de tarefas ou erros.",
 			"testButton": "Testar notificação",
-			"testTitle": "Kilo Code",
-			"testMessage": "Esta é uma notificação de teste do Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Esta é uma notificação de teste do IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -137,7 +137,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code quer condensar sua conversa",
+			"wantsToCondense": "IVOL Code quer condensar sua conversa",
 			"condenseConversation": "Condensar Conversa"
 		},
 		"seeNewChanges": "Ver Novas Alterações",
@@ -176,14 +176,14 @@
 			"modes": "Modos",
 			"skills": "Habilidades"
 		},
-		"ariaLabel": "Regras do Kilo Code",
+		"ariaLabel": "Regras do IVOL Code",
 		"tabs": {
 			"rules": "Regras",
 			"workflows": "Fluxos de Trabalho"
 		},
 		"description": {
-			"rules": "As regras permitem fornecer ao Kilo Code instruções que ele deve seguir em todos os modos e para todos os prompts. Elas são uma forma persistente de incluir contexto e preferências para todas as conversas em seu workspace ou globalmente.",
-			"workflows": "Os fluxos de trabalho são um modelo preparado para uma conversa. Os fluxos de trabalho permitem definir prompts que você usa frequentemente, e podem incluir uma série de passos para guiar o Kilo Code através de tarefas repetitivas, como implantar um serviço ou enviar um PR. Para invocar um fluxo de trabalho, digite",
+			"rules": "As regras permitem fornecer ao IVOL Code instruções que ele deve seguir em todos os modos e para todos os prompts. Elas são uma forma persistente de incluir contexto e preferências para todas as conversas em seu workspace ou globalmente.",
+			"workflows": "Os fluxos de trabalho são um modelo preparado para uma conversa. Os fluxos de trabalho permitem definir prompts que você usa frequentemente, e podem incluir uma série de passos para guiar o IVOL Code através de tarefas repetitivas, como implantar um serviço ou enviar um PR. Para invocar um fluxo de trabalho, digite",
 			"workflowsInChat": "no chat."
 		},
 		"sections": {
@@ -292,7 +292,7 @@
 			},
 			"noCredits": {
 				"title": "Sem créditos na sua conta",
-				"description": "Sua conta Kilo Code não tem créditos. Para usar o autocomplete, adicione créditos à sua conta.",
+				"description": "Sua conta IVOL Code não tem créditos. Para usar o autocomplete, adicione créditos à sua conta.",
 				"buyCredits": "Comprar créditos →"
 			},
 			"configureAutocompleteProfile": "Use qualquer modelo indo para perfis e configurando um Perfil do Tipo de Perfil Autocompletar."
@@ -350,7 +350,7 @@
 		"shareModesNewBanner": "Novo: Compartilhe modos criando uma organização"
 	},
 	"deviceAuth": {
-		"title": "Entrar no Kilo Code",
+		"title": "Entrar no IVOL Code",
 		"step1": "Abra a seguinte URL no seu navegador",
 		"step2": "Verifique o código e autorize este dispositivo no seu navegador",
 		"scanQr": "Ou escaneie este código QR com seu telefone",

@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "เอเจนต์เขียนโค้ด AI แบบ Open Source ที่สร้างโค้ดจากภาษาธรรมชาติ ทำงานอัตโนมัติ และรันคำสั่งเทอร์มินัล มีฟีเจอร์เติมคำอัตโนมัติแบบ inline การทำงานอัตโนมัติของเบราว์เซอร์ การ refactor อัตโนมัติ และโหมดที่กำหนดเองสำหรับการวางแผน เขียนโค้ด และดีบัก รองรับโมเดล AI มากกว่า 500 รุ่น รวมถึง Claude (Anthropic), Gemini, Grok, GPT, Codex และ GLM"
 	},
 	"number_format": {
@@ -105,7 +105,7 @@
 			"processExitedWithError": "กระบวนการ Claude Code ออกด้วยรหัส {{exitCode}} ผลลัพธ์ข้อผิดพลาด: {{output}}",
 			"stoppedWithReason": "Claude Code หยุดด้วยเหตุผล: {{reason}}",
 			"apiKeyModelPlanMismatch": "คีย์ API และแผนการสมัครสมาชิกอนุญาตให้ใช้โมเดลที่แตกต่างกัน ตรวจสอบให้แน่ใจว่าโมเดลที่เลือกรวมอยู่ในแผนของคุณ",
-			"notFound": "ไม่พบไฟล์ปฏิบัติการ Claude Code '{{claudePath}}'\n\nกรุณาติดตั้ง Claude Code CLI:\n1. เยี่ยมชม {{installationUrl}} เพื่อดาวน์โหลด Claude Code\n2. ทำตามคำแนะนำการติดตั้งสำหรับระบบปฏิบัติการของคุณ\n3. ตรวจสอบให้แน่ใจว่าคำสั่ง 'claude' พร้อมใช้งานใน PATH\n4. หรือกำหนดค่าเส้นทางแบบกำหนดเองในการตั้งค่า Kilo Code ภายใต้ 'เส้นทาง Claude Code'\n\nข้อผิดพลาดเดิม: {{originalError}}"
+			"notFound": "ไม่พบไฟล์ปฏิบัติการ Claude Code '{{claudePath}}'\n\nกรุณาติดตั้ง Claude Code CLI:\n1. เยี่ยมชม {{installationUrl}} เพื่อดาวน์โหลด Claude Code\n2. ทำตามคำแนะนำการติดตั้งสำหรับระบบปฏิบัติการของคุณ\n3. ตรวจสอบให้แน่ใจว่าคำสั่ง 'claude' พร้อมใช้งานใน PATH\n4. หรือกำหนดค่าเส้นทางแบบกำหนดเองในการตั้งค่า IVOL Code Agent 5 ภายใต้ 'เส้นทาง Claude Code'\n\nข้อผิดพลาดเดิม: {{originalError}}"
 		},
 		"gemini": {
 			"generate_stream": "ข้อผิดพลาดในการสร้างสตรีมบริบท Gemini: {{error}}",
@@ -171,7 +171,7 @@
 	"warnings": {
 		"no_terminal_content": "ไม่มีเนื้อหาเทอร์มินัลที่เลือก",
 		"missing_task_files": "ไฟล์ของงานนี้หายไป คุณต้องการลบออกจากรายการงานหรือไม่?",
-		"auto_import_failed": "ล้มเหลวในการนำเข้าการตั้งค่า Kilo Code อัตโนมัติ: {{error}}"
+		"auto_import_failed": "ล้มเหลวในการนำเข้าการตั้งค่า IVOL Code Agent 5 อัตโนมัติ: {{error}}"
 	},
 	"info": {
 		"no_changes": "ไม่พบการเปลี่ยนแปลง",
@@ -180,7 +180,7 @@
 		"custom_storage_path_set": "ตั้งค่าเส้นทางจัดเก็บที่กำหนดเอง: {{path}}",
 		"default_storage_path": "กลับไปใช้เส้นทางจัดเก็บเริ่มต้น",
 		"settings_imported": "นำเข้าการตั้งค่าเรียบร้อยแล้ว",
-		"auto_import_success": "นำเข้าการตั้งค่า Kilo Code อัตโนมัติจาก {{filename}} เรียบร้อยแล้ว",
+		"auto_import_success": "นำเข้าการตั้งค่า IVOL Code Agent 5 อัตโนมัติจาก {{filename}} เรียบร้อยแล้ว",
 		"share_link_copied": "คัดลอกลิงก์แชร์ไปยังคลิปบอร์ด",
 		"organization_share_link_copied": "คัดลอกลิงก์แชร์องค์กรไปยังคลิปบอร์ด!",
 		"public_share_link_copied": "คัดลอกลิงก์แชร์สาธารณะไปยังคลิปบอร์ด!",
@@ -210,12 +210,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "ป้อนเส้นทางจัดเก็บประวัติการสนทนาที่กำหนดเอง เว้นว่างไว้เพื่อใช้ตำแหน่งเริ่มต้น",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "กรุณาป้อนเส้นทางแบบสัมบูรณ์ (เช่น D:\\KiloCodeStorage หรือ /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "กรุณาป้อนเส้นทางแบบสัมบูรณ์ (เช่น D:\\IVOLCodeStorage หรือ /home/user/storage)",
 		"enter_valid_path": "กรุณาป้อนเส้นทางที่ถูกต้อง"
 	},
 	"input": {
-		"task_prompt": "Kilo Code ควรทำอะไร?",
+		"task_prompt": "IVOL Code Agent 5 ควรทำอะไร?",
 		"task_placeholder": "สร้าง ค้นหา ถามอะไรก็ได้"
 	},
 	"customModes": {
@@ -242,8 +242,8 @@
 	},
 	"mdm": {
 		"errors": {
-			"cloud_auth_required": "องค์กรของคุณต้องการการยืนยันตัวตน Kilo Code Cloud กรุณาลงชื่อเข้าใช้เพื่อดำเนินการต่อ",
-			"organization_mismatch": "คุณต้องยืนยันตัวตนด้วยบัญชี Kilo Code Cloud ขององค์กรของคุณ",
+			"cloud_auth_required": "องค์กรของคุณต้องการการยืนยันตัวตน Kilo Cloud กรุณาลงชื่อเข้าใช้เพื่อดำเนินการต่อ",
+			"organization_mismatch": "คุณต้องยืนยันตัวตนด้วยบัญชี Kilo Cloud ขององค์กรของคุณ",
 			"verification_failed": "ไม่สามารถตรวจสอบการยืนยันตัวตนขององค์กร"
 		},
 		"info": {
@@ -270,7 +270,7 @@
 	},
 	"docsLink": {
 		"label": "เอกสาร",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "ข้อผิดพลาด",

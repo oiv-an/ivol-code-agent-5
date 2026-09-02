@@ -1,8 +1,8 @@
-# Kilo Code Development Guide
+# IVOL Code Development Guide
 
-> **Note**: New versions of the VS Code extension and CLI are being developed in [Kilo-Org/Kilo](https://github.com/Kilo-Org/Kilo) (extension at `packages/kilo-vscode`, CLI at `packages/opencode`). If you're looking to develop or contribute to the extension or CLI, please refer to the development guide in that repository instead.
+> **Note**: This repository intentionally follows the stable v5 codebase. The original upstream project is available at [Kilo-Org/kilocode-legacy](https://github.com/Kilo-Org/kilocode-legacy).
 
-Welcome to the Kilo Code development guide! This document will help you set up your development environment and understand how to work with the codebase. Whether you're fixing bugs, adding features, or just exploring the code, this guide will get you started.
+Welcome to the IVOL Code development guide! This document will help you set up your development environment and understand how to work with the codebase. Whether you're fixing bugs, adding features, or just exploring the code, this guide will get you started.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Before you begin, choose one of the following development environment options:
 
 1. **Git** - For version control
 2. **Git LFS** - For large file storage (https://git-lfs.com/) - Required for handling GIF, MP4, and other binary assets
-3. **Node.js** (version [v20.20.0](https://github.com/Kilo-Org/kilocode/blob/main/.nvmrc) recommended)
+3. **Node.js** (version `20.20.0` recommended)
 4. **pnpm** - Package manager (https://pnpm.io/)
 5. **Visual Studio Code** - Our recommended IDE for development
 
@@ -43,12 +43,12 @@ Before you begin, choose one of the following development environment options:
 1. **Fork and Clone the Repository**:
 
     - **Fork the Repository**:
-        - Visit the [Kilo Code GitHub repository](https://github.com/Kilo-Org/kilocode)
+        - Visit the [IVOL Code Agent 5 GitHub repository](https://github.com/oiv-an/ivol-code-agent-5)
         - Click the "Fork" button in the top-right corner to create your own copy.
     - **Clone Your Fork**:
         ```bash
-        git clone https://github.com/[YOUR-USERNAME]/kilocode.git
-        cd kilocode
+        git clone https://github.com/[YOUR-USERNAME]/ivol-code-agent-5.git
+        cd ivol-code-agent-5
         ```
         Replace `[YOUR-USERNAME]` with your actual GitHub username.
 
@@ -77,7 +77,7 @@ While not strictly necessary for running the extension, these extensions are rec
 - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) - Integrates ESLint into VS Code.
 - [Prettier - Code formatter](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) - Integrates Prettier into VS Code.
 
-The full list of recommended extensions is [here](https://github.com/Kilo-Org/kilocode/blob/main/.vscode/extensions.json)
+The full list of recommended extensions is in [`.vscode/extensions.json`](.vscode/extensions.json).
 
 #### Devcontainer Setup (Recommended for Windows)
 
@@ -149,7 +149,7 @@ The project is organized into several key directories:
 - **`scripts/`** - Utility scripts
 - **`assets/`** - Static assets like images and icons
 
-For details on where Kilo Code stores configuration, data, and cache files at runtime, see [File Locations](docs/file-locations.md).
+For details on where IVOL Code stores configuration, data, and cache files at runtime, see [File Locations](docs/file-locations.md).
 
 ## Development Workflow
 
@@ -158,7 +158,7 @@ For details on where Kilo Code stores configuration, data, and cache files at ru
 To run the extension in development mode:
 
 1. Press `F5` (or select **Run** → **Start Debugging**) in VSCode
-2. This will open a new VSCode window with Kilo Code loaded
+2. This will open a new VSCode window with IVOL Code loaded
 
 ### Hot Reloading
 
@@ -195,14 +195,14 @@ This will:
 To install your built extension:
 
 ```bash
-code --install-extension "$(ls -1v bin/kilo-code-*.vsix | tail -n1)"
+code --install-extension "$(ls -1v bin/ivol-code-agent-5-*.vsix | tail -n1)"
 ```
 
 Replace `[version]` with the current version number.
 
 ## Testing
 
-Kilo Code uses several types of tests to ensure quality:
+IVOL Code uses several types of tests to ensure quality:
 
 ### Unit Tests
 
@@ -236,7 +236,7 @@ This project uses [Husky](https://typicode.github.io/husky/) to manage Git hooks
 Before a commit is finalized, the `.husky/pre-commit` hook runs:
 
 1.  **Branch Check**: Prevents committing directly to the `main` branch.
-2.  **Type Generation**: Runs `pnpm --filter kilo-code generate-types`.
+2.  **Type Generation**: Runs `pnpm --filter ivol-code-agent-5 generate-types`.
 3.  **Type File Check**: Ensures that any changes made to `src/exports/roo-code.d.ts` by the type generation are staged.
 4.  **Linting**: Runs `lint-staged` to lint and format staged files.
 
@@ -262,12 +262,12 @@ These hooks help maintain code quality and consistency. If you encounter issues 
 ### Debugging Tips
 
 - Use `console.log()` statements in your code for debugging
-- Check the Output panel in VSCode (View > Output) and select "Kilo Code" from the dropdown
+- Check the Output panel in VSCode (View > Output) and select "IVOL Code" from the dropdown
 - For webview issues, use the browser developer tools in the webview (right-click > "Inspect Element")
 
 ### Testing with Local Backend
 
-To test the extension against a local Kilo Code backend:
+To test the extension against a local IVOL Code backend:
 
 1. **Set up your local backend** at `http://localhost:3000`
 2. **Use the "Run Extension [Local Backend]" launch configuration**:
@@ -279,17 +279,12 @@ This automatically sets the `KILOCODE_BACKEND_BASE_URL` environment variable, ma
 
 ## Contributing
 
-We welcome contributions to Kilo Code! Here's how you can help:
+We welcome contributions to IVOL Code! Here's how you can help:
 
-1. **Report an issue** using [GitHub Issues](https://github.com/Kilo-Org/kilocode/issues)
+1. **Report an issue** using [GitHub Issues](https://github.com/oiv-an/ivol-code-agent-5/issues)
 2. **Find an issue** and submit a Pull Request with your fix
 3. **Write tests** to improve Code Coverage
-4. **Improve Documentation** at [kilo.ai/docs](https://kilo.ai/docs)
-5. **Suggest a new feature** using [GitHub Discussions](https://github.com/Kilo-Org/kilocode/discussions/categories/ideas)!
-6. Want to **implement something new**? Awesome! We'd be glad to support you on [Discord](https://kilo.ai/discord)!
+4. **Improve the documentation** in this repository
+5. **Suggest a focused improvement** in the [issue tracker](https://github.com/oiv-an/ivol-code-agent-5/issues)
 
-## Community
-
-Your contributions are welcome! For questions or ideas, please join our Discord server: https://kilo.ai/discord
-
-We look forward to your contributions and feedback!
+Questions and feedback for this fork belong in its [GitHub issue tracker](https://github.com/oiv-an/ivol-code-agent-5/issues).

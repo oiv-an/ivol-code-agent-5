@@ -5,7 +5,7 @@ import { VSCodeTextField, VSCodeRadioGroup, VSCodeRadio } from "@vscode/webview-
 import type { ProviderSettings, ExtensionMessage, ModelRecord } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { useRouterModels } from "@src/components/ui/hooks/useRouterModels"
+// kilocode_change: local catalogs use dedicated extension events instead of the aggregate router hook
 import { vscode } from "@src/utils/vscode"
 
 import { inputEventTransform } from "../transforms"
@@ -19,9 +19,7 @@ export const Ollama = ({ apiConfiguration, setApiConfigurationField }: OllamaPro
 	const { t } = useAppTranslation()
 
 	const [ollamaModels, setOllamaModels] = useState<ModelRecord>({})
-	const routerModels = useRouterModels({
-		ollamaBaseUrl: apiConfiguration?.ollamaBaseUrl, // kilocode_change
-	})
+	// kilocode_change: no duplicate aggregate-router query for Ollama
 
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
@@ -56,25 +54,15 @@ export const Ollama = ({ apiConfiguration, setApiConfigurationField }: OllamaPro
 	}, [])
 
 	// Check if the selected model exists in the fetched models
+	// kilocode_change start: validate only after the local catalog has loaded
 	const modelNotAvailable = useMemo(() => {
 		const selectedModel = apiConfiguration?.ollamaModelId
 		if (!selectedModel) return false
 
-		// Check if model exists in local ollama models
-		if (Object.keys(ollamaModels).length > 0 && selectedModel in ollamaModels) {
-			return false // Model is available locally
-		}
-
-		// If we have router models data for Ollama
-		if (routerModels.data?.ollama) {
-			const availableModels = Object.keys(routerModels.data.ollama)
-			// Show warning if model is not in the list (regardless of how many models there are)
-			return !availableModels.includes(selectedModel)
-		}
-
-		// If neither source has loaded yet, don't show warning
-		return false
-	}, [apiConfiguration?.ollamaModelId, routerModels.data, ollamaModels])
+		const hasLoadedModels = Object.keys(ollamaModels).length > 0
+		return hasLoadedModels && !(selectedModel in ollamaModels)
+	}, [apiConfiguration?.ollamaModelId, ollamaModels])
+	// kilocode_change end
 
 	return (
 		<>

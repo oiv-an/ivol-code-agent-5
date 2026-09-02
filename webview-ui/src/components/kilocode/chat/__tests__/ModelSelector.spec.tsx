@@ -1,6 +1,7 @@
-import { render, screen } from "@/utils/test-utils"
+import { fireEvent, render, screen } from "@/utils/test-utils"
 import { ModelSelector } from "../ModelSelector"
 import type { ProviderSettings } from "@roo-code/types"
+import { vscode } from "@/utils/vscode"
 
 vi.mock("@/utils/vscode", () => ({
 	vscode: {
@@ -28,9 +29,12 @@ vi.mock("../../hooks/useProviderModels", () => ({
 	useProviderModels: (config: ProviderSettings) => mockUseProviderModels(config),
 }))
 
+const mockGetSelectedModelId = vi.fn(() => "model-1")
+const mockGetModelIdKey = vi.fn(() => "apiModelId")
+
 vi.mock("../../hooks/useSelectedModel", () => ({
-	getSelectedModelId: () => "model-1",
-	getModelIdKey: () => "apiModelId",
+	getSelectedModelId: () => mockGetSelectedModelId(),
+	getModelIdKey: () => mockGetModelIdKey(),
 }))
 
 describe("ModelSelector", () => {
@@ -43,6 +47,8 @@ describe("ModelSelector", () => {
 		// Reset mocks before each test
 		mockUseProviderModels.mockReset()
 		mockUseGroupedModelIds.mockReset()
+		mockGetSelectedModelId.mockReturnValue("model-1")
+		mockGetModelIdKey.mockReturnValue("apiModelId")
 
 		// Default mock implementation for useGroupedModelIds (no preferred models)
 		mockUseGroupedModelIds.mockReturnValue({
@@ -84,6 +90,42 @@ describe("ModelSelector", () => {
 		expect(dropdownTrigger.tagName).toBe("BUTTON")
 	})
 
+	test("updates only the model in the current OpenAI-compatible profile", async () => {
+		mockGetModelIdKey.mockReturnValue("openAiModelId")
+
+		const chatConfig: ProviderSettings = {
+			apiProvider: "openai",
+			openAiBaseUrl: "https://provider.example/v1",
+			openAiApiKey: "test-key",
+			openAiModelId: "model-1",
+			profileType: "chat",
+		}
+
+		render(
+			<ModelSelector
+				currentApiConfigName="test-profile"
+				apiConfiguration={chatConfig}
+				fallbackText="Select a model"
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId("dropdown-trigger"))
+		const secondModel = await screen.findByText("Model 2")
+		fireEvent.click(secondModel.closest('[data-testid="dropdown-item"]') ?? secondModel)
+
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "upsertApiConfiguration",
+				text: "test-profile",
+				apiConfiguration: expect.objectContaining({
+					openAiBaseUrl: "https://provider.example/v1",
+					openAiApiKey: "test-key",
+					openAiModelId: "model-2",
+				}),
+			}),
+		)
+	})
+
 	test("renders disabled span for autocomplete profile", () => {
 		const autocompleteConfig: ProviderSettings = {
 			...baseApiConfiguration,
@@ -106,7 +148,44 @@ describe("ModelSelector", () => {
 		expect(dropdownTrigger).not.toBeInTheDocument()
 	})
 
-	test("renders disabled span when isError is true", () => {
+	test("keeps cached model choices selectable when a catalog refresh fails", async () => {
+		mockUseProviderModels.mockReturnValue({
+			provider: "openai",
+			providerModels: {
+				"model-1": { displayName: "Model 1" },
+				"model-2": { displayName: "Model 2" },
+			},
+			providerDefaultModel: undefined,
+			isLoading: false,
+			isError: true,
+		})
+
+		render(
+			<ModelSelector
+				currentApiConfigName="test-profile"
+				apiConfiguration={baseApiConfiguration}
+				fallbackText="Error loading models"
+			/>,
+		)
+
+		const dropdownTrigger = screen.getByTestId("dropdown-trigger")
+		expect(dropdownTrigger).toBeEnabled()
+		expect(screen.queryByText("Error loading models")).not.toBeInTheDocument()
+
+		fireEvent.click(dropdownTrigger)
+		const secondModel = await screen.findByText("Model 2")
+		fireEvent.click(secondModel.closest('[data-testid="dropdown-item"]') ?? secondModel)
+
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "upsertApiConfiguration",
+				apiConfiguration: expect.objectContaining({ apiModelId: "model-2" }),
+			}),
+		)
+	})
+
+	test("keeps the selected model available when the initial catalog request fails", () => {
+		mockUseGroupedModelIds.mockReturnValue({ preferredModelIds: [], restModelIds: [] })
 		mockUseProviderModels.mockReturnValue({
 			provider: "openai",
 			providerModels: {},
@@ -123,13 +202,11 @@ describe("ModelSelector", () => {
 			/>,
 		)
 
-		expect(screen.getByText("Error loading models")).toBeInTheDocument()
-
-		const dropdownTrigger = screen.queryByTestId("dropdown-trigger")
-		expect(dropdownTrigger).not.toBeInTheDocument()
+		expect(screen.getByTestId("dropdown-trigger")).toBeEnabled()
 	})
 
-	test("renders nothing when isLoading is true", () => {
+	test("keeps the selected model dropdown available while the catalog is loading", () => {
+		mockUseGroupedModelIds.mockReturnValue({ preferredModelIds: [], restModelIds: [] })
 		mockUseProviderModels.mockReturnValue({
 			provider: "openai",
 			providerModels: {},
@@ -138,7 +215,7 @@ describe("ModelSelector", () => {
 			isError: false,
 		})
 
-		const { container } = render(
+		render(
 			<ModelSelector
 				currentApiConfigName="test-profile"
 				apiConfiguration={baseApiConfiguration}
@@ -146,7 +223,7 @@ describe("ModelSelector", () => {
 			/>,
 		)
 
-		expect(container.firstChild).toBeNull()
+		expect(screen.getByTestId("dropdown-trigger")).toBeEnabled()
 	})
 
 	test("renders span for virtual-quota-fallback provider with virtualQuotaActiveModel", () => {

@@ -25,6 +25,7 @@ import { buildDocLink } from "@/utils/docLinks"
 
 type ProviderOption = "roo" | "custom"
 type AuthOrigin = "landing" | "providerSelection"
+const PERSONAL_PROVIDER_SETUP_ONLY = true // kilocode_change: never show Roo cloud signup in personal builds
 
 const WelcomeViewProvider = () => {
 	const {
@@ -37,7 +38,7 @@ const WelcomeViewProvider = () => {
 	} = useExtensionState()
 	const { t } = useAppTranslation()
 	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
-	const [selectedProvider, setSelectedProvider] = useState<ProviderOption | null>(null)
+	const [selectedProvider, setSelectedProvider] = useState<ProviderOption | null>("custom") // kilocode_change
 	const [authInProgress, setAuthInProgress] = useState(false)
 	const [authOrigin, setAuthOrigin] = useState<AuthOrigin | null>(null)
 	const [showManualEntry, setShowManualEntry] = useState(false)
@@ -276,12 +277,16 @@ const WelcomeViewProvider = () => {
 						</div>
 					</div>
 
-					<div className="mt-4">
-						<Button onClick={handleGoBack} variant="secondary">
-							<ArrowLeft className="size-4" />
-							{t("welcome:waitingForCloud.goBack")}
-						</Button>
-					</div>
+					{/* kilocode_change start: suppress cloud-only navigation */}
+					{!PERSONAL_PROVIDER_SETUP_ONLY && (
+						<div className="mt-4">
+							<Button onClick={handleGoBack} variant="secondary">
+								<ArrowLeft className="size-4" />
+								{t("welcome:waitingForCloud.goBack")}
+							</Button>
+						</div>
+					)}
+					{/* kilocode_change end */}
 				</TabContent>
 			</Tab>
 		)
@@ -336,22 +341,25 @@ const WelcomeViewProvider = () => {
 								(e.target as HTMLInputElement)) as HTMLInputElement
 							setSelectedProvider(target.value as ProviderOption)
 						}}>
-						{/* Roo Code Router Option */}
-						<VSCodeRadio value="roo" className="flex items-start gap-2">
-							<div className="flex-1 space-y-1 cursor-pointer">
-								<p className="text-lg font-semibold block -mt-1">
-									{t("welcome:providerSignup.rooCloudProvider")}
-								</p>
-								<p className="text-base text-vscode-descriptionForeground mt-0">
-									{t("welcome:providerSignup.rooCloudDescription")}{" "}
-									<VSCodeLink
-										href="https://roocode.com/provider/pricing?utm_source=extension&utm_medium=welcome-screen&utm_campaign=provider-signup&utm_content=learn-more"
-										className="cursor-pointer">
-										{t("welcome:providerSignup.learnMore")}
-									</VSCodeLink>
-								</p>
-							</div>
-						</VSCodeRadio>
+						{/* kilocode_change start: Roo Code Router is unavailable in the personal build. */}
+						{!PERSONAL_PROVIDER_SETUP_ONLY && (
+							<VSCodeRadio value="roo" className="flex items-start gap-2">
+								<div className="flex-1 space-y-1 cursor-pointer">
+									<p className="text-lg font-semibold block -mt-1">
+										{t("welcome:providerSignup.rooCloudProvider")}
+									</p>
+									<p className="text-base text-vscode-descriptionForeground mt-0">
+										{t("welcome:providerSignup.rooCloudDescription")}{" "}
+										<VSCodeLink
+											href="https://roocode.com/provider/pricing?utm_source=extension&utm_medium=welcome-screen&utm_campaign=provider-signup&utm_content=learn-more"
+											className="cursor-pointer">
+											{t("welcome:providerSignup.learnMore")}
+										</VSCodeLink>
+									</p>
+								</div>
+							</VSCodeRadio>
+						)}
+						{/* kilocode_change end */}
 
 						{/* Use Another Provider Option */}
 						<VSCodeRadio value="custom" className="flex items-start gap-2">
@@ -383,10 +391,14 @@ const WelcomeViewProvider = () => {
 				</div>
 
 				<div className="-mt-4 flex gap-2">
-					<Button onClick={handleBackToLanding} variant="secondary">
-						<ArrowLeft className="size-4" />
-						{t("welcome:providerSignup.goBack")}
-					</Button>
+					{/* kilocode_change start: suppress cloud-only back navigation */}
+					{!PERSONAL_PROVIDER_SETUP_ONLY && (
+						<Button onClick={handleBackToLanding} variant="secondary">
+							<ArrowLeft className="size-4" />
+							{t("welcome:providerSignup.goBack")}
+						</Button>
+					)}
+					{/* kilocode_change end */}
 					<Button onClick={handleGetStarted} variant="primary">
 						{t("welcome:providerSignup.finish")} →
 					</Button>

@@ -9,7 +9,6 @@ import { ModelPicker } from "../../../settings/ModelPicker"
 import { vscode } from "@src/utils/vscode"
 import { OrganizationSelector } from "../../common/OrganizationSelector"
 import { getAppUrl } from "@roo-code/types"
-import { useKiloIdentity } from "@src/utils/kilocode/useKiloIdentity"
 
 type KiloCodeProps = {
 	apiConfiguration: ProviderSettings
@@ -42,19 +41,6 @@ export const KiloCode = ({
 			},
 		[setApiConfigurationField],
 	)
-
-	// Use the existing hook to get user identity
-	const userIdentity = useKiloIdentity(apiConfiguration.kilocodeToken || "", "")
-	const isKiloCodeAiUser = userIdentity.endsWith("@kilo.ai")
-
-	const areKilocodeWarningsDisabled = apiConfiguration.kilocodeTesterWarningsDisabledUntil
-		? apiConfiguration.kilocodeTesterWarningsDisabledUntil > Date.now()
-		: false
-
-	const handleToggleTesterWarnings = useCallback(() => {
-		const newTimestamp = Date.now() + (areKilocodeWarningsDisabled ? 0 : 24 * 60 * 60 * 1000)
-		setApiConfigurationField("kilocodeTesterWarningsDisabledUntil", newTimestamp)
-	}, [areKilocodeWarningsDisabled, setApiConfigurationField])
 
 	return (
 		<>
@@ -121,25 +107,10 @@ export const KiloCode = ({
 				defaultModelId={kilocodeDefaultModel}
 				models={routerModels?.kilocode ?? {}}
 				modelIdKey="kilocodeModel"
-				serviceName="Kilo Code"
+				serviceName="Kilo Gateway"
 				serviceUrl={getAppUrl()}
 				organizationAllowList={organizationAllowList}
 			/>
-
-			{/* KILOCODE-TESTER warnings setting - only visible for @kilo.ai users */}
-			{isKiloCodeAiUser && (
-				<div className="mb-4">
-					<label className="block font-medium mb-2">Disable KILOCODE-TESTER warnings</label>
-					<div className="text-sm text-vscode-descriptionForeground mb-2">
-						{areKilocodeWarningsDisabled
-							? `Warnings disabled until ${new Date(apiConfiguration.kilocodeTesterWarningsDisabledUntil || 0).toLocaleString()}`
-							: "KILOCODE-TESTER warnings are currently enabled"}
-					</div>
-					<Button variant="secondary" onClick={handleToggleTesterWarnings} className="text-sm">
-						{areKilocodeWarningsDisabled ? "Enable warnings now" : "Disable warnings for 1 day"}
-					</Button>
-				</div>
-			)}
 		</>
 	)
 }

@@ -4,6 +4,9 @@
 // SPDX-License-Identifier: APACHE2.0
 // SPDX-License-Identifier: Apache-2.0
 
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+
 // Convenient for reading variables from gradle.properties
 fun properties(key: String) = providers.gradleProperty(key)
 
@@ -15,10 +18,9 @@ buildscript {
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.0.21"
-    id("org.jetbrains.intellij.platform") version "2.10.0"
-    id("org.jlleitschuh.gradle.ktlint") version "11.6.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    id("org.jetbrains.kotlin.jvm") version "2.3.20"
+    id("org.jetbrains.intellij.platform") version "2.18.1"
+    id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
 }
 
 apply("genPlatform.gradle")
@@ -58,11 +60,13 @@ ext {
 }
 
 project.afterEvaluate {
-    tasks.findByName(":prepareSandbox")?.inputs?.properties?.put("build_mode", ext.get("debugMode"))
+    tasks.findByName(":prepareSandbox")?.inputs?.properties?.put("build_mode", ext.get("debugMode") ?: "none")
 }
 
 group = properties("pluginGroup").get()
 version = properties("pluginVersion").get()
+
+val localIdePath = providers.gradleProperty("localIdePath").orNull
 
 repositories {
     mavenCentral()
@@ -91,33 +95,28 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
     implementation("com.google.code.gson:gson:2.10.1")
     testImplementation("junit:junit:4.13.2")
-    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")
-
     intellijPlatform {
-        create(properties("platformType"), properties("platformVersion"))
+        if (localIdePath != null) {
+            local(file(localIdePath))
+        } else {
+            phpstorm(properties("platformVersion").get())
+        }
 
-        // Bundled plugins
-        bundledPlugins(
-            listOf(
-                "com.intellij.java",
-                "org.jetbrains.plugins.terminal",
-            ),
-        )
+        bundledPlugin("org.jetbrains.plugins.terminal")
+        bundledModule("com.intellij.modules.jcef")
 
         // Plugin verifier
         pluginVerifier()
 
-        // Instrumentation tools
-        instrumentationTools()
     }
 }
 
-// Configure Java toolchain to force Java 21
+// PhpStorm 2026.2 runs on Java 25.
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(properties("javaVersion").get().toInt()))
     }
 }
 
@@ -129,13 +128,23 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = properties("pluginSinceBuild")
-            untilBuild = provider { null }
+            untilBuild = properties("pluginUntilBuild")
         }
     }
 
     pluginVerification {
+        // This is a deliberately frozen v5 branch. Keep the verifier strict for
+        // actual compatibility/packaging failures while reporting legacy API
+        // usage without failing an otherwise compatible build.
+        failureLevel = listOf(
+            VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+            VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
+            VerifyPluginTask.FailureLevel.PLUGIN_STRUCTURE_WARNINGS,
+        )
+
         ides {
-            recommended()
+            create(IntelliJPlatformType.PhpStorm, properties("platformVersion").get())
         }
     }
 }
@@ -167,57 +176,6 @@ tasks {
         }
     }
 
-    buildPlugin {
-        dependsOn(prepareSandbox)
-
-        // Include the jetbrains directory contents from sandbox in the distribution root
-        doLast {
-            if (ext.get("debugMode") != "idea" && ext.get("debugMode") != "none") {
-                val distributionFile = archiveFile.get().asFile
-                val sandboxPluginsDir = layout.buildDirectory.get().asFile.resolve("idea-sandbox/IC-2024.3/plugins")
-                val jetbrainsDir = sandboxPluginsDir.resolve("jetbrains")
-
-                if (jetbrainsDir.exists() && distributionFile.exists()) {
-                    logger.lifecycle("Adding sandbox resources to distribution ZIP...")
-                    logger.lifecycle("Sandbox jetbrains dir: ${jetbrainsDir.absolutePath}")
-                    logger.lifecycle("Distribution file: ${distributionFile.absolutePath}")
-
-                    // Extract the existing ZIP
-                    val tempDir = layout.buildDirectory.get().asFile.resolve("temp-dist")
-                    tempDir.deleteRecursively()
-                    tempDir.mkdirs()
-
-                    copy {
-                        from(zipTree(distributionFile))
-                        into(tempDir)
-                    }
-
-                    // Copy jetbrains directory CONTENTS directly to plugin root (not the jetbrains folder itself)
-                    val pluginDir = tempDir.resolve(rootProject.name)
-                    copy {
-                        from(jetbrainsDir) // Copy contents of jetbrains dir
-                        into(pluginDir) // Directly into plugin root
-                    }
-
-                    // Re-create the ZIP with resources included
-                    distributionFile.delete()
-                    ant.invokeMethod(
-                        "zip",
-                        mapOf(
-                            "destfile" to distributionFile.absolutePath,
-                            "basedir" to tempDir.absolutePath,
-                        ),
-                    )
-
-                    // Clean up temp directory
-                    tempDir.deleteRecursively()
-
-                    logger.lifecycle("Distribution ZIP updated with sandbox resources at root level")
-                }
-            }
-        }
-    }
-
     prepareSandbox {
         dependsOn("generateConfigProperties")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -245,9 +203,12 @@ tasks {
 
                 // Handle platform.zip for release mode
                 if (ext.get("debugMode") == "release") {
-                    val platformZip = File("platform.zip")
+                    val platformZip = project.findProperty("platformZipPath")
+                        ?.toString()
+                        ?.let(::File)
+                        ?: File("platform.zip")
                     if (!platformZip.exists() || platformZip.length() < 1024 * 1024) {
-                        throw IllegalStateException("platform.zip file does not exist or is smaller than 1MB. This file is supported through git lfs and needs to be obtained through git lfs")
+                        throw IllegalStateException("platform.zip file does not exist or is smaller than 1MB: ${platformZip.absolutePath}")
                     }
 
                     // Extract platform.zip to the platform subdirectory under the project build directory
@@ -271,15 +232,18 @@ tasks {
                 }
             }
 
-            val pluginName = properties("pluginGroup").get().split(".").last()
+            // PrepareSandbox already creates the actual plugin directory using
+            // rootProject.name. Runtime resources must be copied into that same
+            // directory so both runIde and the distributable ZIP see them.
+            val pluginSandboxDirName = rootProject.name
 
             // Copy host runtime files
-            from("../host/dist") { into("$pluginName/runtime/") }
-            from("../host/package.json") { into("$pluginName/runtime/") }
+            from("../host/dist") { into("$pluginSandboxDirName/runtime/") }
+            from("../host/package.json") { into("$pluginSandboxDirName/runtime/") }
 
             // Copy host node_modules based on prodDep.txt
             from("../resources/node_modules") {
-                into("$pluginName/node_modules/")
+                into("$pluginSandboxDirName/node_modules/")
                 doFirst {
                     list.forEach {
                         include(it)
@@ -288,21 +252,23 @@ tasks {
             }
 
             // Copy VSCode plugin extension
-            from("${vscodePluginDir.path}/extension") { into("$pluginName/${ext.get("vscodePlugin")}") }
+            from("${vscodePluginDir.path}/extension") { into("$pluginSandboxDirName/${ext.get("vscodePlugin")}") }
 
             // Copy themes
-            from("src/main/resources/themes/") { into("$pluginName/${ext.get("vscodePlugin")}/integrations/theme/default-themes/") }
+            from("src/main/resources/themes/") {
+                into("$pluginSandboxDirName/${ext.get("vscodePlugin")}/integrations/theme/default-themes/")
+            }
 
             // Copy platform files for release mode
             if (ext.get("debugMode") == "release") {
                 val platformDir = File("${layout.buildDirectory.get().asFile}/platform")
-                from(File(platformDir, "platform.txt")) { into("$pluginName/") }
+                from(File(platformDir, "platform.txt")) { into("$pluginSandboxDirName/") }
                 // Copy platform node_modules last to ensure it takes precedence over host node_modules
-                from(File(platformDir, "node_modules")) { into("$pluginName/node_modules") }
+                from(File(platformDir, "node_modules")) { into("$pluginSandboxDirName/node_modules") }
             }
 
             doLast {
-                File("$destinationDir/$pluginName/${ext.get("vscodePlugin")}/.env").apply {
+                File("$destinationDir/$pluginSandboxDirName/${ext.get("vscodePlugin")}/.env").apply {
                     parentFile.mkdirs()
                     createNewFile()
                 }
@@ -319,13 +285,13 @@ tasks {
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         dependsOn("generateConfigProperties")
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
         }
     }
 
     withType<JavaCompile> {
-        sourceCompatibility = "21"
-        targetCompatibility = "21"
+        sourceCompatibility = properties("javaVersion").get()
+        targetCompatibility = properties("javaVersion").get()
     }
 
     signPlugin {
@@ -468,23 +434,5 @@ ktlint {
     filter {
         exclude("**/generated/**")
         include("**/kotlin/**")
-    }
-}
-
-// Configure detekt
-detekt {
-    toolVersion = "1.23.7"
-    config.setFrom(file("detekt.yml"))
-    buildUponDefaultConfig = true
-    allRules = false
-}
-
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    reports {
-        html.required.set(true)
-        xml.required.set(true)
-        txt.required.set(true)
-        sarif.required.set(true)
-        md.required.set(true)
     }
 }

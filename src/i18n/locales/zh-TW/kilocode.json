@@ -3,8 +3,8 @@
 		"settings_imported": "設定已成功匯入。"
 	},
 	"configDiscovery": {
-		"added": "Kilo Code：已新增 {{source}} {{configType}}：{{name}}{{modeStr}}",
-		"removed": "Kilo Code：已移除 {{source}} {{configType}}：{{name}}{{modeStr}}"
+		"added": "IVOL Code Agent 5：已新增 {{source}} {{configType}}：{{name}}{{modeStr}}",
+		"removed": "IVOL Code Agent 5：已移除 {{source}} {{configType}}：{{name}}{{modeStr}}"
 	},
 	"userFeedback": {
 		"message_update_failed": "訊息更新失敗",
@@ -56,7 +56,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Kilo Code Commit Message 產生器已啟用",
+		"activated": "IVOL Code Agent 5 Commit Message 產生器已啟用",
 		"gitNotFound": "⚠️ 找不到 Git 儲存庫或 Git 無法使用",
 		"gitInitError": "⚠️ Git 初始化錯誤：{{error}}",
 		"generating": "Kilo：正在產生 Commit Message...",
@@ -67,7 +67,7 @@
 		"activationFailed": "Kilo：訊息產生器啟用失敗：{{error}}",
 		"providerRegistered": "Kilo：Commit Message 供應商已註冊",
 		"errors": {
-			"connectionFailed": "無法連線至 Kilo Code 擴充功能",
+			"connectionFailed": "無法連線至 IVOL Code Agent 5 擴充功能",
 			"timeout": "請求在 30 秒後逾時",
 			"invalidResponse": "從擴充功能收到無效的回應格式",
 			"missingMessage": "未從擴充功能收到 Commit Message",
@@ -93,7 +93,7 @@
 		"progress": {
 			"title": "正在產生 Commit Message",
 			"analyzing": "正在分析變更...",
-			"connecting": "正在連線至 Kilo Code...",
+			"connecting": "正在連線至 IVOL Code Agent 5...",
 			"generating": "正在產生 Commit Message..."
 		},
 		"ui": {
@@ -103,14 +103,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "已暫停",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete（已停用）",
-				"noCredits": "**帳戶中沒有額度**\n\nKilo Code 帳戶沒有額度。若要使用 Autocomplete，請為帳戶儲值。\n\n[開啟設定](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**未設定 Autocomplete 模型**\n\n若要啟用 Autocomplete，請新增一個使用以下支援供應商的設定檔：{{providers}}。\n\n[開啟設定](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete（已停用）",
+				"noCredits": "**帳戶中沒有額度**\n\nIVOL Code Agent 5 帳戶沒有額度。若要使用 Autocomplete，請為帳戶儲值。\n\n[開啟設定](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**未設定 Autocomplete 模型**\n\n若要啟用 Autocomplete，請新增一個使用以下支援供應商的設定檔：{{providers}}。\n\n[開啟設定](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "工作階段總費用：",
 				"provider": "供應商：",
 				"model": "模型：",
@@ -124,36 +124,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "正在分析程式碼...",
 			"generating": "正在產生建議編輯...",
 			"processing": "正在處理建議編輯...",
 			"showing": "正在顯示建議編輯..."
 		},
 		"input": {
-			"title": "Kilo Code：快速任務",
+			"title": "IVOL Code Agent 5：快速任務",
 			"placeholder": "例如「重構此函式以提升效率」"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code：產生建議編輯",
+			"generateSuggestions": "IVOL Code Agent 5：產生建議編輯",
 			"displaySuggestions": "顯示建議編輯",
 			"cancelSuggestions": "取消建議編輯",
 			"applyCurrentSuggestion": "套用目前的建議編輯",
 			"applyAllSuggestions": "套用所有建議編輯",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code：建議編輯"
+			"title": "IVOL Code Agent 5：建議編輯"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "可以協助處理快速任務和建議編輯。"
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Kilo Code Autocomplete 因與 GitHub Copilot 衝突而被封鎖。若要修正此問題，必須停用 Copilot 的行內建議。",
+			"message": "IVOL Code Agent 5 Autocomplete 因與 GitHub Copilot 衝突而被封鎖。若要修正此問題，必須停用 Copilot 的行內建議。",
 			"disableCopilot": "停用 Copilot",
 			"disableInlineAssist": "停用 Autocomplete"
 		}

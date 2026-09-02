@@ -4,6 +4,7 @@ import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { VirtualQuotaFallbackProviderPresentation } from "./VirtualQuotaFallbackProviderPresentation"
 import { UsageResultByDuration } from "@roo-code/types"
+import { isPersonalProvider } from "../constants" // kilocode_change
 
 type VirtualQuotaFallbackProviderProps = {
 	apiConfiguration: ProviderSettings
@@ -37,11 +38,15 @@ export const VirtualQuotaFallbackProvider = ({
 
 	// Filter out virtual profile profiles and current profile
 	const availableProfiles = useMemo(() => {
+		// kilocode_change start: hidden provider profiles cannot become fallbacks
 		return (
 			listApiConfigMeta?.filter((profile: ProviderSettingsEntry) => {
-				return profile.apiProvider !== "virtual-quota-fallback" && profile.id !== currentProfileId
+				return (
+					(!profile.apiProvider || isPersonalProvider(profile.apiProvider)) && profile.id !== currentProfileId
+				)
 			}) || []
 		)
+		// kilocode_change end
 	}, [listApiConfigMeta, currentProfileId])
 
 	const profiles = useMemo(() => {

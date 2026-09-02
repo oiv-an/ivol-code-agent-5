@@ -79,7 +79,7 @@
 		"apiRequest": "API अनुरोध",
 		"taskCompleted": "कार्य पूर्ण",
 		"error": "त्रुटि",
-		"question": "Kilo Code का एक प्रश्न है",
+		"question": "IVOL Code का एक प्रश्न है",
 		"command": "Kilo एक कमांड चलाना चाहता है",
 		"tool": "Kilo एक टूल का उपयोग करना चाहता है",
 		"usingTool": "टूल का उपयोग: **{{tool}}** {{details}}",

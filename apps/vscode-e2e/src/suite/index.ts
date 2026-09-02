@@ -20,7 +20,7 @@ interface ModelTestResult {
 }
 
 export async function run() {
-	const extension = vscode.extensions.getExtension<RooCodeAPI>("kilocode.kilo-code")
+	const extension = vscode.extensions.getExtension<RooCodeAPI>("ivol.ivol-code-agent-5")
 
 	if (!extension) {
 		throw new Error("Extension not found")
@@ -35,7 +35,7 @@ export async function run() {
 		openRouterModelId: MODELS_TO_TEST[0],
 	})
 
-	await vscode.commands.executeCommand("kilo-code.SidebarProvider.focus")
+	await vscode.commands.executeCommand("ivol-code-agent-5.SidebarProvider.focus")
 	await waitFor(() => api.isReady())
 
 	globalThis.api = api

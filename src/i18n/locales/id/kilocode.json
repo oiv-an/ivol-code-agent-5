@@ -52,7 +52,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Generator pesan komit Kilo Code diaktifkan",
+		"activated": "Generator pesan komit IVOL Code Agent 5 diaktifkan",
 		"gitNotFound": "⚠️ Repositori Git tidak ditemukan atau git tidak tersedia",
 		"gitInitError": "⚠️ Kesalahan inisialisasi Git: {{error}}",
 		"generating": "Kilo: Menghasilkan pesan komit...",
@@ -64,7 +64,7 @@
 		"providerRegistered": "Kilo: Penyedia pesan komit terdaftar",
 		"errors": {
 			"noProject": "Tidak ada proyek yang tersedia",
-			"connectionFailed": "Gagal terhubung ke ekstensi Kilo Code",
+			"connectionFailed": "Gagal terhubung ke ekstensi IVOL Code Agent 5",
 			"timeout": "Permintaan waktu habis setelah 30 detik",
 			"invalidResponse": "Format respons tidak valid diterima dari ekstensi",
 			"noChanges": "Tidak ada perubahan ditemukan untuk di-commit",
@@ -89,7 +89,7 @@
 		"progress": {
 			"title": "Membuat Pesan Commit",
 			"analyzing": "Menganalisis perubahan...",
-			"connecting": "Menghubungkan ke Kilo Code...",
+			"connecting": "Menghubungkan ke IVOL Code Agent 5...",
 			"generating": "Menghasilkan pesan commit..."
 		},
 		"ui": {
@@ -99,14 +99,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "dijeda",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (dinonaktifkan)",
-				"noCredits": "**Tidak ada kredit di akun kamu**\n\nAkun Kilo Code kamu tidak memiliki kredit. Untuk menggunakan autocomplete, silakan tambahkan kredit ke akun kamu.\n\n[Buka Pengaturan](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**Tidak ada model autocomplete yang dikonfigurasi**\n\nUntuk mengaktifkan autocomplete, tambahkan profil dengan salah satu penyedia yang didukung ini: {{providers}}.\n\n[Buka Pengaturan](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (dinonaktifkan)",
+				"noCredits": "**Tidak ada kredit di akun kamu**\n\nAkun IVOL Code Agent 5 kamu tidak memiliki kredit. Untuk menggunakan autocomplete, silakan tambahkan kredit ke akun kamu.\n\n[Buka Pengaturan](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**Tidak ada model autocomplete yang dikonfigurasi**\n\nUntuk mengaktifkan autocomplete, tambahkan profil dengan salah satu penyedia yang didukung ini: {{providers}}.\n\n[Buka Pengaturan](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "Total biaya sesi:",
 				"provider": "Penyedia:",
 				"model": "Model:",
@@ -120,36 +120,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "Menganalisis kode Anda...",
 			"generating": "Menghasilkan suntingan yang disarankan...",
 			"processing": "Memproses suntingan yang disarankan...",
 			"showing": "Menampilkan suntingan yang disarankan..."
 		},
 		"input": {
-			"title": "Kilo Code: Tugas Cepat",
+			"title": "IVOL Code Agent 5: Tugas Cepat",
 			"placeholder": "mis., 'refaktor fungsi ini agar lebih efisien'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: Hasilkan Suntingan yang Disarankan",
+			"generateSuggestions": "IVOL Code Agent 5: Hasilkan Suntingan yang Disarankan",
 			"displaySuggestions": "Tampilkan Suntingan yang Disarankan",
 			"cancelSuggestions": "Batalkan Suntingan yang Disarankan",
 			"applyCurrentSuggestion": "Terapkan Suntingan yang Disarankan Saat Ini",
 			"applyAllSuggestions": "Terapkan Semua Suntingan yang Disarankan",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: Suntingan yang Disarankan"
+			"title": "IVOL Code Agent 5: Suntingan yang Disarankan"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "Saya dapat membantu Anda dengan tugas cepat dan suntingan yang disarankan."
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Kilo Code Autocomplete diblokir oleh konflik dengan GitHub Copilot. Untuk memperbaiki ini, Anda harus menonaktifkan saran inline Copilot.",
+			"message": "IVOL Code Agent 5 Autocomplete diblokir oleh konflik dengan GitHub Copilot. Untuk memperbaiki ini, Anda harus menonaktifkan saran inline Copilot.",
 			"disableCopilot": "Nonaktifkan Copilot",
 			"disableInlineAssist": "Nonaktifkan Autocomplete"
 		}

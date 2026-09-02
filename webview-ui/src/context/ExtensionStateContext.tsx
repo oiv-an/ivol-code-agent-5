@@ -246,6 +246,35 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Extensi
 	return { ...rest, apiConfiguration, customModePrompts, customSupportPrompts, experiments }
 }
 
+// kilocode_change start: merge lightweight task deltas without cloning the entire long conversation
+export const applyIncrementalTaskMessage = (prevState: ExtensionState, message: ExtensionMessage): ExtensionState => {
+	const activeTaskId = prevState.currentTaskId ?? prevState.currentTaskItem?.id
+	if (message.taskId && message.taskId !== activeTaskId) {
+		return prevState
+	}
+
+	if (message.type === "currentTaskStateUpdated") {
+		return message.taskState ? { ...prevState, ...message.taskState } : prevState
+	}
+
+	const clineMessage = message.clineMessage
+	if (!clineMessage) {
+		return prevState
+	}
+
+	const existingIndex = findLastIndex(prevState.clineMessages, (item) => item.ts === clineMessage.ts)
+	if (existingIndex !== -1) {
+		const clineMessages = [...prevState.clineMessages]
+		clineMessages[existingIndex] = clineMessage
+		return { ...prevState, clineMessages }
+	}
+
+	return message.type === "messageCreated"
+		? { ...prevState, clineMessages: [...prevState.clineMessages, clineMessage] }
+		: prevState
+}
+// kilocode_change end
+
 export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [state, setState] = useState<ExtensionState>({
 		apiConfiguration: {},
@@ -477,20 +506,14 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					setCommands(message.commands ?? [])
 					break
 				}
-				case "messageUpdated": {
-					const clineMessage = message.clineMessage!
-					setState((prevState) => {
-						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.clineMessages, (msg) => msg.ts === clineMessage.ts)
-						if (lastIndex !== -1) {
-							const newClineMessages = [...prevState.clineMessages]
-							newClineMessages[lastIndex] = clineMessage
-							return { ...prevState, clineMessages: newClineMessages }
-						}
-						return prevState
-					})
+				// kilocode_change start: incremental messages and task totals share task-aware merge logic
+				case "messageCreated":
+				case "messageUpdated":
+				case "currentTaskStateUpdated": {
+					setState((prevState) => applyIncrementalTaskMessage(prevState, message))
 					break
 				}
+				// kilocode_change end
 				case "mcpServers": {
 					setMcpServers(message.mcpServers ?? [])
 					break

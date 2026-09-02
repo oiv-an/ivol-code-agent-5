@@ -80,7 +80,7 @@
 		"apiRequest": "API požadavek",
 		"taskCompleted": "Úkol dokončen",
 		"error": "Chyba",
-		"question": "Kilo Code má otázku",
+		"question": "IVOL Code má otázku",
 		"command": "Kilo chce spustit příkaz",
 		"tool": "Kilo chce použít nástroj",
 		"usingTool": "Používání nástroje: **{{tool}}** {{details}}",

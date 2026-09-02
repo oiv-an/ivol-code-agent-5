@@ -18,7 +18,9 @@ describe("Claude Code Streaming Client", () => {
 		})
 
 		test("should have correct user agent", () => {
-			expect(CLAUDE_CODE_API_CONFIG.userAgent).toMatch(/^Kilo-Code\/\d+\.\d+\.\d+$/)
+			expect(CLAUDE_CODE_API_CONFIG.userAgent).toMatch(
+				/^IVOL-Code\/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, // kilocode_change: personal SemVer prerelease
+			)
 		})
 	})
 

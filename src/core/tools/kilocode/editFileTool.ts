@@ -7,12 +7,11 @@ import { formatResponse } from "../../prompts/responses"
 import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } from "../../../shared/tools"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getReadablePath } from "../../../utils/path"
-import { FastApplyApiProvider, fastApplyApiProviderSchema, getKiloUrlFromToken } from "@roo-code/types"
+import { FastApplyApiProvider, fastApplyApiProviderSchema } from "@roo-code/types"
 import { DEFAULT_HEADERS } from "../../../api/providers/constants"
 import { TelemetryService } from "@roo-code/telemetry"
 import { type ClineProviderState } from "../../webview/ClineProvider"
 import { ClineSayTool } from "../../../shared/ExtensionMessage"
-import { X_KILOCODE_ORGANIZATIONID, X_KILOCODE_TASKID, X_KILOCODE_TESTER } from "../../../shared/kilocode/headers"
 import { trackContribution } from "../../../services/contribution-tracking/ContributionTrackingService"
 
 const FAST_APPLY_MODEL_PRICING = {
@@ -273,20 +272,12 @@ async function applyFastApplyEdit(
 			`Original Content: ${originalContent.length} characters`,
 		].join("\n")
 
-		const kiloTesterSuppressUntil = state.apiConfiguration.kilocodeTesterWarningsDisabledUntil
-		const kiloTesterSuppress =
-			kiloTesterSuppressUntil && kiloTesterSuppressUntil > Date.now() ? { [X_KILOCODE_TESTER]: "SUPPRESS" } : {}
 		// Create OpenAI client for Morph API
 		const client = new OpenAI({
 			apiKey: morphConfig.apiKey,
 			baseURL: morphConfig.baseUrl,
 			defaultHeaders: {
 				...DEFAULT_HEADERS,
-				...(morphConfig.kiloCodeOrganizationId
-					? { [X_KILOCODE_ORGANIZATIONID]: morphConfig.kiloCodeOrganizationId }
-					: {}),
-				...kiloTesterSuppress,
-				[X_KILOCODE_TASKID]: cline.taskId,
 			},
 		})
 
@@ -342,10 +333,9 @@ interface FastApplyConfiguration {
 	baseUrl?: string
 	model?: string
 	error?: string
-	kiloCodeOrganizationId?: string
 }
 
-function getFastApplyConfiguration(state: ClineProviderState): FastApplyConfiguration {
+export function getFastApplyConfiguration(state: ClineProviderState): FastApplyConfiguration {
 	// Check if Fast Apply is enabled in API configuration
 	if (state?.experiments?.morphFastApply !== true) {
 		return {
@@ -357,19 +347,25 @@ function getFastApplyConfiguration(state: ClineProviderState): FastApplyConfigur
 	// Read the selected model from state
 	const selectedModel = state.fastApplyModel || "auto"
 
+	// Old settings may still contain `kilocode`. Treat that value as `current`
+	// so restoring a v5 profile can never route edits through the retired Kilo
+	// gateway. The original value remains preserved in the user's backup.
+	const configuredProvider: FastApplyApiProvider =
+		state.fastApplyApiProvider === "kilocode" ? "current" : state.fastApplyApiProvider || "current"
+
 	let apiProvider: FastApplyApiProvider | undefined
-	if (state.fastApplyApiProvider === "current") {
+	if (configuredProvider === "current") {
 		const provider = fastApplyApiProviderSchema.safeParse(state.apiConfiguration?.apiProvider)
 		if (provider.success) {
-			apiProvider = provider.data
+			apiProvider = provider.data === "kilocode" ? undefined : provider.data
 		} else {
 			apiProvider = undefined
 		}
 	} else {
-		apiProvider = state.fastApplyApiProvider
+		apiProvider = configuredProvider
 	}
 
-	const useCurrentApiConfiguration = state.fastApplyApiProvider === "current"
+	const useCurrentApiConfiguration = configuredProvider === "current"
 
 	// Priority 1: Use direct Morph API key if available
 	// Allow human-relay for debugging
@@ -383,24 +379,7 @@ function getFastApplyConfiguration(state: ClineProviderState): FastApplyConfigur
 		}
 	}
 
-	// Priority 2: Use KiloCode provider
-	if (apiProvider === "kilocode") {
-		const token = useCurrentApiConfiguration ? state.apiConfiguration.kilocodeToken : state.morphApiKey
-		if (!token) {
-			return { available: false, error: "No KiloCode token available to use Fast Apply" }
-		}
-		const url = getKiloUrlFromToken("https://api.kilo.ai/api/openrouter/", token)
-
-		return {
-			available: true,
-			apiKey: token,
-			baseUrl: url,
-			model: selectedModel === "auto" ? "morph/morph-v3-large" : selectedModel, // Use selected model
-			kiloCodeOrganizationId: state.apiConfiguration.kilocodeOrganizationId,
-		}
-	}
-
-	// Priority 3: Use OpenRouter provider
+	// Priority 2: Use OpenRouter provider
 	if (apiProvider === "openrouter") {
 		const token = useCurrentApiConfiguration ? state.apiConfiguration.openRouterApiKey : state.morphApiKey
 		if (!token) {

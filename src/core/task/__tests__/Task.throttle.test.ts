@@ -79,6 +79,7 @@ describe("Task token usage throttling", () => {
 			getState: vi.fn().mockResolvedValue({ mode: "code" }),
 			log: vi.fn(),
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined), // kilocode_change
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 		}
 
@@ -103,6 +104,78 @@ describe("Task token usage throttling", () => {
 			task.dispose()
 		}
 	})
+
+	// kilocode_change start: long tasks send one new message instead of the complete state
+	test("posts a lightweight messageCreated update", async () => {
+		const message = {
+			ts: Date.now(),
+			type: "say",
+			say: "text",
+			text: "Test message",
+		}
+
+		await (task as any).addToClineMessages(message)
+
+		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "messageCreated",
+			taskId: task.taskId,
+			clineMessage: message,
+		})
+		expect(mockProvider.postStateToWebview).not.toHaveBeenCalled()
+	})
+
+	test("posts a lightweight queue delta without triggering a full state update", async () => {
+		const modelChanged = vi.fn()
+		task.on("modelChanged", modelChanged)
+
+		const queuedMessage = task.messageQueueService.addMessage("Queued message")
+		await Promise.resolve()
+
+		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "currentTaskStateUpdated",
+			taskId: task.taskId,
+			taskState: expect.objectContaining({
+				messageQueue: [queuedMessage],
+			}),
+		})
+		expect(mockProvider.postStateToWebview).not.toHaveBeenCalled()
+		expect(modelChanged).not.toHaveBeenCalled()
+	})
+
+	test("hydrates saved history before sending the incremental resume ask", async () => {
+		task.dispose()
+		task = new Task({
+			context: mockProvider.context,
+			provider: mockProvider as ClineProvider,
+			apiConfiguration: mockApiConfiguration,
+			historyItem: {
+				id: "saved-task-id",
+				number: 1,
+				task: "Saved task",
+				ts: Date.now(),
+				totalCost: 0,
+				tokensIn: 0,
+				tokensOut: 0,
+				mode: "code",
+			},
+			startTask: false,
+		})
+
+		const callOrder: string[] = []
+		mockProvider.postStateToWebview.mockImplementation(async () => {
+			callOrder.push("state")
+		})
+		vi.spyOn(task as any, "ask").mockImplementation(async () => {
+			callOrder.push("ask")
+			return { response: "yesButtonClicked" }
+		})
+		vi.spyOn(task as any, "initiateTaskLoop").mockResolvedValue(undefined)
+
+		await (task as any).resumeTaskFromHistory()
+
+		expect(callOrder).toEqual(["state", "ask"])
+	})
+	// kilocode_change end
 
 	test("should emit TaskTokenUsageUpdated immediately on first change", async () => {
 		const emitSpy = vi.spyOn(task, "emit")

@@ -28,6 +28,7 @@ type ImportWithProviderOptions = ImportOptions & {
 	provider: {
 		settingsImportedAt?: number
 		postStateToWebview: () => Promise<void>
+		initializePersonalProviderProfile?: () => Promise<void> // kilocode_change
 	}
 }
 
@@ -209,6 +210,11 @@ export const importSettingsWithFeedback = async (
 	}
 
 	if (result.success) {
+		// kilocode_change start: preserve hidden imports but restore an allowed active profile
+		// Imported legacy profiles remain in storage, but the runtime/context must
+		// immediately return to one of the five personal-build providers.
+		await provider.initializePersonalProviderProfile?.()
+		// kilocode_change end
 		provider.settingsImportedAt = Date.now()
 		await provider.postStateToWebview()
 		await vscode.window.showInformationMessage(t("common:info.settings_imported"))

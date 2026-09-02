@@ -6,113 +6,45 @@ import OnboardingView from "../OnboardingView"
 
 // Mock Logo component
 vi.mock("../../common/Logo", () => ({
-	default: () => <div data-testid="kilo-logo">Kilo Logo</div>,
+	default: () => <div data-testid="ivol-code-agent-logo">Kilo Logo</div>,
 }))
 
 describe("OnboardingView", () => {
-	const mockOnSelectFreeModels = vi.fn()
-	const mockOnSelectPremiumModels = vi.fn()
-	const mockOnSelectBYOK = vi.fn()
+	const mockOnConfigureProviders = vi.fn()
 
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
 
 	it("renders the Kilo logo", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
+		render(<OnboardingView onConfigureProviders={mockOnConfigureProviders} />)
 
-		expect(screen.getByTestId("kilo-logo")).toBeInTheDocument()
+		expect(screen.getByTestId("ivol-code-agent-logo")).toBeInTheDocument()
 	})
 
 	it("renders the title", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
+		render(<OnboardingView onConfigureProviders={mockOnConfigureProviders} />)
 
 		// The translation key is returned as-is by the test-utils mock
 		expect(screen.getByText("kilocode:onboarding.title")).toBeInTheDocument()
 	})
 
-	it("renders all three options", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
+	it("renders only the personal provider setup option", () => {
+		render(<OnboardingView onConfigureProviders={mockOnConfigureProviders} />)
 
-		expect(screen.getByText("kilocode:onboarding.freeModels.title")).toBeInTheDocument()
-		expect(screen.getByText("kilocode:onboarding.freeModels.description")).toBeInTheDocument()
-
-		expect(screen.getByText("kilocode:onboarding.premiumModels.title")).toBeInTheDocument()
-		expect(screen.getByText("kilocode:onboarding.premiumModels.description")).toBeInTheDocument()
-
-		expect(screen.getByText("kilocode:onboarding.byok.title")).toBeInTheDocument()
-		expect(screen.getByText("kilocode:onboarding.byok.description")).toBeInTheDocument()
+		expect(screen.getByText("settings:sections.providers")).toBeInTheDocument()
+		expect(screen.getByText("settings:providers.description")).toBeInTheDocument()
+		expect(screen.queryByText("kilocode:onboarding.freeModels.title")).not.toBeInTheDocument()
+		expect(screen.queryByText("kilocode:onboarding.premiumModels.title")).not.toBeInTheDocument()
 	})
 
-	it("calls onSelectFreeModels when Free models option is clicked", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
+	it("opens the provider editor", () => {
+		render(<OnboardingView onConfigureProviders={mockOnConfigureProviders} />)
 
-		const freeModelsButton = screen.getByText("kilocode:onboarding.freeModels.title").closest("button")
-		expect(freeModelsButton).toBeInTheDocument()
-		fireEvent.click(freeModelsButton!)
+		const providersButton = screen.getByText("settings:sections.providers").closest("button")
+		expect(providersButton).toBeInTheDocument()
+		fireEvent.click(providersButton!)
 
-		expect(mockOnSelectFreeModels).toHaveBeenCalledTimes(1)
-		expect(mockOnSelectPremiumModels).not.toHaveBeenCalled()
-		expect(mockOnSelectBYOK).not.toHaveBeenCalled()
-	})
-
-	it("calls onSelectPremiumModels when Premium models option is clicked", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
-
-		const premiumModelsButton = screen.getByText("kilocode:onboarding.premiumModels.title").closest("button")
-		expect(premiumModelsButton).toBeInTheDocument()
-		fireEvent.click(premiumModelsButton!)
-
-		expect(mockOnSelectPremiumModels).toHaveBeenCalledTimes(1)
-		expect(mockOnSelectFreeModels).not.toHaveBeenCalled()
-		expect(mockOnSelectBYOK).not.toHaveBeenCalled()
-	})
-
-	it("calls onSelectBYOK when BYOK option is clicked", () => {
-		render(
-			<OnboardingView
-				onSelectFreeModels={mockOnSelectFreeModels}
-				onSelectPremiumModels={mockOnSelectPremiumModels}
-				onSelectBYOK={mockOnSelectBYOK}
-			/>,
-		)
-
-		const byokButton = screen.getByText("kilocode:onboarding.byok.title").closest("button")
-		expect(byokButton).toBeInTheDocument()
-		fireEvent.click(byokButton!)
-
-		expect(mockOnSelectBYOK).toHaveBeenCalledTimes(1)
-		expect(mockOnSelectFreeModels).not.toHaveBeenCalled()
-		expect(mockOnSelectPremiumModels).not.toHaveBeenCalled()
+		expect(mockOnConfigureProviders).toHaveBeenCalledTimes(1)
 	})
 })

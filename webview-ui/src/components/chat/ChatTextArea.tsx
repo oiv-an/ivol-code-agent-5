@@ -41,6 +41,7 @@ import { useSTT } from "@/hooks/useSTT" // kilocode_change: STT hook
 import { useSTTStatus } from "@/hooks/useSTTStatus" // kilocode_change: STT status management hook
 import { cn } from "@/lib/utils"
 import { usePromptHistory } from "./hooks/usePromptHistory"
+import { isPersonalProvider } from "../settings/constants" // kilocode_change
 
 // kilocode_change start: pull slash commands from Cline
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
@@ -182,7 +183,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 			return listApiConfigMeta_unfilteredByKiloCodeProfileType.filter((config) => {
 				const profileType = (config as { profileType?: ProfileType }).profileType
-				return profileType !== "autocomplete"
+				return (
+					profileType !== "autocomplete" && (!config.apiProvider || isPersonalProvider(config.apiProvider)) // kilocode_change
+				)
 			})
 		}, [listApiConfigMeta_unfilteredByKiloCodeProfileType])
 		// kilocode_change end

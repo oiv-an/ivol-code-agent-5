@@ -25,7 +25,7 @@ export const ModelSelector = ({
 	virtualQuotaActiveModel, //kilocode_change
 }: ModelSelectorProps) => {
 	const { t } = useAppTranslation()
-	const { provider, providerModels, providerDefaultModel, isLoading, isError } = useProviderModels(apiConfiguration)
+	const { provider, providerModels, providerDefaultModel } = useProviderModels(apiConfiguration)
 	const selectedModelId = getSelectedModelId({
 		provider,
 		apiConfiguration,
@@ -98,8 +98,6 @@ export const ModelSelector = ({
 
 		return result
 	}, [preferredModelIds, restModelIds, providerModels, selectedModelId, t])
-
-	const disabled = isLoading || isError || isAutocomplete
 
 	useEffect(() => {
 		if (provider !== "oca") return
@@ -189,10 +187,6 @@ export const ModelSelector = ({
 		setPendingModelId(null)
 	}
 
-	if (isLoading) {
-		return null
-	}
-
 	// kilocode_change start: Display active model for virtual quota fallback
 	if (provider === "virtual-quota-fallback" && virtualQuotaActiveModel) {
 		return (
@@ -206,7 +200,9 @@ export const ModelSelector = ({
 	}
 	// kilocode_change end
 
-	if (isError || isAutocomplete || options.length <= 0) {
+	// A catalog request can fail while React Query still has a valid cached list.
+	// Keep the quick selector available whenever there is at least one usable option.
+	if (isAutocomplete || options.length <= 0) {
 		return <span className="text-xs text-vscode-descriptionForeground opacity-70 truncate">{fallbackText}</span>
 	}
 
@@ -223,8 +219,7 @@ export const ModelSelector = ({
 			/>
 			<SelectDropdown
 				value={selectedModelId}
-				disabled={disabled}
-				title={t("chat:selectApiConfig")}
+				title={t("chat:selectModelConfig")}
 				options={options}
 				onChange={onChange}
 				contentClassName="max-h-[400px] overflow-y-auto"

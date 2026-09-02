@@ -41,16 +41,16 @@ describe("SettingsSyncService", () => {
 			await SettingsSyncService.initialize(mockContext, mockOutputChannel)
 
 			expect(mockGlobalState.setKeysForSync).toHaveBeenCalledWith([
-				"kilo-code.allowedCommands",
-				"kilo-code.deniedCommands",
-				"kilo-code.autoApprovalEnabled",
-				"kilo-code.fuzzyMatchThreshold",
-				"kilo-code.diffEnabled",
-				"kilo-code.directoryContextAddedContext",
-				"kilo-code.language",
-				"kilo-code.customModes",
-				"kilo-code.firstInstallCompleted",
-				"kilo-code.telemetrySetting",
+				"ivol-code-agent-5.allowedCommands",
+				"ivol-code-agent-5.deniedCommands",
+				"ivol-code-agent-5.autoApprovalEnabled",
+				"ivol-code-agent-5.fuzzyMatchThreshold",
+				"ivol-code-agent-5.diffEnabled",
+				"ivol-code-agent-5.directoryContextAddedContext",
+				"ivol-code-agent-5.language",
+				"ivol-code-agent-5.customModes",
+				"ivol-code-agent-5.firstInstallCompleted",
+				"ivol-code-agent-5.telemetrySetting",
 			])
 			expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
 				expect.stringContaining("[SettingsSyncService] Registered 10 keys for synchronization"),
@@ -81,7 +81,7 @@ describe("SettingsSyncService", () => {
 
 			expect(mockConfiguration.get).toHaveBeenCalledWith("enableSettingsSync", true)
 			expect(mockGlobalState.setKeysForSync).toHaveBeenCalledWith(
-				expect.arrayContaining(["kilo-code.allowedCommands", "kilo-code.deniedCommands"]),
+				expect.arrayContaining(["ivol-code-agent-5.allowedCommands", "ivol-code-agent-5.deniedCommands"]),
 			)
 		})
 
@@ -94,7 +94,7 @@ describe("SettingsSyncService", () => {
 			await SettingsSyncService.initialize(mockContext)
 
 			expect(mockGlobalState.setKeysForSync).toHaveBeenCalledWith(
-				expect.arrayContaining(["kilo-code.allowedCommands"]),
+				expect.arrayContaining(["ivol-code-agent-5.allowedCommands"]),
 			)
 		})
 	})
@@ -120,16 +120,16 @@ describe("SettingsSyncService", () => {
 			const syncKeys = SettingsSyncService.getSyncKeys()
 
 			expect(syncKeys).toEqual([
-				"kilo-code.allowedCommands",
-				"kilo-code.deniedCommands",
-				"kilo-code.autoApprovalEnabled",
-				"kilo-code.fuzzyMatchThreshold",
-				"kilo-code.diffEnabled",
-				"kilo-code.directoryContextAddedContext",
-				"kilo-code.language",
-				"kilo-code.customModes",
-				"kilo-code.firstInstallCompleted",
-				"kilo-code.telemetrySetting",
+				"ivol-code-agent-5.allowedCommands",
+				"ivol-code-agent-5.deniedCommands",
+				"ivol-code-agent-5.autoApprovalEnabled",
+				"ivol-code-agent-5.fuzzyMatchThreshold",
+				"ivol-code-agent-5.diffEnabled",
+				"ivol-code-agent-5.directoryContextAddedContext",
+				"ivol-code-agent-5.language",
+				"ivol-code-agent-5.customModes",
+				"ivol-code-agent-5.firstInstallCompleted",
+				"ivol-code-agent-5.telemetrySetting",
 			])
 		})
 	})

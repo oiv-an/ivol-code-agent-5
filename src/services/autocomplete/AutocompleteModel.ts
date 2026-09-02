@@ -5,8 +5,7 @@ import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManag
 import { OpenRouterHandler } from "../../api/providers"
 import { CompletionUsage } from "../../api/providers/openrouter"
 import { ApiStreamChunk } from "../../api/transform/stream"
-import { AUTOCOMPLETE_PROVIDER_MODELS, checkKilocodeBalance } from "./utils/kilocode-utils"
-import { KilocodeOpenrouterHandler } from "../../api/providers/kilocode-openrouter"
+import { AUTOCOMPLETE_PROVIDER_MODELS } from "./utils/kilocode-utils"
 import { PROVIDERS } from "../../../webview-ui/src/components/settings/constants"
 import { ResponseMetaData } from "./types"
 
@@ -22,6 +21,16 @@ const PROVIDER_DISPLAY_NAMES = Object.fromEntries(PROVIDERS.map(({ value, label 
 	ProviderName,
 	string
 >
+
+// Personal builds only auto-discover local autocomplete providers. In
+// particular, never inspect a saved Kilo profile or perform its balance check
+// as a side effect of extension activation.
+export const PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS = new Map(
+	[...AUTOCOMPLETE_PROVIDER_MODELS].filter(([provider]) => provider === "ollama" || provider === "lmstudio"),
+)
+
+const isPersonalAutocompleteProvider = (provider: ProviderName | undefined): provider is "ollama" | "lmstudio" =>
+	provider === "ollama" || provider === "lmstudio"
 
 export class AutocompleteModel {
 	private apiHandler: ApiHandler | null = null
@@ -51,32 +60,23 @@ export class AutocompleteModel {
 
 		this.cleanup()
 
-		const selectedProfile = profiles.find((x) => x.profileType === "autocomplete")
+		const selectedProfile = profiles.find(
+			(x) => x.profileType === "autocomplete" && isPersonalAutocompleteProvider(x.apiProvider),
+		)
 		if (selectedProfile) {
 			const profile = await providerSettingsManager.getProfile({ id: selectedProfile.id })
-			if (profile.apiProvider) {
+			if (isPersonalAutocompleteProvider(profile.apiProvider)) {
 				await useProfile(this, profile, profile.apiProvider)
 				return true
 			}
 		}
 
-		for (const [provider, model] of AUTOCOMPLETE_PROVIDER_MODELS) {
+		for (const [provider, model] of PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS) {
 			const selectedProfile = profiles.find(
 				(x) => x?.apiProvider === provider && !(x.profileType === "autocomplete"),
 			)
 			if (!selectedProfile) continue
 			const profile = await providerSettingsManager.getProfile({ id: selectedProfile.id })
-
-			if (provider === "kilocode") {
-				// For all other providers, assume they are usable
-				if (!profile.kilocodeToken) continue
-				const hasBalance = await checkKilocodeBalance(profile.kilocodeToken, profile.kilocodeOrganizationId)
-				if (!hasBalance) {
-					// Track that we found a kilocode profile but it has no balance
-					this.hasKilocodeProfileWithNoBalance = true
-					continue
-				}
-			}
 			await useProfile(this, { ...profile, [modelIdKeysByProvider[provider]]: model }, provider)
 			return true
 		}
@@ -214,8 +214,8 @@ export class AutocompleteModel {
 		return PROVIDER_DISPLAY_NAMES[this.currentProvider]
 	}
 
-	public getRolloutHash_IfLoggedInToKilo(): number | undefined {
-		return this.apiHandler instanceof KilocodeOpenrouterHandler ? this.apiHandler.getRolloutHash() : undefined
+	public getProviderKey(): ProviderName | undefined {
+		return this.currentProvider ?? undefined
 	}
 
 	public hasValidCredentials(): boolean {

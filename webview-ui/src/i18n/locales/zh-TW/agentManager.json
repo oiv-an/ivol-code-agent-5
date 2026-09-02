@@ -79,7 +79,7 @@
 		"apiRequest": "API 請求",
 		"taskCompleted": "任務完成",
 		"error": "錯誤",
-		"question": "Kilo Code 有一個問題",
+		"question": "IVOL Code 有一個問題",
 		"command": "Kilo 想要執行一個指令",
 		"tool": "Kilo 想要使用一個工具",
 		"usingTool": "正在使用工具：**{{tool}}** {{details}}",

@@ -1,7 +1,7 @@
 import { PostHog } from "posthog-node"
 import * as vscode from "vscode"
 
-import { getKiloUrlFromToken, type TelemetryEvent, TelemetryEventName } from "@roo-code/types"
+import { DISABLED_KILOCODE_URL, getKiloUrlFromToken, type TelemetryEvent, TelemetryEventName } from "@roo-code/types"
 
 import { BaseTelemetryClient } from "./BaseTelemetryClient"
 
@@ -142,7 +142,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		}
 		const id = ++this.counter
 		try {
-			const response = await fetch(getKiloUrlFromToken("https://api.kilo.ai/api/profile", kilocodeToken), {
+			const response = await fetch(getKiloUrlFromToken(`${DISABLED_KILOCODE_URL}/api/profile`, kilocodeToken), {
 				headers: {
 					Authorization: `Bearer ${kilocodeToken}`,
 					"Content-Type": "application/json",

@@ -47,7 +47,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Kilo Code commit mesajı oluşturucu etkinleştirildi",
+		"activated": "IVOL Code Agent 5 commit mesajı oluşturucu etkinleştirildi",
 		"gitNotFound": "⚠️ Git deposu bulunamadı veya git kullanılamıyor",
 		"gitInitError": "⚠️ Git başlatma hatası: {{error}}",
 		"generating": "Kilo: Commit mesajı oluşturuluyor...",
@@ -59,7 +59,7 @@
 		"providerRegistered": "Kilo: Commit mesajı sağlayıcısı kaydedildi",
 		"errors": {
 			"noProject": "Proje mevcut değil",
-			"connectionFailed": "Kilo Code uzantısına bağlanılamadı",
+			"connectionFailed": "IVOL Code Agent 5 uzantısına bağlanılamadı",
 			"timeout": "İstek 30 saniye sonra zaman aşımına uğradı",
 			"noChanges": "Kaydedilecek değişiklik bulunamadı",
 			"missingMessage": "Uzantıdan taahhüt mesajı alınmadı",
@@ -85,7 +85,7 @@
 			"title": "Commit Mesajı Oluşturuluyor",
 			"analyzing": "Değişiklikler inceleniyor...",
 			"generating": "Taahhüt mesajı oluşturuluyor...",
-			"connecting": "Kilo Code'a bağlanıyor..."
+			"connecting": "IVOL Code Agent 5'a bağlanıyor..."
 		},
 		"ui": {
 			"generateButton": "Commit Mesajı Oluştur",
@@ -99,14 +99,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "duraklatıldı",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (devre dışı)",
-				"noCredits": "**Hesabınızda kredi yok**\n\nKilo Code hesabınızda kredi bulunmuyor. Otomatik tamamlamayı kullanmak için lütfen hesabınıza kredi ekleyin.\n\n[Ayarları Aç](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**Otomatik tamamlama modeli yapılandırılmadı**\n\nOtomatik tamamlamayı etkinleştirmek için desteklenen sağlayıcılardan biriyle bir profil ekleyin: {{providers}}.\n\n[Ayarları Aç](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (devre dışı)",
+				"noCredits": "**Hesabınızda kredi yok**\n\nIVOL Code Agent 5 hesabınızda kredi bulunmuyor. Otomatik tamamlamayı kullanmak için lütfen hesabınıza kredi ekleyin.\n\n[Ayarları Aç](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**Otomatik tamamlama modeli yapılandırılmadı**\n\nOtomatik tamamlamayı etkinleştirmek için desteklenen sağlayıcılardan biriyle bir profil ekleyin: {{providers}}.\n\n[Ayarları Aç](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "Oturum toplam maliyeti:",
 				"provider": "Sağlayıcı:",
 				"model": "Model:",
@@ -120,36 +120,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "Kodun analiz ediliyor...",
 			"generating": "Önerilen düzenlemeler oluşturuluyor...",
 			"processing": "Önerilen düzenlemeler işleniyor...",
 			"showing": "Önerilen düzenlemeler gösteriliyor..."
 		},
 		"input": {
-			"title": "Kilo Code: Hızlı Görev",
+			"title": "IVOL Code Agent 5: Hızlı Görev",
 			"placeholder": "örn., 'bu fonksiyonu daha verimli olacak şekilde yeniden düzenle'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: Önerilen Düzenlemeler Oluştur",
+			"generateSuggestions": "IVOL Code Agent 5: Önerilen Düzenlemeler Oluştur",
 			"displaySuggestions": "Önerilen Düzenlemeleri Göster",
 			"cancelSuggestions": "Önerilen Düzenlemeleri İptal Et",
 			"applyCurrentSuggestion": "Mevcut Önerilen Düzenlemeyi Uygula",
 			"applyAllSuggestions": "Tüm Önerilen Düzenlemeleri Uygula",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: Önerilen Düzenlemeler"
+			"title": "IVOL Code Agent 5: Önerilen Düzenlemeler"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "Hızlı görevler ve önerilen düzenlemeler konusunda sana yardımcı olabilirim."
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "Kilo Code Autocomplete, GitHub Copilot ile bir çakışma nedeniyle engelleniyor. Bunu düzeltmek için Copilot'un satır içi önerilerini devre dışı bırakmalısın.",
+			"message": "IVOL Code Agent 5 Autocomplete, GitHub Copilot ile bir çakışma nedeniyle engelleniyor. Bunu düzeltmek için Copilot'un satır içi önerilerini devre dışı bırakmalısın.",
 			"disableCopilot": "Copilot'u Devre Dışı Bırak",
 			"disableInlineAssist": "Autocomplete'i Devre Dışı Bırak"
 		}

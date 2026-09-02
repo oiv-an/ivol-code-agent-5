@@ -49,7 +49,6 @@ import {
 	DoubaoHandler,
 	ZAiHandler,
 	FireworksHandler,
-	RooHandler,
 	FeatherlessHandler,
 	VercelAiGatewayHandler,
 	DeepInfraHandler,
@@ -60,7 +59,6 @@ import {
 	OpenAiCompatibleResponsesHandler, // kilocode_change
 } from "./providers"
 // kilocode_change start
-import { KilocodeOpenrouterHandler } from "./providers/kilocode-openrouter"
 import { InceptionLabsHandler } from "./providers/inception"
 import type { FimHandler } from "./providers/kilocode/FimHandler" // kilocode_change
 export type { FimHandler } from "./providers/kilocode/FimHandler"
@@ -179,7 +177,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	switch (apiProvider) {
 		// kilocode_change start
 		case "kilocode":
-			return new KilocodeOpenrouterHandler(options)
+			throw new Error("The Kilo cloud provider is disabled in IVOL Code Agent 5.")
 		case "virtual-quota-fallback":
 			return new VirtualQuotaFallbackHandler(options)
 		// kilocode_change end
@@ -280,9 +278,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "io-intelligence":
 			return new IOIntelligenceHandler(options)
 		case "roo":
-			// Never throw exceptions from provider constructors
-			// The provider-proxy server will handle authentication and return appropriate error codes
-			return new RooHandler(options)
+			throw new Error("The Roo cloud provider is disabled in IVOL Code Agent 5.")
 		case "featherless":
 			return new FeatherlessHandler(options)
 		case "vercel-ai-gateway":

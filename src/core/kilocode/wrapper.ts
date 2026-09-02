@@ -19,7 +19,7 @@ export const getKiloCodeWrapperProperties = (): KiloCodeWrapperProperties => {
 		kiloCodeWrapperJetbrains = kiloCodeWrapperCode !== "cli"
 		kiloCodeWrapperTitle =
 			kiloCodeWrapperCode === "cli"
-				? "Kilo Code CLI"
+				? "IVOL Code CLI"
 				: JETBRAIN_PRODUCTS[kiloCodeWrapperCode as keyof typeof JETBRAIN_PRODUCTS]?.name || "JetBrains IDE"
 	}
 
@@ -44,11 +44,6 @@ export const getEditorNameHeader = () => {
 		.join(" ")
 }
 
-export function getEffectiveTelemetrySetting(telemetrySetting: TelemetrySetting | undefined) {
-	const isVsCode = !getKiloCodeWrapperProperties().kiloCodeWrapped
-	return isVsCode && vscode.env.isTelemetryEnabled
-		? "enabled"
-		: telemetrySetting === "disabled"
-			? "disabled"
-			: "enabled"
+export function getEffectiveTelemetrySetting(_telemetrySetting: TelemetrySetting | undefined): TelemetrySetting {
+	return "disabled" // Personal build: never initialize network telemetry.
 }

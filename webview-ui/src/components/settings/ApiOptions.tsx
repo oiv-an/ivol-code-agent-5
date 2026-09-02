@@ -51,6 +51,7 @@ import {
 	minimaxDefaultModelId,
 	nanoGptDefaultModelId, //kilocode_change
 	poeDefaultModelId, // kilocode_change
+	isDynamicProvider, // kilocode_change
 } from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
@@ -131,7 +132,7 @@ import {
 	Poe, // kilocode_change
 } from "./providers"
 
-import { MODELS_BY_PROVIDER, PROVIDERS } from "./constants"
+import { isPersonalProvider, MODELS_BY_PROVIDER, PERSONAL_PROVIDERS, PROVIDERS } from "./constants" // kilocode_change
 import { inputEventTransform, noTransform } from "./transforms"
 // import { ModelPicker } from "./ModelPicker" // kilocode_change
 import { ModelInfoView } from "./ModelInfoView"
@@ -235,20 +236,27 @@ const ApiOptions = ({
 		id: selectedModelId,
 		info: selectedModelInfo,
 	} = useSelectedModel(apiConfiguration)
+	// kilocode_change start: request only the selected allowlisted dynamic catalog
+	const shouldFetchRouterModels = isPersonalProvider(selectedProvider) && isDynamicProvider(selectedProvider)
 
-	// kilocode_change start: queryKey, chutesApiKey, gemini
-	const { data: routerModels, refetch: refetchRouterModels } = useRouterModels({
-		openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
-		openRouterApiKey: apiConfiguration?.openRouterApiKey,
-		kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId ?? "personal",
-		deepInfraApiKey: apiConfiguration?.deepInfraApiKey,
-		geminiApiKey: apiConfiguration?.geminiApiKey,
-		googleGeminiBaseUrl: apiConfiguration?.googleGeminiBaseUrl,
-		chutesApiKey: apiConfiguration?.chutesApiKey,
-		syntheticApiKey: apiConfiguration?.syntheticApiKey,
-		zenmuxBaseUrl: apiConfiguration?.zenmuxBaseUrl,
-		zenmuxApiKey: apiConfiguration?.zenmuxApiKey,
-	})
+	const { data: routerModels, refetch: refetchRouterModels } = useRouterModels(
+		{
+			openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
+			openRouterApiKey: apiConfiguration?.openRouterApiKey,
+			kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId ?? "personal",
+			deepInfraApiKey: apiConfiguration?.deepInfraApiKey,
+			geminiApiKey: apiConfiguration?.geminiApiKey,
+			googleGeminiBaseUrl: apiConfiguration?.googleGeminiBaseUrl,
+			chutesApiKey: apiConfiguration?.chutesApiKey,
+			syntheticApiKey: apiConfiguration?.syntheticApiKey,
+			zenmuxBaseUrl: apiConfiguration?.zenmuxBaseUrl,
+			zenmuxApiKey: apiConfiguration?.zenmuxApiKey,
+		},
+		{
+			provider: shouldFetchRouterModels ? selectedProvider : undefined,
+			enabled: shouldFetchRouterModels,
+		},
+	)
 
 	//const { data: openRouterModelProviders } = useOpenRouterModelProviders(
 	//	apiConfiguration?.openRouterModelId,
@@ -307,7 +315,7 @@ const ApiOptions = ({
 				selectedProvider === "poe" || // kilocode_change
 				selectedProvider === "roo"
 			) {
-				vscode.postMessage({ type: "requestRouterModels" })
+				vscode.postMessage({ type: "requestRouterModels", values: { provider: selectedProvider } }) // kilocode_change
 			}
 		},
 		250,
@@ -542,7 +550,7 @@ const ApiOptions = ({
 	// kilocode_change start: no organizationAllowList
 	const providerOptions = useMemo(
 		() =>
-			PROVIDERS.map(({ value, label }) => {
+			PERSONAL_PROVIDERS.map(({ value, label }) => {
 				return { value, label }
 			}),
 		[],

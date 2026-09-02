@@ -12,9 +12,10 @@ try {
 	console.warn("Failed to load environment variables:", e)
 }
 
-import type { CloudUserInfo, AuthState } from "@roo-code/types"
-import { CloudService, BridgeOrchestrator } from "@roo-code/cloud"
-import { TelemetryService, PostHogTelemetryClient, DebugTelemetryClient } from "@roo-code/telemetry" // kilocode_change: added DebugTelemetryClient
+// kilocode_change start: personal build keeps cloud telemetry and auth services disabled
+import { BridgeOrchestrator } from "@roo-code/cloud"
+import { TelemetryService } from "@roo-code/telemetry"
+// kilocode_change end
 import { customToolRegistry } from "@roo-code/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
@@ -51,34 +52,6 @@ import { registerMainThreadForwardingLogger } from "./utils/fowardingLogger" // 
 import { getKiloCodeWrapperProperties } from "./core/kilocode/wrapper" // kilocode_change
 import { checkAnthropicApiKeyConflict } from "./utils/anthropicApiKeyWarning" // kilocode_change
 import { SettingsSyncService } from "./services/settings-sync/SettingsSyncService" // kilocode_change
-import { ManagedIndexer } from "./services/code-index/managed/ManagedIndexer" // kilocode_change
-import { flushModels, getModels, initializeModelCacheRefresh, refreshModels } from "./api/providers/fetchers/modelCache"
-import { kilo_initializeSessionManager } from "./shared/kilocode/cli-sessions/extension/session-manager-utils" // kilocode_change
-import { fetchKilocodeNotificationsOnStartup } from "./core/kilocode/webview/webviewMessageHandlerUtils" // kilocode_change
-
-// kilocode_change start
-async function findKilocodeTokenFromAnyProfile(provider: ClineProvider): Promise<string | undefined> {
-	const { apiConfiguration } = await provider.getState()
-	if (apiConfiguration.kilocodeToken) {
-		return apiConfiguration.kilocodeToken
-	}
-
-	const profiles = await provider.providerSettingsManager.listConfig()
-
-	for (const profile of profiles) {
-		try {
-			const fullProfile = await provider.providerSettingsManager.getProfile({ name: profile.name })
-			if (fullProfile.kilocodeToken) {
-				return fullProfile.kilocodeToken
-			}
-		} catch {
-			continue
-		}
-	}
-
-	return undefined
-}
-// kilocode_change end
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -90,17 +63,13 @@ async function findKilocodeTokenFromAnyProfile(provider: ClineProvider): Promise
 
 let outputChannel: vscode.OutputChannel
 let extensionContext: vscode.ExtensionContext
-let cloudService: CloudService | undefined
-
-let authStateChangedHandler: ((data: { state: AuthState; previousState: AuthState }) => Promise<void>) | undefined
-let settingsUpdatedHandler: (() => void) | undefined
-let userInfoHandler: ((data: { userInfo: CloudUserInfo }) => Promise<void>) | undefined
+// kilocode_change: personal build has no upstream cloud singleton or auth event handlers
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
 export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
-	outputChannel = vscode.window.createOutputChannel("Kilo-Code")
+	outputChannel = vscode.window.createOutputChannel("IVOL Code")
 	context.subscriptions.push(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)
 
@@ -115,56 +84,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Migrate old settings to new
 	await migrateSettings(context, outputChannel)
 
-	// Initialize telemetry service.
+	// Initialize telemetry service without a network client. // kilocode_change
 	const telemetryService = TelemetryService.createInstance()
+	telemetryService.updateTelemetryState(false) // kilocode_change: never contact PostHog or Kilo identity endpoints
 
-	// kilocode_change start: use DebugTelemetryClient in development mode, optionally also PostHog if API key is present
-	try {
-		if (process.env.NODE_ENV === "development") {
-			telemetryService.register(new DebugTelemetryClient())
-			console.info("[DebugTelemetry] Using DebugTelemetryClient for development")
-
-			// Also register PostHog if API key is present for local testing
-			if (process.env.KILOCODE_POSTHOG_API_KEY) {
-				telemetryService.register(new PostHogTelemetryClient())
-				console.info("[Telemetry] Also using PostHogTelemetryClient (API key present)")
-			}
-		} else {
-			telemetryService.register(new PostHogTelemetryClient())
-		}
-	} catch (error) {
-		console.warn("Failed to register TelemetryClient:", error.message)
-	}
-	// kilocode_change end
-
-	// Create logger for cloud services.
+	// Keep a local logger for services that accept the shared logging interface. // kilocode_change
 	const cloudLogger = createDualLogger(createOutputChannelLogger(outputChannel))
-
-	// kilocode_change start: no Roo cloud service
-	// Initialize Roo Code Cloud service.
-	// const cloudService = await CloudService.createInstance(context, cloudLogger)
-
-	// try {
-	// 	if (cloudService.telemetryClient) {
-	// 		TelemetryService.instance.register(cloudService.telemetryClient)
-	// 	}
-	// } catch (error) {
-	// 	outputChannel.appendLine(
-	// 		`[CloudService] Failed to register TelemetryClient: ${error instanceof Error ? error.message : String(error)}`,
-	// 	)
-	// }
-
-	// const postStateListener = () => {
-	// 	ClineProvider.getVisibleInstance()?.postStateToWebview()
-	// }
-
-	// cloudService.on("auth-state-changed", postStateListener)
-	// cloudService.on("user-info", postStateListener)
-	// cloudService.on("settings-updated", postStateListener)
-
-	// // Add to subscriptions for proper cleanup on deactivate
-	// context.subscriptions.push(cloudService)
-	// kilocode_change end
 
 	// Initialize MDM service
 	const mdmService = await MdmService.createInstance(cloudLogger)
@@ -214,162 +139,31 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	// Initialize the provider *before* the Roo Code Cloud service.
+	// kilocode_change start: initialize only the local personal-provider runtime
+	// Initialize the provider without starting the upstream cloud service.
 	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, mdmService)
 
-	// kilocode_change start: Initialize ManagedIndexer
-	const managedIndexer = new ManagedIndexer(contextProxy)
-	context.subscriptions.push(managedIndexer)
-	// kilocode_change end
-
-	// Initialize Roo Code Cloud service.
-	const postStateListener = () => ClineProvider.getVisibleInstance()?.postStateToWebview()
-
-	authStateChangedHandler = async (data: { state: AuthState; previousState: AuthState }) => {
-		postStateListener()
-
-		if (data.state === "logged-out") {
-			try {
-				await provider.remoteControlEnabled(false)
-			} catch (error) {
-				cloudLogger(
-					`[authStateChangedHandler] remoteControlEnabled(false) failed: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
-		}
-
-		// Handle Roo models cache based on auth state (ROO-202)
-		const handleRooModelsCache = async () => {
-			try {
-				if (data.state === "active-session") {
-					// Refresh with auth token to get authenticated models
-					const sessionToken = CloudService.hasInstance()
-						? CloudService.instance.authService?.getSessionToken()
-						: undefined
-					await refreshModels({
-						provider: "roo",
-						baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
-						apiKey: sessionToken,
-					})
-				} else {
-					// Flush without refresh on logout
-					await flushModels({ provider: "roo" }, false)
-				}
-			} catch (error) {
-				cloudLogger(
-					`[authStateChangedHandler] Failed to handle Roo models cache: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
-		}
-
-		if (data.state === "active-session" || data.state === "logged-out") {
-			// kilocode_change start: disable
-			// await handleRooModelsCache()
-			// // Apply stored provider model to API configuration if present
-			// if (data.state === "active-session") {
-			// 	try {
-			// 		const storedModel = context.globalState.get<string>("roo-provider-model")
-			// 		if (storedModel) {
-			// 			cloudLogger(`[authStateChangedHandler] Applying stored provider model: ${storedModel}`)
-			// 			// Get the current API configuration name
-			// 			const currentConfigName =
-			// 				provider.contextProxy.getGlobalState("currentApiConfigName") || "default"
-			// 			// Update it with the stored model using upsertProviderProfile
-			// 			await provider.upsertProviderProfile(currentConfigName, {
-			// 				apiProvider: "roo",
-			// 				apiModelId: storedModel,
-			// 			})
-			// 			// Clear the stored model after applying
-			// 			await context.globalState.update("roo-provider-model", undefined)
-			// 			cloudLogger(`[authStateChangedHandler] Applied and cleared stored provider model`)
-			// 		}
-			// 	} catch (error) {
-			// 		cloudLogger(
-			// 			`[authStateChangedHandler] Failed to apply stored provider model: ${error instanceof Error ? error.message : String(error)}`,
-			// 		)
-			// 	}
-			// }
-			// kilocode_change end
-		}
-	}
-
-	settingsUpdatedHandler = async () => {
-		const userInfo = CloudService.instance.getUserInfo()
-
-		if (userInfo && CloudService.instance.cloudAPI) {
-			try {
-				provider.remoteControlEnabled(CloudService.instance.isTaskSyncEnabled())
-			} catch (error) {
-				cloudLogger(
-					`[settingsUpdatedHandler] remoteControlEnabled failed: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
-		}
-
-		postStateListener()
-	}
-
-	userInfoHandler = async ({ userInfo }: { userInfo: CloudUserInfo }) => {
-		postStateListener()
-
-		if (!CloudService.instance.cloudAPI) {
-			cloudLogger("[userInfoHandler] CloudAPI is not initialized")
-			return
-		}
-
-		try {
-			provider.remoteControlEnabled(CloudService.instance.isTaskSyncEnabled())
-		} catch (error) {
-			cloudLogger(
-				`[userInfoHandler] remoteControlEnabled failed: ${error instanceof Error ? error.message : String(error)}`,
-			)
-		}
-	}
-
-	cloudService = await CloudService.createInstance(context, cloudLogger, {
-		"auth-state-changed": authStateChangedHandler,
-		"settings-updated": settingsUpdatedHandler,
-		"user-info": userInfoHandler,
-	})
-
+	// Auto-import before selecting the active personal profile so imported legacy
+	// profiles are preserved but can never become the runtime configuration.
 	try {
-		if (cloudService.telemetryClient) {
-			// TelemetryService.instance.register(cloudService.telemetryClient) kilocode_change
-		}
-	} catch (error) {
-		outputChannel.appendLine(
-			`[CloudService] Failed to register TelemetryClient: ${error instanceof Error ? error.message : String(error)}`,
-		)
-	}
-
-	// Add to subscriptions for proper cleanup on deactivate.
-	context.subscriptions.push(cloudService)
-
-	// Trigger initial cloud profile sync now that CloudService is ready.
-	try {
-		await provider.initializeCloudProfileSyncWhenReady()
-	} catch (error) {
-		outputChannel.appendLine(
-			`[CloudService] Failed to initialize cloud profile sync: ${error instanceof Error ? error.message : String(error)}`,
-		)
-	}
-
-	// kilocode_change start
-	try {
-		const kiloToken = await findKilocodeTokenFromAnyProfile(provider)
-
-		await kilo_initializeSessionManager({
-			context: context,
-			kiloToken,
-			log: provider.log.bind(provider),
-			outputChannel,
-			provider,
+		await autoImportSettings(outputChannel, {
+			providerSettingsManager: provider.providerSettingsManager,
+			contextProxy: provider.contextProxy,
+			customModesManager: provider.customModesManager,
 		})
 	} catch (error) {
 		outputChannel.appendLine(
-			`[SessionManager] Failed to initialize SessionManager: ${error instanceof Error ? error.message : String(error)}`,
+			`[AutoImport] Error during auto-import: ${error instanceof Error ? error.message : String(error)}`,
 		)
 	}
+
+	await provider.initializePersonalProviderProfile()
+
+	// Personal build does not initialize Kilo managed indexing.
+	// Never restore Roo/Kilo cloud auth, profile sync, remote
+	// control, telemetry, or periodic model/settings requests in the personal build.
+	// Direct provider OAuth (Claude Code and Codex Pro) is initialized separately above.
+	// Personal build never starts Kilo session synchronization in the background.
 	// kilocode_change end
 
 	// Finish initializing the provider.
@@ -383,27 +177,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// kilocode_change start
 	if (!context.globalState.get("firstInstallCompleted")) {
-		outputChannel.appendLine("First installation detected, opening Kilo Code sidebar!")
+		outputChannel.appendLine("First installation detected, opening IVOL Code sidebar!")
 		try {
-			await vscode.commands.executeCommand("kilo-code.SidebarProvider.focus")
+			await vscode.commands.executeCommand("ivol-code-agent-5.SidebarProvider.focus")
 
-			outputChannel.appendLine("Opening Kilo Code walkthrough")
+			outputChannel.appendLine("Opening IVOL Code walkthrough")
 
 			// this can crash, see:
 			// https://discord.com/channels/1349288496988160052/1395865796026040470
 			await vscode.commands.executeCommand(
 				"workbench.action.openWalkthrough",
-				"kilocode.kilo-code#kiloCodeWalkthrough",
+				`${Package.publisher}.${Package.name}#ivolCodeAgent5Walkthrough`, // kilocode_change
 				false,
 			)
 
-			// Enable autocomplete by default for new installs, but not for JetBrains IDEs
-			// JetBrains users can manually enable it if they want to test the feature
-			const { kiloCodeWrapperJetbrains } = getKiloCodeWrapperProperties()
+			// Personal builds keep background autocomplete disabled until the user opts in.
 			const currentAutocompleteSettings = contextProxy.getValue("ghostServiceSettings")
 			await contextProxy.setValue("ghostServiceSettings", {
 				...currentAutocompleteSettings,
-				enableAutoTrigger: !kiloCodeWrapperJetbrains,
+				enableAutoTrigger: false,
+				enableChatAutocomplete: false,
 				enableSmartInlineTaskKeybinding: true,
 			})
 		} catch (error) {
@@ -411,29 +204,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		} finally {
 			await context.globalState.update("firstInstallCompleted", true)
 		}
-	}
-	// kilocode_change end
-
-	// Auto-import configuration if specified in settings
-	try {
-		await autoImportSettings(outputChannel, {
-			providerSettingsManager: provider.providerSettingsManager,
-			contextProxy: provider.contextProxy,
-			customModesManager: provider.customModesManager,
-		})
-	} catch (error) {
-		outputChannel.appendLine(
-			`[AutoImport] Error during auto-import: ${error instanceof Error ? error.message : String(error)}`,
-		)
-	}
-
-	// kilocode_change start: Fetch Kilo Code notifications on startup
-	try {
-		void fetchKilocodeNotificationsOnStartup(contextProxy, outputChannel.appendLine.bind(outputChannel))
-	} catch (error) {
-		outputChannel.appendLine(
-			`[Notifications] Error fetching notifications on startup: ${error instanceof Error ? error.message : String(error)}`,
-		)
 	}
 	// kilocode_change end
 
@@ -508,7 +278,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	// kilocode_change start - Kilo Code specific registrations
+	// kilocode_change start - IVOL Code specific registrations
 	const { kiloCodeWrapped, kiloCodeWrapperCode } = getKiloCodeWrapperProperties()
 	if (kiloCodeWrapped) {
 		// Only foward logs in Jetbrains
@@ -519,12 +289,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		registerAutocompleteProvider(context, provider)
 	}
 	registerCommitMessageProvider(context, outputChannel) // kilocode_change
-	// kilocode_change end - Kilo Code specific registrations
+	// kilocode_change end - IVOL Code specific registrations
 
 	registerCodeActions(context)
 	registerTerminalActions(context)
 
-	// Allows other extensions to activate once Kilo Code is ready.
+	// Allows other extensions to activate once IVOL Code is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 
 	// Implements the `RooCodeAPI` interface.
@@ -583,16 +353,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	}
 
-	// kilocode_change start: Initialize ManagedIndexer
-	void managedIndexer.start().catch((error) => {
-		outputChannel.appendLine(
-			`Failed to start ManagedIndexer: ${error instanceof Error ? error.message : String(error)}`,
-		)
-	})
 	await checkAndRunAutoLaunchingTask(context)
-	// kilocode_change end
-	// Initialize background model cache refresh
-	initializeModelCacheRefresh()
+	// kilocode_change: no managed-indexing startup request in the personal build
+	// kilocode_change: personal build loads provider models on demand instead of polling providers on startup
 
 	return new API(outputChannel, provider, socketPath, enableLogging)
 }
@@ -601,28 +364,7 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
-	if (cloudService && CloudService.hasInstance()) {
-		try {
-			if (authStateChangedHandler) {
-				CloudService.instance.off("auth-state-changed", authStateChangedHandler)
-			}
-
-			if (settingsUpdatedHandler) {
-				CloudService.instance.off("settings-updated", settingsUpdatedHandler)
-			}
-
-			if (userInfoHandler) {
-				CloudService.instance.off("user-info", userInfoHandler as any)
-			}
-
-			outputChannel.appendLine("CloudService event handlers cleaned up")
-		} catch (error) {
-			outputChannel.appendLine(
-				`Failed to clean up CloudService event handlers: ${error instanceof Error ? error.message : String(error)}`,
-			)
-		}
-	}
-
+	// kilocode_change: no upstream cloud event handlers exist in the personal build
 	const bridge = BridgeOrchestrator.getInstance()
 
 	if (bridge) {

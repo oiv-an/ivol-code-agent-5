@@ -103,10 +103,10 @@ describe("OpenRouterHandler", () => {
 			baseURL: "https://openrouter.ai/api/v1",
 			apiKey: mockOptions.openRouterApiKey,
 			defaultHeaders: {
-				"HTTP-Referer": "https://kilocode.ai",
-				"X-Title": "Kilo Code",
-				"X-KiloCode-Version": Package.version,
-				"User-Agent": `Kilo-Code/${Package.version}`,
+				"HTTP-Referer": "https://github.com/oiv-an/ivol-code-agent-5",
+				"X-Title": "IVOL Code",
+				"X-IVOL-Code-Version": Package.version,
+				"User-Agent": `IVOL-Code-Agent-5/${Package.version}`,
 			},
 		})
 	})

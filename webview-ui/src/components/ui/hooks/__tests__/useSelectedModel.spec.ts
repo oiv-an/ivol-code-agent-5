@@ -526,6 +526,30 @@ describe("useSelectedModel", () => {
 			expect(result.current.id).toBe("claude-sonnet-4-5")
 			expect(result.current.info).toBeUndefined()
 		})
+
+		it.each([
+			{ apiProvider: "kilocode", kilocodeModel: "hidden/model" },
+			{ apiProvider: "openrouter", openRouterModelId: "hidden/model" },
+			{ apiProvider: "roo", apiModelId: "hidden/model" },
+		] as ProviderSettings[])("does not request catalogs for migrated hidden provider $apiProvider", (config) => {
+			vi.clearAllMocks()
+			mockUseRouterModels.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
+			mockUseOpenRouterModelProviders.mockReturnValue({ data: {}, isLoading: false, isError: false } as any)
+
+			const wrapper = createWrapper()
+			renderHook(() => useSelectedModel(config), { wrapper })
+
+			expect(mockUseRouterModels).toHaveBeenLastCalledWith(expect.any(Object), {
+				provider: undefined,
+				enabled: false,
+			})
+			expect(mockUseOpenRouterModelProviders).toHaveBeenLastCalledWith(
+				undefined,
+				undefined,
+				undefined,
+				"personal",
+			)
+		})
 	})
 
 	describe("moonshot endpoint restrictions", () => {
@@ -825,8 +849,8 @@ describe("useSelectedModel", () => {
 		})
 	})
 
-		// kilocode_change start
-		describe("vertex provider", () => {
+	// kilocode_change start
+	describe("vertex provider", () => {
 		beforeEach(() => {
 			mockUseRouterModels.mockReturnValue({
 				data: {
@@ -861,10 +885,10 @@ describe("useSelectedModel", () => {
 			expect(result.current.id).toBe("claude-opus-4-6")
 			expect(result.current.info?.supportsImages).toBe(true)
 		})
-		})
-		// kilocode_change end
+	})
+	// kilocode_change end
 
-		describe("litellm provider", () => {
+	describe("litellm provider", () => {
 		beforeEach(() => {
 			mockUseOpenRouterModelProviders.mockReturnValue({
 				data: {},
@@ -1085,9 +1109,26 @@ describe("useSelectedModel", () => {
 
 			expect(result.current.provider).toBe("openai")
 			expect(result.current.id).toBe("gpt-4o")
-			expect(result.current.info).toEqual(openAiModelInfoSaneDefaults)
+			expect(result.current.info).toEqual({ ...openAiModelInfoSaneDefaults, supportsPromptCache: true })
 			expect(result.current.info?.supportsNativeTools).toBe(true)
 			expect(result.current.info?.defaultToolProtocol).toBe("native")
+		})
+
+		it("reports automatic prompt caching for OpenAI Responses profiles", () => {
+			const apiConfiguration: ProviderSettings = {
+				apiProvider: "openai-responses",
+				openAiModelId: "gpt-5.6",
+				openAiCustomModelInfo: {
+					...openAiModelInfoSaneDefaults,
+					supportsPromptCache: false,
+				},
+			}
+
+			const wrapper = createWrapper()
+			const { result } = renderHook(() => useSelectedModel(apiConfiguration), { wrapper })
+
+			expect(result.current.provider).toBe("openai-responses")
+			expect(result.current.info?.supportsPromptCache).toBe(true)
 		})
 
 		it("should merge native tool defaults with custom model info", () => {
@@ -1117,7 +1158,11 @@ describe("useSelectedModel", () => {
 				supportsNativeTools: openAiModelInfoSaneDefaults.supportsNativeTools,
 				defaultToolProtocol: openAiModelInfoSaneDefaults.defaultToolProtocol,
 			}
-			expect(result.current.info).toEqual({ ...nativeToolDefaults, ...customModelInfo })
+			expect(result.current.info).toEqual({
+				...nativeToolDefaults,
+				...customModelInfo,
+				supportsPromptCache: true,
+			})
 			expect(result.current.info?.supportsNativeTools).toBe(true)
 			expect(result.current.info?.defaultToolProtocol).toBe("native")
 		})

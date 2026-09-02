@@ -23,7 +23,7 @@ import type { ModelRecord, RouterModels, ModelInfo } from "./model.js"
 import type { CommitRange } from "./kilocode/kilocode.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 
-// kilocode_change start: Type definitions for Kilo Code-specific features
+// kilocode_change start: Type definitions for IVOL Code-specific features
 // SAP AI Core deployment types
 export type DeploymentRecord = Record<
 	string,
@@ -143,7 +143,9 @@ export interface ExtensionMessage {
 		| "theme"
 		| "workspaceUpdated"
 		| "invoke"
+		| "messageCreated" // kilocode_change
 		| "messageUpdated"
+		| "currentTaskStateUpdated" // kilocode_change
 		| "mcpServers"
 		| "enhancedPrompt"
 		| "commitSearchResults"
@@ -185,7 +187,7 @@ export interface ExtensionMessage {
 		| "mcpDownloadDetails" // kilocode_change
 		| "showSystemNotification" // kilocode_change
 		| "openInBrowser" // kilocode_change
-		| "switchToPreRelease" // kilocode_change
+		// kilocode_change: personal build intentionally omits the pre-release updater message
 		| "acceptInput"
 		| "focusChatInput" // kilocode_change
 		| "stt:started" // kilocode_change: STT session started
@@ -309,6 +311,14 @@ export interface ExtensionMessage {
 		path?: string
 	}>
 	clineMessage?: ClineMessage
+	// kilocode_change start: incremental current-task updates avoid retransmitting long conversations
+	taskId?: string
+	taskState?: {
+		currentTaskTodos?: TodoItem[]
+		currentTaskCumulativeCost?: number
+		messageQueue?: QueuedMessage[]
+	}
+	// kilocode_change end
 	routerModels?: RouterModels
 	openAiModels?: string[]
 	ollamaModels?: ModelRecord
@@ -581,6 +591,7 @@ export type ExtensionState = Pick<
 > & {
 	version: string
 	clineMessages: ClineMessage[]
+	currentTaskId?: string // kilocode_change: stable task identity for incremental message updates
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	currentTaskCumulativeCost?: number // kilocode_change: cumulative cost including deleted messages
@@ -892,7 +903,7 @@ export interface WebviewMessage {
 		| "setReasoningBlockCollapsed" // kilocode_change
 		| "openExternal"
 		| "openInBrowser" // kilocode_change
-		| "switchToPreRelease" // kilocode_change
+		// kilocode_change: personal build intentionally omits the pre-release updater request
 		| "filterMarketplaceItems"
 		| "marketplaceButtonClicked"
 		| "installMarketplaceItem"

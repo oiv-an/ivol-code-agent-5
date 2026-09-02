@@ -8,6 +8,7 @@ vi.mock("posthog-js", () => ({
 		reset: vi.fn(),
 		identify: vi.fn(),
 		capture: vi.fn(),
+		captureException: vi.fn(),
 	},
 }))
 
@@ -35,38 +36,12 @@ describe("TelemetryClient", () => {
 	 * Tests for the updateTelemetryState method
 	 */
 	describe("updateTelemetryState", () => {
-		it("resets PostHog when called", () => {
-			// Act
-			telemetryClient.updateTelemetryState("enabled")
+		it("never initializes PostHog in the personal build, even with hydrated credentials", () => {
+			telemetryClient.updateTelemetryState("enabled", "test-api-key", "test-user-id")
 
-			// Assert
-			expect(posthog.reset).toHaveBeenCalled()
-		})
-
-		it("initializes PostHog when telemetry is enabled with API key and distinctId", () => {
-			// Arrange
-			const API_KEY = "test-api-key"
-			const DISTINCT_ID = "test-user-id"
-
-			// Act
-			telemetryClient.updateTelemetryState("enabled", API_KEY, DISTINCT_ID)
-
-			// Assert
-			expect(posthog.init).toHaveBeenCalledWith(
-				API_KEY,
-				expect.objectContaining({
-					api_host: "https://us.i.posthog.com", // kilocode_change
-					persistence: "localStorage",
-					loaded: expect.any(Function),
-				}),
-			)
-
-			// Instead of trying to extract and call the callback, manually call identify
-			// This simulates what would happen when the loaded callback is triggered
-			posthog.identify(DISTINCT_ID)
-
-			// Now verify identify was called
-			expect(posthog.identify).toHaveBeenCalled()
+			expect(posthog.reset).not.toHaveBeenCalled()
+			expect(posthog.init).not.toHaveBeenCalled()
+			expect(posthog.identify).not.toHaveBeenCalled()
 		})
 
 		it("doesn't initialize PostHog when telemetry is disabled", () => {
@@ -90,16 +65,14 @@ describe("TelemetryClient", () => {
 	 * Tests for the capture method
 	 */
 	describe("capture", () => {
-		it("captures events when telemetry is enabled", () => {
-			// Arrange - set telemetry to enabled
+		it("doesn't capture events or exceptions when hydrated telemetry is enabled", () => {
 			telemetryClient.updateTelemetryState("enabled", "test-key", "test-user")
-			vi.clearAllMocks() // Clear previous calls
 
-			// Act
 			telemetryClient.capture("test_event", { property: "value" })
+			telemetryClient.captureException(new Error("test error"), { property: "value" })
 
-			// Assert
-			expect(posthog.capture).toHaveBeenCalledWith("test_event", { property: "value" })
+			expect(posthog.capture).not.toHaveBeenCalled()
+			expect(posthog.captureException).not.toHaveBeenCalled()
 		})
 
 		it("doesn't capture events when telemetry is disabled", () => {

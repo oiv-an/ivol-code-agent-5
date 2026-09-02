@@ -633,6 +633,12 @@ export class RuntimeProcessHandler {
 			[key: string]: unknown
 		}
 
+		// Handle messageCreated events without waiting for a full state snapshot.
+		if (extMsg.type === "messageCreated" && extMsg.chatMessage) {
+			this.handleMessageCreated(sessionId, extMsg.chatMessage, onEvent)
+			return
+		}
+
 		// Handle messageUpdated events for real-time streaming
 		if (extMsg.type === "messageUpdated" && extMsg.chatMessage) {
 			this.handleMessageUpdated(sessionId, extMsg.chatMessage)
@@ -701,6 +707,28 @@ export class RuntimeProcessHandler {
 				this.checkAndSendPendingContinuation(sessionId, chatMessages)
 			}
 		}
+	}
+
+	/** Handle one newly appended message from the extension. */
+	private handleMessageCreated(
+		sessionId: string,
+		createdMessage: ClineMessage,
+		onEvent: (sessionId: string, event: StreamEvent) => void,
+	): void {
+		if (createdMessage.type === "ask" && createdMessage.ask === "completion_result") {
+			return
+		}
+
+		if (!this.sentApiReqStarted.has(sessionId)) {
+			this.sentApiReqStarted.add(sessionId)
+			onEvent(sessionId, {
+				streamEventType: "kilocode",
+				payload: { ts: Date.now(), type: "say", say: "api_req_started" },
+			})
+		}
+
+		this.callbacks.onChatMessages(sessionId, [createdMessage])
+		this.checkAndSendPendingContinuation(sessionId, [createdMessage])
 	}
 
 	/**

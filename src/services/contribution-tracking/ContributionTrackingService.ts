@@ -1,7 +1,7 @@
 // kilocode_change - new file
 import crypto from "crypto"
 import { createPatch } from "diff"
-import { getKiloUrlFromToken } from "@roo-code/types"
+import { DISABLED_KILOCODE_URL, getKiloUrlFromToken } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { fetchWithRetries } from "../../shared/http"
 import { getCurrentBranch } from "../code-index/managed/git-utils"
@@ -31,7 +31,7 @@ export class ContributionTrackingService {
 	private tokenFetchPromise: Promise<TokenProvisionResponse> | null = null
 
 	// AI Attribution service URL
-	private static readonly CONTRIBUTION_SERVICE_URL = "https://ai-attribution.kiloapps.io/attributions/track"
+	private static readonly CONTRIBUTION_SERVICE_URL = `${DISABLED_KILOCODE_URL}/attributions/track`
 	// private static readonly CONTRIBUTION_SERVICE_URL = "http://localhost:8787/attributions/track"
 
 	// Refresh token 1 minute before expiry
@@ -89,7 +89,7 @@ export class ContributionTrackingService {
 	private async fetchToken(organizationId: string, kilocodeToken: string): Promise<TokenProvisionResponse> {
 		try {
 			const url = getKiloUrlFromToken(
-				`https://api.kilo.ai/api/organizations/${organizationId}/user-tokens`,
+				`${DISABLED_KILOCODE_URL}/api/organizations/${organizationId}/user-tokens`,
 				kilocodeToken,
 			)
 
@@ -403,10 +403,8 @@ export class ContributionTrackingService {
  * })
  * ```
  */
-export function trackContribution(params: TrackContributionParams): void {
-	const service = ContributionTrackingService.getInstance()
-	service.trackContribution(params).catch((error: unknown) => {
-		// Errors are already logged in the service, this just prevents unhandled rejection
-		console.debug("[trackContribution] Contribution tracking failed:", error)
-	})
+// kilocode_change start: never send file-attribution data to Kilo services
+export function trackContribution(_params: TrackContributionParams): void {
+	// Personal build: never send file-attribution data to Kilo services.
 }
+// kilocode_change end

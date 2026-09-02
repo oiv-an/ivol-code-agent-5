@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "Open source AI-coderingsagent die code genereert uit natuurlijke taal, taken automatiseert en terminalopdrachten uitvoert. Met inline autocomplete, browserautomatisering, geautomatiseerde refactoring en aangepaste modi voor planning, codering en debugging. Ondersteunt meer dan 500 AI-modellen, waaronder Claude (Anthropic), Gemini, Grok, GPT, Codex en GLM."
 	},
 	"number_format": {
@@ -165,7 +165,7 @@
 	"warnings": {
 		"no_terminal_content": "Geen terminalinhoud geselecteerd",
 		"missing_task_files": "De bestanden van deze taak ontbreken. Wil je deze uit de takenlijst verwijderen?",
-		"auto_import_failed": "Automatisch importeren van Kilo Code-instellingen mislukt: {{error}}"
+		"auto_import_failed": "Automatisch importeren van IVOL Code Agent 5-instellingen mislukt: {{error}}"
 	},
 	"info": {
 		"no_changes": "Geen wijzigingen gevonden.",
@@ -174,7 +174,7 @@
 		"custom_storage_path_set": "Aangepast opslagpad ingesteld: {{path}}",
 		"default_storage_path": "Terug naar standaard opslagpad",
 		"settings_imported": "Instellingen succesvol geïmporteerd.",
-		"auto_import_success": "Kilo Code-instellingen automatisch geïmporteerd van {{filename}}",
+		"auto_import_success": "IVOL Code Agent 5-instellingen automatisch geïmporteerd van {{filename}}",
 		"share_link_copied": "Deellink gekopieerd naar klembord",
 		"image_copied_to_clipboard": "Afbeelding data-URI gekopieerd naar klembord",
 		"image_saved": "Afbeelding opgeslagen naar {{path}}",
@@ -208,12 +208,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Voer een aangepast opslagpad voor gespreksgeschiedenis in, laat leeg voor standaardlocatie",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Voer een absoluut pad in (bijv. D:\\KiloCodeStorage of /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Voer een absoluut pad in (bijv. D:\\IVOLCodeStorage of /home/user/storage)",
 		"enter_valid_path": "Voer een geldig pad in"
 	},
 	"input": {
-		"task_prompt": "Wat moet Kilo Code doen?",
+		"task_prompt": "Wat moet IVOL Code Agent 5 doen?",
 		"task_placeholder": "Typ hier je taak"
 	},
 	"settings": {
@@ -274,7 +274,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Fout",

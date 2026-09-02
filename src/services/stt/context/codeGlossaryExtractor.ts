@@ -9,7 +9,7 @@ export interface CodeGlossary {
  * Core terms that should always be included in the glossary
  * These are Kilocode-specific or commonly spoken technical terms
  */
-const CORE_TERMS = ["Kilocode", "Kilo Code", "VSCode", "MCP"]
+const CORE_TERMS = ["Kilocode", "IVOL Code", "VSCode", "MCP"]
 
 /**
  * Extract code identifiers from visible editors

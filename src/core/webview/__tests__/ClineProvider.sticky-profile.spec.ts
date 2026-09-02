@@ -481,8 +481,13 @@ describe("ClineProvider - Sticky Provider Profile", () => {
 
 			// Mock providerSettingsManager.listConfig
 			vi.spyOn(provider.providerSettingsManager, "listConfig").mockResolvedValue([
-				{ name: "saved-profile", id: "saved-profile-id", apiProvider: "anthropic" },
+				{ name: "saved-profile", id: "saved-profile-id", apiProvider: "openai" },
 			])
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockResolvedValue({
+				name: "saved-profile",
+				id: "saved-profile-id",
+				apiProvider: "openai",
+			})
 
 			// Initialize task with history item
 			await provider.createTaskWithHistoryItem(historyItem)
@@ -492,6 +497,70 @@ describe("ClineProvider - Sticky Provider Profile", () => {
 				{ name: "saved-profile" },
 				{ persistModeConfig: false, persistTaskHistory: false },
 			)
+		})
+
+		it("should not reactivate a hidden provider saved in task history", async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+
+			const historyItem: HistoryItem = {
+				id: "legacy-task-id",
+				number: 1,
+				ts: Date.now(),
+				task: "Legacy task",
+				tokensIn: 0,
+				tokensOut: 0,
+				cacheWrites: 0,
+				cacheReads: 0,
+				totalCost: 0,
+				mode: "code",
+				apiConfigName: "Legacy Kilo",
+			}
+			const activateProviderProfileSpy = vi.spyOn(provider, "activateProviderProfile")
+			vi.spyOn(provider.providerSettingsManager, "listConfig").mockResolvedValue([
+				{ name: "Legacy Kilo", id: "legacy-id", apiProvider: "kilocode" },
+			])
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockResolvedValue({
+				name: "Legacy Kilo",
+				id: "legacy-id",
+				apiProvider: "kilocode",
+				kilocodeToken: "saved-token",
+			})
+
+			await provider.createTaskWithHistoryItem(historyItem)
+
+			expect(activateProviderProfileSpy).not.toHaveBeenCalled()
+		})
+
+		it("should not reactivate a hidden provider saved for a task mode", async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+
+			const historyItem: HistoryItem = {
+				id: "legacy-mode-task-id",
+				number: 1,
+				ts: Date.now(),
+				task: "Legacy mode task",
+				tokensIn: 0,
+				tokensOut: 0,
+				cacheWrites: 0,
+				cacheReads: 0,
+				totalCost: 0,
+				mode: "code",
+			}
+			const activateProviderProfileSpy = vi.spyOn(provider, "activateProviderProfile")
+			vi.spyOn(provider.providerSettingsManager, "getModeConfigId").mockResolvedValue("legacy-id")
+			vi.spyOn(provider.providerSettingsManager, "listConfig").mockResolvedValue([
+				{ name: "Legacy Kilo", id: "legacy-id", apiProvider: "kilocode" },
+			])
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockResolvedValue({
+				name: "Legacy Kilo",
+				id: "legacy-id",
+				apiProvider: "kilocode",
+				kilocodeToken: "saved-token",
+			})
+
+			await provider.createTaskWithHistoryItem(historyItem)
+
+			expect(activateProviderProfileSpy).not.toHaveBeenCalled()
 		})
 
 		it("should use current profile if history item has no saved apiConfigName", async () => {
@@ -556,9 +625,20 @@ describe("ClineProvider - Sticky Provider Profile", () => {
 			// Mock providerSettingsManager methods
 			vi.spyOn(provider.providerSettingsManager, "getModeConfigId").mockResolvedValue("mode-config-id")
 			vi.spyOn(provider.providerSettingsManager, "listConfig").mockResolvedValue([
-				{ name: "mode-preferred-profile", id: "mode-config-id", apiProvider: "anthropic" },
+				{ name: "mode-preferred-profile", id: "mode-config-id", apiProvider: "claude-code" },
 				{ name: "task-specific-profile", id: "task-profile-id", apiProvider: "openai" },
 			])
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockImplementation(async (args) => {
+				const profileName =
+					"name" in args
+						? args.name
+						: args.id === "mode-config-id"
+							? "mode-preferred-profile"
+							: "task-specific-profile"
+				return profileName === "mode-preferred-profile"
+					? { name: profileName, id: "mode-config-id", apiProvider: "claude-code" }
+					: { name: profileName, id: "task-profile-id", apiProvider: "openai" }
+			})
 
 			// Initialize task with history item
 			await provider.createTaskWithHistoryItem(historyItem)

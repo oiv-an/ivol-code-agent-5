@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "開源 AI 編碼代理，可從自然語言產生程式碼、自動化工作並執行終端機命令。具有內嵌自動完成、瀏覽器自動化、自動重構以及用於規劃、編碼和除錯的自訂模式。支援 500 多種 AI 模型，包括 Claude (Anthropic)、Gemini、Grok、GPT、Codex 和 GLM。"
 	},
 	"number_format": {
@@ -165,7 +165,7 @@
 	"warnings": {
 		"no_terminal_content": "沒有選擇終端機內容",
 		"missing_task_files": "此任務的檔案遺失。您想從任務列表中刪除它嗎？",
-		"auto_import_failed": "自動匯入 Kilo Code 設定失敗：{{error}}"
+		"auto_import_failed": "自動匯入 IVOL Code Agent 5 設定失敗：{{error}}"
 	},
 	"info": {
 		"no_changes": "沒有找到更改。",
@@ -174,7 +174,7 @@
 		"custom_storage_path_set": "自訂儲存路徑已設定：{{path}}",
 		"default_storage_path": "已恢復使用預設儲存路徑",
 		"settings_imported": "設定已成功匯入。",
-		"auto_import_success": "已自動匯入 Kilo Code 設定：{{filename}}",
+		"auto_import_success": "已自動匯入 IVOL Code Agent 5 設定：{{filename}}",
 		"share_link_copied": "分享連結已複製到剪貼簿",
 		"image_copied_to_clipboard": "圖片資料 URI 已複製到剪貼簿",
 		"image_saved": "圖片已儲存至 {{path}}",
@@ -208,12 +208,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "輸入自定義對話記錄儲存路徑，留空以使用預設位置",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "請輸入絕對路徑（例如 D:\\KiloCodeStorage 或 /home/user/storage）",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "請輸入絕對路徑（例如 D:\\IVOLCodeStorage 或 /home/user/storage）",
 		"enter_valid_path": "請輸入有效的路徑"
 	},
 	"input": {
-		"task_prompt": "Kilo Code 該做什麼？",
+		"task_prompt": "IVOL Code Agent 5 該做什麼？",
 		"task_placeholder": "在這裡輸入任務"
 	},
 	"settings": {
@@ -274,7 +274,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "錯誤",

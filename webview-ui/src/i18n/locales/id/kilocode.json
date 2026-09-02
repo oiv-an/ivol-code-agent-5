@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Selamat datang di Kilo Code!",
-		"introText1": "Kilo Code adalah agen coding AI gratis dan open source.",
+		"greeting": "Selamat datang di IVOL Code!",
+		"introText1": "IVOL Code adalah agen coding AI gratis dan open source.",
 		"introText2": "Bekerja dengan model AI terbaru seperti Claude Opus 4.5, Gemini 3 Pro, GPT-5.2, dan lebih dari 450 model lainnya.",
 		"introText3": "Buat akun gratis untuk memulai.",
 		"ctaButton": "Mulai",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Tambah Kredit",
-		"lowBalance": "Saldo Kilo Code kamu rendah",
+		"lowBalance": "Saldo IVOL Code kamu rendah",
 		"switchToFreeModel": "Beralih ke Model Gratis"
 	},
 	"pagination": {
@@ -61,16 +61,16 @@
 			"skills": "Skill"
 		},
 		"provider": {
-			"account": "Akun Kilo Code",
-			"apiKey": "API Key Kilo Code",
-			"login": "Masuk ke Kilo Code",
-			"logout": "Keluar dari Kilo Code",
+			"account": "Akun IVOL Code",
+			"apiKey": "API Key Kilo",
+			"login": "Masuk ke IVOL Code",
+			"logout": "Keluar dari IVOL Code",
 			"loginForPremiumModels": "Masuk untuk mengakses model dan fitur premium",
 			"providerRouting": {
 				"title": "Perutean Penyedia",
 				"managedByOrganization": "Kelola Perutean Penyedia Tingkat Organisasi",
 				"createOrganization": "Buat Organisasi untuk Mengelola Perutean Penyedia",
-				"description": "Kilo Code merutekan permintaan ke penyedia terbaik yang tersedia untuk model Anda. Secara default, permintaan diseimbangkan bebannya di seluruh penyedia teratas untuk memaksimalkan waktu aktif. Namun, Anda dapat memilih penyedia tertentu untuk digunakan untuk model ini.",
+				"description": "IVOL Code merutekan permintaan ke penyedia terbaik yang tersedia untuk model Anda. Secara default, permintaan diseimbangkan bebannya di seluruh penyedia teratas untuk memaksimalkan waktu aktif. Namun, Anda dapat memilih penyedia tertentu untuk digunakan untuk model ini.",
 				"sorting": {
 					"default": "Pengurutan penyedia default",
 					"price": "Utamakan penyedia dengan harga lebih rendah",
@@ -101,15 +101,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Izinkan pembacaan file yang sangat besar",
-				"description": "Saat diaktifkan, Kilo Code akan melakukan pembacaan file atau output MCP yang sangat besar meskipun ada kemungkinan tinggi meluapnya jendela konteks (ukuran konten >80% dari jendela konteks)."
+				"description": "Saat diaktifkan, IVOL Code akan melakukan pembacaan file atau output MCP yang sangat besar meskipun ada kemungkinan tinggi meluapnya jendela konteks (ukuran konten >80% dari jendela konteks)."
 			}
 		},
 		"systemNotifications": {
 			"label": "Aktifkan Notifikasi Sistem",
-			"description": "Saat diaktifkan, Kilo Code akan mengirim notifikasi sistem untuk kejadian penting seperti penyelesaian tugas atau kesalahan.",
+			"description": "Saat diaktifkan, IVOL Code akan mengirim notifikasi sistem untuk kejadian penting seperti penyelesaian tugas atau kesalahan.",
 			"testButton": "Uji Notifikasi",
-			"testTitle": "Kilo Code",
-			"testMessage": "Ini adalah notifikasi uji dari Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Ini adalah notifikasi uji dari IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -130,7 +130,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code ingin mengondensasi percakapan kamu",
+			"wantsToCondense": "IVOL Code ingin mengondensasi percakapan kamu",
 			"condenseConversation": "Kondensasi Percakapan"
 		},
 		"seeNewChanges": "Tampilkan Perubahan Baru",
@@ -169,14 +169,14 @@
 			"modes": "Mode",
 			"skills": "Skill"
 		},
-		"ariaLabel": "Aturan Kilo Code",
+		"ariaLabel": "Aturan IVOL Code",
 		"tabs": {
 			"rules": "Aturan",
 			"workflows": "Alur Kerja"
 		},
 		"description": {
-			"rules": "Aturan memungkinkan kamu memberikan instruksi kepada Kilo Code yang harus diikuti di semua mode dan untuk semua prompt. Mereka adalah cara persisten untuk menyertakan konteks dan preferensi untuk semua percakapan di workspace kamu atau secara global.",
-			"workflows": "Alur kerja adalah template yang disiapkan untuk percakapan. Alur kerja memungkinkan kamu menentukan prompt yang sering kamu gunakan, dan dapat mencakup serangkaian langkah untuk memandu Kilo Code melalui tugas-tugas berulang, seperti menerapkan layanan atau mengirim PR. Untuk memanggil alur kerja, ketik",
+			"rules": "Aturan memungkinkan kamu memberikan instruksi kepada IVOL Code yang harus diikuti di semua mode dan untuk semua prompt. Mereka adalah cara persisten untuk menyertakan konteks dan preferensi untuk semua percakapan di workspace kamu atau secara global.",
+			"workflows": "Alur kerja adalah template yang disiapkan untuk percakapan. Alur kerja memungkinkan kamu menentukan prompt yang sering kamu gunakan, dan dapat mencakup serangkaian langkah untuk memandu IVOL Code melalui tugas-tugas berulang, seperti menerapkan layanan atau mengirim PR. Untuk memanggil alur kerja, ketik",
 			"workflowsInChat": "di chat."
 		},
 		"sections": {
@@ -285,7 +285,7 @@
 			},
 			"noCredits": {
 				"title": "Tidak ada kredit di akun kamu",
-				"description": "Akun Kilo Code kamu tidak memiliki kredit. Untuk menggunakan autocomplete, silakan tambahkan kredit ke akun kamu.",
+				"description": "Akun IVOL Code kamu tidak memiliki kredit. Untuk menggunakan autocomplete, silakan tambahkan kredit ke akun kamu.",
 				"buyCredits": "Beli kredit →"
 			},
 			"configureAutocompleteProfile": "Gunakan model apa pun dengan pergi ke profil dan mengonfigurasi Profil dengan Tipe Profil Autocomplete."
@@ -350,7 +350,7 @@
 		"shareModesNewBanner": "Baru: Bagikan mode dengan membuat organisasi"
 	},
 	"deviceAuth": {
-		"title": "Masuk ke Kilo Code",
+		"title": "Masuk ke IVOL Code",
 		"step1": "Buka URL berikut di browser kamu",
 		"step2": "Verifikasi kode dan otorisasi perangkat ini di browser kamu",
 		"scanQr": "Atau pindai kode QR ini dengan ponsel kamu",

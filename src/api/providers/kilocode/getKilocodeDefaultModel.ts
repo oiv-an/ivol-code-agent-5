@@ -1,5 +1,4 @@
-import { openRouterDefaultModelId } from "@roo-code/types"
-import { getKiloUrlFromToken } from "@roo-code/types"
+import { DISABLED_KILOCODE_URL, getKiloUrlFromToken, openRouterDefaultModelId } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { z } from "zod"
 import { DEFAULT_HEADERS } from "../constants"
@@ -23,7 +22,7 @@ async function fetchKilocodeDefaultModel(
 ): Promise<Defaults> {
 	try {
 		const path = organizationId ? `/organizations/${organizationId}/defaults` : `/defaults`
-		const url = getKiloUrlFromToken(`https://api.kilo.ai/api${path}`, kilocodeToken ?? "")
+		const url = getKiloUrlFromToken(`${DISABLED_KILOCODE_URL}/api${path}`, kilocodeToken ?? "")
 
 		const headers: Record<string, string> = {
 			...DEFAULT_HEADERS,

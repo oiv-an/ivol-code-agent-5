@@ -83,7 +83,7 @@
 		"apiRequest": "طلب API",
 		"taskCompleted": "اكتملت المهمة",
 		"error": "خطأ",
-		"question": "لدى Kilo Code سؤال",
+		"question": "لدى IVOL Code سؤال",
 		"command": "يريد Kilo تشغيل أمر",
 		"tool": "يريد Kilo استخدام أداة",
 		"usingTool": "استخدام الأداة: **{{tool}}** {{details}}",

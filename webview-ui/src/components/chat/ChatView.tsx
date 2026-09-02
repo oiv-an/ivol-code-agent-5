@@ -31,11 +31,9 @@ import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
 import { StandardTooltip } from "@src/components/ui"
 
 // import VersionIndicator from "../common/VersionIndicator" // kilocode_change: unused
-import { OrganizationSelector } from "../kilocode/common/OrganizationSelector"
 // import { useTaskSearch } from "../history/useTaskSearch" // kilocode_change: unused
 // import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog" // kilocode_change: unused
 
-import TelemetryBanner from "../common/TelemetryBanner"
 import HistoryPreview from "../history/HistoryPreview"
 import Announcement from "./Announcement"
 import BrowserActionRow from "./BrowserActionRow"
@@ -50,7 +48,6 @@ import SystemPromptWarning from "./SystemPromptWarning"
 // import ProfileViolationWarning from "./ProfileViolationWarning" kilocode_change: unused
 import { CheckpointWarning } from "./CheckpointWarning"
 import { IdeaSuggestionsBox } from "../kilocode/chat/IdeaSuggestionsBox" // kilocode_change
-import { KilocodeNotifications } from "../kilocode/KilocodeNotifications" // kilocode_change
 import { QueuedMessages } from "./QueuedMessages"
 import { ReviewScopeSelector, type ReviewScopeInfo } from "./ReviewScopeSelector" // kilocode_change: Review mode
 import { buildDocLink } from "@/utils/docLinks"
@@ -84,7 +81,7 @@ const KiloLogo = () => {
 		<div className="flex items-center justify-center" style={{ width: "56px", height: "56px", margin: "0 auto" }}>
 			<img
 				src={`${iconsBaseUri}/${iconFile}`}
-				alt="Kilo Code"
+				alt="IVOL Code"
 				className="w-full h-full object-contain"
 				style={{ opacity: 0.85 }}
 			/>
@@ -122,7 +119,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		showAutoApproveMenu, // kilocode_change
 		enableCheckpoints, // kilocode_change
 		customModes,
-		telemetrySetting,
 		hasSystemPromptOverride,
 		historyPreviewCollapsed, // kilocode_change
 		soundEnabled,
@@ -1602,8 +1598,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const areButtonsVisible = showScrollToBottom || primaryButtonText || secondaryButtonText || isStreaming
 
-	const showTelemetryBanner = telemetrySetting === "unset" // kilocode_change
-
 	return (
 		<div
 			data-testid="chat-view"
@@ -1705,7 +1699,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								</div>
 							</div>
 						)}
-						{!showTelemetryBanner && <OrganizationSelector className="w-40 shrink-0 ml-auto" />}
 					</div>
 					{/* kilocode_change start: changed the classes to support notifications */}
 					<div className="w-full h-full flex flex-col gap-4 px-3.5 transition-all duration-300">
@@ -1719,13 +1712,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 						<RooHero /> */}
 
-						{/* kilocode_change start: KilocodeNotifications + Layout fixes */}
-						{showTelemetryBanner && <TelemetryBanner />}
-						{!showTelemetryBanner && (
-							<div className={taskHistoryFullLength === 0 ? "mt-10" : undefined}>
-								<KilocodeNotifications />
-							</div>
-						)}
+						{/* kilocode_change start: personal build has no remote upgrade or telemetry banners */}
 						<div className="flex flex-grow flex-col justify-center gap-2">
 							<KiloLogo />
 							{/* kilocode_change end */}

@@ -62,7 +62,7 @@
 		"contact": {
 			"label": "Cần nói chuyện với chúng tôi? Viết"
 		},
-		"community": "Muốn nhận mẹo hoặc chỉ muốn giao lưu với những người dùng Kilo Code khác? Tham gia <redditLink>reddit.com/r/kilocode</redditLink> hoặc <discordLink>kilo.ai/discord</discordLink>",
+		"community": "Muốn nhận mẹo hoặc chỉ muốn giao lưu với những người dùng IVOL Code khác? Tham gia <redditLink>reddit.com/r/kilocode</redditLink> hoặc <discordLink>kilo.ai/discord</discordLink>",
 		"contactAndCommunity": "Liên Hệ & Cộng Đồng",
 		"manageSettings": "Quản Lý Cài Đặt",
 		"debugMode": {
@@ -74,7 +74,7 @@
 		"description": "Quản lý các lệnh slash của bạn để thực thi nhanh các quy trình công việc và hành động tùy chỉnh. <DocsLink>Tìm hiểu thêm</DocsLink>"
 	},
 	"prompts": {
-		"description": "Cấu hình các lời nhắc hỗ trợ được sử dụng cho các hành động nhanh như cải thiện lời nhắc, giải thích mã và khắc phục sự cố. Những lời nhắc này giúp Kilo Code cung cấp hỗ trợ tốt hơn cho các tác vụ phát triển phổ biến."
+		"description": "Cấu hình các lời nhắc hỗ trợ được sử dụng cho các hành động nhanh như cải thiện lời nhắc, giải thích mã và khắc phục sự cố. Những lời nhắc này giúp IVOL Code cung cấp hỗ trợ tốt hơn cho các tác vụ phát triển phổ biến."
 	},
 	"codeIndex": {
 		"title": "Lập chỉ mục mã nguồn",
@@ -197,16 +197,16 @@
 	},
 	"autoApprove": {
 		"toggleShortcut": "Bạn có thể định cấu hình một phím tắt chung cho cài đặt này <SettingsLink>trong tùy chọn IDE của bạn</SettingsLink>.",
-		"description": "Cho phép Kilo Code tự động thực hiện các hoạt động mà không cần phê duyệt. Chỉ bật những cài đặt này nếu bạn hoàn toàn tin tưởng AI và hiểu rõ các rủi ro bảo mật liên quan.",
+		"description": "Cho phép IVOL Code tự động thực hiện các hoạt động mà không cần phê duyệt. Chỉ bật những cài đặt này nếu bạn hoàn toàn tin tưởng AI và hiểu rõ các rủi ro bảo mật liên quan.",
 		"enabled": "Phê duyệt tự động đã bật",
 		"toggleAriaLabel": "Chuyển đổi tự động phê duyệt",
 		"disabledAriaLabel": "Tự động phê duyệt bị vô hiệu hóa - hãy chọn các tùy chọn trước",
 		"readOnly": {
 			"label": "Đọc",
-			"description": "Khi được bật, Kilo Code sẽ tự động xem nội dung thư mục và đọc tệp mà không yêu cầu bạn nhấp vào nút Phê duyệt.",
+			"description": "Khi được bật, IVOL Code sẽ tự động xem nội dung thư mục và đọc tệp mà không yêu cầu bạn nhấp vào nút Phê duyệt.",
 			"outsideWorkspace": {
 				"label": "Bao gồm các tệp ngoài không gian làm việc",
-				"description": "Cho phép Kilo Code đọc các tệp bên ngoài không gian làm việc hiện tại mà không yêu cầu phê duyệt."
+				"description": "Cho phép IVOL Code đọc các tệp bên ngoài không gian làm việc hiện tại mà không yêu cầu phê duyệt."
 			}
 		},
 		"delete": {
@@ -219,11 +219,11 @@
 			"delayLabel": "Trì hoãn sau khi ghi để cho phép chẩn đoán phát hiện các vấn đề tiềm ẩn",
 			"outsideWorkspace": {
 				"label": "Bao gồm các tệp ngoài không gian làm việc",
-				"description": "Cho phép Kilo Code tạo và chỉnh sửa các tệp bên ngoài không gian làm việc hiện tại mà không yêu cầu phê duyệt."
+				"description": "Cho phép IVOL Code tạo và chỉnh sửa các tệp bên ngoài không gian làm việc hiện tại mà không yêu cầu phê duyệt."
 			},
 			"protected": {
 				"label": "Bao gồm các tệp được bảo vệ",
-				"description": "Cho phép Kilo Code tạo và chỉnh sửa các tệp được bảo vệ (như .kilocodeignore và các tệp cấu hình .kilocode/) mà không yêu cầu phê duyệt."
+				"description": "Cho phép IVOL Code tạo và chỉnh sửa các tệp được bảo vệ (như .kilocodeignore và các tệp cấu hình .kilocode/) mà không yêu cầu phê duyệt."
 			}
 		},
 		"browser": {
@@ -541,7 +541,7 @@
 			"draftModelDesc": "Mô hình nháp phải từ cùng một họ mô hình để giải mã suy đoán hoạt động chính xác.",
 			"selectDraftModel": "Chọn mô hình nháp",
 			"noModelsFound": "Không tìm thấy mô hình nháp nào. Vui lòng đảm bảo LM Studio đang chạy với chế độ máy chủ được bật.",
-			"description": "LM Studio cho phép bạn chạy các mô hình cục bộ trên máy tính của bạn. Để biết hướng dẫn về cách bắt đầu, xem <a>hướng dẫn nhanh</a> của họ. Bạn cũng sẽ cần khởi động tính năng <b>máy chủ cục bộ</b> của LM Studio để sử dụng nó với tiện ích mở rộng này. <span>Lưu ý:</span> Kilo Code sử dụng các lời nhắc phức tạp và hoạt động tốt nhất với các mô hình Claude. Các mô hình kém mạnh hơn có thể không hoạt động như mong đợi."
+			"description": "LM Studio cho phép bạn chạy các mô hình cục bộ trên máy tính của bạn. Để biết hướng dẫn về cách bắt đầu, xem <a>hướng dẫn nhanh</a> của họ. Bạn cũng sẽ cần khởi động tính năng <b>máy chủ cục bộ</b> của LM Studio để sử dụng nó với tiện ích mở rộng này. <span>Lưu ý:</span> IVOL Code sử dụng các lời nhắc phức tạp và hoạt động tốt nhất với các mô hình Claude. Các mô hình kém mạnh hơn có thể không hoạt động như mong đợi."
 		},
 		"ollama": {
 			"baseUrl": "URL cơ sở (tùy chọn)",
@@ -552,7 +552,7 @@
 			"numCtx": "Kích thước cửa sổ ngữ cảnh (num_ctx)",
 			"numCtxHelp": "Ghi đè kích thước cửa sổ ngữ cảnh mặc định của mô hình. Để trống để sử dụng cấu hình Modelfile của mô hình. Giá trị tối thiểu là 128.",
 			"description": "Ollama cho phép bạn chạy các mô hình cục bộ trên máy tính của bạn. Để biết hướng dẫn về cách bắt đầu, xem hướng dẫn nhanh của họ.",
-			"warning": "Lưu ý: Kilo Code sử dụng các lời nhắc phức tạp và hoạt động tốt nhất với các mô hình Claude. Các mô hình kém mạnh hơn có thể không hoạt động như mong đợi."
+			"warning": "Lưu ý: IVOL Code sử dụng các lời nhắc phức tạp và hoạt động tốt nhất với các mô hình Claude. Các mô hình kém mạnh hơn có thể không hoạt động như mong đợi."
 		},
 		"unboundApiKey": "Khóa API Unbound",
 		"getUnboundApiKey": "Lấy khóa API Unbound",
@@ -574,7 +574,7 @@
 			}
 		},
 		"customModel": {
-			"capabilities": "Cấu hình các khả năng và giá cả cho mô hình tương thích OpenAI tùy chỉnh của bạn. Hãy cẩn thận khi chỉ định khả năng của mô hình, vì chúng có thể ảnh hưởng đến cách Kilo Code hoạt động.",
+			"capabilities": "Cấu hình các khả năng và giá cả cho mô hình tương thích OpenAI tùy chỉnh của bạn. Hãy cẩn thận khi chỉ định khả năng của mô hình, vì chúng có thể ảnh hưởng đến cách IVOL Code hoạt động.",
 			"maxTokens": {
 				"label": "Số token đầu ra tối đa",
 				"description": "Số lượng token tối đa mà mô hình có thể tạo ra trong một phản hồi. (Chỉ định -1 để cho phép máy chủ đặt số token tối đa.)"
@@ -676,7 +676,7 @@
 	"browser": {
 		"enable": {
 			"label": "Bật công cụ trình duyệt",
-			"description": "Khi được bật, Kilo Code có thể sử dụng trình duyệt để tương tác với các trang web khi sử dụng các mô hình hỗ trợ sử dụng máy tính. <0>Tìm hiểu thêm</0>"
+			"description": "Khi được bật, IVOL Code có thể sử dụng trình duyệt để tương tác với các trang web khi sử dụng các mô hình hỗ trợ sử dụng máy tính. <0>Tìm hiểu thêm</0>"
 		},
 		"viewport": {
 			"label": "Kích thước khung nhìn",
@@ -708,7 +708,7 @@
 		},
 		"enable": {
 			"label": "Bật điểm kiểm tra tự động",
-			"description": "Khi được bật, Kilo Code sẽ tự động tạo các điểm kiểm tra trong quá trình thực hiện nhiệm vụ, giúp dễ dàng xem lại các thay đổi hoặc quay lại trạng thái trước đó. <0>Tìm hiểu thêm</0>"
+			"description": "Khi được bật, IVOL Code sẽ tự động tạo các điểm kiểm tra trong quá trình thực hiện nhiệm vụ, giúp dễ dàng xem lại các thay đổi hoặc quay lại trạng thái trước đó. <0>Tìm hiểu thêm</0>"
 		}
 	},
 	"autoPurge": {
@@ -746,12 +746,12 @@
 	"notifications": {
 		"sound": {
 			"label": "Bật hiệu ứng âm thanh",
-			"description": "Khi được bật, Kilo Code sẽ phát hiệu ứng âm thanh cho thông báo và sự kiện.",
+			"description": "Khi được bật, IVOL Code sẽ phát hiệu ứng âm thanh cho thông báo và sự kiện.",
 			"volumeLabel": "Âm lượng"
 		},
 		"tts": {
 			"label": "Bật chuyển văn bản thành giọng nói",
-			"description": "Khi được bật, Kilo Code sẽ đọc to các phản hồi của nó bằng chức năng chuyển văn bản thành giọng nói.",
+			"description": "Khi được bật, IVOL Code sẽ đọc to các phản hồi của nó bằng chức năng chuyển văn bản thành giọng nói.",
 			"speedLabel": "Tốc độ"
 		}
 	},
@@ -759,7 +759,7 @@
 		"description": "Kiểm soát thông tin nào được đưa vào cửa sổ ngữ cảnh của AI, ảnh hưởng đến việc sử dụng token và chất lượng phản hồi",
 		"autoCondenseContextPercent": {
 			"label": "Ngưỡng kích hoạt nén ngữ cảnh thông minh",
-			"description": "Khi cửa sổ ngữ cảnh đạt đến ngưỡng này, Kilo Code sẽ tự động nén nó."
+			"description": "Khi cửa sổ ngữ cảnh đạt đến ngưỡng này, IVOL Code sẽ tự động nén nó."
 		},
 		"condensingApiConfiguration": {
 			"label": "Cấu hình API cho Tóm tắt Ngữ cảnh",
@@ -775,7 +775,7 @@
 		},
 		"autoCondenseContext": {
 			"name": "Tự động kích hoạt nén ngữ cảnh thông minh",
-			"description": "Khi được bật, Kilo Code sẽ tự động nén ngữ cảnh khi đạt đến ngưỡng. Khi bị tắt, bạn vẫn có thể kích hoạt nén ngữ cảnh thủ công."
+			"description": "Khi được bật, IVOL Code sẽ tự động nén ngữ cảnh khi đạt đến ngưỡng. Khi bị tắt, bạn vẫn có thể kích hoạt nén ngữ cảnh thủ công."
 		},
 		"openTabs": {
 			"label": "Giới hạn ngữ cảnh tab đang mở",
@@ -791,7 +791,7 @@
 		},
 		"maxReadFile": {
 			"label": "Ngưỡng tự động cắt ngắn khi đọc tệp",
-			"description": "Kilo Code đọc số dòng này khi mô hình không chỉ định giá trị bắt đầu/kết thúc. Nếu số này nhỏ hơn tổng số dòng của tệp, Kilo Code sẽ tạo một chỉ mục số dòng của các định nghĩa mã. Trường hợp đặc biệt: -1 chỉ thị Kilo Code đọc toàn bộ tệp (không tạo chỉ mục), và 0 chỉ thị không đọc dòng nào và chỉ cung cấp chỉ mục dòng cho ngữ cảnh tối thiểu. Giá trị thấp hơn giảm thiểu việc sử dụng ngữ cảnh ban đầu, cho phép đọc chính xác các phạm vi dòng sau này. Các yêu cầu có chỉ định bắt đầu/kết thúc rõ ràng không bị giới hạn bởi cài đặt này.",
+			"description": "IVOL Code đọc số dòng này khi mô hình không chỉ định giá trị bắt đầu/kết thúc. Nếu số này nhỏ hơn tổng số dòng của tệp, IVOL Code sẽ tạo một chỉ mục số dòng của các định nghĩa mã. Trường hợp đặc biệt: -1 chỉ thị IVOL Code đọc toàn bộ tệp (không tạo chỉ mục), và 0 chỉ thị không đọc dòng nào và chỉ cung cấp chỉ mục dòng cho ngữ cảnh tối thiểu. Giá trị thấp hơn giảm thiểu việc sử dụng ngữ cảnh ban đầu, cho phép đọc chính xác các phạm vi dòng sau này. Các yêu cầu có chỉ định bắt đầu/kết thúc rõ ràng không bị giới hạn bởi cài đặt này.",
 			"lines": "dòng",
 			"always_full_read": "Luôn đọc toàn bộ tệp"
 		},
@@ -915,7 +915,7 @@
 	},
 	"toolProtocol": {
 		"label": "Giao thức gọi công cụ",
-		"description": "Chọn cách Kilo Code giao tiếp với API. Native sử dụng API gọi hàm của nhà cung cấp, trong khi XML sử dụng định nghĩa công cụ định dạng XML.",
+		"description": "Chọn cách IVOL Code giao tiếp với API. Native sử dụng API gọi hàm của nhà cung cấp, trong khi XML sử dụng định nghĩa công cụ định dạng XML.",
 		"default": "Mặc định",
 		"xml": "XML",
 		"native": "Native",
@@ -945,7 +945,7 @@
 		},
 		"todoList": {
 			"label": "Bật công cụ danh sách việc cần làm",
-			"description": "Khi được bật, Kilo Code có thể tạo và quản lý danh sách việc cần làm để theo dõi tiến độ công việc. Điều này giúp tổ chức các tác vụ phức tạp thành các bước có thể quản lý được."
+			"description": "Khi được bật, IVOL Code có thể tạo và quản lý danh sách việc cần làm để theo dõi tiến độ công việc. Điều này giúp tổ chức các tác vụ phức tạp thành các bước có thể quản lý được."
 		}
 	},
 	"experimental": {
@@ -955,19 +955,19 @@
 		},
 		"INSERT_BLOCK": {
 			"name": "Sử dụng công cụ chèn nội dung thử nghiệm",
-			"description": "Bật công cụ chèn nội dung thử nghiệm, cho phép Kilo Code chèn nội dung tại số dòng cụ thể mà không cần tạo diff."
+			"description": "Bật công cụ chèn nội dung thử nghiệm, cho phép IVOL Code chèn nội dung tại số dòng cụ thể mà không cần tạo diff."
 		},
 		"POWER_STEERING": {
 			"name": "Sử dụng chế độ \"power steering\" thử nghiệm",
-			"description": "Khi được bật, Kilo Code sẽ nhắc nhở mô hình về chi tiết định nghĩa chế độ hiện tại thường xuyên hơn. Điều này sẽ dẫn đến việc tuân thủ chặt chẽ hơn các định nghĩa vai trò và hướng dẫn tùy chỉnh, nhưng sẽ sử dụng nhiều token hơn cho mỗi tin nhắn."
+			"description": "Khi được bật, IVOL Code sẽ nhắc nhở mô hình về chi tiết định nghĩa chế độ hiện tại thường xuyên hơn. Điều này sẽ dẫn đến việc tuân thủ chặt chẽ hơn các định nghĩa vai trò và hướng dẫn tùy chỉnh, nhưng sẽ sử dụng nhiều token hơn cho mỗi tin nhắn."
 		},
 		"MULTI_SEARCH_AND_REPLACE": {
 			"name": "Sử dụng công cụ diff đa khối thử nghiệm",
-			"description": "Khi được bật, Kilo Code sẽ sử dụng công cụ diff đa khối. Điều này sẽ cố gắng cập nhật nhiều khối mã trong tệp trong một yêu cầu."
+			"description": "Khi được bật, IVOL Code sẽ sử dụng công cụ diff đa khối. Điều này sẽ cố gắng cập nhật nhiều khối mã trong tệp trong một yêu cầu."
 		},
 		"CONCURRENT_FILE_READS": {
 			"name": "Bật đọc tệp đồng thời",
-			"description": "Khi bật, Kilo Code có thể đọc nhiều tệp trong một yêu cầu duy nhất. Khi tắt, Kilo Code phải đọc từng tệp một. Việc tắt có thể hữu ích khi làm việc với các mô hình ít khả năng hơn hoặc khi bạn muốn kiểm soát nhiều hơn quyền truy cập tệp."
+			"description": "Khi bật, IVOL Code có thể đọc nhiều tệp trong một yêu cầu duy nhất. Khi tắt, IVOL Code phải đọc từng tệp một. Việc tắt có thể hữu ích khi làm việc với các mô hình ít khả năng hơn hoặc khi bạn muốn kiểm soát nhiều hơn quyền truy cập tệp."
 		},
 		"MARKETPLACE": {
 			"name": "Bật Marketplace",
@@ -975,11 +975,11 @@
 		},
 		"MULTI_FILE_APPLY_DIFF": {
 			"name": "Bật chỉnh sửa tệp đồng thời",
-			"description": "Khi được bật, Kilo Code có thể chỉnh sửa nhiều tệp trong một yêu cầu duy nhất. Khi bị tắt, Kilo Code phải chỉnh sửa từng tệp một. Tắt tính năng này có thể hữu ích khi làm việc với các mô hình kém khả năng hơn hoặc khi bạn muốn kiểm soát nhiều hơn đối với các thay đổi tệp."
+			"description": "Khi được bật, IVOL Code có thể chỉnh sửa nhiều tệp trong một yêu cầu duy nhất. Khi bị tắt, IVOL Code phải chỉnh sửa từng tệp một. Tắt tính năng này có thể hữu ích khi làm việc với các mô hình kém khả năng hơn hoặc khi bạn muốn kiểm soát nhiều hơn đối với các thay đổi tệp."
 		},
 		"PREVENT_FOCUS_DISRUPTION": {
 			"name": "Chỉnh sửa nền",
-			"description": "Khi được bật, ngăn chặn gián đoạn tiêu điểm trình soạn thảo. Việc chỉnh sửa tệp diễn ra ở nền mà không mở chế độ xem diff hoặc chiếm tiêu điểm. Bạn có thể tiếp tục làm việc không bị gián đoạn trong khi Kilo Code thực hiện thay đổi. Các tệp có thể được mở mà không có tiêu điểm để thu thập chẩn đoán hoặc giữ hoàn toàn đóng."
+			"description": "Khi được bật, ngăn chặn gián đoạn tiêu điểm trình soạn thảo. Việc chỉnh sửa tệp diễn ra ở nền mà không mở chế độ xem diff hoặc chiếm tiêu điểm. Bạn có thể tiếp tục làm việc không bị gián đoạn trong khi IVOL Code thực hiện thay đổi. Các tệp có thể được mở mà không có tiêu điểm để thu thập chẩn đoán hoặc giữ hoàn toàn đóng."
 		},
 		"ASSISTANT_MESSAGE_PARSER": {
 			"name": "Dùng bộ phân tích tin nhắn mới",
@@ -993,13 +993,13 @@
 			"providerLabel": "Nhà cung cấp",
 			"providerDescription": "Chọn nhà cung cấp để tạo hình ảnh.",
 			"name": "Bật tạo hình ảnh AI",
-			"description": "Khi được bật, Kilo Code có thể tạo hình ảnh từ lời nhắc văn bản. Yêu cầu khóa API Kilo Code hoặc OpenRouter được cấu hình.",
+			"description": "Khi được bật, IVOL Code có thể tạo hình ảnh từ lời nhắc văn bản. Yêu cầu khóa API IVOL Code hoặc OpenRouter được cấu hình.",
 			"apiProvider": "Nhà cung cấp API",
 			"openRouterApiKeyLabel": "Khóa API OpenRouter",
 			"openRouterApiKeyPlaceholder": "Nhập khóa API OpenRouter của bạn",
-			"kiloCodeApiKeyLabel": "Khóa API Kilo Code",
-			"kiloCodeApiKeyPlaceholder": "Nhập khóa API Kilo Code của bạn",
-			"kiloCodeApiKeyPaste": "Dán khóa API Kilo Code hiện tại",
+			"kiloCodeApiKeyLabel": "Khóa API Kilo",
+			"kiloCodeApiKeyPlaceholder": "Nhập khóa API Kilo của bạn",
+			"kiloCodeApiKeyPaste": "Dán khóa API Kilo hiện tại",
 			"getApiKeyText": "Lấy khóa API của bạn từ",
 			"modelSelectionLabel": "Mô hình tạo hình ảnh",
 			"modelSelectionDescription": "Chọn mô hình để sử dụng cho việc tạo hình ảnh",
@@ -1012,7 +1012,7 @@
 		},
 		"MORPH_FAST_APPLY": {
 			"name": "Bật Fast Apply",
-			"description": "Khi được bật, Kilo Code có thể chỉnh sửa tệp bằng Fast Apply với các mô hình chuyên biệt được tối ưu hóa cho việc sửa đổi mã. Yêu cầu Kilo Gateway Provider, OpenRouter hoặc khóa API Morph.",
+			"description": "Khi được bật, IVOL Code có thể chỉnh sửa tệp bằng Fast Apply với các mô hình chuyên biệt được tối ưu hóa cho việc sửa đổi mã. Yêu cầu Kilo Gateway Provider, OpenRouter hoặc khóa API Morph.",
 			"apiProvider": "Nhà cung cấp API",
 			"apiProviderList": {
 				"current": "Hiện tại"
@@ -1030,7 +1030,7 @@
 		},
 		"RUN_SLASH_COMMAND": {
 			"name": "Bật lệnh slash do mô hình khởi tạo",
-			"description": "Khi được bật, Kilo Code có thể chạy các lệnh slash của bạn để thực hiện các quy trình làm việc."
+			"description": "Khi được bật, IVOL Code có thể chạy các lệnh slash của bạn để thực hiện các quy trình làm việc."
 		},
 		"MULTIPLE_NATIVE_TOOL_CALLS": {
 			"name": "Lệnh gọi công cụ song song",
@@ -1038,7 +1038,7 @@
 		},
 		"SPEECH_TO_TEXT": {
 			"name": "Chuyển Giọng nói thành Văn bản (STT)",
-			"description": "Khi được bật, Kilo Code có thể chuyển đổi giọng nói của bạn thành văn bản bằng mô hình Whisper của OpenAI. Nhấp vào nút microphone trong chat để bắt đầu ghi âm. Yêu cầu cài đặt FFmpeg và cấu hình nhà cung cấp API OpenAI."
+			"description": "Khi được bật, IVOL Code có thể chuyển đổi giọng nói của bạn thành văn bản bằng mô hình Whisper của OpenAI. Nhấp vào nút microphone trong chat để bắt đầu ghi âm. Yêu cầu cài đặt FFmpeg và cấu hình nhà cung cấp API OpenAI."
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Bật công cụ tùy chỉnh",
@@ -1054,7 +1054,7 @@
 	},
 	"promptCaching": {
 		"label": "Tắt bộ nhớ đệm prompt",
-		"description": "Khi được chọn, Kilo Code sẽ không sử dụng bộ nhớ đệm prompt cho mô hình này."
+		"description": "Khi được chọn, IVOL Code sẽ không sử dụng bộ nhớ đệm prompt cho mô hình này."
 	},
 	"temperature": {
 		"useCustom": "Sử dụng nhiệt độ tùy chỉnh",
@@ -1084,7 +1084,7 @@
 		}
 	},
 	"modelPicker": {
-		"automaticFetch": "Tiện ích mở rộng tự động lấy danh sách mới nhất các mô hình có sẵn trên <serviceLink>{{serviceName}}</serviceLink>. Nếu bạn không chắc chắn nên chọn mô hình nào, Kilo Code hoạt động tốt nhất với <defaultModelLink>{{defaultModelId}}</defaultModelLink>.",
+		"automaticFetch": "Tiện ích mở rộng tự động lấy danh sách mới nhất các mô hình có sẵn trên <serviceLink>{{serviceName}}</serviceLink>. Nếu bạn không chắc chắn nên chọn mô hình nào, IVOL Code hoạt động tốt nhất với <defaultModelLink>{{defaultModelId}}</defaultModelLink>.",
 		"label": "Mô hình",
 		"searchPlaceholder": "Tìm kiếm",
 		"noMatchFound": "Không tìm thấy kết quả",
@@ -1095,10 +1095,10 @@
 	},
 	"footer": {
 		"feedback": "Nếu bạn có bất kỳ câu hỏi hoặc phản hồi nào, vui lòng mở một vấn đề tại <githubLink>github.com/Kilo-Org/kilocode</githubLink> hoặc tham gia <redditLink>reddit.com/r/kilocode</redditLink> hoặc <discordLink>kilo.ai/discord</discordLink>",
-		"support": "Đối với các câu hỏi về tài chính, vui lòng liên hệ Hỗ trợ khách hàng tại <supportLink>https://kilo.ai/support</supportLink>",
+		"support": "Đối với các câu hỏi về tài chính, vui lòng liên hệ Hỗ trợ khách hàng tại <supportLink>https://github.com/oiv-an/ivol-code-agent-5/issues</supportLink>",
 		"telemetry": {
 			"label": "Cho phép báo cáo lỗi và sử dụng ẩn danh",
-			"description": "Giúp cải thiện Kilo Code bằng cách gửi dữ liệu sử dụng ẩn danh và báo cáo lỗi. Không bao giờ gửi mã, lời nhắc hoặc thông tin cá nhân. Xem chính sách bảo mật của chúng tôi để biết thêm chi tiết."
+			"description": "Giúp cải thiện IVOL Code bằng cách gửi dữ liệu sử dụng ẩn danh và báo cáo lỗi. Không bao giờ gửi mã, lời nhắc hoặc thông tin cá nhân. Xem chính sách bảo mật của chúng tôi để biết thêm chi tiết."
 		},
 		"settings": {
 			"import": "Nhập",

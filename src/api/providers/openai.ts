@@ -26,6 +26,78 @@ import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from ".
 import { getApiRequestTimeout } from "./utils/timeout-config"
 import { handleOpenAIError } from "./utils/openai-error-handler"
 
+// kilocode_change start: personal fork prompt-cache compatibility
+type OpenAiChatMessage = OpenAI.Chat.ChatCompletionMessageParam
+
+function buildCacheMarkedOpenAiMessages(
+	systemPrompt: string,
+	messages: Anthropic.Messages.MessageParam[],
+): OpenAiChatMessage[] {
+	const systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
+		role: "system",
+		content: [
+			{
+				type: "text",
+				text: systemPrompt,
+				cache_control: { type: "ephemeral" },
+			} as OpenAI.Chat.ChatCompletionContentPartText & { cache_control: { type: "ephemeral" } },
+		],
+	}
+
+	const convertedMessages: OpenAiChatMessage[] = [systemMessage, ...convertToOpenAiMessages(messages)]
+
+	const lastTwoUserMessages = convertedMessages.filter((message) => message.role === "user").slice(-2)
+	for (const message of lastTwoUserMessages) {
+		if (typeof message.content === "string") {
+			message.content = [{ type: "text", text: message.content }]
+		}
+
+		if (!Array.isArray(message.content)) continue
+		const lastTextPart = [...message.content].reverse().find((part) => part.type === "text") as
+			| (OpenAI.Chat.ChatCompletionContentPartText & { cache_control?: { type: "ephemeral" } })
+			| undefined
+
+		// Never alter an image-only prompt merely to attach cache metadata.
+		if (!lastTextPart) continue
+		lastTextPart.cache_control = { type: "ephemeral" }
+	}
+
+	return convertedMessages
+}
+
+function isUnsupportedPromptCacheError(error: unknown): boolean {
+	const candidate = error as {
+		status?: number
+		message?: string
+		error?: { message?: string }
+		response?: { status?: number; data?: { error?: { message?: string }; message?: string } }
+	}
+	const status = candidate?.status ?? candidate?.response?.status
+	if (status !== 400 && status !== 422) return false
+
+	const message = [
+		candidate?.message,
+		candidate?.error?.message,
+		candidate?.response?.data?.error?.message,
+		candidate?.response?.data?.message,
+	]
+		.filter(Boolean)
+		.join(" ")
+
+	const rejectedCacheField =
+		/cache[_ -]?control/i.test(message) &&
+		/(unsupported|unknown|unrecognized|not permitted|not allowed|forbidden|prohibited|disallowed|extra|invalid)/i.test(
+			message,
+		)
+	const rejectedStructuredContent =
+		/(?:content|message).*(?:expected|must be|invalid).*(?:string|array)|(?:expected|must be).*string.*content/i.test(
+			message,
+		)
+
+	return rejectedCacheField || rejectedStructuredContent
+}
+// kilocode_change end
+
 // TODO: Rename this to OpenAICompatibleHandler. Also, I think the
 // `OpenAINativeHandler` can subclass from this, since it's obviously
 // compatible with the OpenAI API. We can also rename it to `OpenAIHandler`.
@@ -33,6 +105,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	protected options: ApiHandlerOptions
 	protected client: OpenAI
 	private readonly providerName = "OpenAI"
+	private promptCacheBreakpointsUnsupported = false // kilocode_change: remember incompatible endpoints for this profile
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -91,6 +164,13 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const enabledR1Format = this.options.openAiR1FormatEnabled ?? false
 		const isAzureAiInference = this._isAzureAiInference(modelUrl)
 		const deepseekReasoner = modelId.includes("deepseek-reasoner") || enabledR1Format
+		// kilocode_change start: keep a plain payload for incompatible cache dialects
+		const plainMessages: OpenAiChatMessage[] = deepseekReasoner
+			? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
+			: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)]
+		const usePromptCacheBreakpoints =
+			modelInfo.supportsPromptCache && !deepseekReasoner && this.shouldUseLegacyPromptCacheBreakpoints(modelUrl)
+		// kilocode_change end
 		// kilocode_change removed const ark = modelUrl.includes(".volces.com")
 
 		if (modelId.includes("o1") || modelId.includes("o3") || modelId.includes("o4")) {
@@ -98,60 +178,13 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			return
 		}
 
-		let systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
-			role: "system",
-			content: systemPrompt,
-		}
+		// kilocode_change start: attach cache breakpoints only for the compatible gateway dialect
+		const convertedMessages = usePromptCacheBreakpoints
+			? buildCacheMarkedOpenAiMessages(systemPrompt, messages)
+			: plainMessages
+		// kilocode_change end
 
 		if (this.options.openAiStreamingEnabled ?? true) {
-			let convertedMessages
-
-			if (deepseekReasoner) {
-				convertedMessages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
-			} else {
-				if (modelInfo.supportsPromptCache) {
-					systemMessage = {
-						role: "system",
-						content: [
-							{
-								type: "text",
-								text: systemPrompt,
-								// @ts-ignore-next-line
-								cache_control: { type: "ephemeral" },
-							},
-						],
-					}
-				}
-
-				convertedMessages = [systemMessage, ...convertToOpenAiMessages(messages)]
-
-				if (modelInfo.supportsPromptCache) {
-					// Note: the following logic is copied from openrouter:
-					// Add cache_control to the last two user messages
-					// (note: this works because we only ever add one user message at a time, but if we added multiple we'd need to mark the user message before the last assistant message)
-					const lastTwoUserMessages = convertedMessages.filter((msg) => msg.role === "user").slice(-2)
-
-					lastTwoUserMessages.forEach((msg) => {
-						if (typeof msg.content === "string") {
-							msg.content = [{ type: "text", text: msg.content }]
-						}
-
-						if (Array.isArray(msg.content)) {
-							// NOTE: this is fine since env details will always be added at the end. but if it weren't there, and the user added a image_url type message, it would pop a text part before it and then move it after to the end.
-							let lastTextPart = msg.content.filter((part) => part.type === "text").pop()
-
-							if (!lastTextPart) {
-								lastTextPart = { type: "text", text: "..." }
-								msg.content.push(lastTextPart)
-							}
-
-							// @ts-ignore-next-line
-							lastTextPart["cache_control"] = { type: "ephemeral" }
-						}
-					})
-				}
-			}
-
 			const isGrokXAI = this._isGrokXAI(this.options.openAiBaseUrl)
 
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
@@ -172,15 +205,13 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
-			let stream
-			try {
-				stream = await this.client.chat.completions.create(
-					requestOptions,
-					isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
-				)
-			} catch (error) {
-				throw handleOpenAIError(error, this.providerName)
-			}
+			// kilocode_change start: retry unsupported cache payloads without cache metadata
+			const stream = await this.createChatCompletionWithCacheFallback(
+				requestOptions,
+				isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+				usePromptCacheBreakpoints ? plainMessages : undefined,
+			)
+			// kilocode_change end
 
 			const matcher = new XmlMatcher(
 				"think",
@@ -236,9 +267,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		} else {
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 				model: modelId,
-				messages: deepseekReasoner
-					? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
-					: [systemMessage, ...convertToOpenAiMessages(messages)],
+				messages: convertedMessages, // kilocode_change: use the selected cache-compatible payload
 				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
 				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
 				...(metadata?.toolProtocol === "native" &&
@@ -250,15 +279,13 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 
-			let response
-			try {
-				response = await this.client.chat.completions.create(
-					requestOptions,
-					this._isAzureAiInference(modelUrl) ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
-				)
-			} catch (error) {
-				throw handleOpenAIError(error, this.providerName)
-			}
+			// kilocode_change start: retry unsupported cache payloads without cache metadata
+			const response = await this.createChatCompletionWithCacheFallback(
+				requestOptions,
+				this._isAzureAiInference(modelUrl) ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+				usePromptCacheBreakpoints ? plainMessages : undefined,
+			)
+			// kilocode_change end
 
 			// kilocode_change start: reasoning
 			const message = response.choices[0]?.message
@@ -295,15 +322,62 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 	}
 
+	// kilocode_change start: normalize cache usage from compatible gateways
 	protected processUsageMetrics(usage: any, _modelInfo?: ModelInfo): ApiStreamUsageChunk {
 		return {
 			type: "usage",
 			inputTokens: usage?.prompt_tokens || 0,
 			outputTokens: usage?.completion_tokens || 0,
-			cacheWriteTokens: usage?.cache_creation_input_tokens || undefined,
-			cacheReadTokens: usage?.cache_read_input_tokens || undefined,
+			cacheWriteTokens:
+				usage?.cache_creation_input_tokens || usage?.prompt_tokens_details?.cache_write_tokens || undefined,
+			cacheReadTokens: usage?.cache_read_input_tokens || usage?.prompt_tokens_details?.cached_tokens || undefined,
 		}
 	}
+	// kilocode_change end
+
+	// kilocode_change start: compatible-gateway prompt-cache fallback
+	private async createChatCompletionWithCacheFallback(
+		requestOptions:
+			| OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
+			| OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+		requestConfig: Record<string, unknown>,
+		plainMessages?: OpenAiChatMessage[],
+	): Promise<any> {
+		try {
+			return await this.client.chat.completions.create(requestOptions as any, requestConfig)
+		} catch (error) {
+			if (!plainMessages || !isUnsupportedPromptCacheError(error)) {
+				throw handleOpenAIError(error, this.providerName)
+			}
+
+			this.promptCacheBreakpointsUnsupported = true
+			const fallbackOptions = {
+				...requestOptions,
+				// Use the untouched OpenAI-compatible payload. Merely removing the
+				// cache field would leave formerly-string content converted to arrays.
+				messages: plainMessages,
+			}
+			try {
+				return await this.client.chat.completions.create(fallbackOptions as any, requestConfig)
+			} catch (fallbackError) {
+				throw handleOpenAIError(fallbackError, this.providerName)
+			}
+		}
+	}
+
+	private shouldUseLegacyPromptCacheBreakpoints(modelUrl: string): boolean {
+		if (this.promptCacheBreakpointsUnsupported) return false
+
+		const effectiveUrl = modelUrl || "https://api.openai.com/v1"
+		const host = this._getUrlHost(effectiveUrl)
+		const isAzure =
+			this.options.openAiUseAzure || this._isAzureAiInference(effectiveUrl) || host.endsWith(".azure.com")
+
+		// OpenAI and Azure cache supported prompts automatically. The user's
+		// OpenAI-compatible gateways use the legacy part-level cache_control dialect.
+		return !isAzure && host !== "api.openai.com"
+	}
+	// kilocode_change end
 
 	override getModel() {
 		const id = this.options.openAiModelId ?? ""
@@ -313,6 +387,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const info: ModelInfo = {
 			...NATIVE_TOOL_DEFAULTS,
 			...(this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
+			// kilocode_change start: force prompt caching for the personal OpenAI-compatible provider
+			// The personal build always enables prompt-cache breakpoints for the
+			// user's OpenAI-compatible endpoint.
+			supportsPromptCache: true,
+			// kilocode_change end
 		}
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
 		return { id, info, ...params }
@@ -587,7 +666,8 @@ export async function getOpenAiModels(baseUrl?: string, apiKey?: string, openAiH
 			return []
 		}
 
-		const config: Record<string, any> = {}
+		// kilocode_change: bound each catalog attempt so authenticated and public fallbacks finish in time
+		const config: Record<string, any> = { timeout: 8_000 }
 		const headers: Record<string, string> = {
 			...DEFAULT_HEADERS,
 			...(openAiHeaders || {}),

@@ -44,11 +44,15 @@ const getRouterModels = async (provider?: string) =>
 		}
 
 		window.addEventListener("message", handler)
-		if (provider) {
-			vscode.postMessage({ type: "requestRouterModels", values: { provider } })
-		} else {
-			vscode.postMessage({ type: "requestRouterModels" })
+		// kilocode_change start: never issue an unfiltered provider catalog request
+		if (!provider) {
+			clearTimeout(timeout)
+			cleanup()
+			reject(new Error("A provider filter is required for model catalog requests"))
+			return
 		}
+		vscode.postMessage({ type: "requestRouterModels", values: { provider } })
+		// kilocode_change end
 	})
 
 // kilocode_change start

@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "Agent kodowania AI o otwartym kodzie źródłowym, który generuje kod z języka naturalnego, automatyzuje zadania i wykonuje polecenia terminala. Oferuje autouzupełnianie inline, automatyzację przeglądarki, automatyczny refaktoring oraz niestandardowe tryby do planowania, kodowania i debugowania. Obsługuje ponad 500 modeli AI, w tym Claude (Anthropic), Gemini, Grok, GPT, Codex i GLM."
 	},
 	"number_format": {
@@ -165,7 +165,7 @@
 	"warnings": {
 		"no_terminal_content": "Nie wybrano zawartości terminala",
 		"missing_task_files": "Pliki tego zadania są brakujące. Czy chcesz usunąć je z listy zadań?",
-		"auto_import_failed": "Nie udało się automatycznie zaimportować ustawień Kilo Code: {{error}}"
+		"auto_import_failed": "Nie udało się automatycznie zaimportować ustawień IVOL Code Agent 5: {{error}}"
 	},
 	"info": {
 		"no_changes": "Nie znaleziono zmian.",
@@ -174,7 +174,7 @@
 		"custom_storage_path_set": "Ustawiono niestandardową ścieżkę przechowywania: {{path}}",
 		"default_storage_path": "Wznowiono używanie domyślnej ścieżki przechowywania",
 		"settings_imported": "Ustawienia zaimportowane pomyślnie.",
-		"auto_import_success": "Ustawienia Kilo Code zostały automatycznie zaimportowane z {{filename}}",
+		"auto_import_success": "Ustawienia IVOL Code Agent 5 zostały automatycznie zaimportowane z {{filename}}",
 		"share_link_copied": "Link udostępniania skopiowany do schowka",
 		"image_copied_to_clipboard": "URI danych obrazu skopiowane do schowka",
 		"image_saved": "Obraz zapisany w {{path}}",
@@ -208,12 +208,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Wprowadź niestandardową ścieżkę przechowywania dla historii konwersacji lub pozostaw puste, aby użyć lokalizacji domyślnej",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Wprowadź pełną ścieżkę (np. D:\\KiloCodeStorage lub /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Wprowadź pełną ścieżkę (np. D:\\IVOLCodeStorage lub /home/user/storage)",
 		"enter_valid_path": "Wprowadź prawidłową ścieżkę"
 	},
 	"input": {
-		"task_prompt": "Co ma zrobić Kilo Code?",
+		"task_prompt": "Co ma zrobić IVOL Code Agent 5?",
 		"task_placeholder": "Wpisz swoje zadanie tutaj"
 	},
 	"settings": {
@@ -274,7 +274,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Błąd",

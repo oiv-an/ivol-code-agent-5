@@ -73,6 +73,46 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		} satisfies ApiHandlerOptions)
 
 		expect(handler.getModel().id).toBe("gpt-4o")
+		expect(handler.getModel().info.supportsPromptCache).toBe(true)
+	})
+
+	it("normalizes nested Responses cache usage", async () => {
+		const handler = new OpenAiCompatibleResponsesHandler({
+			openAiApiKey: "test-key",
+			openAiModelId: "gpt-5.6",
+			openAiCustomModelInfo: {
+				contextWindow: 128_000,
+				maxTokens: 16_384,
+				supportsImages: true,
+				supportsPromptCache: false,
+			},
+		} satisfies ApiHandlerOptions)
+
+		mockResponsesCreate.mockResolvedValueOnce({
+			[Symbol.asyncIterator]: async function* () {
+				yield {
+					type: "response.done",
+					response: {
+						usage: {
+							input_tokens: 100,
+							output_tokens: 10,
+							input_tokens_details: { cached_tokens: 80, cache_write_tokens: 20 },
+						},
+					},
+				}
+			},
+		})
+
+		const chunks: any[] = []
+		for await (const chunk of handler.createMessage(systemPrompt, messages)) chunks.push(chunk)
+
+		expect(chunks.find((chunk) => chunk.type === "usage")).toMatchObject({
+			inputTokens: 100,
+			outputTokens: 10,
+			cacheReadTokens: 80,
+			cacheWriteTokens: 20,
+		})
+		expect(handler.getModel().info.supportsPromptCache).toBe(true)
 	})
 
 	it("streams responses via fetch fallback", async () => {

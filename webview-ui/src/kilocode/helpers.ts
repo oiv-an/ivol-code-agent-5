@@ -10,14 +10,21 @@ export const showSystemNotification = debounce((message: string) => {
 	})
 })
 
-export function getMemoryPercentage() {
-	if ("memory" in performance && typeof performance.memory === "object") {
-		const memory = performance.memory as {
-			totalJSHeapSize: number
-			usedJSHeapSize: number
-			jsHeapSizeLimit: number
-		}
-		return Math.floor((100 * memory.totalJSHeapSize) / memory.jsHeapSizeLimit)
+export interface WebviewMemoryInfo {
+	usedJSHeapSize: number
+	jsHeapSizeLimit: number
+}
+
+export function getMemoryPercentage(memoryInfo?: WebviewMemoryInfo) {
+	const memory =
+		memoryInfo ??
+		("memory" in performance && typeof performance.memory === "object"
+			? (performance.memory as WebviewMemoryInfo)
+			: undefined)
+
+	if (!memory || !Number.isFinite(memory.jsHeapSizeLimit) || memory.jsHeapSizeLimit <= 0) {
+		return 0
 	}
-	return 0
+
+	return Math.min(100, Math.floor((100 * memory.usedJSHeapSize) / memory.jsHeapSizeLimit))
 }

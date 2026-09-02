@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Bienvenue dans Kilo Code !",
-		"introText1": "Kilo Code est un agent de codage IA gratuit et open source.",
+		"greeting": "Bienvenue dans IVOL Code !",
+		"introText1": "IVOL Code est un agent de codage IA gratuit et open source.",
 		"introText2": "Il fonctionne avec les derniers modèles d'IA comme Claude Opus 4.5, Gemini 3 Pro, GPT-5.2, et plus de 450 autres.",
 		"introText3": "Créez un compte gratuit pour commencer.",
 		"ctaButton": "Commencer",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Ajouter du crédit",
-		"lowBalance": "Ton solde Kilo Code est bas",
+		"lowBalance": "Ton solde IVOL Code est bas",
 		"switchToFreeModel": "Passer à un modèle gratuit"
 	},
 	"pagination": {
@@ -68,16 +68,16 @@
 			"skills": "Compétences"
 		},
 		"provider": {
-			"account": "Compte Kilo Code",
-			"apiKey": "Clé API Kilo Code",
-			"login": "Se connecter à Kilo Code",
-			"logout": "Se déconnecter de Kilo Code",
+			"account": "Compte IVOL Code",
+			"apiKey": "Clé API Kilo",
+			"login": "Se connecter à IVOL Code",
+			"logout": "Se déconnecter de IVOL Code",
 			"loginForPremiumModels": "Connecte-toi pour accéder aux modèles et fonctionnalités premium",
 			"providerRouting": {
 				"title": "Routage des fournisseurs",
 				"managedByOrganization": "Gérer le routage des fournisseurs au niveau de l'organisation",
 				"createOrganization": "Créer une organisation pour gérer le routage des fournisseurs",
-				"description": "Kilo Code achemine les demandes vers les meilleurs fournisseurs disponibles pour votre modèle. Par défaut, les demandes sont réparties entre les principaux fournisseurs afin de maximiser le temps de disponibilité. Cependant, vous pouvez choisir un fournisseur spécifique à utiliser pour ce modèle.",
+				"description": "IVOL Code achemine les demandes vers les meilleurs fournisseurs disponibles pour votre modèle. Par défaut, les demandes sont réparties entre les principaux fournisseurs afin de maximiser le temps de disponibilité. Cependant, vous pouvez choisir un fournisseur spécifique à utiliser pour ce modèle.",
 				"sorting": {
 					"default": "Tri des fournisseurs par défaut",
 					"price": "Préférer les fournisseurs avec un prix plus bas",
@@ -108,15 +108,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Autoriser les lectures de fichiers très volumineux",
-				"description": "Lorsque cette option est activée, Kilo Code effectuera des lectures de fichiers ou de sorties MCP très volumineuses même s'il existe une forte probabilité de dépasser la fenêtre de contexte (taille du contenu >80% de la fenêtre de contexte)."
+				"description": "Lorsque cette option est activée, IVOL Code effectuera des lectures de fichiers ou de sorties MCP très volumineuses même s'il existe une forte probabilité de dépasser la fenêtre de contexte (taille du contenu >80% de la fenêtre de contexte)."
 			}
 		},
 		"systemNotifications": {
 			"label": "Activer les notifications système",
-			"description": "Lorsque cette option est activée, Kilo Code enverra des notifications système pour les événements importants comme la fin des tâches ou les erreurs.",
+			"description": "Lorsque cette option est activée, IVOL Code enverra des notifications système pour les événements importants comme la fin des tâches ou les erreurs.",
 			"testButton": "Tester la notification",
-			"testTitle": "Kilo Code",
-			"testMessage": "Ceci est une notification de test de Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Ceci est une notification de test de IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -144,7 +144,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code souhaite condenser votre conversation",
+			"wantsToCondense": "IVOL Code souhaite condenser votre conversation",
 			"condenseConversation": "Condenser la Conversation"
 		},
 		"seeNewChanges": "Afficher les nouvelles modifications",
@@ -183,14 +183,14 @@
 			"modes": "Modes",
 			"skills": "Compétences"
 		},
-		"ariaLabel": "Règles Kilo Code",
+		"ariaLabel": "Règles IVOL Code",
 		"tabs": {
 			"rules": "Règles",
 			"workflows": "Flux de Travail"
 		},
 		"description": {
-			"rules": "Les règles vous permettent de fournir à Kilo Code des instructions qu'il doit suivre dans tous les modes et pour tous les prompts. Elles sont un moyen persistant d'inclure du contexte et des préférences pour toutes les conversations dans votre espace de travail ou globalement.",
-			"workflows": "Les flux de travail sont un modèle préparé pour une conversation. Les flux de travail vous permettent de définir des prompts que vous utilisez fréquemment, et peuvent inclure une série d'étapes pour guider Kilo Code à travers des tâches répétitives, comme déployer un service ou soumettre une PR. Pour invoquer un flux de travail, tapez",
+			"rules": "Les règles vous permettent de fournir à IVOL Code des instructions qu'il doit suivre dans tous les modes et pour tous les prompts. Elles sont un moyen persistant d'inclure du contexte et des préférences pour toutes les conversations dans votre espace de travail ou globalement.",
+			"workflows": "Les flux de travail sont un modèle préparé pour une conversation. Les flux de travail vous permettent de définir des prompts que vous utilisez fréquemment, et peuvent inclure une série d'étapes pour guider IVOL Code à travers des tâches répétitives, comme déployer un service ou soumettre une PR. Pour invoquer un flux de travail, tapez",
 			"workflowsInChat": "dans le chat."
 		},
 		"sections": {
@@ -299,7 +299,7 @@
 			},
 			"noCredits": {
 				"title": "Aucun crédit sur ton compte",
-				"description": "Ton compte Kilo Code n'a pas de crédits. Pour utiliser l'autocomplétion, ajoute des crédits à ton compte.",
+				"description": "Ton compte IVOL Code n'a pas de crédits. Pour utiliser l'autocomplétion, ajoute des crédits à ton compte.",
 				"buyCredits": "Acheter des crédits →"
 			},
 			"configureAutocompleteProfile": "Utilise n'importe quel modèle en allant dans les profils et en configurant un Profil du Type de Profil Autocomplétion."
@@ -350,7 +350,7 @@
 		"shareModesNewBanner": "Nouveau : Partagez des modes en créant une organisation"
 	},
 	"deviceAuth": {
-		"title": "Se connecter à Kilo Code",
+		"title": "Se connecter à IVOL Code",
 		"step1": "Ouvre l'URL suivante dans ton navigateur",
 		"step2": "Vérifie le code et autorise cet appareil dans ton navigateur",
 		"scanQr": "Ou scanne ce code QR avec ton téléphone",

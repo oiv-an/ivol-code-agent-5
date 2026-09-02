@@ -82,8 +82,8 @@ vi.mock("@src/components/ui", () => ({
 	Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }))
 
-// kilocode_change: no filtering done on providers client side
-describe.skip("ApiOptions Provider Filtering", () => {
+// kilocode_change start: the personal build exposes only its explicit provider allowlist.
+describe("ApiOptions personal provider allowlist", () => {
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: { retry: false },
@@ -110,17 +110,14 @@ describe.skip("ApiOptions Provider Filtering", () => {
 		)
 	}
 
-	it("should show all providers when no organization allow list is provided", () => {
+	it("shows exactly the five personal providers when no organization allow list is provided", () => {
 		renderWithProviders()
 
 		const selectElement = screen.getByTestId("provider-select")
 		const options = JSON.parse(selectElement.getAttribute("data-options") || "[]")
 
-		// Should include both static and dynamic providers
 		const providerValues = options.map((opt: any) => opt.value)
-		expect(providerValues).toContain("anthropic") // static provider
-		expect(providerValues).toContain("openrouter") // dynamic provider
-		expect(providerValues).toContain("ollama") // dynamic provider
+		expect(providerValues).toEqual(["claude-code", "lmstudio", "ollama", "openai-codex", "openai"])
 	})
 
 	it("should hide static providers with empty models", () => {
@@ -145,25 +142,24 @@ describe.skip("ApiOptions Provider Filtering", () => {
 		PROVIDERS.pop()
 	})
 
-	it("should always show dynamic providers even if they have no models yet", () => {
+	it("shows only Ollama and LM Studio among dynamic providers", () => {
 		renderWithProviders()
 
 		const selectElement = screen.getByTestId("provider-select")
 		const options = JSON.parse(selectElement.getAttribute("data-options") || "[]")
 		const providerValues = options.map((opt: any) => opt.value)
 
-		// Dynamic providers (not in MODELS_BY_PROVIDER) should always be shown
-		expect(providerValues).toContain("openrouter")
 		expect(providerValues).toContain("ollama")
 		expect(providerValues).toContain("lmstudio")
-		expect(providerValues).toContain("litellm")
-		expect(providerValues).toContain("glama") // kilocode_change
-		expect(providerValues).toContain("unbound")
-		expect(providerValues).toContain("requesty")
-		expect(providerValues).toContain("io-intelligence")
+		expect(providerValues).not.toContain("openrouter")
+		expect(providerValues).not.toContain("litellm")
+		expect(providerValues).not.toContain("glama")
+		expect(providerValues).not.toContain("unbound")
+		expect(providerValues).not.toContain("requesty")
+		expect(providerValues).not.toContain("io-intelligence")
 	})
 
-	it("should filter static providers based on organization allow list", () => {
+	it("does not let an organization allow list add hidden providers", () => {
 		// Create a mock organization allow list that only allows certain models
 		const allowList: OrganizationAllowList = {
 			allowAll: false,
@@ -194,21 +190,15 @@ describe.skip("ApiOptions Provider Filtering", () => {
 		const options = JSON.parse(selectElement.getAttribute("data-options") || "[]")
 		const providerValues = options.map((opt: any) => opt.value)
 
-		// Should include anthropic (has allowed models)
-		expect(providerValues).toContain("anthropic")
-
-		// Should NOT include gemini (no allowed models)
+		expect(providerValues).not.toContain("anthropic")
 		expect(providerValues).not.toContain("gemini")
-
-		// Should include openrouter (dynamic provider)
-		expect(providerValues).toContain("openrouter")
-
-		// Should NOT include providers not in the allow list
+		expect(providerValues).not.toContain("openrouter")
 		expect(providerValues).not.toContain("openai-native")
 		expect(providerValues).not.toContain("mistral")
+		expect(providerValues).toEqual(["claude-code", "lmstudio", "ollama", "openai-codex", "openai"])
 	})
 
-	it("should show static provider when allowAll is true for that provider", () => {
+	it("keeps a hidden provider hidden even when organization allowAll is true for it", () => {
 		const allowList: OrganizationAllowList = {
 			allowAll: false,
 			providers: {
@@ -229,11 +219,11 @@ describe.skip("ApiOptions Provider Filtering", () => {
 		const options = JSON.parse(selectElement.getAttribute("data-options") || "[]")
 		const providerValues = options.map((opt: any) => opt.value)
 
-		// Should include anthropic since allowAll is true
-		expect(providerValues).toContain("anthropic")
+		expect(providerValues).not.toContain("anthropic")
+		expect(providerValues).toContain("openai")
 	})
 
-	it("should always show currently selected provider even if it has no models", () => {
+	it("does not expose a hidden currently selected provider", () => {
 		// Add an empty static provider to test
 		;(MODELS_BY_PROVIDER as any).testEmptyProvider = {}
 		// Add the provider to the PROVIDERS list
@@ -279,13 +269,13 @@ describe.skip("ApiOptions Provider Filtering", () => {
 		const options = JSON.parse(selectElement.getAttribute("data-options") || "[]")
 		const providerValues = options.map((opt: any) => opt.value)
 
-		// Should include testEmptyProvider even though it has no models (empty object in MODELS_BY_PROVIDER), because it's currently selected
-		expect(providerValues).toContain("testEmptyProvider")
-		// Should also include anthropic since it has allowAll: true
-		expect(providerValues).toContain("anthropic")
+		expect(providerValues).not.toContain("testEmptyProvider")
+		expect(providerValues).not.toContain("anthropic")
+		expect(providerValues).toEqual(["claude-code", "lmstudio", "ollama", "openai-codex", "openai"])
 
 		// Cleanup
 		delete (MODELS_BY_PROVIDER as any).testEmptyProvider
 		PROVIDERS.pop()
 	})
 })
+// kilocode_change end

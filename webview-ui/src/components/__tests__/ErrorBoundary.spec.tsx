@@ -70,6 +70,10 @@ describe("ErrorBoundary", () => {
 		const errorTitle = screen.getByRole("heading", { level: 2 })
 		expect(errorTitle.textContent).toContain("Something went wrong")
 		expect(screen.getByText(/please copy and paste the following error message/i)).toBeInTheDocument()
+		expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+			"href",
+			"https://github.com/oiv-an/ivol-code-agent-5/issues",
+		)
 	})
 
 	test("error boundary renders error UI when component changes but still in error state", () => {

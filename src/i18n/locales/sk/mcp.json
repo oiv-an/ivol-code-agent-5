@@ -5,7 +5,7 @@
 		"invalid_settings_validation": "Neplatný formát nastavení MCP: {{errorMessages}}",
 		"create_json": "Nepodarilo sa vytvoriť alebo otvoriť .kilocode/mcp.json: {{error}}",
 		"failed_update_project": "Nepodarilo sa aktualizovať servery MCP projektu",
-		"invalidJsonArgument": "Kilo Code sa pokúsil použiť {{toolName}} s neplatným argumentom JSON. Skúšam znova...",
+		"invalidJsonArgument": "IVOL Code Agent 5 sa pokúsil použiť {{toolName}} s neplatným argumentom JSON. Skúšam znova...",
 		"refresh_after_disable": "Nepodarilo sa obnoviť pripojenie MCP po deaktivácii",
 		"refresh_after_enable": "Nepodarilo sa obnoviť pripojenie MCP po aktivácii",
 		"disconnect_servers_partial": "Nepodarilo sa odpojiť {{count}} server(ov) MCP. Skontroluj výstup pre podrobnosti.",

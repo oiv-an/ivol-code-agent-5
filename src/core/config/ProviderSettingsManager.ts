@@ -13,12 +13,17 @@ import {
 	type ProviderName,
 	type ProfileType, // kilocode_change - autocomplete profile type system
 	isProviderName,
+	// kilocode_change start: personal provider policy
+	PERSONAL_PROVIDER_VALUES,
+	isPersonalProvider,
+	// kilocode_change end
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { Mode, modes } from "../../shared/modes"
 import { migrateMorphApiKey } from "./kilocode/migrateMorphApiKey"
 import { buildApiHandler } from "../../api"
+import { getOpenAiModelCatalogStorageKey } from "../../api/providers/openai-model-cache" // kilocode_change
 import { t } from "../../i18n" // kilocode_change - autocomplete profile type system
 
 // Type-safe model migrations mapping
@@ -66,14 +71,16 @@ export class ProviderSettingsManager {
 		modes.map((mode) => [mode.slug, this.defaultConfigId]),
 	)
 
-	// kilocode_change start: Anonymous kilocode onboarding - set default provider for new users
+	// kilocode_change start: personal default provider
+	// Personal builds start with a local, inert OpenAI-compatible profile. This avoids
+	// contacting a vendor gateway if profile migration has not completed yet.
 	private readonly defaultProviderProfiles: ProviderProfiles = {
 		currentApiConfigName: "default",
 		apiConfigs: {
 			default: {
 				id: this.defaultConfigId,
-				apiProvider: "kilocode",
-				kilocodeModel: "minimax/minimax-m2.1:free",
+				apiProvider: "openai",
+				openAiModelId: "",
 			},
 		},
 		modeApiConfigs: this.defaultModeApiConfigs,
@@ -327,6 +334,22 @@ export class ProviderSettingsManager {
 					isDirty = true
 				}
 
+				// kilocode_change start: force prompt caching for personal OpenAI profiles
+				// Personal OpenAI-compatible profiles always opt into prompt caching.
+				// This is intentionally idempotent so imported and newly migrated profiles
+				// cannot silently retain the old disabled default.
+				for (const apiConfig of Object.values(providerProfiles.apiConfigs)) {
+					if (apiConfig.apiProvider !== "openai" || !apiConfig.openAiCustomModelInfo) continue
+					if (apiConfig.openAiCustomModelInfo?.supportsPromptCache === true) continue
+
+					apiConfig.openAiCustomModelInfo = {
+						...apiConfig.openAiCustomModelInfo,
+						supportsPromptCache: true,
+					}
+					isDirty = true
+				}
+				// kilocode_change end
+
 				if (isDirty) {
 					await this.store(providerProfiles)
 				}
@@ -517,6 +540,94 @@ export class ProviderSettingsManager {
 		}
 	}
 
+	// kilocode_change start: personal build active-profile guard
+	/**
+	 * Select a usable profile for the personal build without deleting or rewriting
+	 * any legacy profiles. The current profile wins when it is still allowed;
+	 * otherwise provider priority is OpenAI, Codex, Claude Code, then local models.
+	 * Hidden/missing per-mode references are repointed to the selected profile so
+	 * restoring a task or switching modes cannot reactivate a legacy Kilo profile.
+	 */
+	public async ensurePersonalActiveProfile(): Promise<ProviderSettingsWithId & { name: string }> {
+		try {
+			return await this.lock(async () => {
+				const providerProfiles = await this.load()
+				const entries = Object.entries(providerProfiles.apiConfigs)
+				const currentEntry = entries.find(([name]) => name === providerProfiles.currentApiConfigName)
+
+				let selectedEntry =
+					currentEntry && isPersonalProvider(currentEntry[1].apiProvider) ? currentEntry : undefined
+
+				if (!selectedEntry) {
+					for (const providerName of PERSONAL_PROVIDER_VALUES) {
+						selectedEntry = entries.find(([, config]) => config.apiProvider === providerName)
+						if (selectedEntry) break
+					}
+				}
+
+				let isDirty = false
+
+				if (!selectedEntry) {
+					const existingNames = new Set(Object.keys(providerProfiles.apiConfigs))
+					const existingIds = new Set(
+						Object.values(providerProfiles.apiConfigs)
+							.map((config) => config.id)
+							.filter((id): id is string => Boolean(id)),
+					)
+					const name = this.findUniqueProfileName("Personal OpenAI", existingNames)
+					const config: ProviderSettingsWithId = {
+						id: this.generateUniqueId(existingIds),
+						apiProvider: "openai",
+						openAiModelId: "",
+					}
+
+					providerProfiles.apiConfigs[name] = config
+					selectedEntry = [name, config]
+					isDirty = true
+				}
+
+				const [selectedName, selectedConfig] = selectedEntry
+				if (providerProfiles.currentApiConfigName !== selectedName) {
+					providerProfiles.currentApiConfigName = selectedName
+					isDirty = true
+				}
+
+				const allowedProfileIds = new Set(
+					Object.values(providerProfiles.apiConfigs)
+						.filter((config) => isPersonalProvider(config.apiProvider))
+						.map((config) => config.id)
+						.filter((id): id is string => Boolean(id)),
+				)
+				providerProfiles.modeApiConfigs ??= {}
+
+				for (const [mode, configId] of Object.entries(providerProfiles.modeApiConfigs)) {
+					if (!allowedProfileIds.has(configId)) {
+						providerProfiles.modeApiConfigs[mode] = selectedConfig.id!
+						isDirty = true
+					}
+				}
+
+				for (const mode of modes) {
+					if (!providerProfiles.modeApiConfigs[mode.slug]) {
+						providerProfiles.modeApiConfigs[mode.slug] = selectedConfig.id!
+						isDirty = true
+					}
+				}
+
+				if (isDirty) {
+					await this.store(providerProfiles)
+				}
+
+				return { name: selectedName, ...selectedConfig }
+			})
+		} catch (error) {
+			throw new Error(
+				`Failed to select a personal provider profile: ${error instanceof Error ? error.message : error}`,
+			)
+		}
+	}
+	// kilocode_change end
+
 	// kilocode_change start - autocomplete profile type system
 	/**
 	 * Validate that only one autocomplete profile exists
@@ -570,6 +681,14 @@ export class ProviderSettingsManager {
 
 				// Filter out settings from other providers.
 				const filteredConfig = discriminatedProviderSettingsWithIdSchema.parse(config)
+				// kilocode_change start: force prompt caching for imported and updated profiles
+				if (filteredConfig.apiProvider === "openai" && filteredConfig.openAiCustomModelInfo) {
+					filteredConfig.openAiCustomModelInfo = {
+						...filteredConfig.openAiCustomModelInfo,
+						supportsPromptCache: true,
+					}
+				}
+				// kilocode_change end
 				providerProfiles.apiConfigs[name] = { ...filteredConfig, id }
 				await this.store(providerProfiles)
 				return id
@@ -624,11 +743,35 @@ export class ProviderSettingsManager {
 	public async activateProfile(
 		params: { name: string } | { id: string },
 	): Promise<ProviderSettingsWithId & { name: string }> {
-		const { name, ...providerSettings } = await this.getProfile(params)
-
 		try {
 			return await this.lock(async () => {
 				const providerProfiles = await this.load()
+				// kilocode_change start: reject hidden providers at the persistence boundary
+				let entry: [string, ProviderSettingsWithId] | undefined
+
+				if ("name" in params) {
+					const providerSettings = providerProfiles.apiConfigs[params.name]
+					if (providerSettings) entry = [params.name, providerSettings]
+				} else {
+					entry = Object.entries(providerProfiles.apiConfigs).find(([, config]) => config.id === params.id)
+				}
+
+				if (!entry) {
+					throw new Error(
+						"name" in params
+							? `Config with name '${params.name}' not found`
+							: `Config with ID '${params.id}' not found`,
+					)
+				}
+
+				const [name, providerSettings] = entry
+				if (!isPersonalProvider(providerSettings.apiProvider)) {
+					throw new Error(
+						`Provider '${providerSettings.apiProvider ?? "unset"}' is unavailable in this personal build`,
+					)
+				}
+				// kilocode_change end
+
 				providerProfiles.currentApiConfigName = name
 				await this.store(providerProfiles)
 				return { name, ...providerSettings }
@@ -646,7 +789,9 @@ export class ProviderSettingsManager {
 			return await this.lock(async () => {
 				const providerProfiles = await this.load()
 
-				if (!providerProfiles.apiConfigs[name]) {
+				const deletedConfig = providerProfiles.apiConfigs[name]
+
+				if (!deletedConfig) {
 					throw new Error(`Config '${name}' not found`)
 				}
 
@@ -656,6 +801,19 @@ export class ProviderSettingsManager {
 
 				delete providerProfiles.apiConfigs[name]
 				await this.store(providerProfiles)
+
+				// kilocode_change start: remove the deleted profile's durable quick-model catalog
+				try {
+					if (deletedConfig.id) {
+						await this.context.globalState.update(
+							getOpenAiModelCatalogStorageKey({ profileId: deletedConfig.id }),
+							undefined,
+						)
+					}
+				} catch {
+					// Cache cleanup is best-effort and must never undo a successful profile deletion.
+				}
+				// kilocode_change end
 			})
 		} catch (error) {
 			throw new Error(`Failed to delete config: ${error}`)

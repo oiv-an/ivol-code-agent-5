@@ -65,10 +65,13 @@ import {
 	mainlandZAiModels,
 	mainlandZAiDefaultModelId,
 	zenmuxDefaultModelId,
+	isLocalProvider,
+	isPersonalProvider,
 } from "@roo-code/types"
 import type { ModelRecord, RouterModels } from "@roo/api"
 import { useRouterModels } from "../../ui/hooks/useRouterModels"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useOpenAiModels } from "./useOpenAiModels"
 
 const FALLBACK_MODELS = {
 	models: anthropicModels,
@@ -399,30 +402,56 @@ export const getOptionsForProvider = (provider: ProviderName, apiConfiguration?:
 
 export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 	const provider = apiConfiguration?.apiProvider || "anthropic"
+	const isOpenAiCompatible = isPersonalProvider(provider) && provider === "openai"
+	// A migrated, hidden Kilo profile must never wake the official model catalog.
+	// Hidden profiles remain in storage for rollback, but only an explicit switch to
+	// a supported personal provider may cause automatic model discovery.
+	const shouldFetchRouterModels = isPersonalProvider(provider) && isLocalProvider(provider)
 
-	const { kilocodeDefaultModel } = useExtensionState()
+	const { kilocodeDefaultModel, currentApiConfigName, listApiConfigMeta } = useExtensionState()
+	const currentApiConfigId = listApiConfigMeta?.find((config) => config.name === currentApiConfigName)?.id
 
-	const routerModels = useRouterModels({
-		openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
-		openRouterApiKey: apiConfiguration?.apiKey,
-		kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId ?? "personal",
-		chutesApiKey: apiConfiguration?.chutesApiKey,
-		geminiApiKey: apiConfiguration?.geminiApiKey,
-		googleGeminiBaseUrl: apiConfiguration?.googleGeminiBaseUrl,
-		//kilocode_change start
-		nanoGptApiKey: apiConfiguration?.nanoGptApiKey,
-		nanoGptModelList: apiConfiguration?.nanoGptModelList,
-		//kilocode_change end
-		syntheticApiKey: apiConfiguration?.syntheticApiKey, // kilocode_change
+	const routerModels = useRouterModels(
+		{
+			openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
+			openRouterApiKey: apiConfiguration?.apiKey,
+			lmStudioBaseUrl: apiConfiguration?.lmStudioBaseUrl,
+			ollamaBaseUrl: apiConfiguration?.ollamaBaseUrl,
+			kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId ?? "personal",
+			chutesApiKey: apiConfiguration?.chutesApiKey,
+			geminiApiKey: apiConfiguration?.geminiApiKey,
+			googleGeminiBaseUrl: apiConfiguration?.googleGeminiBaseUrl,
+			//kilocode_change start
+			nanoGptApiKey: apiConfiguration?.nanoGptApiKey,
+			nanoGptModelList: apiConfiguration?.nanoGptModelList,
+			//kilocode_change end
+			syntheticApiKey: apiConfiguration?.syntheticApiKey, // kilocode_change
+		},
+		{
+			provider: shouldFetchRouterModels ? provider : undefined,
+			enabled: shouldFetchRouterModels,
+		},
+	)
+
+	const openAiModels = useOpenAiModels({
+		profileId: currentApiConfigId,
+		baseUrl: apiConfiguration?.openAiBaseUrl,
+		apiKey: apiConfiguration?.openAiApiKey,
+		openAiHeaders: apiConfiguration?.openAiHeaders,
+		enabled: isOpenAiCompatible,
 	})
 
 	const options = getOptionsForProvider(provider, apiConfiguration)
 
-	const { models, defaultModel } =
-		apiConfiguration && typeof routerModels.data !== "undefined"
+	const { models, defaultModel } = isOpenAiCompatible
+		? {
+				models: openAiModels.data ?? {},
+				defaultModel: apiConfiguration?.openAiModelId ?? "",
+			}
+		: apiConfiguration && (!shouldFetchRouterModels || typeof routerModels.data !== "undefined")
 			? getModelsByProvider({
 					provider,
-					routerModels: routerModels.data,
+					routerModels: (routerModels.data ?? {}) as RouterModels,
 					kilocodeDefaultModel,
 					options,
 				})
@@ -434,7 +463,7 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 		provider,
 		providerModels: models as ModelRecord,
 		providerDefaultModel: defaultModel,
-		isLoading: routerModels.isLoading,
-		isError: routerModels.isError,
+		isLoading: isOpenAiCompatible ? openAiModels.isLoading : routerModels.isLoading,
+		isError: isOpenAiCompatible ? openAiModels.isError : routerModels.isError,
 	}
 }

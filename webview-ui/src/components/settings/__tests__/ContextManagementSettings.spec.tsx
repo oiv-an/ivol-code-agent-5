@@ -384,6 +384,24 @@ describe("ContextManagementSettings", () => {
 		expect(selects).toHaveLength(1)
 	})
 
+	it("shows only personal and legacy provider profiles in the threshold selector", () => {
+		render(
+			<ContextManagementSettings
+				{...defaultProps}
+				autoCondenseContext={true}
+				listApiConfigMeta={[
+					{ id: "allowed", name: "Allowed OpenAI", apiProvider: "openai" },
+					{ id: "hidden", name: "Hidden Kilo", apiProvider: "kilocode" },
+					{ id: "legacy", name: "Legacy Profile" },
+				]}
+			/>,
+		)
+
+		expect(screen.getByText("Allowed OpenAI")).toBeInTheDocument()
+		expect(screen.getByText("Legacy Profile")).toBeInTheDocument()
+		expect(screen.queryByText("Hidden Kilo")).not.toBeInTheDocument()
+	})
+
 	describe("Auto Condense Context functionality", () => {
 		const autoCondenseProps = {
 			...defaultProps,

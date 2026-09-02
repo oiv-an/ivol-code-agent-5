@@ -19,19 +19,10 @@ export interface FimResponse {
 	tokensUsed?: number
 }
 
-export function getKiloBaseUriFromToken(kilocodeToken?: string): string {
-	if (kilocodeToken) {
-		try {
-			const payload_string = kilocodeToken.split(".")[1]
-			const payload_json = Buffer.from(payload_string, "base64").toString()
-			const payload = JSON.parse(payload_json)
-			// Note: this is UNTRUSTED, so we need to make sure we're OK with this being manipulated by an attacker
-			if (payload.env === "development") return "http://localhost:3000"
-		} catch (_error) {
-			console.warn("Failed to get base URL from Kilo Code token")
-		}
-	}
-	return "https://api.kilo.ai"
+const DISABLED_KILOCODE_URL = "ivol-disabled://kilo"
+
+export function getKiloBaseUriFromToken(_kilocodeToken?: string): string {
+	return DISABLED_KILOCODE_URL
 }
 
 export class LLMClient {

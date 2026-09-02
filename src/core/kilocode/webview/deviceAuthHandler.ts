@@ -12,7 +12,7 @@ export interface DeviceAuthHandlerCallbacks {
 }
 
 /**
- * Handles device authorization flow for Kilo Code authentication
+ * Handles device authorization flow for IVOL Code authentication
  * This class encapsulates all device auth logic to keep ClineProvider clean
  */
 export class DeviceAuthHandler {
@@ -62,7 +62,7 @@ export class DeviceAuthHandler {
 				})
 
 				this.callbacks.showInformationMessage(
-					`Kilo Code successfully configured! Authenticated as ${userEmail}`,
+					`IVOL Code successfully configured! Authenticated as ${userEmail}`,
 				)
 
 				// Clean up

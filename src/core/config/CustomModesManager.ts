@@ -5,7 +5,6 @@ import * as os from "os"
 
 import * as yaml from "yaml"
 import stripBom from "strip-bom"
-import axios from "axios" // kilocode_change
 
 import { type ModeConfig, type PromptComponent, customModesSettingsSchema, modeConfigSchema } from "@roo-code/types"
 
@@ -16,10 +15,6 @@ import { logger } from "../../utils/logging"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
-// kilocode_change start
-import { getKiloUrlFromToken } from "@roo-code/types"
-import { X_KILOCODE_ORGANIZATIONID, X_KILOCODE_TESTER } from "../../shared/kilocode/headers"
-// kilocode_change end
 
 const ROOMODES_FILENAME = ".kilocodemodes"
 
@@ -1048,86 +1043,12 @@ export class CustomModesManager {
 	 * @returns Array of organization-specific modes
 	 */
 	public async fetchOrganizationModes(
-		kilocodeToken: string,
-		organizationId?: string,
-		kilocodeTesterWarningsDisabledUntil?: number,
+		_kilocodeToken: string,
+		_organizationId?: string,
+		_kilocodeTesterWarningsDisabledUntil?: number,
 	): Promise<ModeConfig[]> {
-		try {
-			// If no organization ID, return empty array (personal account has no org modes)
-			if (!organizationId) {
-				return []
-			}
-
-			const headers: Record<string, string> = {
-				Authorization: `Bearer ${kilocodeToken}`,
-				"Content-Type": "application/json",
-			}
-
-			headers[X_KILOCODE_ORGANIZATIONID] = organizationId
-
-			// Add X-KILOCODE-TESTER: SUPPRESS header if the setting is enabled
-			if (kilocodeTesterWarningsDisabledUntil && kilocodeTesterWarningsDisabledUntil > Date.now()) {
-				headers[X_KILOCODE_TESTER] = "SUPPRESS"
-			}
-
-			const url = getKiloUrlFromToken(
-				`https://api.kilo.ai/api/organizations/${organizationId}/modes`,
-				kilocodeToken,
-			)
-			const response = await axios.get(url, { headers })
-
-			// Validate and parse the response
-			if (!response.data || !Array.isArray(response.data.modes)) {
-				logger.warn("Invalid response format from organization modes API", { organizationId })
-				return []
-			}
-
-			// Validate each mode and mark with organization source
-			const validatedModes: ModeConfig[] = []
-			for (const modeWrapper of response.data.modes) {
-				// Extract the config object and merge with top-level name and slug
-				const config = modeWrapper.config
-				if (!config) {
-					logger.warn("Mode wrapper missing config property", {
-						organizationId,
-						modeId: modeWrapper.id,
-					})
-					continue
-				}
-
-				// Merge top-level name and slug with config properties
-				const mode = {
-					...config,
-					name: modeWrapper.name,
-					slug: modeWrapper.slug,
-				}
-
-				const validationResult = modeConfigSchema.safeParse(mode)
-				if (validationResult.success) {
-					validatedModes.push({ ...validationResult.data, source: "organization" })
-				} else {
-					logger.warn("Invalid mode configuration from organization API", {
-						organizationId,
-						slug: mode.slug,
-						errors: validationResult.error.errors,
-					})
-				}
-			}
-
-			logger.info("Fetched organization modes", {
-				organizationId,
-				count: validatedModes.length,
-			})
-
-			return validatedModes
-		} catch (error) {
-			// Log error but don't throw - gracefully degrade to no organization modes
-			logger.error("Failed to fetch organization modes", {
-				organizationId,
-				error: error instanceof Error ? error.message : String(error),
-			})
-			return []
-		}
+		// Organization cloud services are intentionally disabled in this fork.
+		return []
 	}
 	// kilocode_change end
 

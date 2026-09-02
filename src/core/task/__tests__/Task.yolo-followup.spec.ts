@@ -280,4 +280,25 @@ describe("Task - YOLO Mode Follow-up Question Auto-Answer", () => {
 
 		expect(result.response).toBe("yesButtonClicked")
 	})
+
+	it("updates the incremental webview when a follow-up becomes answered", async () => {
+		const task = new Task({
+			context: mockContext,
+			provider: mockProvider as ClineProvider,
+			apiConfiguration: { apiProvider: "anthropic" } as any,
+			startTask: false,
+		})
+		const followUp = { ts: Date.now(), type: "ask", ask: "followup", text: "Continue?" } as const
+		;(task as any).clineMessages = [followUp]
+		vi.spyOn(task as any, "saveClineMessages").mockResolvedValue(undefined)
+
+		task.handleWebviewAskResponse("messageResponse", "Yes", undefined)
+		await vi.waitFor(() => {
+			expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
+				type: "messageUpdated",
+				taskId: task.taskId,
+				clineMessage: expect.objectContaining({ ts: followUp.ts, isAnswered: true }),
+			})
+		})
+	})
 })

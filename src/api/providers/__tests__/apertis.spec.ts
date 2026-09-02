@@ -3,7 +3,7 @@
 vi.mock("../constants", () => ({
 	DEFAULT_HEADERS: {
 		"HTTP-Referer": "https://github.com/Kilo-Org/kilocode",
-		"X-Title": "Kilo Code",
+		"X-Title": "IVOL Code",
 		"User-Agent": "KiloCode/1.0.0",
 	},
 }))

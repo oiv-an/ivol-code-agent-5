@@ -89,10 +89,10 @@ function checkJava() {
 
 	if (!commandExists("java")) {
 		printError("Java is not installed or not in PATH")
-		console.log("  Install Java 21 (recommended):")
-		console.log("  - Windows: Download from https://openjdk.org/projects/jdk/21/")
-		console.log("  - macOS: brew install openjdk@21")
-		console.log("  - Linux: sudo apt install openjdk-21-jdk")
+		console.log("  Install Java 25 (required by PhpStorm 2026.2):")
+		console.log("  - Windows: Download from https://openjdk.org/projects/jdk/25/")
+		console.log("  - macOS: use the JBR bundled with PhpStorm 2026.2")
+		console.log("  - Linux: install OpenJDK 25")
 		return false
 	}
 
@@ -117,34 +117,32 @@ function checkJava() {
 	const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true" || process.env.JENKINS_URL
 	const isWindows = process.platform === "win32"
 
-	if (majorVersion !== "21") {
+	if (majorVersion !== "25") {
 		if (isCI && isWindows) {
-			printWarning(`Java version is ${majorVersion}, but Java 21 is required for JetBrains plugin development`)
+			printWarning(`Java version is ${majorVersion}, but Java 25 is required for JetBrains plugin development`)
 			console.log(`  Current Java: ${javaVersion.split("\n")[0]}`)
 			console.log("  Windows CI Environment detected - JetBrains plugin build will be skipped")
-			console.log("  Note: JetBrains plugin requires Java 21, which is not available in this environment")
+			console.log("  Note: JetBrains plugin requires Java 25, which is not available in this environment")
 			console.log("  This is expected behavior - JetBrains plugin builds are primarily tested on Linux/macOS CI")
 			return true // Allow CI to continue, but JetBrains build will be skipped
 		} else if (isCI) {
-			printWarning(`Java version is ${majorVersion}, but Java 21 is recommended for JetBrains plugin development`)
+			printWarning(`Java version is ${majorVersion}, but Java 25 is required for JetBrains plugin development`)
 			console.log(`  Current Java: ${javaVersion.split("\n")[0]}`)
 			console.log("  CI Environment detected - continuing with available Java version")
 			console.log(`  Note: Some features may not work correctly with Java ${majorVersion}`)
 			return true // Allow CI to continue with warning
 		} else {
-			printError(`Java version is ${majorVersion}, but Java 21 is required`)
+			printError(`Java version is ${majorVersion}, but Java 25 is required`)
 			console.log(`  Current Java: ${javaVersion.split("\n")[0]}`)
 			console.log("  Recommended fix:")
-			console.log("  - Windows: Download Java 21 from https://openjdk.org/projects/jdk/21/")
-			console.log("  - macOS: brew install openjdk@21 && export JAVA_HOME=$(/usr/libexec/java_home -v 21)")
-			console.log(
-				"  - Linux: sudo apt install openjdk-21-jdk && export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64",
-			)
+			console.log("  - Windows: Download Java 25 from https://openjdk.org/projects/jdk/25/")
+			console.log("  - macOS: export JAVA_HOME to the JBR bundled with PhpStorm 2026.2")
+			console.log("  - Linux: install OpenJDK 25 and export JAVA_HOME to it")
 			return false
 		}
 	}
 
-	printSuccess("Java 21 is installed and active")
+	printSuccess("Java 25 is installed and active")
 	console.log(`  ${javaVersion.split("\n")[0]}`)
 	return true
 }

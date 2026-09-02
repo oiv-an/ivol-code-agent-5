@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "Vitaj v Kilo Code!",
-		"introText1": "Kilo Code je bezplatný open source AI coding agent.",
+		"greeting": "Vitaj v IVOL Code!",
+		"introText1": "IVOL Code je bezplatný open source AI coding agent.",
 		"introText2": "Funguje s najnovšími AI modelmi ako Claude Opus 4.5, Gemini 3 Pro, GPT-5.2 a viac ako 450 ďalšími.",
 		"introText3": "Vytvor si bezplatný účet a začni.",
 		"ctaButton": "Začať",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "Pridať kredit",
-		"lowBalance": "Tvoj Kilo Code zostatok je nízky",
+		"lowBalance": "Tvoj IVOL Code zostatok je nízky",
 		"switchToFreeModel": "Prepnúť na bezplatný model"
 	},
 	"pagination": {
@@ -68,16 +68,16 @@
 			"skills": "Zručnosti"
 		},
 		"provider": {
-			"account": "Účet Kilo Code",
-			"apiKey": "Kilo Code API Key",
-			"login": "Prihlásiť sa do Kilo Code",
-			"logout": "Odhlásiť sa z Kilo Code",
+			"account": "Účet IVOL Code",
+			"apiKey": "Kilo API Key",
+			"login": "Prihlásiť sa do IVOL Code",
+			"logout": "Odhlásiť sa z IVOL Code",
 			"loginForPremiumModels": "Prihlás sa pre prístup k prémiovým modelom a funkciám",
 			"providerRouting": {
 				"title": "Smerovanie poskytovateľov",
 				"managedByOrganization": "Spravovať smerovanie poskytovateľov na úrovni organizácie",
 				"createOrganization": "Vytvoriť organizáciu pre správu smerovania poskytovateľov",
-				"description": "Kilo Code smeruje požiadavky na najlepších dostupných poskytovateľov pre váš model. V predvolenom nastavení sú požiadavky rozložené medzi najlepších poskytovateľov, aby sa maximalizovala doba prevádzky. Môžete si však vybrať konkrétneho poskytovateľa, ktorého chcete pre tento model použiť.",
+				"description": "IVOL Code smeruje požiadavky na najlepších dostupných poskytovateľov pre váš model. V predvolenom nastavení sú požiadavky rozložené medzi najlepších poskytovateľov, aby sa maximalizovala doba prevádzky. Môžete si však vybrať konkrétneho poskytovateľa, ktorého chcete pre tento model použiť.",
 				"sorting": {
 					"default": "Predvolené radenie poskytovateľov",
 					"price": "Uprednostniť poskytovateľov s nižšou cenou",
@@ -108,15 +108,15 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "Povoliť čítanie veľmi veľkých súborov",
-				"description": "Keď je povolené, Kilo Code vykoná čítanie veľmi veľkých súborov alebo výstupov MCP aj keď existuje vysoká pravdepodobnosť pretečenia kontextového okna (veľkosť obsahu >80% kontextového okna)."
+				"description": "Keď je povolené, IVOL Code vykoná čítanie veľmi veľkých súborov alebo výstupov MCP aj keď existuje vysoká pravdepodobnosť pretečenia kontextového okna (veľkosť obsahu >80% kontextového okna)."
 			}
 		},
 		"systemNotifications": {
 			"label": "Povoliť systémové oznámenia",
-			"description": "Keď je povolené, Kilo Code bude odosielať systémové oznámenia pre dôležité udalosti ako dokončenie úlohy alebo chyby.",
+			"description": "Keď je povolené, IVOL Code bude odosielať systémové oznámenia pre dôležité udalosti ako dokončenie úlohy alebo chyby.",
 			"testButton": "Otestovať oznámenia",
-			"testTitle": "Kilo Code",
-			"testMessage": "Toto je testovacie oznámenie z Kilo Code."
+			"testTitle": "IVOL Code",
+			"testMessage": "Toto je testovacie oznámenie z IVOL Code."
 		},
 		"terminal": {
 			"commandGenerator": {
@@ -137,7 +137,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code chce skrátiť tvoju konverzáciu",
+			"wantsToCondense": "IVOL Code chce skrátiť tvoju konverzáciu",
 			"condenseConversation": "Skrátiť konverzáciu"
 		},
 		"seeNewChanges": "Zobraziť nové zmeny",
@@ -176,14 +176,14 @@
 			"modes": "Režimy",
 			"skills": "Zručnosti"
 		},
-		"ariaLabel": "Kilo Code Rules",
+		"ariaLabel": "IVOL Code Rules",
 		"tabs": {
 			"rules": "Pravidlá",
 			"workflows": "Pracovné postupy"
 		},
 		"description": {
-			"rules": "Pravidlá ti umožňujú poskytnúť Kilo Code pokyny, ktoré by mal dodržiavať vo všetkých režimoch a pre všetky prompty. Je to trvalý spôsob, ako zahrnúť kontext a preferencie pre všetky konverzácie v tvojom pracovnom priestore alebo globálne.",
-			"workflows": "Pracovné postupy sú pripravená šablóna pre konverzáciu. Pracovné postupy ti môžu umožniť definovať prompty, ktoré často používaš, a môžu zahŕňať rad krokov na vedenie Kilo Code cez opakujúce sa úlohy, ako je nasadenie služby alebo odoslanie PR. Pre vyvolanie pracovného postupu napíš",
+			"rules": "Pravidlá ti umožňujú poskytnúť IVOL Code pokyny, ktoré by mal dodržiavať vo všetkých režimoch a pre všetky prompty. Je to trvalý spôsob, ako zahrnúť kontext a preferencie pre všetky konverzácie v tvojom pracovnom priestore alebo globálne.",
+			"workflows": "Pracovné postupy sú pripravená šablóna pre konverzáciu. Pracovné postupy ti môžu umožniť definovať prompty, ktoré často používaš, a môžu zahŕňať rad krokov na vedenie IVOL Code cez opakujúce sa úlohy, ako je nasadenie služby alebo odoslanie PR. Pre vyvolanie pracovného postupu napíš",
 			"workflowsInChat": "v chate."
 		},
 		"sections": {
@@ -298,7 +298,7 @@
 			},
 			"noCredits": {
 				"title": "Na vašom účte nie sú žiadne kredity",
-				"description": "Váš účet Kilo Code nemá žiadne kredity. Pre použitie automatického dokončovania prosím pridajte kredity na svoj účet.",
+				"description": "Váš účet IVOL Code nemá žiadne kredity. Pre použitie automatického dokončovania prosím pridajte kredity na svoj účet.",
 				"buyCredits": "Kúpiť kredity →"
 			},
 			"codeEditorSuggestions": "Návrhy v editore kódu",
@@ -355,7 +355,7 @@
 		"shareModesNewBanner": "Novinka: Zdieľajte režimy vytvorením organizácie"
 	},
 	"deviceAuth": {
-		"title": "Prihlásiť sa do Kilo Code",
+		"title": "Prihlásiť sa do IVOL Code",
 		"step1": "Otvori nasledujúcu URL vo svojom prehliadači",
 		"step2": "Over kód a autorizuj toto zariadenie vo svojom prehliadači",
 		"scanQr": "Alebo naskenuj tento QR kód svojím telefónom",

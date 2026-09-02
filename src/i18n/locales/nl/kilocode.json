@@ -52,7 +52,7 @@
 		}
 	},
 	"commitMessage": {
-		"activated": "Kilo Code commit bericht generator geactiveerd",
+		"activated": "IVOL Code Agent 5 commit bericht generator geactiveerd",
 		"gitNotFound": "⚠️ Git-repository niet gevonden of git niet beschikbaar",
 		"gitInitError": "⚠️ Git-initialisatiefout: {{error}}",
 		"generating": "Kilo: Commit bericht genereren...",
@@ -65,7 +65,7 @@
 		"errors": {
 			"noProject": "Geen project beschikbaar",
 			"timeout": "Verzoek is verlopen na 30 seconden",
-			"connectionFailed": "Verbinding maken met Kilo Code-extensie mislukt",
+			"connectionFailed": "Verbinding maken met IVOL Code Agent 5-extensie mislukt",
 			"invalidResponse": "Ongeldig responsformaat ontvangen van extensie",
 			"missingMessage": "Geen commit-bericht ontvangen van extensie",
 			"noChanges": "Geen wijzigingen gevonden om te committen",
@@ -90,7 +90,7 @@
 			"title": "Commit-bericht genereren",
 			"analyzing": "Wijzigingen analyseren...",
 			"generating": "Commit-bericht genereren...",
-			"connecting": "Verbinding maken met Kilo Code..."
+			"connecting": "Verbinding maken met IVOL Code Agent 5..."
 		},
 		"ui": {
 			"generateButton": "Commit Bericht Genereren",
@@ -99,14 +99,14 @@
 	},
 	"autocomplete": {
 		"statusBar": {
-			"enabled": "$(kilo-logo) Autocomplete",
+			"enabled": "$(sparkle) Autocomplete",
 			"snoozed": "gepauzeerd",
 			"warning": "$(warning) Autocomplete",
 			"tooltip": {
-				"basic": "Kilo Code Autocomplete",
-				"disabled": "Kilo Code Autocomplete (uitgeschakeld)",
-				"noCredits": "**Geen tegoed op je account**\n\nJe Kilo Code account heeft geen tegoed. Om autocomplete te gebruiken, voeg tegoed toe aan je account.\n\n[Instellingen openen](command:kilo-code.settingsButtonClicked)",
-				"noUsableProvider": "**Geen autocomplete model geconfigureerd**\n\nOm autocomplete in te schakelen, voeg een profiel toe met een van deze ondersteunde providers: {{providers}}.\n\n[Instellingen openen](command:kilo-code.settingsButtonClicked)",
+				"basic": "IVOL Code Agent 5 Autocomplete",
+				"disabled": "IVOL Code Agent 5 Autocomplete (uitgeschakeld)",
+				"noCredits": "**Geen tegoed op je account**\n\nJe IVOL Code Agent 5 account heeft geen tegoed. Om autocomplete te gebruiken, voeg tegoed toe aan je account.\n\n[Instellingen openen](command:ivol-code-agent-5.settingsButtonClicked)",
+				"noUsableProvider": "**Geen autocomplete model geconfigureerd**\n\nOm autocomplete in te schakelen, voeg een profiel toe met een van deze ondersteunde providers: {{providers}}.\n\n[Instellingen openen](command:ivol-code-agent-5.settingsButtonClicked)",
 				"sessionTotal": "Totale sessiekosten:",
 				"provider": "Provider:",
 				"model": "Model:",
@@ -120,36 +120,36 @@
 				"lessThanCent": "<$0.01"
 			}
 		},
-		"toggleMessage": "Kilo Code Autocomplete {{status}}",
+		"toggleMessage": "IVOL Code Agent 5 Autocomplete {{status}}",
 		"progress": {
-			"title": "Kilo Code",
+			"title": "IVOL Code Agent 5",
 			"analyzing": "Je code analyseren...",
 			"generating": "Voorgestelde bewerkingen genereren...",
 			"processing": "Voorgestelde bewerkingen verwerken...",
 			"showing": "Voorgestelde bewerkingen tonen..."
 		},
 		"input": {
-			"title": "Kilo Code: Snelle Taak",
+			"title": "IVOL Code Agent 5: Snelle Taak",
 			"placeholder": "bijv., 'refactor deze functie om efficiënter te zijn'"
 		},
 		"commands": {
-			"generateSuggestions": "Kilo Code: Voorgestelde Bewerkingen Genereren",
+			"generateSuggestions": "IVOL Code Agent 5: Voorgestelde Bewerkingen Genereren",
 			"displaySuggestions": "Voorgestelde Bewerkingen Tonen",
 			"cancelSuggestions": "Voorgestelde Bewerkingen Annuleren",
 			"applyCurrentSuggestion": "Huidige Voorgestelde Bewerking Toepassen",
 			"applyAllSuggestions": "Alle Voorgestelde Bewerkingen Toepassen",
-			"category": "Kilo Code"
+			"category": "IVOL Code Agent 5"
 		},
 		"codeAction": {
-			"title": "Kilo Code: Voorgestelde Bewerkingen"
+			"title": "IVOL Code Agent 5: Voorgestelde Bewerkingen"
 		},
 		"chatParticipant": {
-			"fullName": "Kilo Code Agent",
+			"fullName": "IVOL Code Agent 5 Agent",
 			"name": "Agent",
 			"description": "Ik kan je helpen met snelle taken en voorgestelde bewerkingen."
 		},
 		"incompatibilityExtensionPopup": {
-			"message": "De Kilo Code Autocomplete wordt geblokkeerd door een conflict met GitHub Copilot. Om dit op te lossen, moet je Copilot's inline suggesties uitschakelen.",
+			"message": "De IVOL Code Agent 5 Autocomplete wordt geblokkeerd door een conflict met GitHub Copilot. Om dit op te lossen, moet je Copilot's inline suggesties uitschakelen.",
 			"disableCopilot": "Copilot Uitschakelen",
 			"disableInlineAssist": "Autocomplete Uitschakelen"
 		}
@@ -206,7 +206,7 @@
 		}
 	},
 	"configDiscovery": {
-		"added": "Kilo Code: Toegevoegd {{source}} {{configType}}: {{name}}{{modeStr}}",
-		"removed": "Kilo code: Verwijderd {{source}} {{configType}}: {{name}}{{modeStr}}"
+		"added": "IVOL Code Agent 5: Toegevoegd {{source}} {{configType}}: {{name}}{{modeStr}}",
+		"removed": "IVOL Code: Verwijderd {{source}} {{configType}}: {{name}}{{modeStr}}"
 	}
 }

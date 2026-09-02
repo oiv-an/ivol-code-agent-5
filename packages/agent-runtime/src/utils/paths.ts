@@ -4,7 +4,7 @@ import * as fs from "fs"
 import { logs } from "./logger.js"
 
 /**
- * Centralized path management for Kilo Code agent runtime
+ * Centralized path management for IVOL Code agent runtime
  * All configuration and logs are stored in ~/.kilocode/
  */
 export class KiloCodePaths {

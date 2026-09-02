@@ -3,7 +3,7 @@ import { X_KILOCODE_VERSION } from "../../../../../../shared/kilocode/headers"
 import { Package } from "../../../../../../shared/package"
 import OpenRouter from "./OpenRouter"
 import { IFimProvider } from "../../../../../../api/providers/kilocode/IFimProvider"
-import { getKiloUrlFromToken } from "@roo-code/types"
+import { DISABLED_KILOCODE_URL, getKiloUrlFromToken } from "@roo-code/types"
 
 /**
  * Extended CompletionOptions to include KiloCode-specific per-request metadata
@@ -40,7 +40,7 @@ class KiloCode extends OpenRouter {
 		// Transform apiBase to use KiloCode backend
 		const transformedOptions = {
 			...parentOptions,
-			apiBase: getKiloUrlFromToken("https://api.kilo.ai/api/openrouter/v1/", kilocodeToken),
+			apiBase: getKiloUrlFromToken(`${DISABLED_KILOCODE_URL}/api/openrouter/v1/`, kilocodeToken),
 		}
 
 		super(transformedOptions)

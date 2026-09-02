@@ -1,11 +1,18 @@
 # Plugin basic information
-pluginGroup=ai.kilocode.jetbrains
+pluginGroup=pro.ivol.kilocode5.jetbrains
 pluginVersion={{VERSION}}
 
 # Platform basic information
-platformVersion=2024.3
-platformType=IC
-pluginSinceBuild=243
+platformVersion=2026.2.1
+platformType=PS
+pluginSinceBuild=262
+pluginUntilBuild=262.*
+javaVersion=25
+
+# The PhpStorm 2026.2 API surface is large enough that Kotlin's default
+# compiler heap can run out during a clean build.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+kotlin.daemon.jvmargs=-Xmx2048m
 
 # Disable automatic Kotlin stdlib dependency to avoid conflicts with IntelliJ Platform's bundled version
 # See: https://jb.gg/intellij-platform-kotlin-stdlib

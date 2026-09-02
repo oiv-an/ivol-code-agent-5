@@ -9,6 +9,7 @@ import { vscode } from "@/utils/vscode"
 import { Button, Input, Slider, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui" // kilocode_change
 
 import { SetCachedStateField } from "./types"
+import { isPersonalProvider } from "./constants" // kilocode_change
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
@@ -480,14 +481,20 @@ export const AutoApproveSettings = ({
 								</SelectTrigger>
 								<SelectContent>
 									<SelectItem value="-">No gatekeeper (approve all)</SelectItem>
-									{(listApiConfigMeta || []).map((config) => (
-										<SelectItem
-											key={config.id}
-											value={config.id}
-											data-testid={`gatekeeper-${config.id}-option`}>
-											{config.name}
-										</SelectItem>
-									))}
+									{/* kilocode_change start: hide unavailable provider profiles */}
+									{(listApiConfigMeta || [])
+										.filter(
+											(config) => !config.apiProvider || isPersonalProvider(config.apiProvider),
+										)
+										.map((config) => (
+											<SelectItem
+												key={config.id}
+												value={config.id}
+												data-testid={`gatekeeper-${config.id}-option`}>
+												{config.name}
+											</SelectItem>
+										))}
+									{/* kilocode_change end */}
 								</SelectContent>
 							</Select>
 							<div className="text-sm text-vscode-descriptionForeground mt-1">

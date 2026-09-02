@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { AutocompleteModel } from "../AutocompleteModel"
+import { AutocompleteModel, PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS } from "../AutocompleteModel"
 import { ProviderSettingsManager } from "../../../core/config/ProviderSettingsManager"
-import { AUTOCOMPLETE_PROVIDER_MODELS } from "../utils/kilocode-utils"
 import * as apiIndex from "../../../api"
-import { TelemetryService } from "../../../../packages/telemetry/src/TelemetryService"
 
 describe("AutocompleteModel", () => {
 	let mockProviderSettingsManager: ProviderSettingsManager
@@ -15,13 +13,16 @@ describe("AutocompleteModel", () => {
 		} as any
 	})
 
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
+
 	describe("reload", () => {
-		it("sorts profiles by supportedProviders index order", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+		it("uses personal local-provider priority instead of profile order", async () => {
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const profiles = [
-				{ id: "3", name: "profile3", apiProvider: supportedProviders[2] },
-				{ id: "1", name: "profile1", apiProvider: supportedProviders[0] },
 				{ id: "2", name: "profile2", apiProvider: supportedProviders[1] },
+				{ id: "1", name: "profile1", apiProvider: supportedProviders[0] },
 			] as any
 
 			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
@@ -39,7 +40,7 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("filters out profiles without apiProvider", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const profiles = [
 				{ id: "1", name: "profile1", apiProvider: undefined },
 				{ id: "2", name: "profile2", apiProvider: supportedProviders[0] },
@@ -60,7 +61,7 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("filters out profiles with unsupported apiProvider", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const profiles = [
 				{ id: "1", name: "profile1", apiProvider: "unsupported" },
 				{ id: "2", name: "profile2", apiProvider: supportedProviders[0] },
@@ -92,15 +93,14 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("returns true when profile found", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
-			const profiles = [{ id: "1", name: "mistral-profile", apiProvider: "mistral" }] as any
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const profiles = [{ id: "1", name: "local-profile", apiProvider: supportedProviders[0] }] as any
 
 			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
 			vi.mocked(mockProviderSettingsManager.getProfile).mockResolvedValue({
 				id: "1",
-				name: "mistral-profile",
-				apiProvider: "mistral",
-				mistralApiKey: "test-key",
+				name: "local-profile",
+				apiProvider: supportedProviders[0],
 			} as any)
 
 			const model = new AutocompleteModel()
@@ -111,359 +111,43 @@ describe("AutocompleteModel", () => {
 		})
 	})
 
-	describe("provider usability", () => {
-		beforeEach(() => {
-			// Mock fetch globally for these tests
+	describe("personal provider isolation", () => {
+		it("allows only LM Studio and Ollama for autocomplete", () => {
+			expect([...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]).toEqual(["lmstudio", "ollama"])
+		})
+
+		it("does not inspect or contact a saved Kilo profile", async () => {
 			vi.stubGlobal("fetch", vi.fn())
-
-			// Mock TelemetryService
-			const mockTelemetryService = {
-				captureEvent: vi.fn(),
-				captureException: vi.fn(),
-				isTelemetryEnabled: vi.fn().mockReturnValue(false),
-				shutdown: vi.fn(),
-			}
-			vi.spyOn(TelemetryService, "hasInstance").mockReturnValue(true)
-			vi.spyOn(TelemetryService, "instance", "get").mockReturnValue(mockTelemetryService as any)
-		})
-
-		afterEach(() => {
-			// Restore fetch
-			vi.unstubAllGlobals()
-
-			// Restore TelemetryService mocks
-			vi.restoreAllMocks()
-		})
-
-		it("should skip kilocode provider when balance is zero and use openrouter instead", async () => {
-			const profiles = [
-				{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" },
-				{ id: "2", name: "openrouter-profile", apiProvider: "openrouter" },
-			] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profiles with tokens
-			vi.mocked(mockProviderSettingsManager.getProfile).mockImplementation(async (args: any) => {
-				if (args.id === "1") {
-					return {
-						id: "1",
-						name: "kilocode-profile",
-						apiProvider: "kilocode",
-						kilocodeToken: "test-token",
-					} as any
-				} else if (args.id === "2") {
-					return {
-						id: "2",
-						name: "openrouter-profile",
-						apiProvider: "openrouter",
-						openRouterApiKey: "test-key",
-					} as any
-				}
-				return null as any
-			})
-
-			// Mock fetch to return zero balance for kilocode
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ data: { balance: 0 } }),
-					} as any
-				}
-				// For OpenRouter models endpoint
-				if (url.includes("/models")) {
-					return {
-						ok: true,
-						json: async () => ({ data: [] }),
-					} as any
-				}
-				// For other URLs, return a basic response
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
+			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue([
+				{ id: "kilo", name: "Old Kilo", apiProvider: "kilocode", kilocodeToken: "secret" },
+			] as any)
 
 			const model = new AutocompleteModel()
 			const result = await model.reload(mockProviderSettingsManager)
 
-			// Should have tried both providers but used openrouter (since kilocode balance is 0)
-			expect(result).toBe(true)
-			expect(model.loaded).toBe(true)
-		})
-
-		it("should use kilocode provider when balance is greater than zero", async () => {
-			const profiles = [
-				{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" },
-				{ id: "2", name: "openrouter-profile", apiProvider: "openrouter" },
-			] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profiles with tokens
-			vi.mocked(mockProviderSettingsManager.getProfile).mockImplementation(async (args: any) => {
-				if (args.id === "1") {
-					return {
-						id: "1",
-						name: "kilocode-profile",
-						apiProvider: "kilocode",
-						kilocodeToken: "test-token",
-					} as any
-				} else if (args.id === "2") {
-					return {
-						id: "2",
-						name: "openrouter-profile",
-						apiProvider: "openrouter",
-						openRouterApiKey: "test-key",
-					} as any
-				}
-				return null as any
-			})
-
-			// Mock fetch to return positive balance for kilocode
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ data: { balance: 10.5 } }),
-					} as any
-				}
-				// For OpenRouter models endpoint
-				if (url.includes("/models")) {
-					return {
-						ok: true,
-						json: async () => ({ data: [] }),
-					} as any
-				}
-				// For other URLs, return a basic response
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
-
-			const model = new AutocompleteModel()
-			const result = await model.reload(mockProviderSettingsManager)
-
-			// Should have used kilocode provider (first one with positive balance)
-			expect(result).toBe(true)
-			expect(model.loaded).toBe(true)
-		})
-
-		it("should handle kilocode provider with no token", async () => {
-			const profiles = [
-				{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" },
-				{ id: "2", name: "openrouter-profile", apiProvider: "openrouter" },
-			] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profiles - kilocode without token
-			vi.mocked(mockProviderSettingsManager.getProfile).mockImplementation(async (args: any) => {
-				if (args.id === "1") {
-					return {
-						id: "1",
-						name: "kilocode-profile",
-						apiProvider: "kilocode",
-						kilocodeToken: "", // No token
-					} as any
-				} else if (args.id === "2") {
-					return {
-						id: "2",
-						name: "openrouter-profile",
-						apiProvider: "openrouter",
-						openRouterApiKey: "test-key",
-					} as any
-				}
-				return null as any
-			})
-
-			// Mock fetch to handle the no-token case
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					// This should not be called since there's no token
-					return {
-						ok: false,
-						status: 401,
-					} as any
-				}
-				// For OpenRouter models endpoint
-				if (url.includes("/models")) {
-					return {
-						ok: true,
-						json: async () => ({ data: [] }),
-					} as any
-				}
-				// For other URLs, return a basic response
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
-
-			const model = new AutocompleteModel()
-			const result = await model.reload(mockProviderSettingsManager)
-
-			// Should skip kilocode (no token) and use openrouter
-			expect(result).toBe(true)
-			expect(model.loaded).toBe(true)
-		})
-
-		it("should set hasKilocodeProfileWithNoBalance when kilocode profile exists but has no balance", async () => {
-			const profiles = [{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" }] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profile with token
-			vi.mocked(mockProviderSettingsManager.getProfile).mockResolvedValue({
-				id: "1",
-				name: "kilocode-profile",
-				apiProvider: "kilocode",
-				kilocodeToken: "test-token",
-			} as any)
-
-			// Mock fetch to return zero balance for kilocode
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ balance: 0 }),
-					} as any
-				}
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
-
-			const model = new AutocompleteModel()
-			const result = await model.reload(mockProviderSettingsManager)
-
-			// Should not find a usable provider
 			expect(result).toBe(false)
-			expect(model.loaded).toBe(true)
-			// Should have set the flag indicating kilocode profile exists but has no balance
-			expect(model.hasKilocodeProfileWithNoBalance).toBe(true)
+			expect(mockProviderSettingsManager.getProfile).not.toHaveBeenCalled()
+			expect(global.fetch).not.toHaveBeenCalled()
+			expect(model.hasKilocodeProfileWithNoBalance).toBe(false)
 		})
 
-		it("should not set hasKilocodeProfileWithNoBalance when kilocode profile has balance", async () => {
-			const profiles = [{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" }] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profile with token
+		it("ignores an explicit Kilo autocomplete profile and uses an allowed local profile", async () => {
+			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue([
+				{ id: "kilo", name: "Old Kilo", apiProvider: "kilocode", profileType: "autocomplete" },
+				{ id: "local", name: "Local", apiProvider: "lmstudio" },
+			] as any)
 			vi.mocked(mockProviderSettingsManager.getProfile).mockResolvedValue({
-				id: "1",
-				name: "kilocode-profile",
-				apiProvider: "kilocode",
-				kilocodeToken: "test-token",
+				id: "local",
+				name: "Local",
+				apiProvider: "lmstudio",
 			} as any)
-
-			// Mock fetch to return positive balance for kilocode and valid models response
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ balance: 10.5 }),
-					} as any
-				}
-				// For OpenRouter/Kilocode models endpoint
-				if (url.includes("/models")) {
-					return {
-						ok: true,
-						json: async () => ({
-							data: [
-								{
-									id: "mistralai/codestral-2508",
-									name: "Codestral",
-									context_length: 32000,
-									pricing: { prompt: "0.0001", completion: "0.0003" },
-								},
-							],
-						}),
-					} as any
-				}
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
 
 			const model = new AutocompleteModel()
 			const result = await model.reload(mockProviderSettingsManager)
 
-			// Should find a usable provider
 			expect(result).toBe(true)
-			expect(model.loaded).toBe(true)
-			// Should not have set the flag
-			expect(model.hasKilocodeProfileWithNoBalance).toBe(false)
-		})
-
-		it("should clear hasKilocodeProfileWithNoBalance on reload", async () => {
-			const profiles = [{ id: "1", name: "kilocode-profile", apiProvider: "kilocode" }] as any
-
-			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
-
-			// Mock profile with token
-			vi.mocked(mockProviderSettingsManager.getProfile).mockResolvedValue({
-				id: "1",
-				name: "kilocode-profile",
-				apiProvider: "kilocode",
-				kilocodeToken: "test-token",
-			} as any)
-
-			// First reload: zero balance
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ balance: 0 }),
-					} as any
-				}
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
-
-			const model = new AutocompleteModel()
-			await model.reload(mockProviderSettingsManager)
-			expect(model.hasKilocodeProfileWithNoBalance).toBe(true)
-
-			// Second reload: positive balance with valid models response
-			;(global.fetch as any).mockImplementation(async (url: string) => {
-				if (url.includes("/api/profile/balance")) {
-					return {
-						ok: true,
-						json: async () => ({ balance: 10.5 }),
-					} as any
-				}
-				// For OpenRouter/Kilocode models endpoint
-				if (url.includes("/models")) {
-					return {
-						ok: true,
-						json: async () => ({
-							data: [
-								{
-									id: "mistralai/codestral-2508",
-									name: "Codestral",
-									context_length: 32000,
-									pricing: { prompt: "0.0001", completion: "0.0003" },
-								},
-							],
-						}),
-					} as any
-				}
-				return {
-					ok: true,
-					json: async () => ({}),
-				} as any
-			})
-
-			await model.reload(mockProviderSettingsManager)
-			// Flag should be cleared after reload with positive balance
-			expect(model.hasKilocodeProfileWithNoBalance).toBe(false)
+			expect(mockProviderSettingsManager.getProfile).toHaveBeenCalledTimes(1)
+			expect(mockProviderSettingsManager.getProfile).toHaveBeenCalledWith({ id: "local" })
 		})
 	})
 
@@ -474,7 +158,7 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("returns provider name from API handler when provider is loaded", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const profiles = [{ id: "1", name: "profile1", apiProvider: supportedProviders[0] }] as any
 
 			vi.mocked(mockProviderSettingsManager.listConfig).mockResolvedValue(profiles)
@@ -487,8 +171,8 @@ describe("AutocompleteModel", () => {
 
 			// Mock buildApiHandler to return a handler with providerName
 			const mockApiHandler = {
-				providerName: "Mistral",
-				getModel: vi.fn().mockReturnValue({ id: "mistral-model", info: {} }),
+				providerName: "LM Studio",
+				getModel: vi.fn().mockReturnValue({ id: "local-model", info: {} }),
 				createMessage: vi.fn(),
 				countTokens: vi.fn(),
 			}
@@ -498,9 +182,11 @@ describe("AutocompleteModel", () => {
 			await model.reload(mockProviderSettingsManager)
 
 			const providerName = model.getProviderDisplayName()
+			const providerKey = model.getProviderKey()
 			expect(providerName).toBeTruthy()
 			expect(typeof providerName).toBe("string")
-			expect(providerName).toBe("Mistral")
+			expect(providerName).toBe("LM Studio")
+			expect(providerKey).toBe(supportedProviders[0])
 
 			// Restore the spy
 			vi.restoreAllMocks()
@@ -518,7 +204,7 @@ describe("AutocompleteModel", () => {
 			})
 
 			it("stores and returns profile name after loading", async () => {
-				const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+				const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 				const profiles = [
 					{
 						id: "1",
@@ -544,7 +230,7 @@ describe("AutocompleteModel", () => {
 			})
 
 			it("stores and returns profile type after loading", async () => {
-				const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+				const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 				const profiles = [
 					{ id: "1", name: "My Profile", apiProvider: supportedProviders[0], profileType: "autocomplete" },
 				] as any
@@ -565,7 +251,7 @@ describe("AutocompleteModel", () => {
 			})
 
 			it("clears profile information on cleanup", async () => {
-				const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+				const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 				const profiles = [
 					{ id: "1", name: "My Profile", apiProvider: supportedProviders[0], profileType: "autocomplete" },
 				] as any
@@ -611,7 +297,7 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("should use custom model for explicit autocomplete profiles", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const provider = supportedProviders[0]
 			const customModelId = "custom-autocomplete-model"
 
@@ -651,9 +337,9 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("should override model for non-autocomplete profiles", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const provider = supportedProviders[0]
-			const defaultAutocompleteModel = AUTOCOMPLETE_PROVIDER_MODELS.get(provider)
+			const defaultAutocompleteModel = PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.get(provider)
 
 			const profiles = [
 				{
@@ -691,9 +377,9 @@ describe("AutocompleteModel", () => {
 		})
 
 		it("should override model for profiles without profileType", async () => {
-			const supportedProviders = [...AUTOCOMPLETE_PROVIDER_MODELS.keys()]
+			const supportedProviders = [...PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.keys()]
 			const provider = supportedProviders[0]
-			const defaultAutocompleteModel = AUTOCOMPLETE_PROVIDER_MODELS.get(provider)
+			const defaultAutocompleteModel = PERSONAL_AUTOCOMPLETE_PROVIDER_MODELS.get(provider)
 
 			const profiles = [
 				{

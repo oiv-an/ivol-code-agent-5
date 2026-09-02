@@ -1,6 +1,6 @@
 {
 	"extension": {
-		"name": "Kilo Code",
+		"name": "IVOL Code Agent 5",
 		"description": "AI-агент для програмування з відкритим кодом, який генерує код з природної мови, автоматизує завдання та виконує команди терміналу. Включає вбудоване автодоповнення, автоматизацію браузера, автоматичний рефакторинг та користувацькі режими для планування, програмування та налагодження. Підтримує понад 500 AI-моделей, включаючи Claude (Anthropic), Gemini, Grok, GPT, Codex та GLM."
 	},
 	"number_format": {
@@ -171,7 +171,7 @@
 	"warnings": {
 		"no_terminal_content": "Не вибрано вміст терміналу",
 		"missing_task_files": "Файли цього завдання відсутні. Хочеш видалити його зі списку завдань?",
-		"auto_import_failed": "Не вдалося автоматично імпортувати налаштування Kilo Code: {{error}}"
+		"auto_import_failed": "Не вдалося автоматично імпортувати налаштування IVOL Code Agent 5: {{error}}"
 	},
 	"info": {
 		"no_changes": "Змін не знайдено.",
@@ -180,7 +180,7 @@
 		"custom_storage_path_set": "Встановлено користувацький шлях зберігання: {{path}}",
 		"default_storage_path": "Повернуто до використання шляху зберігання за замовчуванням",
 		"settings_imported": "Налаштування успішно імпортовано.",
-		"auto_import_success": "Налаштування Kilo Code автоматично імпортовано з {{filename}}",
+		"auto_import_success": "Налаштування IVOL Code Agent 5 автоматично імпортовано з {{filename}}",
 		"share_link_copied": "Посилання для поділу скопійовано в буфер обміну",
 		"organization_share_link_copied": "Посилання для поділу організації скопійовано в буфер обміну!",
 		"public_share_link_copied": "Публічне посилання для поділу скопійовано в буфер обміну!",
@@ -210,12 +210,12 @@
 	},
 	"storage": {
 		"prompt_custom_path": "Введи користувацький шлях зберігання історії розмов, залиш порожнім для використання розташування за замовчуванням",
-		"path_placeholder": "D:\\KiloCodeStorage",
-		"enter_absolute_path": "Будь ласка, введи абсолютний шлях (наприклад, D:\\KiloCodeStorage або /home/user/storage)",
+		"path_placeholder": "D:\\IVOLCodeStorage",
+		"enter_absolute_path": "Будь ласка, введи абсолютний шлях (наприклад, D:\\IVOLCodeStorage або /home/user/storage)",
 		"enter_valid_path": "Будь ласка, введи дійсний шлях"
 	},
 	"input": {
-		"task_prompt": "Що має зробити Kilo Code?",
+		"task_prompt": "Що має зробити IVOL Code Agent 5?",
 		"task_placeholder": "Створити, знайти, запитати щось"
 	},
 	"customModes": {
@@ -242,8 +242,8 @@
 	},
 	"mdm": {
 		"errors": {
-			"cloud_auth_required": "Твоя організація вимагає автентифікації Kilo Code Cloud. Будь ласка, увійди, щоб продовжити.",
-			"organization_mismatch": "Ти повинен бути автентифікований з обліковим записом Kilo Code Cloud твоєї організації.",
+			"cloud_auth_required": "Твоя організація вимагає автентифікації Kilo Cloud. Будь ласка, увійди, щоб продовжити.",
+			"organization_mismatch": "Ти повинен бути автентифікований з обліковим записом Kilo Cloud твоєї організації.",
 			"verification_failed": "Не вдалося перевірити автентифікацію організації."
 		},
 		"info": {
@@ -270,7 +270,7 @@
 	},
 	"docsLink": {
 		"label": "Документація",
-		"url": "https://kilo.ai/docs"
+		"url": "https://github.com/oiv-an/ivol-code-agent-5#readme"
 	},
 	"errorBoundary": {
 		"title": "Помилка",

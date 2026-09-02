@@ -25,7 +25,7 @@
 		"invalidImageFormat": "Prijatý neplatný formát obrázka",
 		"unknownError": "Nastala neznáma chyba",
 		"roo": {
-			"authRequired": "Pre generovanie obrázkov je vyžadovaná autentizácia Kilo Code Cloud. Prihlás sa prosím do Kilo Code Cloud."
+			"authRequired": "Pre generovanie obrázkov je vyžadovaná autentizácia Kilo Cloud. Prihlás sa prosím do Kilo Cloud."
 		}
 	}
 }

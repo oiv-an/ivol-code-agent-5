@@ -1,6 +1,6 @@
 {
-	"greeting": "Olá, eu sou o Kilo Code!",
-	"introduction": "<strong>Kilo Code é o principal agente de codificação autônomo.</strong> Prepare-se para arquitetar, codificar, depurar e aumentar sua produtividade como nunca antes. Para continuar, o Kilo Code necessita de uma chave API.",
+	"greeting": "Olá, eu sou o IVOL Code!",
+	"introduction": "<strong>IVOL Code é o principal agente de codificação autônomo.</strong> Prepare-se para arquitetar, codificar, depurar e aumentar sua produtividade como nunca antes. Para continuar, o IVOL Code necessita de uma chave API.",
 	"notice": "Para começar, esta extensão precisa de um provedor de API.",
 	"start": "Vamos lá!",
 	"routers": {
@@ -16,7 +16,7 @@
 			"incentive": "Tente Roo gratuitamente"
 		}
 	},
-	"chooseProvider": "Para fazer sua mágica, o Kilo Code precisa de uma chave API.",
+	"chooseProvider": "Para fazer sua mágica, o IVOL Code precisa de uma chave API.",
 	"landing": {
 		"greeting": "Bem-vindo ao Roo Code!",
 		"introduction": "Com uma variedade de Modos integrados e extensíveis, o Roo Code permite que você planeje, arquitete, codifique, depure e aumente sua produtividade como nunca antes.",
@@ -50,8 +50,8 @@
 	"startRouter": "Recomendamos usar um roteador LLM:",
 	"startCustom": "Ou você pode trazer sua própria chave API:",
 	"telemetry": {
-		"helpImprove": "Ajude a melhorar o Kilo Code",
-		"helpImproveMessage": "O Kilo Code coleta dados de erros e uso para nos ajudar a corrigir bugs e melhorar a extensão. Esta telemetria não coleta código, prompts ou informações pessoais. Você pode desativar isso nas <settingsLink>configurações</settingsLink>."
+		"helpImprove": "Ajude a melhorar o IVOL Code",
+		"helpImproveMessage": "O IVOL Code coleta dados de erros e uso para nos ajudar a corrigir bugs e melhorar a extensão. Esta telemetria não coleta código, prompts ou informações pessoais. Você pode desativar isso nas <settingsLink>configurações</settingsLink>."
 	},
 	"importSettings": "Importar configurações"
 }

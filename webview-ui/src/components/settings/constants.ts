@@ -26,7 +26,15 @@ import {
 	minimaxModels,
 	basetenModels,
 	corethinkModels,
+	// kilocode_change start: shared personal provider policy
+	PERSONAL_PROVIDER_VALUES,
+	isPersonalProvider,
+	// kilocode_change end
 } from "@roo-code/types"
+
+// kilocode_change start: expose the shared policy to settings controls
+export { PERSONAL_PROVIDER_VALUES, isPersonalProvider }
+// kilocode_change end
 
 export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, ModelInfo>>> = {
 	anthropic: anthropicModels,
@@ -113,3 +121,9 @@ export const PROVIDERS = [
 ].sort((a, b) => a.label.localeCompare(b.label))
 
 PROVIDERS.unshift({ value: "kilocode", label: "Kilo Gateway", proxy: false }) // kilocode_change
+
+// kilocode_change start: visible personal provider catalog
+// Personal builds keep the full provider implementation for backwards-compatible
+// profile loading, but only expose providers from the shared personal-build policy.
+export const PERSONAL_PROVIDERS = PROVIDERS.filter(({ value }) => isPersonalProvider(value))
+// kilocode_change end

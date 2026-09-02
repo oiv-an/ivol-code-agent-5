@@ -28,12 +28,10 @@ const OnboardingOption: React.FC<OnboardingOptionProps> = ({ title, description,
 }
 
 interface OnboardingViewProps {
-	onSelectFreeModels: () => void
-	onSelectPremiumModels: () => void
-	onSelectBYOK: () => void
+	onConfigureProviders: () => void
 }
 
-const OnboardingView: React.FC<OnboardingViewProps> = ({ onSelectFreeModels, onSelectPremiumModels, onSelectBYOK }) => {
+const OnboardingView: React.FC<OnboardingViewProps> = ({ onConfigureProviders }) => {
 	const { t } = useAppTranslation()
 
 	return (
@@ -45,25 +43,12 @@ const OnboardingView: React.FC<OnboardingViewProps> = ({ onSelectFreeModels, onS
 			</h1>
 
 			<div className="w-full max-w-md flex flex-col gap-4">
+				{/* Personal builds expose only the five supported provider types. */}
 				<OnboardingOption
-					title={t("kilocode:onboarding.freeModels.title")}
-					description={t("kilocode:onboarding.freeModels.description")}
-					icon="sparkle"
-					onClick={onSelectFreeModels}
-				/>
-
-				<OnboardingOption
-					title={t("kilocode:onboarding.premiumModels.title")}
-					description={t("kilocode:onboarding.premiumModels.description")}
-					icon="star-full"
-					onClick={onSelectPremiumModels}
-				/>
-
-				<OnboardingOption
-					title={t("kilocode:onboarding.byok.title")}
-					description={t("kilocode:onboarding.byok.description")}
+					title={t("settings:sections.providers")}
+					description={t("settings:providers.description")}
 					icon="key"
-					onClick={onSelectBYOK}
+					onClick={onConfigureProviders}
 				/>
 			</div>
 		</div>

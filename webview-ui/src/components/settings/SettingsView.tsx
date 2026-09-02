@@ -37,7 +37,6 @@ import { ensureBodyPointerEventsRestored } from "@/utils/fixPointerEvents"
 import {
 	type ProviderSettings,
 	type ExperimentId,
-	type TelemetrySetting,
 	type ProfileType, // kilocode_change - autocomplete profile type system
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	ImageGenerationProvider,
@@ -68,6 +67,7 @@ import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
 import { SetCachedStateField, SetExperimentEnabled } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import ApiConfigManager from "./ApiConfigManager"
+import { isPersonalProvider } from "./constants" // kilocode_change
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { BrowserSettings } from "./BrowserSettings"
@@ -250,7 +250,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		autoPurgeCompletedTaskRetentionDays,
 		autoPurgeIncompleteTaskRetentionDays,
 		autoPurgeLastRunTimestamp,
-		kiloCodeWrapperProperties,
 		// kilocode_change end - Auto-purge settings
 		includeDiagnosticMessages,
 		maxDiagnosticMessages,
@@ -453,17 +452,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		})
 	}, [])
 
-	const setTelemetrySetting = useCallback((setting: TelemetrySetting) => {
-		setCachedState((prevState) => {
-			if (prevState.telemetrySetting === setting) {
-				return prevState
-			}
-
-			setChangeDetected(true)
-			return { ...prevState, telemetrySetting: setting }
-		})
-	}, [])
-
+	// kilocode_change: telemetry is permanently disabled, so settings expose no telemetry mutator
 	const _setDebug = useCallback((debug: boolean) => {
 		setCachedState((prevState) => {
 			if (prevState.debug === debug) {
@@ -1060,10 +1049,16 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 											// If deleting the editing profile, switch to another for editing
 											if (isEditingProfile && listApiConfigMeta && listApiConfigMeta.length > 1) {
-												const nextProfile = listApiConfigMeta.find((p) => p.name !== configName)
+												// kilocode_change start: choose only an allowed replacement profile
+												const nextProfile = listApiConfigMeta.find(
+													(p) =>
+														p.name !== configName &&
+														(!p.apiProvider || isPersonalProvider(p.apiProvider)),
+												)
 												if (nextProfile) {
 													setEditingApiConfigName(nextProfile.name)
 												}
+												// kilocode_change end
 											}
 										}}
 										onRenameConfig={(oldName: string, newName: string) => {
@@ -1309,14 +1304,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
 						)}
 
+						{/* kilocode_change start: render About directly in the personal tab layout */}
 						{/* About Section */}
-						{activeTab === "about" && (
-							<About
-								telemetrySetting={telemetrySetting}
-								setTelemetrySetting={setTelemetrySetting}
-								isVsCode={kiloCodeWrapperProperties?.kiloCodeWrapped !== true /*kilocode_change*/}
-							/>
-						)}
+						{activeTab === "about" && <About />}
+						{/* kilocode_change end */}
 					</SearchIndexProvider>
 				</TabContent>
 			</div>

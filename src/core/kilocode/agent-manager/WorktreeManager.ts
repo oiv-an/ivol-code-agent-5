@@ -380,7 +380,7 @@ export class WorktreeManager {
 			}
 
 			const addition = content.endsWith("\n") || content === "" ? "" : "\n"
-			const excludeEntry = `${addition}\n# Kilo Code session metadata\n${entry}\n`
+			const excludeEntry = `${addition}\n# IVOL Code session metadata\n${entry}\n`
 
 			await fs.promises.appendFile(excludePath, excludeEntry)
 			this.log(`Added ${entry} to main repo git exclude: ${excludePath}`)
@@ -422,7 +422,7 @@ export class WorktreeManager {
 		}
 
 		const addition = content.endsWith("\n") || content === "" ? "" : "\n"
-		const excludeEntry = `${addition}\n# Kilo Code agent worktrees\n${entry}\n`
+		const excludeEntry = `${addition}\n# IVOL Code agent worktrees\n${entry}\n`
 
 		await fs.promises.appendFile(excludePath, excludeEntry)
 		this.log("Added .kilocode/worktrees/ to .git/info/exclude")

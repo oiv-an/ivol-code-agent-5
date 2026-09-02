@@ -1,28 +1,21 @@
-# Kilo Code Privacy Policy
+# IVOL Code Agent 5 Privacy Notice
 
-**Last Updated: March 7th, 2025**
+IVOL Code Agent 5 is a local, independent build of the open-source upstream v5.16.2 codebase. It does not require a Kilo account and does not include automatic Kilo/Roo upgrade notifications or telemetry credentials.
 
-Kilo Code respects your privacy and is committed to transparency about how we handle your data. Below is a simple breakdown of where key pieces of data go—and, importantly, where they don’t.
+## Data stored locally
 
-### **Where Your Data Goes (And Where It Doesn’t)**
+Task history, extension settings, provider profiles, and caches are stored in VS Code's local extension storage. Provider credentials are stored through VS Code's secure secret storage.
 
-- **Code & Files**: Kilo Code accesses files on your local machine when needed for AI-assisted features. When you send commands to Kilo Code, relevant files may be transmitted to your chosen AI model provider (e.g., OpenAI, Anthropic, OpenRouter) to generate responses. We do not have access to this data, but AI providers may store it per their privacy policies.
-- **Commands**: Any commands executed through Kilo Code happen on your local environment. However, when you use AI-powered features, the relevant code and context from your commands may be transmitted to your chosen AI model provider (e.g., OpenAI, Anthropic, OpenRouter) to generate responses. We do not have access to or store this data, but AI providers may process it per their privacy policies.
-- **Prompts & AI Requests**: When you use AI-powered features, your prompts and relevant project context are sent to your chosen AI model provider (e.g., OpenAI, Anthropic, OpenRouter) to generate responses. We do not store or process this data. These AI providers have their own privacy policies and may store data per their terms of service.
-- **API Keys & Credentials**: If you enter an API key (e.g., to connect an AI model), it is stored locally on your device and never sent to us or any third party, except the provider you have chosen.
+## Data sent to providers
 
-### **Your Choices & Control**
+When you submit a request, the extension sends the prompt and any context you selected to the active AI provider. That provider processes data under its own privacy policy and terms. The providers exposed by this build are OpenAI-compatible endpoints, OpenAI Codex account access, Claude Code account access, Ollama, and LM Studio.
 
-- You can run models locally to prevent data being sent to third-parties.
+Ollama and LM Studio can run locally, but their actual network behavior depends on the endpoint configured by the user.
 
-### **Security & Updates**
+## Tools and integrations
 
-We take reasonable measures to secure your data, but no system is 100% secure. If our privacy policy changes, we will notify you within the extension.
+Commands run on the local machine. Browser, MCP, terminal, and other tools can communicate with services or files explicitly selected or configured by the user.
 
-### **Contact Us**
+## Independent fork
 
-For any privacy-related questions, soon you can reach out to us at support@kilo.ai.
-
----
-
-By using Kilo Code, you agree to this Privacy Policy.
+IVOL Code Agent 5 is not affiliated with or endorsed by the original upstream authors. The included `LICENSE` and `NOTICE` files describe the open-source license and upstream attribution.

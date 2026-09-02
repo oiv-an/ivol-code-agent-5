@@ -3,12 +3,18 @@ import { render, screen, act } from "@/utils/test-utils"
 import {
 	type ProviderSettings,
 	type ExperimentId,
+	type ExtensionMessage,
 	type ExtensionState,
 	openRouterDefaultModelId, // kilocode_change
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 } from "@roo-code/types"
 
-import { ExtensionStateContextProvider, useExtensionState, mergeExtensionState } from "../ExtensionStateContext"
+import {
+	ExtensionStateContextProvider,
+	useExtensionState,
+	mergeExtensionState,
+	applyIncrementalTaskMessage,
+} from "../ExtensionStateContext"
 
 const TestComponent = () => {
 	const {
@@ -222,6 +228,60 @@ describe("ExtensionStateContext", () => {
 		)
 	})
 })
+
+// kilocode_change start: long conversations are updated incrementally
+describe("applyIncrementalTaskMessage", () => {
+	const createState = (messages: ExtensionState["clineMessages"] = []): ExtensionState =>
+		({ currentTaskId: "task-a", clineMessages: messages }) as ExtensionState
+
+	it("appends a newly created message for the active task", () => {
+		const state = createState()
+		const message = {
+			type: "messageCreated",
+			taskId: "task-a",
+			clineMessage: { ts: 1, type: "say", say: "text", text: "hello" },
+		} satisfies ExtensionMessage
+
+		expect(applyIncrementalTaskMessage(state, message).clineMessages).toEqual([message.clineMessage])
+	})
+
+	it("deduplicates a created message already present in a full state", () => {
+		const state = createState([{ ts: 1, type: "say", say: "text", text: "old" }])
+		const message = {
+			type: "messageCreated",
+			taskId: "task-a",
+			clineMessage: { ts: 1, type: "say", say: "text", text: "new" },
+		} satisfies ExtensionMessage
+
+		const result = applyIncrementalTaskMessage(state, message)
+		expect(result.clineMessages).toHaveLength(1)
+		expect(result.clineMessages[0].text).toBe("new")
+	})
+
+	it("ignores a delayed message from a different task", () => {
+		const state = createState([{ ts: 1, type: "say", say: "text", text: "active" }])
+		const message = {
+			type: "messageCreated",
+			taskId: "task-b",
+			clineMessage: { ts: 2, type: "say", say: "text", text: "stale" },
+		} satisfies ExtensionMessage
+
+		expect(applyIncrementalTaskMessage(state, message)).toBe(state)
+	})
+
+	it("updates task totals without replacing the message array", () => {
+		const state = createState([{ ts: 1, type: "say", say: "text", text: "active" }])
+		const result = applyIncrementalTaskMessage(state, {
+			type: "currentTaskStateUpdated",
+			taskId: "task-a",
+			taskState: { currentTaskCumulativeCost: 12.5, messageQueue: [] },
+		})
+
+		expect(result.clineMessages).toBe(state.clineMessages)
+		expect(result.currentTaskCumulativeCost).toBe(12.5)
+	})
+})
+// kilocode_change end
 
 describe("mergeExtensionState", () => {
 	it("should correctly merge extension states", () => {

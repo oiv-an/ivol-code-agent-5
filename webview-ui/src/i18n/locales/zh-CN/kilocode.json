@@ -15,8 +15,8 @@
 		}
 	},
 	"welcome": {
-		"greeting": "欢迎使用 Kilo Code！",
-		"introText1": "Kilo Code 是一个免费的开源 AI 编程代理。",
+		"greeting": "欢迎使用 IVOL Code！",
+		"introText1": "IVOL Code 是一个免费的开源 AI 编程代理。",
 		"introText2": "它适用于最新的 AI 模型，如 Claude Opus 4.5、Gemini 3 Pro、GPT-5.2 以及 450 多个其他模型。",
 		"introText3": "创建免费账户即可开始使用。",
 		"ctaButton": "开始使用",
@@ -26,7 +26,7 @@
 	},
 	"lowCreditWarning": {
 		"addCredit": "添加额度",
-		"lowBalance": "你的 Kilo Code 余额不足",
+		"lowBalance": "你的 IVOL Code 余额不足",
 		"switchToFreeModel": "切换到免费模型"
 	},
 	"pagination": {
@@ -70,27 +70,27 @@
 		"contextManagement": {
 			"allowVeryLargeReads": {
 				"label": "允许超大文件读取",
-				"description": "启用后，Kilo Code 将执行超大文件或 MCP 输出读取，即使存在高概率溢出上下文窗口（内容大小 >80% 的上下文窗口）。"
+				"description": "启用后，IVOL Code 将执行超大文件或 MCP 输出读取，即使存在高概率溢出上下文窗口（内容大小 >80% 的上下文窗口）。"
 			}
 		},
 		"systemNotifications": {
 			"label": "启用系统通知",
-			"description": "启用后 Kilo Code 将发送系统通知，提醒任务完成或错误等重要事件。",
+			"description": "启用后 IVOL Code 将发送系统通知，提醒任务完成或错误等重要事件。",
 			"testButton": "测试通知",
-			"testTitle": "Kilo Code",
-			"testMessage": "这是来自 Kilo Code 的测试通知。"
+			"testTitle": "IVOL Code",
+			"testMessage": "这是来自 IVOL Code 的测试通知。"
 		},
 		"provider": {
-			"account": "Kilo Code 账号",
-			"apiKey": "Kilo Code API 密钥",
-			"login": "登录 Kilo Code",
-			"logout": "退出 Kilo Code",
+			"account": "IVOL Code 账号",
+			"apiKey": "Kilo API 密钥",
+			"login": "登录 IVOL Code",
+			"logout": "退出 IVOL Code",
 			"loginForPremiumModels": "登录以访问高级模型和功能",
 			"providerRouting": {
 				"title": "提供商路由",
 				"managedByOrganization": "管理组织级提供商路由",
 				"createOrganization": "创建组织以管理提供商路由",
-				"description": "Kilo Code 将请求路由到您模型的最佳可用提供商。默认情况下，请求会在顶级提供商之间进行负载均衡，以最大限度地延长正常运行时间。但是，您可以选择要用于此模型的特定提供商。",
+				"description": "IVOL Code 将请求路由到您模型的最佳可用提供商。默认情况下，请求会在顶级提供商之间进行负载均衡，以最大限度地延长正常运行时间。但是，您可以选择要用于此模型的特定提供商。",
 				"sorting": {
 					"default": "默认提供商排序",
 					"price": "优先选择低价格提供商",
@@ -144,7 +144,7 @@
 	},
 	"chat": {
 		"condense": {
-			"wantsToCondense": "Kilo Code 想要压缩你的对话",
+			"wantsToCondense": "IVOL Code 想要压缩你的对话",
 			"condenseConversation": "压缩对话"
 		},
 		"seeNewChanges": "查看新更改",
@@ -183,14 +183,14 @@
 			"modes": "模式",
 			"skills": "技能"
 		},
-		"ariaLabel": "Kilo Code 规则",
+		"ariaLabel": "IVOL Code 规则",
 		"tabs": {
 			"rules": "规则",
 			"workflows": "工作流"
 		},
 		"description": {
-			"rules": "规则允许你为 Kilo Code 提供在所有模式和所有提示中都应遵循的指令。它们是在你的工作空间或全局范围内为所有对话包含上下文和偏好的持久方式。",
-			"workflows": "工作流是为对话准备的模板。工作流允许你定义经常使用的提示，并可以包含一系列步骤来指导 Kilo Code 完成重复性任务，如部署服务或提交 PR。要调用工作流，请输入",
+			"rules": "规则允许你为 IVOL Code 提供在所有模式和所有提示中都应遵循的指令。它们是在你的工作空间或全局范围内为所有对话包含上下文和偏好的持久方式。",
+			"workflows": "工作流是为对话准备的模板。工作流允许你定义经常使用的提示，并可以包含一系列步骤来指导 IVOL Code 完成重复性任务，如部署服务或提交 PR。要调用工作流，请输入",
 			"workflowsInChat": "在聊天中。"
 		},
 		"sections": {
@@ -262,11 +262,11 @@
 			"keybindingDescription": "自动补全功能可以通过命令触发。你可以在<DocsLink>这里配置键盘快捷键</DocsLink>。",
 			"enableAutoTrigger": {
 				"label": "启用自动补全",
-				"description": "启用后，当你停止输入时 Kilo Code 将自动触发自动补全。这对快速修复和建议很有用。"
+				"description": "启用后，当你停止输入时 IVOL Code 将自动触发自动补全。这对快速修复和建议很有用。"
 			},
 			"autoTriggerDelay": {
 				"label": "自动触发延迟",
-				"description": "你停止输入后 Kilo Code 触发自动补全前的秒数延迟。延迟越短建议获取速度越快，但可能更消耗资源。"
+				"description": "你停止输入后 IVOL Code 触发自动补全前的秒数延迟。延迟越短建议获取速度越快，但可能更消耗资源。"
 			},
 			"enableSmartInlineTaskKeybinding": {
 				"label": "手动自动补全（{{keybinding}}）",
@@ -278,7 +278,7 @@
 			"provider": "提供商",
 			"enableChatAutocomplete": {
 				"label": "聊天输入自动完成",
-				"description": "启用后，Kilo Code 将在您输入聊天内容时提供补全建议。按 Tab 键接受建议。"
+				"description": "启用后，IVOL Code 将在您输入聊天内容时提供补全建议。按 Tab 键接受建议。"
 			},
 			"snooze": {
 				"label": "暂停自动补全",
@@ -301,7 +301,7 @@
 			},
 			"noCredits": {
 				"title": "您的账户没有额度",
-				"description": "您的 Kilo Code 账户没有额度。要使用自动补全，请为您的账户充值。",
+				"description": "您的 IVOL Code 账户没有额度。要使用自动补全，请为您的账户充值。",
 				"buyCredits": "购买额度 →"
 			}
 		}
@@ -351,7 +351,7 @@
 		"shareModesNewBanner": "新功能：通过创建组织来共享模式"
 	},
 	"deviceAuth": {
-		"title": "登录 Kilo Code",
+		"title": "登录 IVOL Code",
 		"step1": "在浏览器中打开以下 URL",
 		"step2": "验证代码并在浏览器中授权此设备",
 		"scanQr": "或用手机扫描此二维码",

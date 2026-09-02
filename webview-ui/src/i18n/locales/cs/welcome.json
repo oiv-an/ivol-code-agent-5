@@ -1,6 +1,6 @@
 {
-	"greeting": "Ahoj, jsem Kilo Code!",
-	"introduction": "<strong>Kilo Code je přední autonomní agent pro kódování.</strong> Připrav se na architekturu, kódování, ladění a zvýšení své produktivity jako nikdy předtím. Pro pokračování Kilo Code vyžaduje API klíč.",
+	"greeting": "Ahoj, jsem IVOL Code!",
+	"introduction": "<strong>IVOL Code je přední autonomní agent pro kódování.</strong> Připrav se na architekturu, kódování, ladění a zvýšení své produktivity jako nikdy předtím. Pro pokračování IVOL Code vyžaduje API klíč.",
 	"notice": "Pro začátek toto rozšíření potřebuje poskytovatele API.",
 	"start": "Pojďme na to!",
 	"routers": {
@@ -16,7 +16,7 @@
 			"incentive": "Vyzkoušej Roo zdarma"
 		}
 	},
-	"chooseProvider": "Aby mohl dělat svá kouzla, Kilo Code potřebuje API klíč.",
+	"chooseProvider": "Aby mohl dělat svá kouzla, IVOL Code potřebuje API klíč.",
 	"landing": {
 		"greeting": "Vítej v Roo Code!",
 		"introduction": "S řadou vestavěných a rozšiřitelných Modes ti Roo Code umožní plánovat, navrhovat architekturu, kódovat, ladit a zvýšit svou produktivitu jako nikdy předtím.",
@@ -64,8 +64,8 @@
 	"rooCloudProviderCoder": "Coder Agent",
 	"rooCloudProviderCoderDesc": "Specializovaný agent pro psaní a refaktoring kódu",
 	"telemetry": {
-		"helpImprove": "Pomoz vylepšit Kilo Code",
-		"helpImproveMessage": "Kilo Code sbírá data o chybách a používání, aby nám pomohl opravit chyby a vylepšit rozšíření. Tato telemetrie nesbírá kód, prompts ani osobní informace. Můžeš to vypnout v <settingsLink>nastavení</settingsLink>.",
+		"helpImprove": "Pomoz vylepšit IVOL Code",
+		"helpImproveMessage": "IVOL Code sbírá data o chybách a používání, aby nám pomohl opravit chyby a vylepšit rozšíření. Tato telemetrie nesbírá kód, prompts ani osobní informace. Můžeš to vypnout v <settingsLink>nastavení</settingsLink>.",
 		"changeSettings": "Toto můžete později změnit v dolní části <settingsLink>nastavení</settingsLink>"
 	},
 	"importSettings": "Importovat Nastavení"

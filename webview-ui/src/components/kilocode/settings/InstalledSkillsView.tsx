@@ -78,7 +78,7 @@ const InstalledSkillsView = () => {
 				<p>
 					{t("kilocode:skills.description")}{" "}
 					<VSCodeLink
-						href="https://kilo.ai/docs/features/skills"
+						href="https://github.com/oiv-an/ivol-code-agent-5#readme"
 						style={{ display: "inline" }}
 						className="text-xs">
 						{t("kilocode:docs")}

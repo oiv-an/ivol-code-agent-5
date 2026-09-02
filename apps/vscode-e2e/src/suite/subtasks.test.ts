@@ -4,7 +4,7 @@ import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
 
 import { waitFor } from "./utils"
 
-suite("Kilo Code Subtasks", () => {
+suite("IVOL Code Subtasks", () => {
 	test("Should create and complete a subtask successfully", async function () {
 		this.timeout(180_000) // 3 minutes for complex orchestration
 		const api = globalThis.api

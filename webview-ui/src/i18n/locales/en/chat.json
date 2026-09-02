@@ -1,5 +1,5 @@
 {
-	"greeting": "What can Kilo Code do for you?",
+	"greeting": "What can IVOL Code do for you?",
 	"task": {
 		"title": "Task",
 		"expand": "Expand task",
@@ -22,11 +22,11 @@
 		"sharePublicly": "Share Publicly",
 		"sharePubliclyDescription": "Anyone with the link can access",
 		"connectToCloud": "Connect to Cloud",
-		"connectToCloudDescription": "Sign in to Kilo Code Cloud to share tasks",
+		"connectToCloudDescription": "Sign in to Kilo Cloud to share tasks",
 		"sharingDisabledByOrganization": "Sharing disabled by organization",
 		"shareSuccessOrganization": "Organization link copied to clipboard",
 		"shareSuccessPublic": "Public link copied to clipboard",
-		"openInCloud": "Open task in Kilo Code Cloud",
+		"openInCloud": "Open task in Kilo Cloud",
 		"openInCloudIntro": "Keep monitoring or interacting with Kilo from anywhere. Scan, click or copy to open.",
 		"openApiHistory": "Open API History",
 		"openUiHistory": "Open UI History"
@@ -131,7 +131,7 @@
 		"title": "Modes",
 		"marketplace": "Mode Marketplace",
 		"settings": "Mode Settings",
-		"description": "Specialized personas that tailor Kilo Code's behavior.",
+		"description": "Specialized personas that tailor IVOL Code's behavior.",
 		"searchPlaceholder": "Search modes...",
 		"noResults": "No results found",
 		"organizationModes": "Organization Modes"
@@ -209,50 +209,50 @@
 		}
 	},
 	"instructions": {
-		"wantsToFetch": "Kilo Code wants to fetch detailed instructions to assist with the current task"
+		"wantsToFetch": "IVOL Code wants to fetch detailed instructions to assist with the current task"
 	},
 	"fileOperations": {
-		"wantsToRead": "Kilo Code wants to read this file",
-		"wantsToReadMultiple": "Kilo Code wants to read multiple files",
-		"wantsToReadAndXMore": "Kilo Code wants to read this file and {{count}} more",
-		"wantsToReadOutsideWorkspace": "Kilo Code wants to read this file outside of the workspace",
-		"didRead": "Kilo Code read this file",
-		"wantsToEdit": "Kilo Code wants to edit this file",
-		"wantsToEditOutsideWorkspace": "Kilo Code wants to edit this file outside of the workspace",
-		"wantsToEditProtected": "Kilo Code wants to edit a protected configuration file",
-		"wantsToApplyBatchChanges": "Kilo Code wants to apply changes to multiple files",
-		"wantsToGenerateImage": "Kilo Code wants to generate an image",
-		"wantsToGenerateImageOutsideWorkspace": "Kilo Code wants to generate an image outside of the workspace",
-		"wantsToGenerateImageProtected": "Kilo Code wants to generate an image in a protected location",
-		"didGenerateImage": "Kilo Code generated an image",
-		"wantsToCreate": "Kilo Code wants to create a new file",
-		"wantsToInsert": "Kilo Code wants to insert content into this file",
-		"wantsToInsertWithLineNumber": "Kilo Code wants to insert content into this file at line {{lineNumber}}",
-		"wantsToInsertAtEnd": "Kilo Code wants to append content to the end of this file",
-		"wantsToDelete": "Kilo Code wants to delete this file",
-		"wantsToDeleteDirectory": "Kilo Code wants to delete this directory"
+		"wantsToRead": "IVOL Code wants to read this file",
+		"wantsToReadMultiple": "IVOL Code wants to read multiple files",
+		"wantsToReadAndXMore": "IVOL Code wants to read this file and {{count}} more",
+		"wantsToReadOutsideWorkspace": "IVOL Code wants to read this file outside of the workspace",
+		"didRead": "IVOL Code read this file",
+		"wantsToEdit": "IVOL Code wants to edit this file",
+		"wantsToEditOutsideWorkspace": "IVOL Code wants to edit this file outside of the workspace",
+		"wantsToEditProtected": "IVOL Code wants to edit a protected configuration file",
+		"wantsToApplyBatchChanges": "IVOL Code wants to apply changes to multiple files",
+		"wantsToGenerateImage": "IVOL Code wants to generate an image",
+		"wantsToGenerateImageOutsideWorkspace": "IVOL Code wants to generate an image outside of the workspace",
+		"wantsToGenerateImageProtected": "IVOL Code wants to generate an image in a protected location",
+		"didGenerateImage": "IVOL Code generated an image",
+		"wantsToCreate": "IVOL Code wants to create a new file",
+		"wantsToInsert": "IVOL Code wants to insert content into this file",
+		"wantsToInsertWithLineNumber": "IVOL Code wants to insert content into this file at line {{lineNumber}}",
+		"wantsToInsertAtEnd": "IVOL Code wants to append content to the end of this file",
+		"wantsToDelete": "IVOL Code wants to delete this file",
+		"wantsToDeleteDirectory": "IVOL Code wants to delete this directory"
 	},
 	"directoryOperations": {
-		"wantsToViewTopLevel": "Kilo Code wants to view the top level files in this directory",
-		"didViewTopLevel": "Kilo Code viewed the top level files in this directory",
-		"wantsToViewTopLevelOutsideWorkspace": "Kilo Code wants to view the top level files in this directory (outside workspace)",
-		"didViewTopLevelOutsideWorkspace": "Kilo Code viewed the top level files in this directory (outside workspace)",
-		"wantsToViewRecursive": "Kilo Code wants to recursively view all files in this directory",
-		"didViewRecursive": "Kilo Code recursively viewed all files in this directory",
-		"wantsToViewRecursiveOutsideWorkspace": "Kilo Code wants to recursively view all files in this directory (outside workspace)",
-		"didViewRecursiveOutsideWorkspace": "Kilo Code recursively viewed all files in this directory (outside workspace)",
-		"wantsToViewDefinitions": "Kilo Code wants to view source code definition names used in this directory",
-		"didViewDefinitions": "Kilo Code viewed source code definition names used in this directory",
-		"wantsToViewDefinitionsOutsideWorkspace": "Kilo Code wants to view source code definition names used in this directory (outside workspace)",
-		"didViewDefinitionsOutsideWorkspace": "Kilo Code viewed source code definition names used in this directory (outside workspace)",
-		"wantsToSearch": "Kilo Code wants to search this directory for <code>{{regex}}</code>",
-		"didSearch": "Kilo Code searched this directory for <code>{{regex}}</code>",
-		"wantsToSearchOutsideWorkspace": "Kilo Code wants to search this directory (outside workspace) for <code>{{regex}}</code>",
-		"didSearchOutsideWorkspace": "Kilo Code searched this directory (outside workspace) for <code>{{regex}}</code>"
+		"wantsToViewTopLevel": "IVOL Code wants to view the top level files in this directory",
+		"didViewTopLevel": "IVOL Code viewed the top level files in this directory",
+		"wantsToViewTopLevelOutsideWorkspace": "IVOL Code wants to view the top level files in this directory (outside workspace)",
+		"didViewTopLevelOutsideWorkspace": "IVOL Code viewed the top level files in this directory (outside workspace)",
+		"wantsToViewRecursive": "IVOL Code wants to recursively view all files in this directory",
+		"didViewRecursive": "IVOL Code recursively viewed all files in this directory",
+		"wantsToViewRecursiveOutsideWorkspace": "IVOL Code wants to recursively view all files in this directory (outside workspace)",
+		"didViewRecursiveOutsideWorkspace": "IVOL Code recursively viewed all files in this directory (outside workspace)",
+		"wantsToViewDefinitions": "IVOL Code wants to view source code definition names used in this directory",
+		"didViewDefinitions": "IVOL Code viewed source code definition names used in this directory",
+		"wantsToViewDefinitionsOutsideWorkspace": "IVOL Code wants to view source code definition names used in this directory (outside workspace)",
+		"didViewDefinitionsOutsideWorkspace": "IVOL Code viewed source code definition names used in this directory (outside workspace)",
+		"wantsToSearch": "IVOL Code wants to search this directory for <code>{{regex}}</code>",
+		"didSearch": "IVOL Code searched this directory for <code>{{regex}}</code>",
+		"wantsToSearchOutsideWorkspace": "IVOL Code wants to search this directory (outside workspace) for <code>{{regex}}</code>",
+		"didSearchOutsideWorkspace": "IVOL Code searched this directory (outside workspace) for <code>{{regex}}</code>"
 	},
 	"codebaseSearch": {
-		"wantsToSearch": "Kilo Code wants to search the codebase for <code>{{query}}</code>",
-		"wantsToSearchWithPath": "Kilo Code wants to search the codebase for <code>{{query}}</code> in <code>{{path}}</code>",
+		"wantsToSearch": "IVOL Code wants to search the codebase for <code>{{query}}</code>",
+		"wantsToSearchWithPath": "IVOL Code wants to search the codebase for <code>{{query}}</code> in <code>{{path}}</code>",
 		"didSearch_one": "Found 1 result",
 		"didSearch_other": "Found {{count}} results",
 		"resultTooltip": "Similarity score: {{score}} (click to open file)"
@@ -283,18 +283,18 @@
 		"youSaid": "You said"
 	},
 	"mcp": {
-		"wantsToUseTool": "Kilo Code wants to use a tool on the {{serverName}} MCP server",
-		"wantsToAccessResource": "Kilo Code wants to access a resource on the {{serverName}} MCP server"
+		"wantsToUseTool": "IVOL Code wants to use a tool on the {{serverName}} MCP server",
+		"wantsToAccessResource": "IVOL Code wants to access a resource on the {{serverName}} MCP server"
 	},
 	"modes": {
-		"wantsToSwitch": "Kilo Code wants to switch to {{mode}} mode",
-		"wantsToSwitchWithReason": "Kilo Code wants to switch to {{mode}} mode because: {{reason}}",
-		"didSwitch": "Kilo Code switched to {{mode}} mode",
-		"didSwitchWithReason": "Kilo Code switched to {{mode}} mode because: {{reason}}"
+		"wantsToSwitch": "IVOL Code wants to switch to {{mode}} mode",
+		"wantsToSwitchWithReason": "IVOL Code wants to switch to {{mode}} mode because: {{reason}}",
+		"didSwitch": "IVOL Code switched to {{mode}} mode",
+		"didSwitchWithReason": "IVOL Code switched to {{mode}} mode because: {{reason}}"
 	},
 	"subtasks": {
-		"wantsToCreate": "Kilo Code wants to create a new subtask in {{mode}} mode",
-		"wantsToFinish": "Kilo Code wants to finish this subtask",
+		"wantsToCreate": "IVOL Code wants to create a new subtask in {{mode}} mode",
+		"wantsToFinish": "IVOL Code wants to finish this subtask",
 		"newTaskContent": "Subtask Instructions",
 		"completionContent": "Subtask Completed",
 		"resultContent": "Subtask Results",
@@ -302,7 +302,7 @@
 		"completionInstructions": "Subtask completed! You can review the results and suggest any corrections or next steps. If everything looks good, confirm to return the result to the parent task."
 	},
 	"questions": {
-		"hasQuestion": "Kilo Code has a question"
+		"hasQuestion": "IVOL Code has a question"
 	},
 	"taskCompleted": "Task Completed",
 	"error": "Error",
@@ -324,7 +324,7 @@
 	"diffError": {
 		"title": "Edit Unsuccessful"
 	},
-	"troubleMessage": "Kilo Code is having trouble...",
+	"troubleMessage": "IVOL Code is having trouble...",
 	"powershell": {
 		"issues": "It seems like you're having Windows PowerShell issues, please see this"
 	},
@@ -346,19 +346,19 @@
 		"triggerLabelAll": "BRRR"
 	},
 	"announcement": {
-		"title": "Kilo Code {{version}} Released",
-		"support": "Please support Kilo Code by starring us on <githubLink>GitHub</githubLink>.",
+		"title": "IVOL Code {{version}} Released",
+		"support": "Please support IVOL Code by starring us on <githubLink>GitHub</githubLink>.",
 		"stealthModel": {
-			"feature": "<bold>Limited-time FREE stealth model</bold> - Code Supernova: Now upgraded with a <bold>1M token context window</bold>! A versatile agentic coding model that supports image inputs, accessible through Kilo Code Cloud.",
+			"feature": "<bold>Limited-time FREE stealth model</bold> - Code Supernova: Now upgraded with a <bold>1M token context window</bold>! A versatile agentic coding model that supports image inputs, accessible through Kilo Cloud.",
 			"note": "(Note: prompts and completions are logged by the model creator and used to improve the model)",
-			"connectButton": "Connect to Kilo Code Cloud",
-			"selectModel": "Select <code>roo/code-supernova</code> from the Kilo Code Cloud provider in Settings to get started.",
+			"connectButton": "Connect to Kilo Cloud",
+			"selectModel": "Select <code>roo/code-supernova</code> from the Kilo Cloud provider in Settings to get started.",
 			"goToSettingsButton": "Go to Settings"
 		},
 		"release": {
 			"heading": "What's New:",
 			"openaiCodexProvider": "Added OpenAI - ChatGPT Plus/Pro Provider that gives subscription-based access to Codex models without per-token costs.",
-			"gpt52codexModel": "Added the new gpt-5.2-codex model to Kilo Code Router, the standard OpenAI provider, and more.",
+			"gpt52codexModel": "Added the new gpt-5.2-codex model to Kilo Router, the standard OpenAI provider, and more.",
 			"bugFixes": "Fixed memory leaks causing gray screens, Gemini thought signature issues, and more stability improvements."
 		},
 		"cloudAgents": {
@@ -368,7 +368,7 @@
 			"tryButton": "Try Cloud Agents"
 		},
 		"careers": "Also, <careersLink>we're hiring!</careersLink>",
-		"socialLinks": "Join us on <xLink>X</xLink>, <discordLink>Discord</discordLink>, or <redditLink>r/KiloCode</redditLink> 🚀"
+		"socialLinks": "Join us on <xLink>X</xLink>, <discordLink>Discord</discordLink>, or <redditLink>IVOL Code</redditLink> 🚀"
 	},
 	"reasoning": {
 		"thinking": "Thinking",
@@ -386,7 +386,7 @@
 	"browser": {
 		"session": "Browser Session",
 		"active": "Active",
-		"rooWantsToUse": "Kilo Code wants to use the browser",
+		"rooWantsToUse": "IVOL Code wants to use the browser",
 		"consoleLogs": "Console Logs",
 		"noNewLogs": "(No new logs)",
 		"screenshot": "Browser screenshot",
@@ -434,13 +434,13 @@
 	"profileViolationWarning": "The current profile isn't compatible with your organization's settings",
 	"shellIntegration": {
 		"title": "Command Execution Warning",
-		"description": "Your command is being executed without VSCode terminal shell integration. To suppress this warning you can disable shell integration in the <strong>Terminal</strong> section of the <settingsLink>Kilo Code settings</settingsLink> or troubleshoot VSCode terminal integration using the link below.",
+		"description": "Your command is being executed without VSCode terminal shell integration. To suppress this warning you can disable shell integration in the <strong>Terminal</strong> section of the <settingsLink>IVOL Code settings</settingsLink> or troubleshoot VSCode terminal integration using the link below.",
 		"troubleshooting": "Click here for shell integration documentation."
 	},
 	"ask": {
 		"autoApprovedRequestLimitReached": {
 			"title": "Auto-Approved Request Limit Reached",
-			"description": "Kilo Code has reached the auto-approved limit of {{count}} API request(s). Would you like to reset the count and proceed with the task?",
+			"description": "IVOL Code has reached the auto-approved limit of {{count}} API request(s). Would you like to reset the count and proceed with the task?",
 			"button": "Reset and Continue"
 		},
 		"autoApprovedCostLimitReached": {
@@ -483,8 +483,8 @@
 		}
 	},
 	"slashCommand": {
-		"wantsToRun": "Kilo Code wants to run a slash command",
-		"didRun": "Kilo Code ran a slash command"
+		"wantsToRun": "IVOL Code wants to run a slash command",
+		"didRun": "IVOL Code ran a slash command"
 	},
 	"queuedMessages": {
 		"title": "Queued Messages",

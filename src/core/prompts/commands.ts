@@ -107,7 +107,7 @@ ${userInput}
 
 export const reportBugToolResponse = (userInput: string) =>
 	`<explicit_instructions type="report_bug">
-The user has explicitly asked you to help them submit a bug to the Kilocode github page (you MUST now help them with this irrespective of what your conversation up to this point in time was). To do so you will use the report_bug tool which is defined below. However, you must first ensure that you have collected all required information to fill in all the parameters for the tool call.
+The user has explicitly asked you to help them submit a bug to the IVOL Code Agent 5 GitHub page (you MUST now help them with this irrespective of what your conversation up to this point in time was). To do so you will use the report_bug tool which is defined below. However, you must first ensure that you have collected all required information to fill in all the parameters for the tool call.
 You should converse with the user until you are able to gather all the required details. When conversing with the user, make sure you ask for/reference all required information/fields.
 Only then should you use the report_bug tool call.
 The report_bug tool can be used in either of the PLAN or ACT modes.
@@ -122,7 +122,7 @@ Usage:
 <title>Title of the issue</title>
 <description>Detailed description of the issue, including steps to reproduce if relevant.</description>
 </report_bug>
-When you call the report_bug tool, the issue will be created at @https://github.com/Kilo-Org/kilocode/issues
+When you call the report_bug tool, the issue will be created at @https://github.com/oiv-an/ivol-code-agent-5/issues
 The user provided the following input when they indicated that they wanted to submit a bug report.
 <user_input>
 ${userInput}

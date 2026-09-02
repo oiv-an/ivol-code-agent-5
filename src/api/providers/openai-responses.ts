@@ -467,8 +467,21 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 	private normalizeUsage(usage: any, model: OpenAiResponsesModel): ApiStreamUsageChunk {
 		const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0
 		const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0
-		const cacheWriteTokens = usage.cache_creation_input_tokens ?? usage.cache_write_tokens ?? 0
-		const cacheReadTokens = usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cached_tokens ?? 0
+		// kilocode_change start: normalize prompt-cache usage across compatible response APIs
+		const cacheWriteTokens =
+			usage.cache_creation_input_tokens ??
+			usage.cache_write_tokens ??
+			usage.input_tokens_details?.cache_write_tokens ??
+			usage.prompt_tokens_details?.cache_write_tokens ??
+			0
+		const cacheReadTokens =
+			usage.cache_read_input_tokens ??
+			usage.cache_read_tokens ??
+			usage.cached_tokens ??
+			usage.input_tokens_details?.cached_tokens ??
+			usage.prompt_tokens_details?.cached_tokens ??
+			0
+		// kilocode_change end
 		const { totalCost } = calculateApiCostOpenAI(
 			model.info,
 			inputTokens,
@@ -492,6 +505,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 		const info: ModelInfo = {
 			...NATIVE_TOOL_DEFAULTS,
 			...(this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
+			supportsPromptCache: true, // kilocode_change: Responses caching is automatic in the personal build
 		}
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
 		return { id, info, ...params }

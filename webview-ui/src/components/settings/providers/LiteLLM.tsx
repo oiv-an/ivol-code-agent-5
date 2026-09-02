@@ -92,7 +92,12 @@ export const LiteLLM = ({
 			return
 		}
 
-		vscode.postMessage({ type: "requestRouterModels", values: { litellmApiKey: key, litellmBaseUrl: url } })
+		// kilocode_change start: correlate the refresh with its provider
+		vscode.postMessage({
+			type: "requestRouterModels",
+			values: { provider: "litellm", refresh: true, litellmApiKey: key, litellmBaseUrl: url },
+		})
+		// kilocode_change end
 	}, [apiConfiguration, setRefreshStatus, setRefreshError, t])
 
 	return (

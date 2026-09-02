@@ -59,6 +59,24 @@ describe("PromptsView", () => {
 		expect(selectTrigger).toHaveTextContent("Code")
 	})
 
+	it("shows only personal and legacy provider profiles in the API configuration selector", async () => {
+		renderPromptsView({
+			listApiConfigMeta: [
+				{ id: "allowed", name: "Allowed OpenAI", apiProvider: "openai" },
+				{ id: "hidden", name: "Hidden Kilo", apiProvider: "kilocode" },
+				{ id: "legacy", name: "Legacy Profile" },
+			],
+		})
+
+		fireEvent.click(screen.getByText("settings:common.select").closest("button")!)
+
+		await waitFor(() => {
+			expect(screen.getByText("Allowed OpenAI")).toBeInTheDocument()
+			expect(screen.getByText("Legacy Profile")).toBeInTheDocument()
+			expect(screen.queryByText("Hidden Kilo")).not.toBeInTheDocument()
+		})
+	})
+
 	it("opens the mode selection popover when the trigger is clicked", async () => {
 		renderPromptsView()
 		const selectTrigger = screen.getByTestId("mode-select-trigger")

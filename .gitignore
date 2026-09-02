@@ -1,4 +1,5 @@
 .pnpm-store
+.gradle-user-home/
 dist
 out
 out-*
@@ -77,3 +78,6 @@ qdrant_storage/
 ./plans/
 
 roo-cli-*.tar.gz*
+
+# Local JetBrains plugin installation backups
+plugin-builds/

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Button } from "@/components/ui"
 
 import { SetCachedStateField } from "./types"
+import { isPersonalProvider } from "./constants" // kilocode_change
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
@@ -511,26 +512,32 @@ export const ContextManagementSettings = ({
 										{t("settings:contextManagement.condensingThreshold.defaultProfile") ||
 											"Default (applies to all unconfigured profiles)"}
 									</SelectItem>
-									{(listApiConfigMeta || []).map((config) => {
-										const profileThreshold = profileThresholds[config.id]
-										const thresholdDisplay =
-											profileThreshold !== undefined
-												? profileThreshold === -1
-													? ` ${t(
-															"settings:contextManagement.condensingThreshold.usesGlobal",
-															{
-																threshold: autoCondenseContextPercent,
-															},
-														)}`
-													: ` (${profileThreshold}%)`
-												: ""
-										return (
-											<SelectItem key={config.id} value={config.id}>
-												{config.name}
-												{thresholdDisplay}
-											</SelectItem>
+									{/* kilocode_change start: hide unavailable provider profiles */}
+									{(listApiConfigMeta || [])
+										.filter(
+											(config) => !config.apiProvider || isPersonalProvider(config.apiProvider),
 										)
-									})}
+										.map((config) => {
+											const profileThreshold = profileThresholds[config.id]
+											const thresholdDisplay =
+												profileThreshold !== undefined
+													? profileThreshold === -1
+														? ` ${t(
+																"settings:contextManagement.condensingThreshold.usesGlobal",
+																{
+																	threshold: autoCondenseContextPercent,
+																},
+															)}`
+														: ` (${profileThreshold}%)`
+													: ""
+											return (
+												<SelectItem key={config.id} value={config.id}>
+													{config.name}
+													{thresholdDisplay}
+												</SelectItem>
+											)
+										})}
+									{/* kilocode_change end */}
 								</SelectContent>
 							</Select>
 						</div>

@@ -75,7 +75,11 @@ vi.mock("../AutocompleteModel", () => {
 		}
 
 		public getProviderDisplayName(): string {
-			return "test-provider"
+			return "Ollama"
+		}
+
+		public getProviderKey(): string {
+			return "ollama"
 		}
 
 		public hasValidCredentials(): boolean {
@@ -191,6 +195,30 @@ describe("AutocompleteServiceManager (less mocked logic)", () => {
 
 	afterEach(() => {
 		;(vscode.window as any).activeTextEditor = null
+	})
+
+	describe("personal defaults", () => {
+		it("keeps editor and chat autocomplete disabled until explicit opt-in", async () => {
+			const context = { subscriptions: [] } as unknown as vscode.ExtensionContext
+			const cline: TestCline = {
+				providerSettingsManager: { initialize: vi.fn().mockResolvedValue(undefined) },
+				postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			}
+
+			new AutocompleteServiceManager(context, cline as any)
+
+			await vi.waitFor(() => expect(cline.postStateToWebview).toHaveBeenCalled())
+			const { ContextProxy } = (await import("../../../core/config/ContextProxy")) as any
+			const settings = ContextProxy.instance.getGlobalState("ghostServiceSettings")
+
+			expect(settings).toMatchObject({
+				enableAutoTrigger: false,
+				enableChatAutocomplete: false,
+				provider: "ollama",
+				model: "test-model",
+			})
+			expect(vscode.languages.registerInlineCompletionItemProvider).not.toHaveBeenCalled()
+		})
 	})
 
 	describe("codeSuggestion()", () => {

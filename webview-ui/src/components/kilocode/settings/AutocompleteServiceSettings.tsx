@@ -17,7 +17,7 @@ import { vscode } from "@/utils/vscode"
 import { VSCodeCheckbox, VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useKeybindings } from "@/hooks/useKeybindings"
 import { useExtensionState } from "../../../context/ExtensionStateContext"
-import { PROVIDERS } from "../../settings/constants"
+import { isPersonalProvider, PROVIDERS } from "../../settings/constants"
 
 type AutocompleteServiceSettingsViewProps = HTMLAttributes<HTMLDivElement> & {
 	ghostServiceSettings: AutocompleteServiceSettings
@@ -28,8 +28,8 @@ type AutocompleteServiceSettingsViewProps = HTMLAttributes<HTMLDivElement> & {
 }
 
 // Get the list of supported provider keys from AUTOCOMPLETE_PROVIDER_MODELS
-const SUPPORTED_AUTOCOMPLETE_PROVIDER_KEYS = Array.from(AUTOCOMPLETE_PROVIDER_MODELS.keys())
-const AUTOCOMPLETE_SERVICE_KEYBINDING_COMMAND_IDS = ["kilo-code.autocomplete.generateSuggestions"]
+const SUPPORTED_AUTOCOMPLETE_PROVIDER_KEYS = Array.from(AUTOCOMPLETE_PROVIDER_MODELS.keys()).filter(isPersonalProvider)
+const AUTOCOMPLETE_SERVICE_KEYBINDING_COMMAND_IDS = ["ivol-code-agent-5.autocomplete.generateSuggestions"]
 
 export const AutocompleteServiceSettingsView = ({
 	ghostServiceSettings,
@@ -39,14 +39,8 @@ export const AutocompleteServiceSettingsView = ({
 }: AutocompleteServiceSettingsViewProps) => {
 	const { t } = useAppTranslation()
 	const { kiloCodeWrapperProperties } = useExtensionState()
-	const {
-		enableAutoTrigger,
-		enableSmartInlineTaskKeybinding,
-		enableChatAutocomplete,
-		provider,
-		model,
-		hasKilocodeProfileWithNoBalance,
-	} = ghostServiceSettings || {}
+	const { enableAutoTrigger, enableSmartInlineTaskKeybinding, enableChatAutocomplete, provider, model } =
+		ghostServiceSettings || {}
 	const keybindings = useKeybindings(AUTOCOMPLETE_SERVICE_KEYBINDING_COMMAND_IDS)
 	const [snoozeDuration, setSnoozeDuration] = useState<number>(300)
 	const [currentTime, setCurrentTime] = useState<number>(Date.now())
@@ -194,7 +188,7 @@ export const AutocompleteServiceSettingsView = ({
 							settingId="autocomplete-smart-inline-task-keybinding"
 							section="autocomplete"
 							label={t("kilocode:autocomplete.settings.enableSmartInlineTaskKeybinding.label", {
-								keybinding: keybindings["kilo-code.autocomplete.generateSuggestions"],
+								keybinding: keybindings["ivol-code-agent-5.autocomplete.generateSuggestions"],
 							})}
 							className="flex flex-col gap-1">
 							<VSCodeCheckbox
@@ -202,20 +196,24 @@ export const AutocompleteServiceSettingsView = ({
 								onChange={onEnableSmartInlineTaskKeybindingChange}>
 								<span className="font-medium">
 									{t("kilocode:autocomplete.settings.enableSmartInlineTaskKeybinding.label", {
-										keybinding: keybindings["kilo-code.autocomplete.generateSuggestions"],
+										keybinding: keybindings["ivol-code-agent-5.autocomplete.generateSuggestions"],
 									})}
 								</span>
 							</VSCodeCheckbox>
 							<div className="text-vscode-descriptionForeground text-sm mt-1">
 								<Trans
 									i18nKey="kilocode:autocomplete.settings.enableSmartInlineTaskKeybinding.description"
-									values={{ keybinding: keybindings["kilo-code.autocomplete.generateSuggestions"] }}
+									values={{
+										keybinding: keybindings["ivol-code-agent-5.autocomplete.generateSuggestions"],
+									}}
 									components={{
 										DocsLink: (
 											<a
 												href="#"
 												onClick={() =>
-													openGlobalKeybindings("kilo-code.autocomplete.generateSuggestions")
+													openGlobalKeybindings(
+														"ivol-code-agent-5.autocomplete.generateSuggestions",
+													)
 												}
 												className="text-[var(--vscode-list-highlightForeground)] hover:underline cursor-pointer"></a>
 										),
@@ -262,7 +260,7 @@ export const AutocompleteServiceSettingsView = ({
 						</div>
 
 						<div className="text-sm">
-							{provider && model ? (
+							{provider && model && isPersonalProvider(provider) ? (
 								<>
 									<div className="text-vscode-descriptionForeground">
 										<span className="font-medium">
@@ -277,22 +275,6 @@ export const AutocompleteServiceSettingsView = ({
 										{model}
 									</div>
 								</>
-							) : hasKilocodeProfileWithNoBalance ? (
-								<div className="flex flex-col gap-2">
-									<div className="text-vscode-errorForeground font-medium">
-										{t("kilocode:autocomplete.settings.noCredits.title")}
-									</div>
-									<div className="text-vscode-descriptionForeground">
-										{t("kilocode:autocomplete.settings.noCredits.description")}
-									</div>
-									<div className="text-vscode-descriptionForeground">
-										<a
-											href="https://kilo.ai/credits"
-											className="text-vscode-textLink-foreground hover:underline">
-											{t("kilocode:autocomplete.settings.noCredits.buyCredits")}
-										</a>
-									</div>
-								</div>
 							) : (
 								<div className="flex flex-col gap-2">
 									<div className="text-vscode-errorForeground font-medium">
@@ -306,13 +288,6 @@ export const AutocompleteServiceSettingsView = ({
 											<li key={name}>{name}</li>
 										))}
 									</ul>
-									<div className="text-vscode-descriptionForeground">
-										<a
-											href="https://kilo.ai/docs/basic-usage/autocomplete"
-											className="text-vscode-textLink-foreground hover:underline">
-											{t("kilocode:autocomplete.settings.noModelConfigured.learnMore")}
-										</a>
-									</div>
 								</div>
 							)}
 							{MODEL_SELECTION_ENABLED && (

@@ -19,6 +19,7 @@ import {
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import CommitMessagePromptSettings from "./CommitMessagePromptSettings" // kilocode_change
+import { isPersonalProvider } from "./constants" // kilocode_change
 import { SearchableSetting } from "./SearchableSetting"
 
 interface PromptsSettingsProps {
@@ -271,14 +272,21 @@ const PromptsSettings = ({
 												? t("prompts:supportPrompts.enhance.useCurrentConfig")
 												: t("prompts:supportPrompts.condense.useCurrentConfig")}
 										</SelectItem>
-										{(listApiConfigMeta || []).map((config) => (
-											<SelectItem
-												key={config.id}
-												value={config.id}
-												data-testid={`${config.id}-option`}>
-												{config.name}
-											</SelectItem>
-										))}
+										{/* kilocode_change start: hide unavailable provider profiles */}
+										{(listApiConfigMeta || [])
+											.filter(
+												(config) =>
+													!config.apiProvider || isPersonalProvider(config.apiProvider),
+											)
+											.map((config) => (
+												<SelectItem
+													key={config.id}
+													value={config.id}
+													data-testid={`${config.id}-option`}>
+													{config.name}
+												</SelectItem>
+											))}
+										{/* kilocode_change end */}
 									</SelectContent>
 								</Select>
 								<div className="text-sm text-vscode-descriptionForeground mt-1">

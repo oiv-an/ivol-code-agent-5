@@ -105,7 +105,7 @@ export const Unbound = ({
 			window.addEventListener("message", messageHandler)
 		})
 
-		vscode.postMessage({ type: "requestRouterModels" })
+		vscode.postMessage({ type: "requestRouterModels", values: { provider: "unbound" } }) // kilocode_change
 
 		await modelsPromise
 
