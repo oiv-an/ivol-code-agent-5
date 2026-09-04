@@ -62,6 +62,51 @@ describe("getModelMaxOutputTokens", () => {
 		expect(result).toBe(8192)
 	})
 
+	// kilocode_change start
+	test.each([-1, 0, Number.NaN, Number.POSITIVE_INFINITY])(
+		"should ignore non-positive or non-finite maxTokens sentinel %s",
+		(maxTokens) => {
+			const model: ModelInfo = {
+				contextWindow: 400_000,
+				maxTokens,
+				supportsPromptCache: true,
+			}
+
+			expect(
+				getModelMaxOutputTokens({
+					modelId: "gpt-5.6-sol",
+					model,
+					settings: { apiProvider: "openai" },
+				}),
+			).toBe(ANTHROPIC_DEFAULT_MAX_TOKENS)
+			expect(
+				getModelMaxOutputTokens({
+					modelId: "gpt-5.6-sol",
+					model,
+					settings: { apiProvider: "openai" },
+					format: "openai",
+				}),
+			).toBeUndefined()
+		},
+	)
+
+	test("should ignore a negative reasoning output sentinel", () => {
+		const model: ModelInfo = {
+			contextWindow: 400_000,
+			requiredReasoningBudget: true,
+			supportsPromptCache: true,
+		}
+
+		expect(
+			getModelMaxOutputTokens({
+				modelId: "reasoning-model",
+				model,
+				settings: { modelMaxTokens: -1 },
+			}),
+		).toBe(16_384)
+	})
+	// kilocode_change end
+
 	test("should return ANTHROPIC_DEFAULT_MAX_TOKENS for Anthropic models that support reasoning budget but aren't using it", () => {
 		const anthropicModelId = "claude-sonnet-4-20250514"
 		const model: ModelInfo = {

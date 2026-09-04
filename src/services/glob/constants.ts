@@ -20,6 +20,10 @@ export const DIRS_TO_IGNORE = [
 	"deps",
 	"pkg",
 	"Pods",
+	// kilocode_change start: personal safety snapshots can contain complete workspace trees
+	"IVOL-Code-Agent-5-full-backup-*",
+	"IVOL-Code-Agent-5-post-install-safety-*",
+	// kilocode_change end
 	".git",
 	".*",
 ]

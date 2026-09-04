@@ -42,9 +42,11 @@ vi.mock("vscode", () => ({
 // Mock modelCache getModels/flushModels used by the handler
 const getModelsMock = vi.fn()
 const flushModelsMock = vi.fn()
+const refreshModelsMock = vi.fn()
 vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 	getModels: (...args: any[]) => getModelsMock(...args),
 	flushModels: (...args: any[]) => flushModelsMock(...args),
+	refreshModels: (...args: any[]) => refreshModelsMock(...args),
 }))
 
 // kilocode_change start: OpenAI-compatible quick model selector
@@ -72,6 +74,8 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		getOpenAiModelsMock.mockReset()
+		refreshModelsMock.mockReset()
+		refreshModelsMock.mockResolvedValue({})
 		globalStateValues = new Map()
 
 		mockProvider = {
@@ -283,6 +287,32 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 		})
 	})
 
+	it("refreshes the signed-in ChatGPT subscription catalog", async () => {
+		refreshModelsMock.mockResolvedValue({
+			"gpt-5.6-sol": { contextWindow: 370_000, supportsPromptCache: true },
+		})
+
+		await webviewMessageHandler(
+			mockProvider as any,
+			{
+				type: "requestRouterModels",
+				values: { provider: "openai-codex" },
+			} as any,
+		)
+
+		expect(refreshModelsMock).toHaveBeenCalledWith({ provider: "openai-codex" })
+		expect(getModelsMock).not.toHaveBeenCalled()
+		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "routerModels",
+			routerModels: {
+				"openai-codex": {
+					"gpt-5.6-sol": { contextWindow: 370_000, supportsPromptCache: true },
+				},
+			},
+			values: { provider: "openai-codex" },
+		})
+	})
+
 	it("fails closed when no provider filter is sent", async () => {
 		await webviewMessageHandler(
 			mockProvider as any,
@@ -409,12 +439,10 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 			} as any,
 		)
 
-		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(
-			1,
-			"https://provider.example/v1",
-			"test-key",
-			{ Authorization: "custom-secret", "X-Test": "value" },
-		)
+		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(1, "https://provider.example/v1", "test-key", {
+			Authorization: "custom-secret",
+			"X-Test": "value",
+		})
 		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(2, "https://provider.example/v1", undefined, {
 			"X-Test": "value",
 		})

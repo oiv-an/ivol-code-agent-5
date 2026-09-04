@@ -16,7 +16,13 @@ import type { ModelInfo } from "../model.js"
 
 export type OpenAiCodexModelId = keyof typeof openAiCodexModels
 
-export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.5"
+// kilocode_change start: ChatGPT subscription catalog defaults and fixed context budget
+// Keep the context budget independent of the values advertised by the remote
+// Codex catalog. This is the user's fixed safety limit for every Plus/Pro model.
+export const OPENAI_CODEX_CONTEXT_WINDOW = 370_000
+
+export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.6-sol"
+// kilocode_change end
 
 /**
  * Models available through the Codex OAuth flow.
@@ -24,9 +30,65 @@ export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.5"
  * Costs are 0 as they are covered by the subscription.
  */
 export const openAiCodexModels = {
+	// kilocode_change start: current ChatGPT Plus/Pro Codex fallback catalog
+	"gpt-5.6-sol": {
+		maxTokens: 128000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+		supportsNativeTools: true,
+		defaultToolProtocol: "native",
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+		reasoningEffort: "low",
+		inputPrice: 0,
+		outputPrice: 0,
+		supportsTemperature: false,
+		displayName: "GPT-5.6 Sol",
+		preferredIndex: 1,
+		description: "Latest frontier agentic coding model via ChatGPT subscription",
+	},
+	"gpt-5.6-terra": {
+		maxTokens: 128000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+		supportsNativeTools: true,
+		defaultToolProtocol: "native",
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+		reasoningEffort: "medium",
+		inputPrice: 0,
+		outputPrice: 0,
+		supportsTemperature: false,
+		displayName: "GPT-5.6 Terra",
+		preferredIndex: 2,
+		description: "Balanced agentic coding model via ChatGPT subscription",
+	},
+	"gpt-5.6-luna": {
+		maxTokens: 128000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+		supportsNativeTools: true,
+		defaultToolProtocol: "native",
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+		reasoningEffort: "medium",
+		inputPrice: 0,
+		outputPrice: 0,
+		supportsTemperature: false,
+		displayName: "GPT-5.6 Luna",
+		preferredIndex: 3,
+		description: "Fast and efficient agentic coding model via ChatGPT subscription",
+	},
+	// kilocode_change end
 	"gpt-5.5": {
 		maxTokens: 128000,
-		contextWindow: 1000000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -39,11 +101,11 @@ export const openAiCodexModels = {
 		inputPrice: 0,
 		outputPrice: 0,
 		supportsTemperature: false,
-		description: "GPT-5.5: OpenAI's latest frontier model for agentic coding via ChatGPT subscription",
+		description: "GPT-5.5: Proven previous-generation model via ChatGPT subscription",
 	},
 	"gpt-5.1-codex-max": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -60,7 +122,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.1-codex": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -77,7 +139,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.4": {
 		maxTokens: 128000,
-		contextWindow: 1000000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -91,9 +153,47 @@ export const openAiCodexModels = {
 		supportsTemperature: false,
 		description: "GPT-5.4: OpenAI's flagship coding model via ChatGPT subscription",
 	},
+	// kilocode_change start: additional models in the current Codex account catalog
+	"gpt-5.4-mini": {
+		maxTokens: 128000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+		supportsNativeTools: true,
+		defaultToolProtocol: "native",
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+		reasoningEffort: "medium",
+		inputPrice: 0,
+		outputPrice: 0,
+		supportsTemperature: false,
+		displayName: "GPT-5.4 Mini",
+		preferredIndex: 23,
+		description: "Small, fast, and cost-efficient model for simpler coding tasks",
+	},
+	"gpt-5.3-codex-spark": {
+		maxTokens: 128000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+		supportsNativeTools: true,
+		defaultToolProtocol: "native",
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+		reasoningEffort: "high",
+		inputPrice: 0,
+		outputPrice: 0,
+		supportsTemperature: false,
+		displayName: "GPT-5.3 Codex Spark",
+		preferredIndex: 26,
+		description: "Ultra-fast coding model via ChatGPT subscription",
+	},
+	// kilocode_change end
 	"gpt-5.3-codex": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -109,7 +209,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.2-codex": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -125,7 +225,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.1": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -143,7 +243,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -161,7 +261,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5-codex": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -178,7 +278,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5-codex-mini": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -195,7 +295,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.1-codex-mini": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],
@@ -211,7 +311,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.2": {
 		maxTokens: 128000,
-		contextWindow: 400000,
+		contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 		supportsNativeTools: true,
 		defaultToolProtocol: "native",
 		includedTools: ["apply_patch"],

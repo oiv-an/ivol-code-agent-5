@@ -103,6 +103,80 @@ describe("list-files gitignore integration", () => {
 		expect(directoriesInResult).toContain(path.join(tempDir, "allowed-dir") + "/")
 	})
 
+	// kilocode_change start
+	it("should not traverse directories ignored by .gitignore", async () => {
+		const ignoredDir = path.join(tempDir, "ignored-dir")
+		const allowedDir = path.join(tempDir, "allowed-dir")
+		await fs.promises.mkdir(path.join(ignoredDir, "nested"), { recursive: true })
+		await fs.promises.mkdir(path.join(allowedDir, "nested"), { recursive: true })
+		await fs.promises.writeFile(path.join(tempDir, ".gitignore"), "ignored-dir/\n")
+
+		const mockSpawn = vi.mocked(childProcess.spawn)
+		const mockProcess = {
+			stdout: {
+				on: vi.fn((event, callback) => {
+					if (event === "data") {
+						setTimeout(() => callback(""), 10)
+					}
+				}),
+			},
+			stderr: {
+				on: vi.fn(),
+			},
+			on: vi.fn((event, callback) => {
+				if (event === "close") {
+					setTimeout(() => callback(0), 20)
+				}
+			}),
+			kill: vi.fn(),
+		}
+		mockSpawn.mockReturnValue(mockProcess as any)
+
+		const readdirSpy = vi.spyOn(fs.promises, "readdir")
+		await listFiles(tempDir, true, 100)
+		const scannedDirectories = readdirSpy.mock.calls.map(([dir]) => path.resolve(String(dir)))
+		readdirSpy.mockRestore()
+
+		expect(scannedDirectories).toContain(allowedDir)
+		expect(scannedDirectories).not.toContain(ignoredDir)
+	})
+
+	it("should not traverse IVOL safety backup directories", async () => {
+		const backupDir = path.join(tempDir, "IVOL-Code-Agent-5-full-backup-2026-09-03-090946")
+		const allowedDir = path.join(tempDir, "allowed-dir")
+		await fs.promises.mkdir(path.join(backupDir, "nested"), { recursive: true })
+		await fs.promises.mkdir(path.join(allowedDir, "nested"), { recursive: true })
+
+		const mockSpawn = vi.mocked(childProcess.spawn)
+		const mockProcess = {
+			stdout: {
+				on: vi.fn((event, callback) => {
+					if (event === "data") {
+						setTimeout(() => callback(""), 10)
+					}
+				}),
+			},
+			stderr: { on: vi.fn() },
+			on: vi.fn((event, callback) => {
+				if (event === "close") {
+					setTimeout(() => callback(0), 20)
+				}
+			}),
+			kill: vi.fn(),
+		}
+		mockSpawn.mockReturnValue(mockProcess as any)
+
+		const readdirSpy = vi.spyOn(fs.promises, "readdir")
+		const [results] = await listFiles(tempDir, true, 100)
+		const scannedDirectories = readdirSpy.mock.calls.map(([dir]) => path.resolve(String(dir)))
+		readdirSpy.mockRestore()
+
+		expect(results).not.toContain(`${backupDir}/`)
+		expect(scannedDirectories).toContain(allowedDir)
+		expect(scannedDirectories).not.toContain(backupDir)
+	})
+	// kilocode_change end
+
 	it("should handle nested .gitignore files correctly", async () => {
 		// Setup nested directory structure
 		await fs.promises.mkdir(path.join(tempDir, "src"), { recursive: true })

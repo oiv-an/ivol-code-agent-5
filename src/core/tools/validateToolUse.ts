@@ -87,6 +87,13 @@ export function isToolAllowedForMode(
 	experiments?: Record<string, boolean>,
 	includedTools?: string[], // Opt-in tools explicitly included (e.g., from modelInfo)
 ): boolean {
+	// Native web search is exposed provider-specifically by the OpenAI handler.
+	// It is read-only and may be used in every mode; the executor performs the
+	// provider/setting check again before making a network request.
+	if (tool === "web_search") {
+		return true
+	}
+
 	// Always allow these tools
 	if (ALWAYS_AVAILABLE_TOOLS.includes(tool as any)) {
 		return true

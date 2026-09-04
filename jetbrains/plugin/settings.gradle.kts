@@ -2,4 +2,4 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-rootProject.name = "Kilo Code 5 Personal"
+rootProject.name = "IVOL Code Agent 5"

@@ -158,8 +158,9 @@ export function getKeepMessagesWithToolBlocks(messages: ApiMessage[], keepCount:
 }
 
 export const N_MESSAGES_TO_KEEP = 3
-export const MIN_CONDENSE_THRESHOLD = 5 // Minimum percentage of context window to trigger condensing
-export const MAX_CONDENSE_THRESHOLD = 100 // Maximum percentage of context window to trigger condensing
+// Persisted thresholds are percentages of the context window already used.
+export const MIN_CONDENSE_THRESHOLD = 5
+export const MAX_CONDENSE_THRESHOLD = 100
 
 const SUMMARY_PROMPT = `\
 Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.

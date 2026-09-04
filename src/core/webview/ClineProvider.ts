@@ -2088,7 +2088,11 @@ export class ClineProvider
 
 	async postStateToWebview() {
 		const state = await this.getStateToPostToWebview()
-		this.postMessageToWebview({ type: "state", state })
+		// Preserve ordering with the incremental messages that follow a state
+		// boundary. JetBrains transports webview messages asynchronously; without
+		// awaiting this send, a later delta can overtake the state that establishes
+		// its currentTaskId and be discarded by the task-aware reducer.
+		await this.postMessageToWebview({ type: "state", state })
 
 		// Check MDM compliance and send user to account tab if not compliant
 		// Only redirect if there's an actual MDM policy requiring authentication
@@ -2412,7 +2416,7 @@ export class ClineProvider
 			allowedMaxRequests,
 			allowedMaxCost,
 			autoCondenseContext: autoCondenseContext ?? true,
-			autoCondenseContextPercent: autoCondenseContextPercent ?? 100,
+			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			uriScheme: vscode.env.uriScheme,
 			uiKind: vscode.UIKind[vscode.env.uiKind], // kilocode_change
 			kiloCodeWrapperProperties, // kilocode_change wrapper information
@@ -2736,7 +2740,7 @@ export class ClineProvider
 			allowedMaxRequests: stateValues.allowedMaxRequests,
 			allowedMaxCost: stateValues.allowedMaxCost,
 			autoCondenseContext: stateValues.autoCondenseContext ?? true,
-			autoCondenseContextPercent: stateValues.autoCondenseContextPercent ?? 100,
+			autoCondenseContextPercent: stateValues.autoCondenseContextPercent ?? 90,
 			// taskHistory: stateValues.taskHistory ?? [], // kilocode_change
 			allowedCommands: stateValues.allowedCommands,
 			deniedCommands: stateValues.deniedCommands,

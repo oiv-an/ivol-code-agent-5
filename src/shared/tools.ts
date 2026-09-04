@@ -118,6 +118,7 @@ export type NativeToolArgs = {
 	}
 	browser_action: BrowserActionParams
 	codebase_search: { query: string; path?: string }
+	web_search: { query: string }
 	fetch_instructions: { task: string }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
@@ -213,6 +214,11 @@ export interface DeleteFileToolUse extends ToolUse {
 export interface CodebaseSearchToolUse extends ToolUse<"codebase_search"> {
 	name: "codebase_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path">>
+}
+
+export interface WebSearchToolUse extends ToolUse<"web_search"> {
+	name: "web_search"
+	params: Partial<Pick<Record<ToolParamName, string>, "query">>
 }
 
 export interface SearchFilesToolUse extends ToolUse<"search_files"> {
@@ -315,6 +321,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	new_task: "create new task",
 	new_rule: "create new rule",
 	codebase_search: "codebase search",
+	web_search: "search the web",
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
 	generate_image: "generate images",

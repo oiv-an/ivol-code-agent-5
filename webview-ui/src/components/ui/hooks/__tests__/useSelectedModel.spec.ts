@@ -11,6 +11,8 @@ import {
 	BEDROCK_1M_CONTEXT_MODEL_IDS,
 	litellmDefaultModelInfo,
 	openAiModelInfoSaneDefaults,
+	openAiCodexDefaultModelId,
+	openAiCodexModels,
 	moonshotModels,
 } from "@roo-code/types"
 
@@ -1057,6 +1059,54 @@ describe("useSelectedModel", () => {
 			expect(result.current.info).toEqual({ ...nativeToolDefaults, ...customModelInfo })
 			expect(result.current.info?.supportsNativeTools).toBe(true)
 			expect(result.current.info?.defaultToolProtocol).toBe("native")
+		})
+	})
+
+	describe("openai-codex provider", () => {
+		beforeEach(() => {
+			mockUseOpenRouterModelProviders.mockReturnValue({
+				data: {},
+				isLoading: false,
+				isError: false,
+			} as any)
+		})
+
+		it("uses the selected model from the signed-in account catalog", () => {
+			const accountModelInfo: ModelInfo = {
+				contextWindow: 370_000,
+				supportsPromptCache: true,
+				displayName: "Account Model",
+			}
+			mockUseRouterModels.mockReturnValue({
+				data: { "openai-codex": { "account-model": accountModelInfo } },
+				isLoading: false,
+				isError: false,
+			} as any)
+
+			const wrapper = createWrapper()
+			const { result } = renderHook(
+				() => useSelectedModel({ apiProvider: "openai-codex", apiModelId: "account-model" }),
+				{ wrapper },
+			)
+
+			expect(result.current.id).toBe("account-model")
+			expect(result.current.info).toBe(accountModelInfo)
+			expect(result.current.isLoading).toBe(false)
+		})
+
+		it("falls back to the bundled catalog when account discovery is unavailable", () => {
+			mockUseRouterModels.mockReturnValue({
+				data: {},
+				isLoading: false,
+				isError: true,
+			} as any)
+
+			const wrapper = createWrapper()
+			const { result } = renderHook(() => useSelectedModel({ apiProvider: "openai-codex" }), { wrapper })
+
+			expect(result.current.id).toBe(openAiCodexDefaultModelId)
+			expect(result.current.info).toBe(openAiCodexModels[openAiCodexDefaultModelId])
+			expect(result.current.isError).toBe(true)
 		})
 	})
 

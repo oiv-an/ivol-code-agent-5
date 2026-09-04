@@ -17,6 +17,7 @@ import { processUserContentMentions } from "../../mentions/processUserContentMen
 import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../../diff/strategies/multi-file-search-replace"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
+import { NonRetryableApiError } from "../../../api/providers/utils/non-retryable-api-error"
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
@@ -948,6 +949,60 @@ describe("Cline", () => {
 
 				const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
 				await expect(iterator.next()).rejects.toThrow("terminated")
+
+				expect(createMessageSpy).toHaveBeenCalledTimes(1)
+				expect(backoffSpy).not.toHaveBeenCalled()
+			})
+
+			it("attemptApiRequest should not automatically replay a non-retryable provider response", async () => {
+				const responsesConfig = {
+					...mockApiConfig,
+					apiProvider: "openai" as const,
+					openAiBaseUrl: "https://prox.example.com",
+					openAiModelId: "1-gpt-sol",
+					openAiWebSearchEnabled: true,
+				}
+
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: responsesConfig,
+					task: "test task",
+					startTask: false,
+					context: mockExtensionContext,
+				})
+
+				const completedResponseError = new NonRetryableApiError(
+					"Responses API completed without assistant text.",
+				)
+				const mockFailedStream = {
+					// eslint-disable-next-line require-yield
+					async *[Symbol.asyncIterator]() {
+						throw completedResponseError
+					},
+					async next() {
+						throw completedResponseError
+					},
+					async return() {
+						return { done: true, value: undefined }
+					},
+					async throw(e: any) {
+						throw e
+					},
+					async [Symbol.asyncDispose]() {},
+				} as AsyncGenerator<ApiStreamChunk>
+
+				const createMessageSpy = vi.spyOn(task.api, "createMessage").mockReturnValue(mockFailedStream)
+				const backoffSpy = vi.spyOn(task as any, "backoffAndAnnounce").mockResolvedValue(undefined)
+
+				mockProvider.getState = vi.fn().mockResolvedValue({
+					apiConfiguration: responsesConfig,
+					autoApprovalEnabled: true,
+					requestDelaySeconds: 1,
+					mode: "code",
+				})
+
+				const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
+				await expect(iterator.next()).rejects.toThrow("completed without assistant text")
 
 				expect(createMessageSpy).toHaveBeenCalledTimes(1)
 				expect(backoffSpy).not.toHaveBeenCalled()

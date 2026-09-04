@@ -5,7 +5,7 @@ import com.intellij.openapi.diagnostic.Logger
 import java.util.MissingResourceException
 
 /**
- * Dynamic translation system for Kilo Code JetBrains plugin
+ * Dynamic translation system for the IVOL Code Agent 5 JetBrains plugin
  *
  * Supports named parameter substitution and auto-discovery of translation bundles.
  * Maintains API compatibility with the TypeScript i18n system.

@@ -498,6 +498,10 @@
 		"apiKey": "API Key",
 		"openAiBaseUrl": "Base URL",
 		"getOpenAiApiKey": "Get OpenAI API Key",
+		"openAiWebSearch": "Native web search",
+		"openAiWebSearchDescription": "Enabled by default. The primary model decides when web search is needed. Only the search is sent as a separate request through the OpenAI Responses API; normal replies keep using the regular OpenAI Chat API.",
+		"openAiWebSearchModel": "Model for web search",
+		"openAiWebSearchModelDescription": "Loaded from this provider with the same Base URL, API key, and headers. This model is used only for separate web-search requests; it does not replace the primary model or affect the primary model's reasoning settings.",
 		"mistralApiKey": "Mistral API Key",
 		"getMistralApiKey": "Get Mistral / Codestral API Key",
 		"codestralBaseUrl": "Codestral Base URL (Optional)",
@@ -657,7 +661,8 @@
 			"low": "Low",
 			"medium": "Medium",
 			"high": "High",
-			"xhigh": "Extra High"
+			"xhigh": "Extra High",
+			"max": "Ultra (API Max)"
 		},
 		"verbosity": {
 			"label": "Output Verbosity",
@@ -799,8 +804,8 @@
 	"contextManagement": {
 		"description": "Control what information is included in the AI's context window, affecting token usage and response quality",
 		"autoCondenseContextPercent": {
-			"label": "Threshold to trigger intelligent context condensing",
-			"description": "When the context window reaches this threshold, IVOL Code will automatically condense it."
+			"label": "Remaining context that triggers condensing",
+			"description": "IVOL Code automatically condenses when this percentage of the total context window remains."
 		},
 		"condensingApiConfiguration": {
 			"label": "API Configuration for Context Condensing",
@@ -867,13 +872,13 @@
 			}
 		},
 		"condensingThreshold": {
-			"label": "Condensing Trigger Threshold",
-			"selectProfile": "Configure threshold for profile",
+			"label": "Condense when this much context remains",
+			"selectProfile": "Configure remaining context for profile",
 			"defaultProfile": "Global Default (all profiles)",
-			"defaultDescription": "When context reaches this percentage, it will be automatically condensed for all profiles unless they have custom settings",
-			"profileDescription": "Custom threshold for this profile only (overrides global default)",
-			"inheritDescription": "This profile inherits the global default threshold ({{threshold}}%)",
-			"usesGlobal": "(uses global {{threshold}}%)"
+			"defaultDescription": "Condensing starts when {{threshold}}% of the total context window remains. You can enter an exact value from 1% to 95%; the default is 10%.",
+			"profileDescription": "Remaining-context percentage for this profile only (overrides the global value)",
+			"inheritDescription": "This profile inherits the global remaining-context value ({{threshold}}%)",
+			"usesGlobal": "(global remaining {{threshold}}%)"
 		},
 		"includeCurrentTime": {
 			"label": "Include current time in context",

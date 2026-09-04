@@ -23,7 +23,7 @@ import { getGlamaModels } from "./glama" // kilocode_change
 import { getOCAModels } from "./oca" // kilocode_change
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
-import { GetModelsOptions } from "../../../shared/api"
+import { GetModelsOptions, GetModelsOptionsFor } from "../../../shared/api"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 import { getIOIntelligenceModels } from "./io-intelligence"
@@ -44,6 +44,7 @@ import { getChutesModels } from "./chutes"
 import { getNanoGptModels } from "./nano-gpt" //kilocode_change
 import { getPoeModels } from "./poe" // kilocode_change
 import { getZenmuxModels } from "./zenmux"
+import { getOpenAiCodexModels } from "./openai-codex" // kilocode_change
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -80,6 +81,11 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 
 	let models: ModelRecord
 	switch (provider) {
+		// kilocode_change start: signed-in ChatGPT Plus/Pro catalog
+		case "openai-codex":
+			models = await getOpenAiCodexModels()
+			break
+		// kilocode_change end
 		case "openrouter":
 			// kilocode_change start: base url and bearer token
 			models = await getOpenRouterModels({
@@ -217,7 +223,8 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
  * @param baseUrl - Optional base URL for the provider (currently used only for LiteLLM).
  * @returns The models from the cache or the fetched models.
  */
-export const getModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
+export function getModels<P extends RouterName>(options: GetModelsOptionsFor<P>): Promise<ModelRecord> // kilocode_change: retain provider-specific requirements for typed callers
+export async function getModels(options: GetModelsOptions): Promise<ModelRecord> {
 	const { provider } = options
 
 	let models = getModelsFromCache(provider)

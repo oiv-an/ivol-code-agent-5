@@ -14,6 +14,17 @@ import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
 import { vscode } from "@/utils/vscode"
 
+// The persisted field historically stored the percentage already used. Older
+// installations stored 100 while the runtime separately enforced a 10%
+// buffer, so present that legacy value as the new 10%-remaining default.
+const normalizeStoredUsageThreshold = (value: number) => {
+	if (!Number.isFinite(value) || value >= 100) return 90
+	return Math.min(Math.max(value, 5), 99)
+}
+
+const usageThresholdToRemainingPercent = (value: number) => 100 - normalizeStoredUsageThreshold(value)
+const remainingPercentToUsageThreshold = (value: number) => 100 - Math.min(Math.max(value, 1), 95)
+
 type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
@@ -83,8 +94,9 @@ export const ContextManagementSettings = ({
 	const { t } = useAppTranslation()
 	const [selectedThresholdProfile, setSelectedThresholdProfile] = React.useState<string>("default")
 
-	// Helper function to get the current threshold value based on selected profile
-	const getCurrentThresholdValue = () => {
+	// The storage remains backward compatible (percent used), while the control
+	// shows the clearer user-facing value requested here: percent remaining.
+	const getCurrentUsageThreshold = () => {
 		if (selectedThresholdProfile === "default") {
 			return autoCondenseContextPercent
 		}
@@ -94,20 +106,30 @@ export const ContextManagementSettings = ({
 		}
 		return profileThreshold
 	}
+	const getCurrentRemainingPercent = () => usageThresholdToRemainingPercent(getCurrentUsageThreshold())
 
-	// Helper function to handle threshold changes
-	const handleThresholdChange = (value: number) => {
+	const handleRemainingPercentChange = (value: number) => {
+		const usageThreshold = remainingPercentToUsageThreshold(value)
 		if (selectedThresholdProfile === "default") {
-			setCachedStateField("autoCondenseContextPercent", value)
+			setCachedStateField("autoCondenseContextPercent", usageThreshold)
 		} else {
 			const newThresholds = {
 				...profileThresholds,
-				[selectedThresholdProfile]: value,
+				[selectedThresholdProfile]: usageThreshold,
 			}
 
 			setCachedStateField("profileThresholds", newThresholds)
 			vscode.postMessage({ type: "updateSettings", updatedSettings: { profileThresholds: newThresholds } })
 		}
+	}
+
+	const handleRemainingPercentInput = (rawValue: string) => {
+		if (rawValue.trim() === "") return
+
+		const value = Number(rawValue)
+		if (!Number.isFinite(value)) return
+
+		handleRemainingPercentChange(Math.round(value))
 	}
 	return (
 		<div className={cn("flex flex-col gap-2", className)} {...props}>
@@ -525,10 +547,13 @@ export const ContextManagementSettings = ({
 														? ` ${t(
 																"settings:contextManagement.condensingThreshold.usesGlobal",
 																{
-																	threshold: autoCondenseContextPercent,
+																	threshold:
+																		usageThresholdToRemainingPercent(
+																			autoCondenseContextPercent,
+																		),
 																},
 															)}`
-														: ` (${profileThreshold}%)`
+														: ` (${usageThresholdToRemainingPercent(profileThreshold)}%)`
 													: ""
 											return (
 												<SelectItem key={config.id} value={config.id}>
@@ -542,23 +567,37 @@ export const ContextManagementSettings = ({
 							</Select>
 						</div>
 
-						{/* Threshold Slider */}
+						{/* Threshold slider and exact numeric input */}
 						<div>
 							<div className="flex items-center gap-2">
 								<Slider
-									min={10}
-									max={100}
+									min={1}
+									max={95}
 									step={1}
-									value={[getCurrentThresholdValue()]}
-									onValueChange={([value]) => handleThresholdChange(value)}
+									value={[getCurrentRemainingPercent()]}
+									onValueChange={([value]) => handleRemainingPercentChange(value)}
 									data-testid="condense-threshold-slider"
 								/>
-								<span className="w-20">{getCurrentThresholdValue()}%</span>
+								<div className="flex shrink-0 items-center gap-1">
+									<Input
+										type="number"
+										min={1}
+										max={95}
+										step={1}
+										inputMode="numeric"
+										value={getCurrentRemainingPercent()}
+										onChange={(event) => handleRemainingPercentInput(event.target.value)}
+										className="w-20"
+										aria-label={t("settings:contextManagement.autoCondenseContextPercent.label")}
+										data-testid="condense-threshold-input"
+									/>
+									<span aria-hidden="true">%</span>
+								</div>
 							</div>
 							<div className="text-vscode-descriptionForeground text-sm mt-1">
 								{selectedThresholdProfile === "default"
 									? t("settings:contextManagement.condensingThreshold.defaultDescription", {
-											threshold: autoCondenseContextPercent,
+											threshold: usageThresholdToRemainingPercent(autoCondenseContextPercent),
 										})
 									: t("settings:contextManagement.condensingThreshold.profileDescription")}
 							</div>

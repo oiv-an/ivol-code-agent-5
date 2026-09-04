@@ -340,5 +340,33 @@ describe("ThinkingBudget", () => {
 			expect(screen.getByTestId("select-item-medium")).toBeInTheDocument()
 			expect(screen.getByTestId("select-item-high")).toBeInTheDocument()
 		})
+
+		// kilocode_change start: GPT-5.6 maximum reasoning effort
+		it("should show max only when the model capability explicitly includes it", () => {
+			const { rerender } = render(
+				<ThinkingBudget
+					{...defaultProps}
+					modelInfo={{
+						...reasoningEffortModelInfo,
+						supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+					}}
+				/>,
+			)
+
+			expect(screen.getByTestId("select-item-max")).toHaveTextContent("settings:providers.reasoningEffort.max")
+
+			rerender(
+				<ThinkingBudget
+					{...defaultProps}
+					modelInfo={{
+						...reasoningEffortModelInfo,
+						supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+					}}
+				/>,
+			)
+
+			expect(screen.queryByTestId("select-item-max")).not.toBeInTheDocument()
+		})
+		// kilocode_change end
 	})
 })

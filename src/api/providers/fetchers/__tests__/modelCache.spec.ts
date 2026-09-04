@@ -45,6 +45,7 @@ vi.mock("../glama") // kilocode_change start
 vi.mock("../unbound")
 vi.mock("../io-intelligence")
 vi.mock("../ovhcloud") // kilocode_change
+vi.mock("../openai-codex") // kilocode_change
 
 // Mock ContextProxy with a simple static instance
 vi.mock("../../../core/config/ContextProxy", () => ({
@@ -69,6 +70,7 @@ import { getGlamaModels } from "../glama" // kilocode_change
 import { getUnboundModels } from "../unbound"
 import { getIOIntelligenceModels } from "../io-intelligence"
 import { getOvhCloudAiEndpointsModels } from "../ovhcloud" // kilocode_change
+import { getOpenAiCodexModels } from "../openai-codex" // kilocode_change
 
 const mockGetLiteLLMModels = getLiteLLMModels as Mock<typeof getLiteLLMModels>
 const mockGetOpenRouterModels = getOpenRouterModels as Mock<typeof getOpenRouterModels>
@@ -77,6 +79,7 @@ const mockGetGlamaModels = getGlamaModels as Mock<typeof getGlamaModels> // kilo
 const mockGetUnboundModels = getUnboundModels as Mock<typeof getUnboundModels>
 const mockGetIOIntelligenceModels = getIOIntelligenceModels as Mock<typeof getIOIntelligenceModels>
 const mockGetOvhCloudAiEndpointsModels = getOvhCloudAiEndpointsModels as Mock<typeof getOvhCloudAiEndpointsModels> // kilocode_change
+const mockGetOpenAiCodexModels = getOpenAiCodexModels as Mock<typeof getOpenAiCodexModels> // kilocode_change
 
 const DUMMY_REQUESTY_KEY = "requesty-key-for-testing"
 const DUMMY_UNBOUND_KEY = "unbound-key-for-testing"
@@ -124,6 +127,24 @@ describe("getModels with new GetModelsOptions", () => {
 		expect(mockGetOpenRouterModels).toHaveBeenCalled()
 		expect(result).toEqual(mockModels)
 	})
+
+	// kilocode_change start: authenticated ChatGPT account catalog
+	it("calls getOpenAiCodexModels for the subscription provider", async () => {
+		const mockModels = {
+			"gpt-5.6-sol": {
+				maxTokens: 128_000,
+				contextWindow: 370_000,
+				supportsPromptCache: true,
+			},
+		}
+		mockGetOpenAiCodexModels.mockResolvedValue(mockModels)
+
+		const result = await getModels({ provider: "openai-codex" })
+
+		expect(mockGetOpenAiCodexModels).toHaveBeenCalledTimes(1)
+		expect(result).toEqual(mockModels)
+	})
+	// kilocode_change end
 
 	it("calls getRequestyModels with optional API key", async () => {
 		const mockModels = {

@@ -76,6 +76,8 @@ export const shouldUseReasoningEffort = ({
 		| "low"
 		| "medium"
 		| "high"
+		| "xhigh"
+		| "max" // kilocode_change: GPT-5.6 maximum effort
 		| undefined
 
 	// "disable" explicitly omits reasoning
@@ -101,6 +103,8 @@ export const shouldUseReasoningEffort = ({
 		| "low"
 		| "medium"
 		| "high"
+		| "xhigh"
+		| "max" // kilocode_change: GPT-5.6 maximum effort
 		| undefined
 	return !!modelDefaultEffort
 }
@@ -110,6 +114,8 @@ export const DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS = 8_192
 export const GEMINI_25_PRO_MIN_THINKING_TOKENS = 128
 // kilocode_change start
 const QWEN3_MAX_THINKING_OUTPUT_TOKEN_LIMIT = 32_768
+const isPositiveFiniteTokenLimit = (value: unknown): value is number =>
+	typeof value === "number" && Number.isFinite(value) && value > 0
 // kilocode_change end
 
 // Max Tokens
@@ -126,8 +132,15 @@ export const getModelMaxOutputTokens = ({
 	format?: "anthropic" | "openai" | "gemini" | "openrouter" | "zenmux"
 }): number | undefined => {
 	if (shouldUseReasoningBudget({ model, settings })) {
-		return settings?.modelMaxTokens || DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS
+		// kilocode_change start: saved providers use -1 as an "automatic" sentinel;
+		// it must never become a real output limit or a negative context reserve.
+		return isPositiveFiniteTokenLimit(settings?.modelMaxTokens)
+			? settings.modelMaxTokens
+			: DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS
+		// kilocode_change end
 	}
+
+	const modelMaxTokens = model.maxTokens
 
 	const isAnthropicContext =
 		modelId.includes("claude") ||
@@ -142,7 +155,7 @@ export const getModelMaxOutputTokens = ({
 	}*/
 
 	// For Anthropic contexts, always ensure a maxTokens value is set
-	if (isAnthropicContext && (!model.maxTokens || model.maxTokens === 0)) {
+	if (isAnthropicContext && !isPositiveFiniteTokenLimit(modelMaxTokens)) {
 		return ANTHROPIC_DEFAULT_MAX_TOKENS
 	}
 
@@ -152,16 +165,16 @@ export const getModelMaxOutputTokens = ({
 
 	// If model has explicit maxTokens, clamp it to 20% of the context window
 	// Exception: GPT-5 models should use their exact configured max output tokens
-	if (model.maxTokens) {
+	if (isPositiveFiniteTokenLimit(modelMaxTokens)) {
 		// Check if this is a GPT-5 model (case-insensitive)
 		const isGpt5Model = modelId.toLowerCase().includes("gpt-5")
 
 		// GPT-5 models bypass the 20% cap and use their full configured max tokens
 		if (isGpt5Model) {
-			return model.maxTokens
+			return modelMaxTokens
 		}
 
-		const contextCappedMaxTokens = Math.min(model.maxTokens, Math.ceil(model.contextWindow * 0.2))
+		const contextCappedMaxTokens = Math.min(modelMaxTokens, Math.ceil(model.contextWindow * 0.2))
 
 		// kilocode_change start
 		// qwen3-max-thinking currently rejects values above 32,768 (upstream provider constraint).
@@ -196,6 +209,7 @@ type CommonFetchParams = {
 // If a new dynamic provider is added in packages/types, this will fail to compile
 // until a corresponding entry is added here.
 const dynamicProviderExtras = {
+	"openai-codex": {} as {}, // eslint-disable-line @typescript-eslint/no-empty-object-type -- kilocode_change: OAuth credentials come from secure storage
 	gemini: {} as { apiKey?: string; baseUrl?: string }, // kilocode_change
 	openrouter: {} as {}, // eslint-disable-line @typescript-eslint/no-empty-object-type
 	zenmux: {} as { apiKey?: string; baseUrl?: string },
@@ -236,3 +250,10 @@ const dynamicProviderExtras = {
 export type GetModelsOptions = {
 	[P in keyof typeof dynamicProviderExtras]: ({ provider: P } & (typeof dynamicProviderExtras)[P]) & CommonFetchParams
 }[RouterName]
+
+// kilocode_change start: typed dynamic-provider model discovery
+// Preserve provider-specific required fields for literal callers while also
+// allowing router-backed handlers whose provider is already a validated union.
+export type GetModelsOptionsFor<P extends RouterName> = { provider: P } & (typeof dynamicProviderExtras)[P] &
+	CommonFetchParams
+// kilocode_change end

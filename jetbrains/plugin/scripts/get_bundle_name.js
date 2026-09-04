@@ -23,8 +23,8 @@ function getBundleName() {
 
 		const version = gradleVersionMatch[1].trim()
 
-		// Generate the bundle name following the pattern: Kilo Code-{version}.zip
-		const bundleName = `Kilo Code-${version}.zip`
+		// Generate the public IVOL Code Agent 5 bundle name.
+		const bundleName = `IVOL Code Agent 5-${version}.zip`
 
 		// Output just the filename for CI usage
 		process.stdout.write(bundleName)

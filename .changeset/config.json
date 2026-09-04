@@ -5,6 +5,6 @@
 	"fixed": [["ivol-code-agent-5"]],
 	"linked": [],
 	"access": "restricted",
-	"baseBranch": "main",
+	"baseBranch": "stable-v5",
 	"updateInternalDependencies": "patch"
 }

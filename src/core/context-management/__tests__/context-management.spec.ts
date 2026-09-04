@@ -10,10 +10,12 @@ import { ApiMessage } from "../../task-persistence/apiMessages"
 import * as condenseModule from "../../condense"
 
 import {
+	DEFAULT_CONDENSE_USAGE_PERCENT,
 	TOKEN_BUFFER_PERCENTAGE,
 	estimateTokenCount,
 	truncateConversation,
 	manageContext,
+	normalizeCondenseUsageThreshold,
 	willManageContext,
 } from "../index"
 
@@ -280,10 +282,9 @@ describe("Context Management", () => {
 			{ role: "assistant", content: "Fourth message" },
 			{ role: "user", content: "Fifth message" },
 		]
-		it("should not truncate if tokens are below max tokens threshold", async () => {
+		it("should not truncate below the 90% safety threshold", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
-			const dynamicBuffer = modelInfo.contextWindow * TOKEN_BUFFER_PERCENTAGE // 10000
-			const totalTokens = 70000 - dynamicBuffer - 1 // Just below threshold - buffer
+			const totalTokens = 89_999
 
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
@@ -314,9 +315,9 @@ describe("Context Management", () => {
 			})
 		})
 
-		it("should truncate if tokens are above max tokens threshold", async () => {
+		it("should truncate at the 90% safety threshold", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold
+			const totalTokens = 90_000
 
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
@@ -351,7 +352,7 @@ describe("Context Management", () => {
 		it("should work with non-prompt caching models the same as prompt caching models", async () => {
 			// The implementation no longer differentiates between prompt caching and non-prompt caching models
 			const modelInfo1 = createModelInfo(100000, 30000)
-			const modelInfo2 = createModelInfo(100000, 30000)
+			const modelInfo2 = { ...createModelInfo(100000, 30000), supportsPromptCache: false }
 
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
@@ -360,7 +361,7 @@ describe("Context Management", () => {
 			]
 
 			// Test below threshold
-			const belowThreshold = 69999
+			const belowThreshold = 89_999
 			const result1 = await manageContext({
 				messages: messagesWithSmallContent,
 				totalTokens: belowThreshold,
@@ -389,17 +390,18 @@ describe("Context Management", () => {
 				currentProfileId: "default",
 			})
 
-			// For truncation results, we can't compare messages directly because
-			// truncationId is randomly generated. Compare structure instead.
+			// Prompt-cache support does not change threshold behavior.
 			expect(result1.messages.length).toEqual(result2.messages.length)
 			expect(result1.summary).toEqual(result2.summary)
 			expect(result1.cost).toEqual(result2.cost)
 			expect(result1.prevContextTokens).toEqual(result2.prevContextTokens)
-			expect(result1.truncationId).toBeDefined()
-			expect(result2.truncationId).toBeDefined()
+			expect(result1.messages).toEqual(messagesWithSmallContent)
+			expect(result2.messages).toEqual(messagesWithSmallContent)
+			expect(result1.truncationId).toBeUndefined()
+			expect(result2.truncationId).toBeUndefined()
 
 			// Test above threshold
-			const aboveThreshold = 70001
+			const aboveThreshold = 90_000
 			const result3 = await manageContext({
 				messages: messagesWithSmallContent,
 				totalTokens: aboveThreshold,
@@ -441,7 +443,7 @@ describe("Context Management", () => {
 		it("should consider incoming content when deciding to truncate", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
 			const maxTokens = 30000
-			const availableTokens = modelInfo.contextWindow - maxTokens
+			const allowedTokens = modelInfo.contextWindow * (DEFAULT_CONDENSE_USAGE_PERCENT / 100)
 
 			// Test case 1: Small content that won't push us over the threshold
 			const smallContent = [{ type: "text" as const, text: "Small content" }]
@@ -451,9 +453,8 @@ describe("Context Management", () => {
 				{ role: messages[messages.length - 1].role, content: smallContent },
 			]
 
-			// Set base tokens so total is well below threshold + buffer even with small content added
-			const dynamicBuffer = modelInfo.contextWindow * TOKEN_BUFFER_PERCENTAGE
-			const baseTokensForSmall = availableTokens - smallContentTokens - dynamicBuffer - 10
+			// Keep the combined count below the 90%-used safety threshold.
+			const baseTokensForSmall = allowedTokens - smallContentTokens - 10
 			const resultWithSmall = await manageContext({
 				messages: messagesWithSmallContent,
 				totalTokens: baseTokensForSmall,
@@ -488,7 +489,7 @@ describe("Context Management", () => {
 			]
 
 			// Set base tokens so we're just below threshold without content, but over with content
-			const baseTokensForLarge = availableTokens - Math.floor(largeContentTokens / 2)
+			const baseTokensForLarge = allowedTokens - Math.floor(largeContentTokens / 2)
 			const resultWithLarge = await manageContext({
 				messages: messagesWithLargeContent,
 				totalTokens: baseTokensForLarge,
@@ -516,7 +517,7 @@ describe("Context Management", () => {
 			]
 
 			// Set base tokens so we're just below threshold without content
-			const baseTokensForVeryLarge = availableTokens - Math.floor(veryLargeContentTokens / 2)
+			const baseTokensForVeryLarge = allowedTokens - Math.floor(veryLargeContentTokens / 2)
 			const resultWithVeryLarge = await manageContext({
 				messages: messagesWithVeryLargeContent,
 				totalTokens: baseTokensForVeryLarge,
@@ -536,10 +537,9 @@ describe("Context Management", () => {
 			expect(resultWithVeryLarge.prevContextTokens).toBe(baseTokensForVeryLarge + veryLargeContentTokens)
 		})
 
-		it("should truncate if tokens are within TOKEN_BUFFER_PERCENTAGE of the threshold", async () => {
+		it("should truncate once only TOKEN_BUFFER_PERCENTAGE remains", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
-			const dynamicBuffer = modelInfo.contextWindow * TOKEN_BUFFER_PERCENTAGE // 10% of 100000 = 10000
-			const totalTokens = 70000 - dynamicBuffer + 1 // Just within the dynamic buffer of threshold (70000)
+			const totalTokens = modelInfo.contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE)
 
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
@@ -591,7 +591,7 @@ describe("Context Management", () => {
 				.mockResolvedValue(mockSummarizeResponse)
 
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold
+			const totalTokens = 90_000 // At the legacy-100 normalized threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
 				{ ...messages[messages.length - 1], content: "" },
@@ -617,7 +617,7 @@ describe("Context Management", () => {
 				mockApiHandler,
 				"System prompt",
 				taskId,
-				70001,
+				90_000,
 				true,
 				undefined, // customCondensingPrompt
 				undefined, // condensingApiHandler
@@ -651,7 +651,7 @@ describe("Context Management", () => {
 				.mockResolvedValue(mockSummarizeResponse)
 
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold
+			const totalTokens = 90_000 // At the legacy-100 normalized threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
 				{ ...messages[messages.length - 1], content: "" },
@@ -701,7 +701,7 @@ describe("Context Management", () => {
 			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation")
 
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold
+			const totalTokens = 90_000 // At the safety threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
 				{ ...messages[messages.length - 1], content: "" },
@@ -765,9 +765,8 @@ describe("Context Management", () => {
 				.mockResolvedValue(mockSummarizeResponse)
 
 			const modelInfo = createModelInfo(100000, 30000)
-			// Set tokens to be below the allowedTokens threshold but above the percentage threshold
 			const contextWindow = modelInfo.contextWindow
-			const totalTokens = 60000 // Below allowedTokens but 60% of context window
+			const totalTokens = 60000 // 60% of the context window, above the configured 50% threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
 				{ ...messages[messages.length - 1], content: "" },
@@ -818,7 +817,6 @@ describe("Context Management", () => {
 			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation")
 
 			const modelInfo = createModelInfo(100000, 30000)
-			// Set tokens to be below both the allowedTokens threshold and the percentage threshold
 			const contextWindow = modelInfo.contextWindow
 			const totalTokens = 40000 // 40% of context window
 			const messagesWithSmallContent = [
@@ -1018,10 +1016,7 @@ describe("Context Management", () => {
 			const currentProfileId = "test-profile" // This profile is not in profileThresholds
 			const contextWindow = modelInfo.contextWindow
 
-			// Calculate allowedTokens: contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
-			// allowedTokens = 100000 * 0.9 - 30000 = 60000
-			// Set tokens to be below both the global threshold (80%) and allowedTokens
-			const totalTokens = 50000 // 50% of context window, well below 60000 allowedTokens and 80% threshold
+			const totalTokens = 50000 // 50% of the context window, below the global 80% threshold
 
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
@@ -1047,8 +1042,7 @@ describe("Context Management", () => {
 				currentProfileId,
 			})
 
-			// Should NOT use summarization because 50% < 80% (global threshold, since profile has no specific threshold)
-			// and totalTokens (50000) < allowedTokens (60000)
+			// Should NOT summarize because 50% < 80% (the global threshold).
 			expect(summarizeSpy).not.toHaveBeenCalled()
 			expect(result).toEqual({
 				messages: messagesWithSmallContent,
@@ -1063,42 +1057,23 @@ describe("Context Management", () => {
 	})
 
 	/**
-	 * Tests for the getMaxTokens function (private but tested through manageContext)
+	 * Output token limits describe a response cap, not input context already in use.
 	 */
-	describe("getMaxTokens", () => {
-		// We'll test this indirectly through manageContext
-		const createModelInfo = (contextWindow: number, maxTokens?: number): ModelInfo => ({
-			contextWindow,
-			supportsPromptCache: true, // Not relevant for getMaxTokens
-			maxTokens,
-		})
-
-		// Reuse across tests for consistency
+	describe("output token limits do not affect context threshold", () => {
 		const messages: ApiMessage[] = [
 			{ role: "user", content: "First message" },
 			{ role: "assistant", content: "Second message" },
 			{ role: "user", content: "Third message" },
 			{ role: "assistant", content: "Fourth message" },
-			{ role: "user", content: "Fifth message" },
+			{ role: "user", content: "" },
 		]
 
-		it("should use maxTokens as buffer when specified", async () => {
-			const modelInfo = createModelInfo(100000, 50000)
-			// Max tokens = 100000 - 50000 = 50000
-
-			// Create messages with very small content in the last one to avoid token overflow
-			const messagesWithSmallContent = [
-				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
-			]
-
-			// Account for the dynamic buffer which is 10% of context window (10,000 tokens)
-			// Below max tokens and buffer - no truncation
-			const result1 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 39999, // Well below threshold + dynamic buffer
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
+		const run = (totalTokens: number, contextWindow: number, maxTokens?: number | null) =>
+			manageContext({
+				messages,
+				totalTokens,
+				contextWindow,
+				maxTokens,
 				apiHandler: mockApiHandler,
 				autoCondenseContext: false,
 				autoCondenseContextPercent: 100,
@@ -1107,183 +1082,32 @@ describe("Context Management", () => {
 				profileThresholds: {},
 				currentProfileId: "default",
 			})
-			expect(result1).toEqual({
-				messages: messagesWithSmallContent,
-				summary: "",
-				cost: 0,
-				prevContextTokens: 39999,
-			})
 
-			// Above max tokens - truncate
-			const result2 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 50001, // Above threshold
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result2.messages).not.toEqual(messagesWithSmallContent)
-			// Should have all original messages + truncation marker (non-destructive)
-			expect(result2.messages.length).toBe(6) // 5 original + 1 marker
-			expect(result2.truncationId).toBeDefined()
-			expect(result2.messagesRemoved).toBe(2)
-			expect(result2.summary).toBe("")
-			expect(result2.cost).toBe(0)
-			expect(result2.prevContextTokens).toBe(50001)
-		})
+		it.each([50_000, undefined, -1] as const)(
+			"uses the same 90%% boundary when maxTokens is %s",
+			async (maxTokens) => {
+				const below = await run(89_999, 100_000, maxTokens)
+				expect(below.messages).toEqual(messages)
+				expect(below.truncationId).toBeUndefined()
+				expect(below.prevContextTokens).toBe(89_999)
 
-		it("should use ANTHROPIC_DEFAULT_MAX_TOKENS as buffer when maxTokens is undefined", async () => {
-			const modelInfo = createModelInfo(100000, undefined)
-			// Max tokens = 100000 - ANTHROPIC_DEFAULT_MAX_TOKENS = 100000 - 8192 = 91808
+				const atBoundary = await run(90_000, 100_000, maxTokens)
+				expect(atBoundary.truncationId).toBeDefined()
+				expect(atBoundary.messagesRemoved).toBe(2)
+				expect(atBoundary.prevContextTokens).toBe(90_000)
+			},
+		)
 
-			// Create messages with very small content in the last one to avoid token overflow
-			const messagesWithSmallContent = [
-				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
-			]
+		it("scales the 90% boundary with the context window", async () => {
+			const smallBelow = await run(44_999, 50_000, 10_000)
+			const smallAtBoundary = await run(45_000, 50_000, 10_000)
+			const largeBelow = await run(179_999, 200_000, 30_000)
+			const largeAtBoundary = await run(180_000, 200_000, 30_000)
 
-			// Account for the dynamic buffer which is 10% of context window (10,000 tokens)
-			// Below max tokens and buffer - no truncation
-			const result1 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 81807, // Well below threshold + dynamic buffer (91808 - 10000 = 81808)
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result1).toEqual({
-				messages: messagesWithSmallContent,
-				summary: "",
-				cost: 0,
-				prevContextTokens: 81807,
-			})
-
-			// Above max tokens - truncate
-			const result2 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 81809, // Above threshold (81808)
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result2.messages).not.toEqual(messagesWithSmallContent)
-			// Should have all original messages + truncation marker (non-destructive)
-			expect(result2.messages.length).toBe(6) // 5 original + 1 marker
-			expect(result2.truncationId).toBeDefined()
-			expect(result2.summary).toBe("")
-			expect(result2.cost).toBe(0)
-			expect(result2.prevContextTokens).toBe(81809)
-		})
-
-		it("should handle small context windows appropriately", async () => {
-			const modelInfo = createModelInfo(50000, 10000)
-			// Max tokens = 50000 - 10000 = 40000
-
-			// Create messages with very small content in the last one to avoid token overflow
-			const messagesWithSmallContent = [
-				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
-			]
-
-			// Below max tokens and buffer - no truncation
-			const result1 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 34999, // Well below threshold + buffer
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result1.messages).toEqual(messagesWithSmallContent)
-
-			// Above max tokens - truncate
-			const result2 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 40001, // Above threshold
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result2.messages).not.toEqual(messagesWithSmallContent)
-			// Should have all original messages + truncation marker (non-destructive)
-			expect(result2.messages.length).toBe(6) // 5 original + 1 marker
-			expect(result2.truncationId).toBeDefined()
-		})
-
-		it("should handle large context windows appropriately", async () => {
-			const modelInfo = createModelInfo(200000, 30000)
-			// Max tokens = 200000 - 30000 = 170000
-
-			// Create messages with very small content in the last one to avoid token overflow
-			const messagesWithSmallContent = [
-				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
-			]
-
-			// Account for the dynamic buffer which is 10% of context window (20,000 tokens for this test)
-			// Below max tokens and buffer - no truncation
-			const result1 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 149999, // Well below threshold + dynamic buffer
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result1.messages).toEqual(messagesWithSmallContent)
-
-			// Above max tokens - truncate
-			const result2 = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 170001, // Above threshold
-				contextWindow: modelInfo.contextWindow,
-				maxTokens: modelInfo.maxTokens,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 100,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-			})
-			expect(result2.messages).not.toEqual(messagesWithSmallContent)
-			// Should have all original messages + truncation marker (non-destructive)
-			expect(result2.messages.length).toBe(6) // 5 original + 1 marker
-			expect(result2.truncationId).toBeDefined()
+			expect(smallBelow.truncationId).toBeUndefined()
+			expect(smallAtBoundary.truncationId).toBeDefined()
+			expect(largeBelow.truncationId).toBeUndefined()
+			expect(largeAtBoundary.truncationId).toBeDefined()
 		})
 	})
 
@@ -1291,6 +1115,108 @@ describe("Context Management", () => {
 	 * Tests for the willManageContext helper function
 	 */
 	describe("willManageContext", () => {
+		const subscriptionModelOptions = {
+			contextWindow: 370_000,
+			maxTokens: 128_000,
+			autoCondenseContext: true,
+			autoCondenseContextPercent: 100,
+			profileThresholds: {},
+			currentProfileId: "default",
+			lastMessageTokens: 0,
+		}
+
+		it("normalizes the legacy stored value 100 to the default 90% used threshold", () => {
+			expect(normalizeCondenseUsageThreshold(100)).toBe(90)
+			expect(normalizeCondenseUsageThreshold(90)).toBe(90)
+			expect(normalizeCondenseUsageThreshold(undefined)).toBe(90)
+			expect(normalizeCondenseUsageThreshold(99)).toBe(99)
+		})
+
+		it("does not condense the reported 228,573-token subscription task", () => {
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 155_388,
+					lastMessageTokens: 73_185,
+				}),
+			).toBe(false)
+		})
+
+		it("uses the exact 333,000-token boundary without reserving maxTokens", () => {
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 332_999,
+				}),
+			).toBe(false)
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 333_000,
+				}),
+			).toBe(true)
+		})
+
+		it.each([
+			[1, 99, 366_300],
+			[3, 97, 358_900],
+			[5, 95, 351_500],
+		])(
+			"uses the exact 370k boundary for %i%% remaining (%i%% used)",
+			(_remainingPercent, usageThreshold, boundary) => {
+				expect(
+					willManageContext({
+						...subscriptionModelOptions,
+						totalTokens: boundary - 1,
+						autoCondenseContextPercent: usageThreshold,
+					}),
+				).toBe(false)
+				expect(
+					willManageContext({
+						...subscriptionModelOptions,
+						totalTokens: boundary,
+						autoCondenseContextPercent: usageThreshold,
+					}),
+				).toBe(true)
+			},
+		)
+
+		it("uses a custom 75% used threshold", () => {
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 277_499,
+					autoCondenseContextPercent: 75,
+				}),
+			).toBe(false)
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 277_500,
+					autoCondenseContextPercent: 75,
+				}),
+			).toBe(true)
+		})
+
+		it("uses the 333,000-token safety boundary when auto-condense is disabled", () => {
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 332_999,
+					autoCondenseContext: false,
+					autoCondenseContextPercent: 75,
+				}),
+			).toBe(false)
+			expect(
+				willManageContext({
+					...subscriptionModelOptions,
+					totalTokens: 333_000,
+					autoCondenseContext: false,
+					autoCondenseContextPercent: 75,
+				}),
+			).toBe(true)
+		})
+
 		it("should return true when context percent exceeds threshold", () => {
 			const result = willManageContext({
 				totalTokens: 60000,
@@ -1319,10 +1245,9 @@ describe("Context Management", () => {
 			expect(result).toBe(false)
 		})
 
-		it("should return true when tokens exceed allowedTokens even if autoCondenseContext is false", () => {
-			// allowedTokens = contextWindow * (1 - 0.1) - reservedTokens = 100000 * 0.9 - 30000 = 60000
+		it("should return true at the 90% safety threshold when autoCondenseContext is false", () => {
 			const result = willManageContext({
-				totalTokens: 60001, // Exceeds allowedTokens
+				totalTokens: 90_000,
 				contextWindow: 100000,
 				maxTokens: 30000,
 				autoCondenseContext: false, // Even with auto-condense disabled
@@ -1334,10 +1259,9 @@ describe("Context Management", () => {
 			expect(result).toBe(true)
 		})
 
-		it("should return false when autoCondenseContext is false and tokens are below allowedTokens", () => {
-			// allowedTokens = contextWindow * (1 - 0.1) - reservedTokens = 100000 * 0.9 - 30000 = 60000
+		it("should return false below the 90% safety threshold when autoCondenseContext is false", () => {
 			const result = willManageContext({
-				totalTokens: 59999, // Below allowedTokens
+				totalTokens: 89_999,
 				contextWindow: 100000,
 				maxTokens: 30000,
 				autoCondenseContext: false,
@@ -1420,7 +1344,7 @@ describe("Context Management", () => {
 
 		it("should include system prompt tokens in newContextTokensAfterTruncation", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold to trigger truncation
+			const totalTokens = 90_000 // At the 90% safety threshold
 
 			const messages: ApiMessage[] = [
 				{ role: "user", content: "First message" },
@@ -1462,7 +1386,7 @@ describe("Context Management", () => {
 
 		it("should produce consistent prev vs new token comparison (both including system prompt)", async () => {
 			const modelInfo = createModelInfo(100000, 30000)
-			const totalTokens = 70001 // Above threshold to trigger truncation
+			const totalTokens = 90_000 // At the 90% safety threshold
 
 			const messages: ApiMessage[] = [
 				{ role: "user", content: "First message" },

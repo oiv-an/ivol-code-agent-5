@@ -23,6 +23,9 @@ import java.util.concurrent.ConcurrentHashMap
 class ExtensionManager : Disposable {
     companion object {
         val LOG = Logger.getInstance(ExtensionManager::class.java)
+
+        private const val LEGACY_EXTENSION_ID = "Kilo Code.kilo-code"
+        private const val LEGACY_EXTENSION_PUBLISHER = "Kilo Code"
     }
 
     // Registered extensions
@@ -44,20 +47,19 @@ class ExtensionManager : Disposable {
         val packageJsonContent = File(packageJsonPath).readText()
         val packageJson = gson.fromJson(packageJsonContent, PackageJson::class.java)
 
-        // Create extension identifier
-        val name = packageJson.name
-        val publisher = "Kilo Code"
-        val extensionIdentifier = ExtensionIdentifier("$publisher.$name")
+        // Keep the JetBrains runtime identity stable so existing global storage remains available.
+        // The VS Code marketplace package name is intentionally independent from this identifier.
+        val extensionIdentifier = ExtensionIdentifier(LEGACY_EXTENSION_ID)
 
         // Create extension description
         return ExtensionDescription(
-            id = "$publisher.$name",
+            id = LEGACY_EXTENSION_ID,
             identifier = extensionIdentifier,
-            name = "$publisher.$name",
+            name = LEGACY_EXTENSION_ID,
             displayName = packageJson.displayName,
             description = packageJson.description,
             version = packageJson.version ?: "1.0.0",
-            publisher = "Kilo Code",
+            publisher = LEGACY_EXTENSION_PUBLISHER,
             main = packageJson.main ?: "./dist/extension.js",
             activationEvents = packageJson.activationEvents ?: listOf("onStartupFinished"),
             extensionLocation = URI.file(extensionPath),

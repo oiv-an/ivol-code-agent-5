@@ -40,6 +40,7 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
+import { webSearchTool } from "../tools/WebSearchTool"
 
 import { formatResponse } from "../prompts/responses"
 
@@ -479,6 +480,8 @@ export async function presentAssistantMessage(cline: Task) {
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "codebase_search": // Add case for the new tool
+						return `[${block.name} for '${block.params.query}']`
+					case "web_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "update_todo_list":
 						return `[${block.name}]`
@@ -1084,6 +1087,15 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_search":
 					await codebaseSearchTool.handle(cline, block as ToolUse<"codebase_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						removeClosingTag,
+						toolProtocol,
+					})
+					break
+				case "web_search":
+					await webSearchTool.handle(cline, block as ToolUse<"web_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,

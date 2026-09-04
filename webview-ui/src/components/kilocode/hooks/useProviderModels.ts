@@ -66,6 +66,7 @@ import {
 	mainlandZAiDefaultModelId,
 	zenmuxDefaultModelId,
 	isLocalProvider,
+	isDynamicProvider,
 	isPersonalProvider,
 } from "@roo-code/types"
 import type { ModelRecord, RouterModels } from "@roo/api"
@@ -186,9 +187,13 @@ export const getModelsByProvider = ({
 			}
 		}
 		case "openai-codex": {
+			const accountModels = routerModels["openai-codex"]
+			const models = accountModels && Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
 			return {
-				models: openAiCodexModels,
-				defaultModel: openAiCodexDefaultModelId,
+				models,
+				defaultModel: models[openAiCodexDefaultModelId]
+					? openAiCodexDefaultModelId
+					: Object.keys(models)[0] || openAiCodexDefaultModelId,
 			}
 		}
 		case "mistral": {
@@ -406,7 +411,8 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 	// A migrated, hidden Kilo profile must never wake the official model catalog.
 	// Hidden profiles remain in storage for rollback, but only an explicit switch to
 	// a supported personal provider may cause automatic model discovery.
-	const shouldFetchRouterModels = isPersonalProvider(provider) && isLocalProvider(provider)
+	const shouldFetchRouterModels =
+		isPersonalProvider(provider) && (isLocalProvider(provider) || isDynamicProvider(provider))
 
 	const { kilocodeDefaultModel, currentApiConfigName, listApiConfigMeta } = useExtensionState()
 	const currentApiConfigId = listApiConfigMeta?.find((config) => config.name === currentApiConfigName)?.id
@@ -448,7 +454,8 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 				models: openAiModels.data ?? {},
 				defaultModel: apiConfiguration?.openAiModelId ?? "",
 			}
-		: apiConfiguration && (!shouldFetchRouterModels || typeof routerModels.data !== "undefined")
+		: apiConfiguration &&
+			  (!shouldFetchRouterModels || provider === "openai-codex" || typeof routerModels.data !== "undefined")
 			? getModelsByProvider({
 					provider,
 					routerModels: (routerModels.data ?? {}) as RouterModels,
@@ -463,7 +470,7 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 		provider,
 		providerModels: models as ModelRecord,
 		providerDefaultModel: defaultModel,
-		isLoading: isOpenAiCompatible ? openAiModels.isLoading : routerModels.isLoading,
-		isError: isOpenAiCompatible ? openAiModels.isError : routerModels.isError,
+		isLoading: isOpenAiCompatible ? openAiModels.isLoading : shouldFetchRouterModels && routerModels.isLoading,
+		isError: isOpenAiCompatible ? openAiModels.isError : shouldFetchRouterModels && routerModels.isError,
 	}
 }

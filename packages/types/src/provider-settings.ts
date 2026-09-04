@@ -39,6 +39,11 @@ import {
 
 export const DEFAULT_CONSECUTIVE_MISTAKE_LIMIT = 3
 
+// kilocode_change start: personal OpenAI web-search defaults
+export const DEFAULT_OPENAI_WEB_SEARCH_ENABLED = true
+export const DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID = "1-gpt-sol"
+// kilocode_change end
+
 /**
  * DynamicProvider
  *
@@ -46,6 +51,7 @@ export const DEFAULT_CONSECUTIVE_MISTAKE_LIMIT = 3
  */
 
 export const dynamicProviders = [
+	"openai-codex", // kilocode_change: account-specific ChatGPT Plus/Pro model catalog
 	"openrouter",
 	"vercel-ai-gateway",
 	"huggingface",
@@ -157,7 +163,6 @@ export const providerNames = [
 	"mistral",
 	"moonshot",
 	"minimax",
-	"openai-codex",
 	"openai-native",
 	"openai-responses", // kilocode_change
 	"qwen-code",
@@ -203,9 +208,14 @@ export const isPersonalProvider = (value: unknown): value is PersonalProvider =>
 	typeof value === "string" && personalProviderValues.has(value)
 
 // Only these personal providers have a router-style model catalog. OpenAI uses
-// its dedicated compatible-provider catalog; Codex Pro and Claude Code are
-// static; all remaining router providers are intentionally unavailable.
-export const PERSONAL_ROUTER_MODEL_PROVIDERS = ["ollama", "lmstudio"] as const satisfies readonly PersonalProvider[]
+// its dedicated compatible-provider catalog; Codex loads the signed-in
+// account's catalog; Claude Code remains static. All other router providers are
+// intentionally unavailable.
+export const PERSONAL_ROUTER_MODEL_PROVIDERS = [
+	"openai-codex",
+	"ollama",
+	"lmstudio",
+] as const satisfies readonly PersonalProvider[]
 
 export type PersonalRouterModelProvider = (typeof PERSONAL_ROUTER_MODEL_PROVIDERS)[number]
 
@@ -367,6 +377,8 @@ const openAiSchema = baseProviderSettingsSchema.extend({
 	openAiUseAzure: z.boolean().optional(),
 	azureApiVersion: z.string().optional(),
 	openAiStreamingEnabled: z.boolean().optional(),
+	openAiWebSearchEnabled: z.boolean().optional(),
+	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
 	openAiHostHeader: z.string().optional(), // Keep temporarily for backward compatibility during migration.
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
@@ -382,6 +394,8 @@ const openAiResponsesSchema = baseProviderSettingsSchema.extend({
 	openAiUseAzure: z.boolean().optional(),
 	azureApiVersion: z.string().optional(),
 	openAiStreamingEnabled: z.boolean().optional(),
+	openAiWebSearchEnabled: z.boolean().optional(),
+	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
 	openAiHostHeader: z.string().optional(), // Keep temporarily for backward compatibility during migration.
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })

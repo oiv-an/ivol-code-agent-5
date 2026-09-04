@@ -269,9 +269,22 @@ export const applyIncrementalTaskMessage = (prevState: ExtensionState, message: 
 		return { ...prevState, clineMessages }
 	}
 
-	return message.type === "messageCreated"
-		? { ...prevState, clineMessages: [...prevState.clineMessages, clineMessage] }
-		: prevState
+	if (message.type !== "messageCreated") {
+		return prevState
+	}
+
+	// JetBrains delivers each webview message through a separate asynchronous
+	// JavaScript call. Preserve the canonical timestamp order if two valid
+	// deltas for the active task arrive out of order.
+	const clineMessages = [...prevState.clineMessages]
+	const insertionIndex = clineMessages.findIndex((item) => item.ts > clineMessage.ts)
+	if (insertionIndex === -1) {
+		clineMessages.push(clineMessage)
+	} else {
+		clineMessages.splice(insertionIndex, 0, clineMessage)
+	}
+
+	return { ...prevState, clineMessages }
 }
 // kilocode_change end
 
@@ -362,7 +375,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		organizationAllowList: ORGANIZATION_ALLOW_ALL,
 		organizationSettingsVersion: -1,
 		autoCondenseContext: true,
-		autoCondenseContextPercent: 100,
+		autoCondenseContextPercent: 90,
 		profileThresholds: {},
 		codebaseIndexConfig: {
 			codebaseIndexEnabled: true,

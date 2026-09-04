@@ -20,6 +20,7 @@ import { getModelValidationError, validateApiConfigurationExcludingModelErrors, 
 
 describe("Model Validation Functions", () => {
 	const mockRouterModels: RouterModels = {
+		"openai-codex": {},
 		openrouter: {
 			"valid-model": {
 				maxTokens: 8192,

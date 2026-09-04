@@ -1,5 +1,110 @@
 # IVOL Code Agent 5
 
+## 5.16.223
+
+### Patch Changes
+
+- Add a dedicated native web-search model and GPT-5.6 maximum reasoning effort.
+
+- Keep native web search compatible with OpenAI-compatible gateways that reject optional parallel-tool fields.
+
+- Load the signed-in ChatGPT Plus/Pro model catalog, enforce a 370k context limit, and keep prompt caching enabled.
+
+- Prevent native web-search turns from exhausting the response budget before the assistant can answer.
+
+- Keep normal OpenAI turns on Chat Completions and use Responses only for an explicitly selected native web-search tool call.
+
+- Restore JetBrains task history and reliable proxy streaming for native web search.
+
+- Trigger automatic context condensation from the full context-window usage, default to 10% remaining, and expose the remaining-context threshold in settings without subtracting the output limit twice.
+
+- Always send structured Responses API input arrays through compatible proxy and Codex OAuth transports.
+
+- Use IVOL Code Agent 5 branding throughout the JetBrains interface while preserving the legacy internal storage identity used by existing task history.
+
+- Prevent JetBrains authentication parameters from being written to IDE logs.
+
+## 5.16.222
+
+### Patch Changes
+
+- Add an exact numeric remaining-context threshold next to the slider, configurable from 1% to 95% globally or per profile.
+- Keep the default at 10% while allowing precise lower values such as 1%, 3%, or 5%.
+- Verify exact 370,000-token trigger boundaries without subtracting the model output limit.
+
+## 5.16.221
+
+### Patch Changes
+
+- Keep every ordinary OpenAI-compatible turn on Chat Completions, even when native web search is enabled.
+- Let the primary model invoke a provider-local web-search function autonomously; only that isolated search uses Responses API with the selected search model, same credentials, and structured input.
+- Preserve normal streaming and primary-model reasoning settings while returning bounded search results and source URLs to the Chat conversation.
+
+## 5.16.220
+
+### Patch Changes
+
+- Always send Responses API input as a structured item array for both OpenAI-compatible proxy and ChatGPT Plus/Pro Codex routes, including a final transport-level conversion of any legacy string prompt.
+- Preserve each conversation message, function call, and function result as an independent Responses input item.
+
+## 5.16.219
+
+### Patch Changes
+
+- Restore historical tasks directly into Resume/Terminate state instead of showing a false Cancel action that recreated the same task in a loop.
+- Preserve the entered task text as the task header across JetBrains webview message ordering, and never display internal API request metadata as the task title.
+- Delay automatic context condensing until the configured percentage of the full context window remains (10% by default), without incorrectly reserving the model's output limit a second time, and expose the remaining-context threshold in settings.
+
+## 5.16.218
+
+### Patch Changes
+
+- Load the current model catalog from the signed-in ChatGPT Plus/Pro account, keep a last-known-good offline fallback, fix every subscription model to a 370,000-token context limit, and keep prompt caching enabled with stable per-task cache affinity.
+
+## 5.16.217
+
+### Patch Changes
+
+- Restore the existing PhpStorm task history after the independent package rename by preserving the legacy JetBrains storage identity.
+- Restore the compatible streaming transport for proxy Responses requests, terminate cleanly on the final event, and prevent empty or interrupted streams from being replayed.
+- Raise the protected native-search response budget so maximum reasoning has room to return the final assistant answer.
+
+## 5.16.216
+
+### Patch Changes
+
+- Fix long Responses API tasks that incorrectly treated the saved automatic `-1` value as a negative output reserve and skipped context condensation.
+- Reserve the actual dedicated web-search model budget before sending a request in both VS Code and JetBrains builds.
+- Restrict the one larger `max_output_tokens` retry to reasoning-only/search-only responses and report its outcome accurately.
+
+## 5.16.215
+
+### Patch Changes
+
+- Prevent reasoning-heavy native web searches from ending without an assistant answer by reserving a larger output budget for the GPT search model.
+- Retry a custom-gateway response once with a larger budget only when it stopped at `max_output_tokens` before returning text or an actionable tool call.
+
+## 5.16.214
+
+### Patch Changes
+
+- Add a dedicated native web-search model selector that uses the current OpenAI-compatible provider, API key, and headers, with web search enabled and `1-gpt-sol` selected by default for new personal profiles.
+- Add the real GPT-5.6 `max` reasoning effort above Extra High and pass the selected effort through Responses API requests.
+
+## 5.16.213
+
+### Patch Changes
+
+- Make native web search reliable through compatible proxy endpoints by using bounded non-streaming Responses requests, accepting completed assistant messages and refusals, and preserving citations and usage.
+- Prevent automatic duplicate submissions when a completed custom web-search response cannot be consumed safely.
+- Stop recursive directory scans at `.gitignore` exclusions so large ignored backups cannot freeze the extension host.
+
+## 5.16.212
+
+### Patch Changes
+
+- Add an optional native web search setting for OpenAI-compatible profiles. When enabled, compatible Responses API models decide autonomously when to search and return clickable sources.
+
 ## 5.16.211
 
 ### Patch Changes

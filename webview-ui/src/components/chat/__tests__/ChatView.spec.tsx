@@ -315,6 +315,71 @@ const renderChatView = (props: Partial<ChatViewProps> = {}) => {
 	)
 }
 
+describe("ChatView - restored task controls", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(vscode.postMessage).mockClear()
+	})
+
+	it.each(["user_cancelled", "streaming_failed"])(
+		"shows Resume/Terminate instead of a false Cancel after %s",
+		async (cancelReason) => {
+			const view = renderChatView()
+			const taskTs = Date.now() - 2_000
+
+			mockPostMessage({
+				currentTaskId: "task-a",
+				currentTaskItem: { id: "task-a", ts: taskTs, task: "Original task" },
+				clineMessages: [
+					{ type: "say", say: "text", ts: taskTs, text: "Original task" },
+					{
+						type: "say",
+						say: "api_req_started",
+						ts: taskTs + 1,
+						text: JSON.stringify({ apiProtocol: "openai", cancelReason }),
+					},
+					{
+						type: "say",
+						say: "api_req_retry_delayed",
+						ts: taskTs + 2,
+						text: "Stopped retry",
+						partial: true,
+					},
+				],
+			})
+
+			await waitFor(() => {
+				expect(view.queryByText("chat:cancel.title")).not.toBeInTheDocument()
+			})
+
+			window.postMessage(
+				{
+					type: "messageCreated",
+					taskId: "task-a",
+					clineMessage: {
+						type: "ask",
+						ask: "resume_task",
+						ts: taskTs + 3,
+						partial: false,
+					},
+				},
+				"*",
+			)
+
+			await waitFor(() => {
+				expect(view.getByText("chat:resumeTask.title")).toBeInTheDocument()
+				expect(view.getByText("chat:terminate.title")).toBeInTheDocument()
+				expect(view.queryByText("chat:cancel.title")).not.toBeInTheDocument()
+			})
+
+			vi.mocked(vscode.postMessage).mockClear()
+			fireEvent.click(view.getByText("chat:terminate.title"))
+			expect(vscode.postMessage).toHaveBeenCalledWith({ type: "clearTask" })
+			expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "cancelTask" })
+		},
+	)
+})
+
 describe("ChatView - Sound Playing Tests", () => {
 	beforeEach(() => vi.clearAllMocks())
 

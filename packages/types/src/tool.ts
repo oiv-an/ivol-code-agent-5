@@ -34,6 +34,7 @@ export const toolNames = [
 	"new_task",
 	"fetch_instructions",
 	"codebase_search",
+	"web_search",
 	// kilocode_change start
 	"fast_edit_file",
 	"new_rule",

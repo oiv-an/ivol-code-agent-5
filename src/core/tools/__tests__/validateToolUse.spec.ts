@@ -13,6 +13,12 @@ const askMode = modes.find((m) => m.slug === "ask")?.slug || "ask"
 
 describe("mode-validator", () => {
 	describe("isToolAllowedForMode", () => {
+		it("allows provider-injected web search in every mode", () => {
+			expect(isToolAllowedForMode("web_search", codeMode, [])).toBe(true)
+			expect(isToolAllowedForMode("web_search", architectMode, [])).toBe(true)
+			expect(isToolAllowedForMode("web_search", askMode, [])).toBe(true)
+		})
+
 		describe("code mode", () => {
 			it("allows all code mode tools", () => {
 				// Code mode has all groups
@@ -183,6 +189,10 @@ describe("mode-validator", () => {
 
 		it("does not throw for allowed tools in architect mode", () => {
 			expect(() => validateToolUse("read_file", "architect", [])).not.toThrow()
+		})
+
+		it("accepts the recognized provider-injected web_search tool", () => {
+			expect(() => validateToolUse("web_search", "architect", [])).not.toThrow()
 		})
 
 		it("throws error when tool requirement is not met", () => {

@@ -432,11 +432,12 @@ describe("ContextManagementSettings", () => {
 
 			// Threshold settings should be visible
 			expect(screen.getByTestId("condense-threshold-slider")).toBeInTheDocument()
+			expect(screen.getByTestId("condense-threshold-input")).toHaveValue(25)
 			// One combobox for profile selection
 			expect(screen.getAllByRole("combobox")).toHaveLength(1)
 		})
 
-		it("updates auto condense context percent", () => {
+		it("stores the used-percent threshold when the remaining-percent slider changes", () => {
 			const mockSetCachedStateField = vitest.fn()
 			const props = { ...autoCondenseProps, setCachedStateField: mockSetCachedStateField }
 			render(<ContextManagementSettings {...props} />)
@@ -448,12 +449,44 @@ describe("ContextManagementSettings", () => {
 			slider.focus()
 			fireEvent.keyDown(slider, { key: "ArrowRight" })
 
-			expect(mockSetCachedStateField).toHaveBeenCalledWith("autoCondenseContextPercent", 76)
+			expect(mockSetCachedStateField).toHaveBeenCalledWith("autoCondenseContextPercent", 74)
 		})
 
-		it("displays correct auto condense context percent value", () => {
-			render(<ContextManagementSettings {...autoCondenseProps} />)
-			expect(screen.getByText("75%")).toBeInTheDocument()
+		it.each([
+			[1, 99],
+			[3, 97],
+			[5, 95],
+		])("stores an exact %i%% remaining value as %i%% used", (remainingPercent, usageThreshold) => {
+			const mockSetCachedStateField = vitest.fn()
+			const props = { ...autoCondenseProps, setCachedStateField: mockSetCachedStateField }
+			render(<ContextManagementSettings {...props} />)
+
+			fireEvent.change(screen.getByTestId("condense-threshold-input"), {
+				target: { value: String(remainingPercent) },
+			})
+
+			expect(mockSetCachedStateField).toHaveBeenCalledWith("autoCondenseContextPercent", usageThreshold)
+		})
+
+		it("clamps typed remaining percentages to the supported range", () => {
+			const mockSetCachedStateField = vitest.fn()
+			const props = { ...autoCondenseProps, setCachedStateField: mockSetCachedStateField }
+			render(<ContextManagementSettings {...props} />)
+
+			const input = screen.getByTestId("condense-threshold-input")
+			fireEvent.change(input, { target: { value: "0" } })
+			fireEvent.change(input, { target: { value: "100" } })
+
+			expect(mockSetCachedStateField).toHaveBeenNthCalledWith(1, "autoCondenseContextPercent", 99)
+			expect(mockSetCachedStateField).toHaveBeenNthCalledWith(2, "autoCondenseContextPercent", 5)
+		})
+
+		it("displays the remaining context percent and normalizes the legacy default", () => {
+			const { rerender } = render(<ContextManagementSettings {...autoCondenseProps} />)
+			expect(screen.getByTestId("condense-threshold-input")).toHaveValue(25)
+
+			rerender(<ContextManagementSettings {...autoCondenseProps} autoCondenseContextPercent={100} />)
+			expect(screen.getByTestId("condense-threshold-input")).toHaveValue(10)
 		})
 	})
 

@@ -455,6 +455,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "web_search":
+				if (partialArgs.query !== undefined) {
+					nativeArgs = {
+						query: partialArgs.query,
+					}
+				}
+				break
+
 			case "fetch_instructions":
 				if (partialArgs.task !== undefined) {
 					nativeArgs = {
@@ -750,6 +758,14 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							query: args.query,
 							path: args.path,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_search":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
 						} as NativeArgsFor<TName>
 					}
 					break

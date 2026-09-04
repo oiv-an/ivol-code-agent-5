@@ -15,6 +15,7 @@ This build preserves the version 5 workflow while keeping it compatible with cur
 - More efficient updates for very long conversations.
 - Reliable reopening of saved tasks.
 - Supported prompt caching is enabled.
+- Optional native web search lets compatible OpenAI Responses models decide autonomously when current information is needed and returns source links.
 - Automatic Kilo/Roo account, Marketplace, task-sharing, telemetry, and upgrade communications are disabled in this build.
 
 ## Providers available in this build
@@ -39,7 +40,7 @@ Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-
 
 ## Versioning
 
-Version `5.16.211` corresponds to the upstream `5.16.2` base plus the eleventh IVOL stability revision.
+Version `5.16.223` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## License and attribution
 

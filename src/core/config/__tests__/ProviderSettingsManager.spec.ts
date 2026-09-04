@@ -71,6 +71,8 @@ describe("ProviderSettingsManager", () => {
 			const storedConfig = JSON.parse(calls[calls.length - 1][1])
 			expect(storedConfig.apiConfigs.default.apiProvider).toBe("openai")
 			expect(storedConfig.apiConfigs.default.openAiModelId).toBe("")
+			expect(storedConfig.apiConfigs.default.openAiWebSearchEnabled).toBe(true)
+			expect(storedConfig.apiConfigs.default.openAiWebSearchModelId).toBe("1-gpt-sol")
 		})
 		// kilocode_change end
 
@@ -971,7 +973,13 @@ describe("ProviderSettingsManager", () => {
 
 			const selected = await providerSettingsManager.ensurePersonalActiveProfile()
 
-			expect(selected).toMatchObject({ name: "Personal OpenAI", apiProvider: "openai", openAiModelId: "" })
+			expect(selected).toMatchObject({
+				name: "Personal OpenAI",
+				apiProvider: "openai",
+				openAiModelId: "",
+				openAiWebSearchEnabled: true,
+				openAiWebSearchModelId: "1-gpt-sol",
+			})
 			const storedConfig = JSON.parse(mockSecrets.store.mock.calls.at(-1)![1])
 			expect(storedConfig.apiConfigs["Legacy Kilo"].kilocodeToken).toBe("saved-token")
 			expect(storedConfig.currentApiConfigName).toBe("Personal OpenAI")

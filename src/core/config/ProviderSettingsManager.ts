@@ -9,6 +9,8 @@ import {
 	isSecretStateKey,
 	ProviderSettingsEntry,
 	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
+	DEFAULT_OPENAI_WEB_SEARCH_ENABLED, // kilocode_change
+	DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID, // kilocode_change
 	getModelId,
 	type ProviderName,
 	type ProfileType, // kilocode_change - autocomplete profile type system
@@ -81,6 +83,8 @@ export class ProviderSettingsManager {
 				id: this.defaultConfigId,
 				apiProvider: "openai",
 				openAiModelId: "",
+				openAiWebSearchEnabled: DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
+				openAiWebSearchModelId: DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID,
 			},
 		},
 		modeApiConfigs: this.defaultModeApiConfigs,
@@ -579,6 +583,8 @@ export class ProviderSettingsManager {
 						id: this.generateUniqueId(existingIds),
 						apiProvider: "openai",
 						openAiModelId: "",
+						openAiWebSearchEnabled: DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
+						openAiWebSearchModelId: DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID,
 					}
 
 					providerProfiles.apiConfigs[name] = config

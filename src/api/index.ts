@@ -1,7 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import type { ProviderSettings, ModelInfo, ToolProtocol } from "@roo-code/types"
+import {
+	DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
+	type ProviderSettings,
+	type ModelInfo,
+	type ToolProtocol,
+} from "@roo-code/types"
 
 import { ApiStream } from "./transform/stream"
 
@@ -130,6 +135,9 @@ export interface ApiHandlerCreateMessageMetadata {
 	 * Only applies when toolProtocol is "native".
 	 */
 	parallelToolCalls?: boolean
+	// kilocode_change: internal-only switch used by the dedicated Responses
+	// search worker after the primary Chat model has selected `web_search`.
+	forceWebSearch?: boolean
 	/**
 	 * Optional array of tool names that the model is allowed to call.
 	 * When provided, all tool definitions are passed to the model (so it can reference
@@ -149,6 +157,15 @@ export interface ApiHandler {
 	): ApiStream
 
 	getModel(): { id: string; info: ModelInfo }
+
+	// kilocode_change start
+	/**
+	 * Output space that context management must preserve for the exact request
+	 * model used by this handler. This may differ from getModel() when a
+	 * dedicated Responses web-search model is selected.
+	 */
+	readonly contextManagementMaxOutputTokens?: number
+	// kilocode_change end
 
 	/**
 	 * Counts tokens for content blocks
@@ -204,6 +221,9 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 				? new AnthropicVertexHandler(options)
 				: new VertexHandler(options)
 		case "openai":
+			// kilocode_change: ordinary provider turns always stay on Chat Completions.
+			// OpenAiHandler exposes a provider-local `web_search` function when enabled;
+			// only executing that function makes a separate Responses API request.
 			return new OpenAiHandler(options)
 		case "ollama":
 			return new NativeOllamaHandler(options)
@@ -216,7 +236,10 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "openai-native":
 			return new OpenAiNativeHandler(options)
 		case "openai-responses": // kilocode_change
-			return new OpenAiCompatibleResponsesHandler(options) // kilocode_change
+			return new OpenAiCompatibleResponsesHandler({
+				...options,
+				openAiWebSearchEnabled: options.openAiWebSearchEnabled ?? DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
+			}) // kilocode_change
 		case "deepseek":
 			return new DeepSeekHandler(options)
 		case "doubao":

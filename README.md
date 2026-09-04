@@ -18,6 +18,7 @@ The extension uses the independent ID `ivol.ivol-code-agent-5`, so an official u
 - Preserve the version 5 workflow on current VS Code and JetBrains IDE releases.
 - Keep very long conversations responsive.
 - Make OpenAI-compatible model switching fast and reliable.
+- Let compatible OpenAI Responses models use optional native web search autonomously and return source links.
 - Keep the extension isolated from official upstream updates and cloud services.
 - Retain local task history, provider profiles, and secure credentials across personal builds.
 
@@ -41,9 +42,9 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.211`
+- Version: `5.16.223`
 
-Version `5.16.211` corresponds to the upstream `5.16.2` base plus the eleventh IVOL stability revision.
+Version `5.16.223` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## Development
 

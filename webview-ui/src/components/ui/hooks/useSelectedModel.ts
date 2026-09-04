@@ -121,10 +121,12 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 	const needOllama = typeof ollamaModelId !== "undefined"
 
 	const hasValidRouterData = needRouterModels
-		? routerModels.data &&
-			routerModels.data[provider] !== undefined &&
-			typeof routerModels.data[provider] === "object" &&
-			!routerModels.isLoading
+		? provider === "openai-codex"
+			? !routerModels.isLoading // bundled catalog is the offline fallback
+			: routerModels.data &&
+				routerModels.data[provider] !== undefined &&
+				typeof routerModels.data[provider] === "object" &&
+				!routerModels.isLoading
 		: true
 
 	const isReady =
@@ -557,8 +559,12 @@ function getSelectedModel({
 			return { id, info }
 		}
 		case "openai-codex": {
-			const id = apiConfiguration.apiModelId ?? defaultModelId
-			const info = openAiCodexModels[id as keyof typeof openAiCodexModels]
+			const accountModels = routerModels["openai-codex"]
+			const models: ModelRecord =
+				accountModels && Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
+			const availableDefault = models[defaultModelId] ? defaultModelId : Object.keys(models)[0] || defaultModelId
+			const id = getValidatedModelId(apiConfiguration.apiModelId, models, availableDefault)
+			const info = models[id]
 			return { id, info }
 		}
 		case "vercel-ai-gateway": {

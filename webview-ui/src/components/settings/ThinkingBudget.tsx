@@ -17,7 +17,7 @@ Selection behavior:
   - set enableReasoningEffort = true
   - persist reasoningEffort = "none"
   - request builders include reasoning with value "none"
-- "minimal" | "low" | "medium" | "high":
+- "minimal" | "low" | "medium" | "high" | "xhigh" | "max":
   - set enableReasoningEffort = true
   - persist the selected value
   - request builders include reasoning with the selected effort
@@ -29,7 +29,7 @@ Required:
 Notes:
 - Current selection is normalized to the capability: unsupported persisted values are not shown.
 - Both "disable" and "none" display as the "None" label per UX, but are wired differently as above.
-- "minimal" uses t("settings:providers.reasoningEffort.minimal").
+- Every effort value uses its matching settings:providers.reasoningEffort translation.
 */
 
 import { useEffect } from "react"
@@ -253,7 +253,7 @@ export const ThinkingBudget = ({ apiConfiguration, setApiConfigurationField, mod
 						setApiConfigurationField("enableReasoningEffort", false)
 						setApiConfigurationField("reasoningEffort", "disable")
 					} else {
-						// "none", "minimal", "low", "medium", "high" all enable reasoning
+						// Every non-disable effort, including GPT-5.6 "max", enables reasoning. // kilocode_change
 						setApiConfigurationField("enableReasoningEffort", true)
 						setApiConfigurationField("reasoningEffort", value as ReasoningEffortWithMinimal)
 					}

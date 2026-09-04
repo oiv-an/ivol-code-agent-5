@@ -3,6 +3,7 @@ import { render, screen, act } from "@/utils/test-utils"
 import {
 	type ProviderSettings,
 	type ExperimentId,
+	type ClineMessage,
 	type ExtensionMessage,
 	type ExtensionState,
 	openRouterDefaultModelId, // kilocode_change
@@ -269,6 +270,25 @@ describe("applyIncrementalTaskMessage", () => {
 		expect(applyIncrementalTaskMessage(state, message)).toBe(state)
 	})
 
+	it("inserts a delayed message for the active task by timestamp", () => {
+		const apiMessage = {
+			ts: 2,
+			type: "say",
+			say: "api_req_started",
+			text: '{"apiProtocol":"openai"}',
+		} satisfies ClineMessage
+		const state = createState([apiMessage])
+		const taskMessage = { ts: 1, type: "say", say: "text", text: "Entered task text" } satisfies ClineMessage
+
+		const result = applyIncrementalTaskMessage(state, {
+			type: "messageCreated",
+			taskId: "task-a",
+			clineMessage: taskMessage,
+		})
+
+		expect(result.clineMessages).toEqual([taskMessage, apiMessage])
+	})
+
 	it("updates task totals without replacing the message array", () => {
 		const state = createState([{ ts: 1, type: "say", say: "text", text: "active" }])
 		const result = applyIncrementalTaskMessage(state, {
@@ -310,7 +330,7 @@ describe("mergeExtensionState", () => {
 			cloudUserInfo: null,
 			organizationAllowList: { allowAll: true, providers: {} },
 			autoCondenseContext: true,
-			autoCondenseContextPercent: 100,
+			autoCondenseContextPercent: 90,
 			cloudIsAuthenticated: false,
 			sharingEnabled: false,
 			publicSharingEnabled: false,

@@ -64,6 +64,7 @@ import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "..
 import { ApiStream, GroundingSource } from "../../api/transform/stream"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { VirtualQuotaFallbackHandler } from "../../api/providers/virtual-quota-fallback" // kilocode_change: Import VirtualQuotaFallbackHandler for model change notifications
+import { isNonRetryableApiError } from "../../api/providers/utils/non-retryable-api-error"
 
 // shared
 import { findLastIndex } from "../../shared/array"
@@ -2078,10 +2079,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// The todo list is already set in the constructor if initialTodos were provided
 		// No need to add any messages - the todoList property is already set
 
-		await this.providerRef.deref()?.postStateToWebview()
-
 		await this.say("text", task, images)
 		this.isInitialized = true
+
+		// The initial user message is the authoritative task title. Hydrate only
+		// after it exists so a host cannot register an empty task and then accept
+		// api_req_started as message zero if the earlier incremental delta races.
+		await this.providerRef.deref()?.postStateToWebview()
 
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 
@@ -3634,6 +3638,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						// Clean up partial state
 						await abortStream(cancelReason, streamingFailedMessage)
 						// kilocode_change start
+						if (isNonRetryableApiError(error)) {
+							console.error(
+								`[Task#${this.taskId}.${this.instanceId}] Provider marked the completed request as non-retryable.`,
+							)
+							throw error
+						}
+
 						// Bound retries for repeated Chutes "terminated" stream failures
 						// to prevent indefinite thinking/retry loops.
 						const retryAttempt = currentItem.retryAttempt ?? 0
@@ -4294,11 +4305,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// kilocode_change end
 		const modelInfo = this.api.getModel().info
 
-		const maxTokens = getModelMaxOutputTokens({
-			modelId: this.api.getModel().id,
-			model: modelInfo,
-			settings: this.apiConfiguration,
-		})
+		// kilocode_change start: Responses may send a dedicated web-search model,
+		// so reserve the handler's actual request budget instead of the primary
+		// model's saved sentinel value.
+		const maxTokens =
+			this.api.contextManagementMaxOutputTokens ??
+			getModelMaxOutputTokens({
+				modelId: this.api.getModel().id,
+				model: modelInfo,
+				settings: this.apiConfiguration,
+			})
+		// kilocode_change end
 
 		const contextWindow = this.api.contextWindow ?? modelInfo.contextWindow // kilocode_change: Use contextWindow from API handler if available
 
@@ -4439,7 +4456,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			requestDelaySeconds,
 			mode,
 			autoCondenseContext = true,
-			autoCondenseContextPercent = 100,
+			autoCondenseContextPercent = 90,
 			profileThresholds = {},
 		} = state ?? {}
 
@@ -4492,11 +4509,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// kilocode_change end
 			const modelInfo = this.api.getModel().info
 
-			const maxTokens = getModelMaxOutputTokens({
-				modelId: this.api.getModel().id,
-				model: modelInfo,
-				settings: this.apiConfiguration,
-			})
+			// kilocode_change start: use the output reserve for the exact model that
+			// the handler will send (including a dedicated Responses search model).
+			const maxTokens =
+				this.api.contextManagementMaxOutputTokens ??
+				getModelMaxOutputTokens({
+					modelId: this.api.getModel().id,
+					model: modelInfo,
+					settings: this.apiConfiguration,
+				})
+			// kilocode_change end
 
 			const contextWindow = this.api.contextWindow ?? modelInfo.contextWindow // kilocode_change
 
@@ -4806,6 +4828,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch (error) {
 			this.isWaitingForFirstChunk = false
 			// kilocode_change start
+			if (autoApprovalEnabled && isNonRetryableApiError(error)) {
+				throw error
+			}
+
 			if (apiConfiguration?.apiProvider === "kilocode" && isAnyRecognizedKiloCodeError(error)) {
 				const defaultFreeModel = (
 					await getKilocodeDefaultModel(

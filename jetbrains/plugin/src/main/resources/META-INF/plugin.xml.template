@@ -11,10 +11,10 @@ SPDX-License-Identifier: Apache-2.0
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-    <name>Kilo Code 5 Personal</name>
+    <name>IVOL Code Agent 5</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor>Ivol — fork of Kilo Code Legacy</vendor>
+    <vendor>IVOL</vendor>
 
     <!-- Resource bundles for internationalization -->
     <resource-bundle>messages.JetbrainsBundle</resource-bundle>
@@ -24,8 +24,8 @@ SPDX-License-Identifier: Apache-2.0
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-        <h1>Kilo Code 5 Personal</h1>
-        <p>Personal stable fork of the open-source Kilo Code 5 AI coding assistant.</p>
+        <h1>IVOL Code Agent 5</h1>
+        <p>Stable independent AI coding assistant based on the open-source version 5 codebase.</p>
    ]]></description>
    
    <!-- Change notes for the plugin -->
@@ -48,7 +48,7 @@ SPDX-License-Identifier: Apache-2.0
         <postStartupActivity implementation="ai.kilocode.jetbrains.plugin.WecoderPlugin"/>
         <editorFactoryListener implementation="ai.kilocode.jetbrains.editor.EditorListener"/>
         <toolWindow factoryClass="ai.kilocode.jetbrains.ui.RooToolWindowFactory"
-                    id="Kilo Code"
+                    id="IVOL Code"
                     secondary="true"
                     icon="/icons/kilo-dark.svg"
                     anchor="right" />
@@ -113,9 +113,9 @@ SPDX-License-Identifier: Apache-2.0
             <reference ref="kilocode.settingsButtonClicked" />
         </group>
 
-        <group id="kilocode.RightClickMenu" text="Kilo Code" description="kilocode main menu"  icon="/icons/kilo-dark-small.svg" popup="true">
+        <group id="kilocode.RightClickMenu" text="IVOL Code" description="IVOL Code main menu"  icon="/icons/kilo-dark-small.svg" popup="true">
             <group id="kilocode.RightClick.Chat" class="ai.kilocode.jetbrains.actions.RightClickChatActionGroup"
-                   text="Chat" description="kilocode chat tool"/>
+                   text="Chat" description="IVOL Code chat tool"/>
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
         </group>
     </actions>

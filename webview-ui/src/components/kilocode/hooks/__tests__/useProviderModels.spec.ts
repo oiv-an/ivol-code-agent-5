@@ -1,6 +1,11 @@
 import { renderHook } from "@testing-library/react"
 
-import { openAiModelInfoSaneDefaults, type ProviderSettings } from "@roo-code/types"
+import {
+	openAiCodexModels,
+	openAiModelInfoSaneDefaults,
+	type ModelRecord,
+	type ProviderSettings,
+} from "@roo-code/types"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useRouterModels } from "@/components/ui/hooks/useRouterModels"
 
@@ -62,6 +67,49 @@ describe("useProviderModels", () => {
 			provider: undefined,
 			enabled: false,
 		})
+	})
+
+	it("uses the signed-in account catalog for the ChatGPT subscription profile", () => {
+		const accountModels: ModelRecord = {
+			"account-model": {
+				contextWindow: 370_000,
+				supportsPromptCache: true,
+			},
+			"account-model-2": {
+				contextWindow: 370_000,
+				supportsPromptCache: true,
+			},
+		}
+		mockUseRouterModels.mockReturnValue({
+			data: { "openai-codex": accountModels },
+			isLoading: false,
+			isError: false,
+		} as any)
+
+		const { result } = renderHook(() =>
+			useProviderModels({ apiProvider: "openai-codex", apiModelId: "account-model" }),
+		)
+
+		expect(result.current.providerModels).toBe(accountModels)
+		expect(result.current.providerDefaultModel).toBe("account-model")
+		expect(mockUseRouterModels).toHaveBeenCalledWith(expect.any(Object), {
+			provider: "openai-codex",
+			enabled: true,
+		})
+		expect(mockUseOpenAiModels).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }))
+	})
+
+	it("keeps the bundled Codex catalog available while the account catalog loads", () => {
+		mockUseRouterModels.mockReturnValue({
+			data: undefined,
+			isLoading: true,
+			isError: false,
+		} as any)
+
+		const { result } = renderHook(() => useProviderModels({ apiProvider: "openai-codex" }))
+
+		expect(result.current.providerModels).toBe(openAiCodexModels)
+		expect(result.current.isLoading).toBe(true)
 	})
 
 	it.each(["openai-responses", "openrouter", "roo"] as const)(

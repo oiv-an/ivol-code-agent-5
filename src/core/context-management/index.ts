@@ -6,7 +6,6 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { ApiHandler } from "../../api"
 import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation, SummarizeResponse } from "../condense"
 import { ApiMessage } from "../task-persistence/apiMessages"
-import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
 
 /**
  * Context Management
@@ -19,10 +18,25 @@ import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
  */
 
 /**
- * Default percentage of the context window to use as a buffer when deciding when to truncate.
- * Used by Context Management to determine when to trigger condensation or (fallback) sliding window truncation.
+ * Default percentage of the context window that remains when automatic context
+ * condensing starts. Ten percent remaining means a 90% usage threshold.
  */
 export const TOKEN_BUFFER_PERCENTAGE = 0.1
+
+// kilocode_change start: Older builds stored 100 as the global default and
+// separately forced a 10% buffer. Keep that persisted value compatible while
+// making the threshold itself authoritative. Output limits must not be
+// subtracted a second time from an already declared context window.
+export const DEFAULT_CONDENSE_USAGE_PERCENT = 100 * (1 - TOKEN_BUFFER_PERCENTAGE)
+
+export const normalizeCondenseUsageThreshold = (value?: number | null): number => {
+	if (typeof value !== "number" || !Number.isFinite(value) || value === MAX_CONDENSE_THRESHOLD) {
+		return DEFAULT_CONDENSE_USAGE_PERCENT
+	}
+
+	return Math.min(Math.max(value, MIN_CONDENSE_THRESHOLD), MAX_CONDENSE_THRESHOLD - 1)
+}
+// kilocode_change end
 
 /**
  * Counts tokens for user content using the provider's token counting implementation.
@@ -160,7 +174,6 @@ export type WillManageContextOptions = {
 export function willManageContext({
 	totalTokens,
 	contextWindow,
-	maxTokens,
 	autoCondenseContext,
 	autoCondenseContextPercent,
 	profileThresholds,
@@ -168,31 +181,29 @@ export function willManageContext({
 	lastMessageTokens,
 }: WillManageContextOptions): boolean {
 	if (!autoCondenseContext) {
-		// When auto-condense is disabled, only truncation can occur
-		const reservedTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
+		// When auto-condense is disabled, only the 10%-remaining safety
+		// truncation can occur.
 		const prevContextTokens = totalTokens + lastMessageTokens
-		const allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
-		return prevContextTokens > allowedTokens
+		const allowedTokens = contextWindow * (DEFAULT_CONDENSE_USAGE_PERCENT / 100)
+		return prevContextTokens >= allowedTokens
 	}
 
-	const reservedTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
 	const prevContextTokens = totalTokens + lastMessageTokens
-	const allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
 
 	// Determine the effective threshold to use
-	let effectiveThreshold = autoCondenseContextPercent
+	let effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
 	const profileThreshold = profileThresholds[currentProfileId]
 	if (profileThreshold !== undefined) {
 		if (profileThreshold === -1) {
-			effectiveThreshold = autoCondenseContextPercent
+			effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
 		} else if (profileThreshold >= MIN_CONDENSE_THRESHOLD && profileThreshold <= MAX_CONDENSE_THRESHOLD) {
-			effectiveThreshold = profileThreshold
+			effectiveThreshold = normalizeCondenseUsageThreshold(profileThreshold)
 		}
 		// Invalid values fall back to global setting (effectiveThreshold already set)
 	}
 
 	const contextPercent = (100 * prevContextTokens) / contextWindow
-	return contextPercent >= effectiveThreshold || prevContextTokens > allowedTokens
+	return contextPercent >= effectiveThreshold
 }
 
 /**
@@ -239,7 +250,6 @@ export async function manageContext({
 	messages,
 	totalTokens,
 	contextWindow,
-	maxTokens,
 	apiHandler,
 	autoCondenseContext,
 	autoCondenseContextPercent,
@@ -253,8 +263,6 @@ export async function manageContext({
 }: ContextManagementOptions): Promise<ContextManagementResult> {
 	let error: string | undefined
 	let cost = 0
-	// Calculate the maximum tokens reserved for response
-	const reservedTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
 
 	// Estimate tokens for the last message (which is always a user message)
 	const lastMessage = messages[messages.length - 1]
@@ -266,33 +274,31 @@ export async function manageContext({
 	// Calculate total effective tokens (totalTokens never includes the last message)
 	const prevContextTokens = totalTokens + lastMessageTokens
 
-	// Calculate available tokens for conversation history
-	// Truncate if we're within TOKEN_BUFFER_PERCENTAGE of the context window
-	const allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
-
 	// Determine the effective threshold to use
-	let effectiveThreshold = autoCondenseContextPercent
+	let effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
 	const profileThreshold = profileThresholds[currentProfileId]
 	if (profileThreshold !== undefined) {
 		if (profileThreshold === -1) {
 			// Special case: -1 means inherit from global setting
-			effectiveThreshold = autoCondenseContextPercent
+			effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
 		} else if (profileThreshold >= MIN_CONDENSE_THRESHOLD && profileThreshold <= MAX_CONDENSE_THRESHOLD) {
 			// Valid custom threshold
-			effectiveThreshold = profileThreshold
+			effectiveThreshold = normalizeCondenseUsageThreshold(profileThreshold)
 		} else {
 			// Invalid threshold value, fall back to global setting
 			console.warn(
 				`Invalid profile threshold ${profileThreshold} for profile "${currentProfileId}". Using global default of ${autoCondenseContextPercent}%`,
 			)
-			effectiveThreshold = autoCondenseContextPercent
+			effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
 		}
 	}
 	// If no specific threshold is found for the profile, fall back to global setting
+	const allowedUsagePercent = autoCondenseContext ? effectiveThreshold : DEFAULT_CONDENSE_USAGE_PERCENT
+	const allowedTokens = contextWindow * (allowedUsagePercent / 100)
 
 	if (autoCondenseContext) {
 		const contextPercent = (100 * prevContextTokens) / contextWindow
-		if (contextPercent >= effectiveThreshold || prevContextTokens > allowedTokens) {
+		if (contextPercent >= effectiveThreshold) {
 			// Attempt to intelligently condense the context
 			const result = await summarizeConversation(
 				messages,
@@ -315,7 +321,7 @@ export async function manageContext({
 	}
 
 	// Fall back to sliding window truncation if needed
-	if (prevContextTokens > allowedTokens) {
+	if (prevContextTokens >= allowedTokens) {
 		const truncationResult = truncateConversation(messages, 0.5, taskId)
 
 		// Calculate new context tokens after truncation by counting non-truncated messages

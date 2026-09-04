@@ -7,7 +7,10 @@ import { DynamicProvider, LocalProvider } from "./provider-settings.js"
 
 export const reasoningEfforts = ["low", "medium", "high", "xhigh"] as const
 
-export const reasoningEffortsSchema = z.enum(reasoningEfforts)
+// kilocode_change start: GPT-5.6 adds the API-level "max" effort. Keep the
+// default boolean capability list unchanged so older models do not expose it.
+export const reasoningEffortsSchema = z.enum([...reasoningEfforts, "max"] as const)
+// kilocode_change end
 
 export type ReasoningEffort = z.infer<typeof reasoningEffortsSchema>
 
@@ -23,7 +26,7 @@ export type ReasoningEffortWithMinimal = z.infer<typeof reasoningEffortWithMinim
  * Extended Reasoning Effort (includes "none" and "minimal")
  * Note: "disable" is a UI/control value, not a value sent as effort
  */
-export const reasoningEffortsExtended = ["none", "minimal", "low", "medium", "high", "xhigh"] as const
+export const reasoningEffortsExtended = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const // kilocode_change
 
 export const reasoningEffortExtendedSchema = z.enum(reasoningEffortsExtended)
 
@@ -32,7 +35,16 @@ export type ReasoningEffortExtended = z.infer<typeof reasoningEffortExtendedSche
 /**
  * Reasoning Effort user setting (includes "disable")
  */
-export const reasoningEffortSettingValues = ["disable", "none", "minimal", "low", "medium", "high", "xhigh"] as const
+export const reasoningEffortSettingValues = [
+	"disable",
+	"none",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max", // kilocode_change: GPT-5.6 maximum single-model effort
+] as const
 export const reasoningEffortSettingSchema = z.enum(reasoningEffortSettingValues)
 
 /**
@@ -91,7 +103,10 @@ export const modelInfoSchema = z.object({
 	defaultTemperature: z.number().optional(),
 	requiredReasoningBudget: z.boolean().optional(),
 	supportsReasoningEffort: z
-		.union([z.boolean(), z.array(z.enum(["disable", "none", "minimal", "low", "medium", "high", "xhigh"]))])
+		.union([
+			z.boolean(),
+			z.array(z.enum(["disable", "none", "minimal", "low", "medium", "high", "xhigh", "max"])), // kilocode_change
+		])
 		.optional(),
 	requiredReasoningEffort: z.boolean().optional(),
 	preserveReasoning: z.boolean().optional(),
@@ -169,6 +184,26 @@ export const modelInfoSchema = z.object({
 })
 
 export type ModelInfo = z.infer<typeof modelInfoSchema>
+
+// kilocode_change start: recognize models that support the OpenAI API-level "max" reasoning effort
+const openAiMaxReasoningModelPattern =
+	/^gpt-5\.6(?:-(?:sol|terra|luna))?(?:-\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?$/
+
+export const supportsOpenAiMaxReasoningEffort = (
+	modelId: string | undefined,
+	modelInfo?: Pick<ModelInfo, "supportsReasoningEffort">,
+): boolean => {
+	if (Array.isArray(modelInfo?.supportsReasoningEffort) && modelInfo.supportsReasoningEffort.includes("max")) {
+		return true
+	}
+
+	const normalizedModelId = modelId?.trim().toLowerCase()
+	return (
+		normalizedModelId === "1-gpt-sol" ||
+		(!!normalizedModelId && openAiMaxReasoningModelPattern.test(normalizedModelId))
+	)
+}
+// kilocode_change end
 
 export type ModelRecord = Record<string, ModelInfo>
 

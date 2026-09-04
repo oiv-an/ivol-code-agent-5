@@ -6,8 +6,8 @@ import OpenAI from "openai"
 import {
 	type ModelInfo,
 	openAiCodexDefaultModelId,
-	OpenAiCodexModelId,
 	openAiCodexModels,
+	OPENAI_CODEX_CONTEXT_WINDOW,
 	type ReasoningEffort,
 	type ReasoningEffortExtended,
 	ApiProviderError,
@@ -28,6 +28,8 @@ import { openAiCodexOAuthManager } from "../../integrations/openai-codex/oauth"
 import { t } from "../../i18n"
 
 import { DEFAULT_HEADERS } from "./constants" // kilocode-change
+import { getModelsFromCache } from "./fetchers/modelCache" // kilocode_change
+import { normalizeResponsesInput } from "./utils/responses-input"
 
 // Get extension version for User-Agent header
 const extensionVersion: string = require("../../package.json").version ?? "unknown"
@@ -291,6 +293,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 			}>
 			tool_choice?: any
 			parallel_tool_calls?: boolean
+			prompt_cache_key?: string
 		}
 
 		// Per the implementation guide: Codex backend may reject max_output_tokens
@@ -301,6 +304,9 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 			stream: true,
 			store: false,
 			instructions: systemPrompt,
+			// kilocode_change: keep the cache-affinity key stable for the whole task.
+			// Prompt caching itself is automatic on the Codex backend.
+			prompt_cache_key: metadata?.taskId || this.sessionId,
 			// Only include encrypted reasoning content when reasoning effort is set
 			...(reasoningEffort ? { include: ["reasoning.encrypted_content"] } : {}),
 			...(reasoningEffort
@@ -344,6 +350,11 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		accessToken: string,
 		taskId?: string,
 	): ApiStream {
+		const normalizedRequestBody = {
+			...requestBody,
+			input: normalizeResponsesInput(requestBody?.input),
+		}
+
 		// Create AbortController for cancellation
 		this.abortController = new AbortController()
 
@@ -371,7 +382,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 						defaultHeaders: codexHeaders,
 					})
 
-				const stream = (await (client as any).responses.create(requestBody, {
+				const stream = (await (client as any).responses.create(normalizedRequestBody, {
 					signal: this.abortController.signal,
 					// If the SDK supports per-request overrides, ensure headers are present.
 					headers: codexHeaders,
@@ -394,7 +405,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 				}
 			} catch (_sdkErr) {
 				// Fallback to manual SSE via fetch (Codex backend).
-				yield* this.makeCodexRequest(requestBody, model, accessToken, taskId)
+				yield* this.makeCodexRequest(normalizedRequestBody, model, accessToken, taskId)
 			}
 		} finally {
 			this.abortController = undefined
@@ -412,8 +423,13 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 			}
 
 			if (message.role === "user") {
-				const content: any[] = []
-				const toolResults: any[] = []
+				let content: any[] = []
+				const flushContent = () => {
+					if (content.length > 0) {
+						formattedInput.push({ type: "message", role: "user", content })
+						content = []
+					}
+				}
 
 				if (typeof message.content === "string") {
 					content.push({ type: "input_text", text: message.content })
@@ -429,11 +445,12 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 									: image.source.url // kilocode_change
 							content.push({ type: "input_image", image_url: imageUrl })
 						} else if (block.type === "tool_result") {
+							flushContent()
 							const result =
 								typeof block.content === "string"
 									? block.content
 									: block.content?.map((c) => (c.type === "text" ? c.text : "")).join("") || ""
-							toolResults.push({
+							formattedInput.push({
 								type: "function_call_output",
 								// Sanitize and truncate call_id to fit OpenAI's 64-char limit
 								call_id: sanitizeOpenAiCallId(block.tool_use_id),
@@ -443,16 +460,15 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 					}
 				}
 
-				if (content.length > 0) {
-					formattedInput.push({ role: "user", content })
-				}
-
-				if (toolResults.length > 0) {
-					formattedInput.push(...toolResults)
-				}
+				flushContent()
 			} else if (message.role === "assistant") {
-				const content: any[] = []
-				const toolCalls: any[] = []
+				let content: any[] = []
+				const flushContent = () => {
+					if (content.length > 0) {
+						formattedInput.push({ type: "message", role: "assistant", content })
+						content = []
+					}
+				}
 
 				if (typeof message.content === "string") {
 					content.push({ type: "output_text", text: message.content })
@@ -461,7 +477,8 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 						if (block.type === "text") {
 							content.push({ type: "output_text", text: block.text })
 						} else if (block.type === "tool_use") {
-							toolCalls.push({
+							flushContent()
+							formattedInput.push({
 								type: "function_call",
 								// Sanitize and truncate call_id to fit OpenAI's 64-char limit
 								call_id: sanitizeOpenAiCallId(block.id),
@@ -472,13 +489,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 					}
 				}
 
-				if (content.length > 0) {
-					formattedInput.push({ role: "assistant", content })
-				}
-
-				if (toolCalls.length > 0) {
-					formattedInput.push(...toolCalls)
-				}
+				flushContent()
 			}
 		}
 
@@ -491,6 +502,11 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		accessToken: string,
 		taskId?: string,
 	): ApiStream {
+		requestBody = {
+			...requestBody,
+			input: normalizeResponsesInput(requestBody?.input),
+		}
+
 		// Per the implementation guide: route to Codex backend with Bearer token
 		const url = `${CODEX_API_BASE_URL}/responses`
 
@@ -978,16 +994,35 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	}
 
 	private getReasoningEffort(model: OpenAiCodexModel): ReasoningEffortExtended | undefined {
-		const selected = (this.options.reasoningEffort as any) ?? (model.info.reasoningEffort as any)
-		return selected && selected !== "disable" && selected !== "none" ? (selected as any) : undefined
+		const configured =
+			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ?? undefined
+		const supported = model.info.supportsReasoningEffort
+		const configuredIsSupported =
+			configured && configured !== "disable" && configured !== "none"
+				? supported === true || (Array.isArray(supported) && supported.includes(configured))
+				: false
+		const selected = configuredIsSupported ? configured : model.info.reasoningEffort
+		return selected && selected !== "disable" && selected !== "none" ? selected : undefined
 	}
 
 	override getModel() {
 		const modelId = this.options.apiModelId
+		const accountModels = getModelsFromCache("openai-codex")
+		const selectedInfo =
+			modelId && accountModels?.[modelId]
+				? accountModels[modelId]
+				: modelId && modelId in openAiCodexModels
+					? openAiCodexModels[modelId as keyof typeof openAiCodexModels]
+					: undefined
+		const id = selectedInfo ? modelId! : openAiCodexDefaultModelId
 
-		let id = modelId && modelId in openAiCodexModels ? (modelId as OpenAiCodexModelId) : openAiCodexDefaultModelId
-
-		const info: ModelInfo = openAiCodexModels[id]
+		// kilocode_change: enforce the subscription-wide fixed budget and cache
+		// capability even when the model metadata came from an older disk cache.
+		const info: ModelInfo = {
+			...(selectedInfo ?? openAiCodexModels[openAiCodexDefaultModelId]),
+			contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
+			supportsPromptCache: true,
+		}
 
 		const params = getModelParams({
 			format: "openai",
@@ -1042,12 +1077,14 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 				model: model.id,
 				input: [
 					{
+						type: "message",
 						role: "user",
 						content: [{ type: "input_text", text: prompt }],
 					},
 				],
 				stream: false,
 				store: false,
+				prompt_cache_key: this.sessionId, // kilocode_change: force stable cache affinity
 				...(reasoningEffort ? { include: ["reasoning.encrypted_content"] } : {}),
 			}
 
@@ -1080,7 +1117,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 			const response = await fetch(url, {
 				method: "POST",
 				headers,
-				body: JSON.stringify(requestBody),
+				body: JSON.stringify({ ...requestBody, input: normalizeResponsesInput(requestBody.input) }),
 				signal: this.abortController.signal,
 			})
 

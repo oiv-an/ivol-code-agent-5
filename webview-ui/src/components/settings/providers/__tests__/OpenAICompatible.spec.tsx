@@ -5,11 +5,12 @@ import { ProviderSettings } from "@roo-code/types"
 
 // Mock the vscrui Checkbox component
 vi.mock("vscrui", () => ({
-	Checkbox: ({ children, checked, onChange }: any) => (
+	Checkbox: ({ children, checked, disabled, onChange }: any) => (
 		<label data-testid={`checkbox-${children?.toString().replace(/\s+/g, "-").toLowerCase()}`}>
 			<input
 				type="checkbox"
 				checked={checked}
+				disabled={disabled}
 				onChange={() => onChange(!checked)} // Toggle the checked state
 				data-testid={`checkbox-input-${children?.toString().replace(/\s+/g, "-").toLowerCase()}`}
 			/>
@@ -18,7 +19,7 @@ vi.mock("vscrui", () => ({
 	),
 }))
 
-// Mock the VSCodeTextField and VSCodeButton components
+// Mock the VS Code toolkit components
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeTextField: ({
 		children,
@@ -52,6 +53,12 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 			{children}
 		</button>
 	),
+	VSCodeDropdown: ({ children, value, onChange, className, id, "data-testid": dataTestId }: any) => (
+		<select id={id} value={value} onChange={onChange} className={className} data-testid={dataTestId}>
+			{children}
+		</select>
+	),
+	VSCodeOption: ({ children, value }: any) => <option value={value}>{children}</option>,
 }))
 
 // Mock the translation hook
@@ -77,7 +84,11 @@ vi.mock("../../R1FormatSetting", () => ({
 }))
 
 vi.mock("../../ThinkingBudget", () => ({
-	ThinkingBudget: () => <div data-testid="thinking-budget">Thinking Budget</div>,
+	ThinkingBudget: ({ modelInfo }: any) => (
+		<div data-testid="thinking-budget" data-reasoning-efforts={JSON.stringify(modelInfo?.supportsReasoningEffort)}>
+			Thinking Budget
+		</div>
+	),
 }))
 
 // Mock react-use
@@ -311,5 +322,142 @@ describe("OpenAICompatible Component - includeMaxTokens checkbox", () => {
 			const description = screen.getByText("settings:includeMaxOutputTokensDescription")
 			expect(description).toHaveClass("text-sm", "text-vscode-descriptionForeground", "ml-6")
 		})
+	})
+})
+
+describe("OpenAICompatible Component - web search checkbox", () => {
+	const mockSetApiConfigurationField = vi.fn()
+	const mockOrganizationAllowList = {
+		allowAll: true,
+		providers: {},
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	it("renders the translated label and defaults web search to enabled with the GPT search model", () => {
+		render(
+			<OpenAICompatible
+				apiConfiguration={{ apiProvider: "openai" }}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		expect(screen.getByText("settings:providers.openAiWebSearch")).toBeInTheDocument()
+		expect(screen.getByText("settings:providers.openAiWebSearchDescription")).toBeInTheDocument()
+		expect(screen.getByTestId("checkbox-input-settings:providers.openaiwebsearch")).toBeChecked()
+		expect(screen.getByTestId("openai-web-search-model-select")).toHaveValue("1-gpt-sol")
+		expect(screen.getByText("settings:providers.openAiWebSearchModelDescription")).toBeInTheDocument()
+	})
+
+	it("reflects the saved value and persists user changes through the profile setter", () => {
+		render(
+			<OpenAICompatible
+				apiConfiguration={{ apiProvider: "openai-responses", openAiWebSearchEnabled: true }}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		const checkbox = screen.getByTestId("checkbox-input-settings:providers.openaiwebsearch")
+		expect(checkbox).toBeChecked()
+		fireEvent.click(checkbox)
+		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("openAiWebSearchEnabled", false)
+	})
+
+	it("persists a dedicated web-search model from the current provider catalog", () => {
+		render(
+			<OpenAICompatible
+				apiConfiguration={{
+					apiProvider: "openai",
+					openAiModelId: "main-model",
+					openAiWebSearchEnabled: true,
+					openAiWebSearchModelId: "gpt-5.6-sol",
+				}}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		const selector = screen.getByTestId("openai-web-search-model-select")
+		expect(selector).toHaveValue("gpt-5.6-sol")
+		fireEvent.change(selector, { target: { value: "main-model" } })
+		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("openAiWebSearchModelId", "main-model")
+	})
+
+	it("hides the web-search model selector after an explicit opt-out", () => {
+		render(
+			<OpenAICompatible
+				apiConfiguration={{ apiProvider: "openai", openAiWebSearchEnabled: false }}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		expect(screen.getByTestId("checkbox-input-settings:providers.openaiwebsearch")).not.toBeChecked()
+		expect(screen.queryByTestId("openai-web-search-model-select")).not.toBeInTheDocument()
+	})
+
+	it("bases reasoning options only on the primary model, not the web-search model", () => {
+		const { rerender } = render(
+			<OpenAICompatible
+				apiConfiguration={{
+					apiProvider: "openai",
+					openAiModelId: "1-gpt-sol",
+					openAiWebSearchEnabled: true,
+					openAiWebSearchModelId: "older-search-model",
+					enableReasoningEffort: true,
+				}}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		expect(screen.getByTestId("thinking-budget")).toHaveAttribute(
+			"data-reasoning-efforts",
+			JSON.stringify(["low", "medium", "high", "xhigh", "max"]),
+		)
+
+		rerender(
+			<OpenAICompatible
+				apiConfiguration={{
+					apiProvider: "openai",
+					openAiModelId: "older-model",
+					openAiWebSearchEnabled: true,
+					openAiWebSearchModelId: "1-gpt-sol",
+					enableReasoningEffort: true,
+				}}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		expect(screen.getByTestId("thinking-budget")).toHaveAttribute(
+			"data-reasoning-efforts",
+			JSON.stringify(["low", "medium", "high", "xhigh"]),
+		)
+	})
+
+	it("keeps ordinary chat streaming enabled when web search uses a custom base URL", () => {
+		render(
+			<OpenAICompatible
+				apiConfiguration={{
+					apiProvider: "openai",
+					openAiBaseUrl: "https://prox.example.com",
+					openAiWebSearchEnabled: true,
+					openAiStreamingEnabled: true,
+				}}
+				setApiConfigurationField={mockSetApiConfigurationField}
+				organizationAllowList={mockOrganizationAllowList}
+			/>,
+		)
+
+		const streamingCheckbox = screen.getByTestId("checkbox-input-settings:modelinfo.enablestreaming")
+		expect(streamingCheckbox).toBeChecked()
+		expect(streamingCheckbox).toBeEnabled()
+		fireEvent.click(streamingCheckbox)
+		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("openAiStreamingEnabled", false)
 	})
 })

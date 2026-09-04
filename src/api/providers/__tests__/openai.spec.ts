@@ -9,6 +9,7 @@ import { Package } from "../../../shared/package"
 import axios from "axios"
 
 const mockCreate = vitest.fn()
+const mockResponsesCreate = vitest.fn()
 
 vitest.mock("openai", () => {
 	const mockConstructor = vitest.fn()
@@ -65,6 +66,9 @@ vitest.mock("openai", () => {
 					}),
 				},
 			},
+			responses: {
+				create: mockResponsesCreate,
+			},
 		})),
 	}
 })
@@ -88,6 +92,7 @@ describe("OpenAiHandler", () => {
 		}
 		handler = new OpenAiHandler(mockOptions)
 		mockCreate.mockClear()
+		mockResponsesCreate.mockClear()
 	})
 
 	describe("constructor", () => {
@@ -157,6 +162,100 @@ describe("OpenAiHandler", () => {
 			expect(usageChunk?.inputTokens).toBe(10)
 			expect(usageChunk?.outputTokens).toBe(5)
 			expect(JSON.stringify(mockCreate.mock.calls[0][0].messages)).toContain("cache_control")
+		})
+
+		it("keeps ordinary web-search-enabled turns on Chat Completions and only advertises the search function", async () => {
+			const handler = new OpenAiHandler({
+				...mockOptions,
+				openAiModelId: "primary-chat-model",
+				openAiWebSearchEnabled: true,
+				openAiWebSearchModelId: "dedicated-search-model",
+				openAiStreamingEnabled: false,
+			})
+
+			const chunks: any[] = []
+			for await (const chunk of handler.createMessage(systemPrompt, messages, { taskId: "task-1" })) {
+				chunks.push(chunk)
+			}
+
+			expect(chunks.some((chunk) => chunk.type === "text" && chunk.text === "Test response")).toBe(true)
+			expect(mockCreate).toHaveBeenCalledTimes(1)
+			expect(mockResponsesCreate).not.toHaveBeenCalled()
+			const body = mockCreate.mock.calls[0][0]
+			expect(body.model).toBe("primary-chat-model")
+			expect(body.tools).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						type: "function",
+						function: expect.objectContaining({ name: "web_search" }),
+					}),
+				]),
+			)
+			expect(body.tool_choice).toBe("auto")
+			expect(body.parallel_tool_calls).toBe(false)
+		})
+
+		it("omits the provider-local search function when web search is disabled", async () => {
+			const handler = new OpenAiHandler({
+				...mockOptions,
+				openAiWebSearchEnabled: false,
+				openAiStreamingEnabled: false,
+			})
+
+			for await (const _chunk of handler.createMessage(systemPrompt, messages, { taskId: "task-2" })) {
+			}
+
+			const body = mockCreate.mock.calls[0][0]
+			expect(body).not.toHaveProperty("tools")
+			expect(body).not.toHaveProperty("tool_choice")
+			expect(body).not.toHaveProperty("parallel_tool_calls")
+		})
+
+		it("keeps web search available for an XML-locked task without changing its Chat transport", async () => {
+			mockCreate.mockResolvedValueOnce({
+				choices: [
+					{
+						message: {
+							role: "assistant",
+							content: null,
+							tool_calls: [
+								{
+									id: "search_1",
+									type: "function",
+									function: { name: "web_search", arguments: '{"query":"latest fact"}' },
+								},
+							],
+						},
+						finish_reason: "tool_calls",
+					},
+				],
+				usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+			})
+			const handler = new OpenAiHandler({
+				...mockOptions,
+				openAiWebSearchEnabled: true,
+				openAiStreamingEnabled: false,
+			})
+
+			const chunks: any[] = []
+			for await (const chunk of handler.createMessage(systemPrompt, messages, {
+				taskId: "xml-task",
+				toolProtocol: "xml",
+			})) {
+				chunks.push(chunk)
+			}
+
+			expect(mockResponsesCreate).not.toHaveBeenCalled()
+			expect(chunks).toContainEqual({
+				type: "tool_call",
+				id: "search_1",
+				name: "web_search",
+				arguments: '{"query":"latest fact"}',
+			})
+			expect(mockCreate.mock.calls[0][0]).toMatchObject({
+				tool_choice: "auto",
+				parallel_tool_calls: false,
+			})
 		})
 
 		it("should handle tool calls in non-streaming mode", async () => {
@@ -545,6 +644,70 @@ describe("OpenAiHandler", () => {
 			expect(callArgs.reasoning_effort).toBe("high")
 		})
 
+		// kilocode_change start: gate API-level max reasoning by the actual Chat Completions model
+		it("should include API max reasoning effort for a non-streaming GPT-5.6 request", async () => {
+			const reasoningHandler = new OpenAiHandler({
+				...mockOptions,
+				openAiModelId: "gpt-5.6-sol",
+				openAiStreamingEnabled: false,
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+				openAiCustomModelInfo: {
+					contextWindow: 128_000,
+					supportsPromptCache: false,
+					supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+				},
+			})
+
+			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
+			}
+
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("max")
+		})
+
+		it("should omit stale max reasoning effort from an unsupported streaming model", async () => {
+			const reasoningHandler = new OpenAiHandler({
+				...mockOptions,
+				openAiModelId: "gpt-5.5",
+				openAiStreamingEnabled: true,
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+				openAiCustomModelInfo: {
+					contextWindow: 128_000,
+					supportsPromptCache: false,
+					supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+					reasoningEffort: "max",
+				},
+			})
+
+			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
+			}
+
+			expect(mockCreate.mock.calls[0][0]).not.toHaveProperty("reasoning_effort")
+		})
+
+		it("should omit stale max reasoning effort from an unrelated non-streaming model", async () => {
+			const reasoningHandler = new OpenAiHandler({
+				...mockOptions,
+				openAiModelId: "my-gpt-sol-old",
+				openAiStreamingEnabled: false,
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+				openAiCustomModelInfo: {
+					contextWindow: 128_000,
+					supportsPromptCache: false,
+					supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+					reasoningEffort: "max",
+				},
+			})
+
+			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
+			}
+
+			expect(mockCreate.mock.calls[0][0]).not.toHaveProperty("reasoning_effort")
+		})
+		// kilocode_change end
+
 		it("should not include reasoning_effort when reasoning effort is disabled", async () => {
 			const noReasoningOptions: ApiHandlerOptions = {
 				...mockOptions,
@@ -776,6 +939,7 @@ describe("OpenAiHandler", () => {
 			openAiBaseUrl: "https://test.services.ai.azure.com",
 			openAiModelId: "deepseek-v3",
 			azureApiVersion: "2024-05-01-preview",
+			openAiWebSearchEnabled: false,
 		}
 
 		it("should initialize with Azure AI Inference Service configuration", () => {

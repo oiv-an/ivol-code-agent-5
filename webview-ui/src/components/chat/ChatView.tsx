@@ -610,6 +610,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [expandedRows])
 
 	const isStreaming = useMemo(() => {
+		// A persisted resume prompt is terminal UI state, even when the request
+		// before it ended with a partial retry/error marker. This guard does not
+		// depend on the button-state effect having run yet, so a restored task can
+		// never briefly turn its Resume action into a false Cancel action.
+		const latestMessage = messages.at(-1)
+		if (
+			latestMessage?.type === "ask" &&
+			(latestMessage.ask === "resume_task" || latestMessage.ask === "resume_completed_task") &&
+			latestMessage.partial !== true
+		) {
+			return false
+		}
+
 		// Checking clineAsk isn't enough since messages effect may be called
 		// again for a tool for example, set clineAsk to its value, and if the
 		// next message is not an ask then it doesn't reset. This is likely due
@@ -626,32 +639,35 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			return false
 		}
 
-		const isLastMessagePartial = modifiedMessages.at(-1)?.partial === true
+		const lastModifiedMessage = modifiedMessages.at(-1)
+		const isLastMessagePartial = lastModifiedMessage?.partial === true
+		const lastApiReqStarted = findLast(
+			modifiedMessages,
+			(message: ClineMessage) => message.say === "api_req_started",
+		)
+		const lastApiReqInfo =
+			lastApiReqStarted?.text !== null && lastApiReqStarted?.text !== undefined
+				? (JSON.parse(lastApiReqStarted.text) as { cost?: number; cancelReason?: string })
+				: undefined
 
 		if (isLastMessagePartial) {
-			return true
-		} else {
-			const lastApiReqStarted = findLast(
-				modifiedMessages,
-				(message: ClineMessage) => message.say === "api_req_started",
-			)
-
 			if (
-				lastApiReqStarted &&
-				lastApiReqStarted.text !== null &&
-				lastApiReqStarted.text !== undefined &&
-				lastApiReqStarted.say === "api_req_started"
+				(lastModifiedMessage?.say === "api_req_retry_delayed" ||
+					lastModifiedMessage?.say === "api_req_rate_limit_wait") &&
+				lastApiReqInfo?.cancelReason !== undefined
 			) {
-				const cost = JSON.parse(lastApiReqStarted.text).cost
-
-				if (cost === undefined) {
-					return true // API request has not finished yet.
-				}
+				return false
 			}
+
+			return true
+		}
+
+		if (lastApiReqInfo?.cost === undefined && lastApiReqInfo?.cancelReason === undefined && lastApiReqStarted) {
+			return true // API request has not finished yet.
 		}
 
 		return false
-	}, [modifiedMessages, clineAsk, enableButtons, primaryButtonText])
+	}, [messages, modifiedMessages, clineAsk, enableButtons, primaryButtonText])
 
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")

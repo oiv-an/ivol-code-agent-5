@@ -784,6 +784,7 @@ const ApiOptions = ({
 					setApiConfigurationField={setApiConfigurationField}
 					simplifySettings={fromWelcomeView}
 					openAiCodexIsAuthenticated={openAiCodexIsAuthenticated}
+					models={routerModels?.["openai-codex"]}
 				/>
 			)}
 

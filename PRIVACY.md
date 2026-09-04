@@ -12,6 +12,8 @@ When you submit a request, the extension sends the prompt and any context you se
 
 Ollama and LM Studio can run locally, but their actual network behavior depends on the endpoint configured by the user.
 
+For an OpenAI-compatible profile, the user can optionally enable native web search and select a search model from the same configured provider. When enabled, the primary model can decide to call the extension's web-search tool during the normal chat flow. Only that tool call is sent as a separate Responses API request with the built-in `web_search` capability; ordinary chat requests continue to use the configured chat API. The configured provider performs the search and returns source links. The extension does not contact a separate third-party search service directly.
+
 ## Tools and integrations
 
 Commands run on the local machine. Browser, MCP, terminal, and other tools can communicate with services or files explicitly selected or configured by the user.

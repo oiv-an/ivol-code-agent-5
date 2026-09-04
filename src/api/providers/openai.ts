@@ -5,10 +5,12 @@ import axios from "axios"
 import {
 	type ModelInfo,
 	azureOpenAiDefaultApiVersion,
+	DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
 	openAiModelInfoSaneDefaults,
 	NATIVE_TOOL_DEFAULTS,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
+	supportsOpenAiMaxReasoningEffort, // kilocode_change: gate API-level max by the actual request model
 } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
@@ -25,6 +27,33 @@ import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { getApiRequestTimeout } from "./utils/timeout-config"
 import { handleOpenAIError } from "./utils/openai-error-handler"
+
+// kilocode_change start: keep normal OpenAI turns on Chat Completions and expose
+// native Responses web search as a provider-local function tool. The tool is
+// executed by the task pipeline only when the model actually selects it.
+export const OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME = "web_search"
+
+const OPENAI_NATIVE_WEB_SEARCH_TOOL: OpenAI.Chat.ChatCompletionFunctionTool = {
+	type: "function",
+	function: {
+		name: OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME,
+		strict: true,
+		description:
+			"Search the live web using the provider's native OpenAI Responses web_search tool. Call this autonomously only when the request depends on current, changing, external, or otherwise unavailable information. Do not use it for facts already present in the conversation or local workspace.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: {
+					type: "string",
+					description: "A concise, self-contained web search query.",
+				},
+			},
+			required: ["query"],
+			additionalProperties: false,
+		},
+	},
+}
+// kilocode_change end
 
 // kilocode_change start: personal fork prompt-cache compatibility
 type OpenAiChatMessage = OpenAI.Chat.ChatCompletionMessageParam
@@ -164,6 +193,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const enabledR1Format = this.options.openAiR1FormatEnabled ?? false
 		const isAzureAiInference = this._isAzureAiInference(modelUrl)
 		const deepseekReasoner = modelId.includes("deepseek-reasoner") || enabledR1Format
+		const toolRequestOptions = this.getToolRequestOptions(metadata)
 		// kilocode_change start: keep a plain payload for incompatible cache dialects
 		const plainMessages: OpenAiChatMessage[] = deepseekReasoner
 			? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
@@ -194,12 +224,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				...(reasoning && reasoning),
-				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
-				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
-				...(metadata?.toolProtocol === "native" &&
-					metadata.parallelToolCalls === true && {
-						parallel_tool_calls: true,
-					}),
+				...toolRequestOptions,
 			}
 
 			// Add max_tokens if needed
@@ -268,12 +293,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 				model: modelId,
 				messages: convertedMessages, // kilocode_change: use the selected cache-compatible payload
-				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
-				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
-				...(metadata?.toolProtocol === "native" &&
-					metadata.parallelToolCalls === true && {
-						parallel_tool_calls: true,
-					}),
+				...(reasoning && reasoning), // kilocode_change: preserve xhigh/max in non-streaming requests
+				...toolRequestOptions,
 			}
 
 			// Add max_tokens if needed
@@ -377,6 +398,53 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		// OpenAI-compatible gateways use the legacy part-level cache_control dialect.
 		return !isAzure && host !== "api.openai.com"
 	}
+
+	/**
+	 * Build the function-tool portion of a normal Chat Completions request.
+	 * Enabling web search only advertises a local function to the primary model;
+	 * it does not change this request's endpoint or model. The executor for this
+	 * function performs the bounded Responses API search request separately.
+	 */
+	private getToolRequestOptions(
+		metadata?: ApiHandlerCreateMessageMetadata,
+	): Pick<OpenAI.Chat.Completions.ChatCompletionCreateParams, "tools" | "tool_choice" | "parallel_tool_calls"> {
+		const webSearchEnabled = this.options.openAiWebSearchEnabled ?? DEFAULT_OPENAI_WEB_SEARCH_ENABLED
+		// Only force the OpenAI-specific serial-call flag when web search was
+		// explicitly enabled on the saved provider profile. Some compatible
+		// gateways (notably LiteLLM/Bedrock routes) reject the field entirely,
+		// so an implicit default must preserve the legacy omit-unless-true rule.
+		const forceSerialWebSearch = this.options.openAiWebSearchEnabled === true
+		const configuredTools = this.convertToolsForOpenAI(metadata?.tools) ?? []
+		const tools = webSearchEnabled
+			? [
+					...configuredTools.filter(
+						(tool) =>
+							tool?.type !== "function" || tool.function?.name !== OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME,
+					),
+					OPENAI_NATIVE_WEB_SEARCH_TOOL,
+				]
+			: configuredTools
+
+		if (tools.length === 0) {
+			return {}
+		}
+
+		return {
+			tools,
+			...(metadata?.tool_choice
+				? { tool_choice: metadata.tool_choice }
+				: webSearchEnabled
+					? { tool_choice: "auto" as const }
+					: {}),
+			// Never allow a search request and a local side-effecting tool call in
+			// the same model response. Without web search, preserve the old opt-in.
+			...(forceSerialWebSearch
+				? { parallel_tool_calls: false }
+				: metadata?.toolProtocol === "native" && metadata.parallelToolCalls === true
+					? { parallel_tool_calls: true }
+					: {}),
+		}
+	}
 	// kilocode_change end
 
 	override getModel() {
@@ -384,7 +452,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		// Ensure OpenAI-compatible models default to supporting native tool calling.
 		// This is required for [`Task.attemptApiRequest()`](src/core/task/Task.ts:3817) to
 		// include tool definitions in the request.
-		const info: ModelInfo = {
+		const configuredInfo: ModelInfo = {
 			...NATIVE_TOOL_DEFAULTS,
 			...(this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
 			// kilocode_change start: force prompt caching for the personal OpenAI-compatible provider
@@ -393,8 +461,21 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			supportsPromptCache: true,
 			// kilocode_change end
 		}
+		// kilocode_change start: never send stale API-level max to an unsupported Chat Completions model
+		// Deliberately gate by the actual request model ID only. A stale custom capability
+		// array must not opt an older or unrelated model into the GPT-5.6-only value.
+		const supportsMaxReasoningEffort = supportsOpenAiMaxReasoningEffort(id)
+		const info: ModelInfo =
+			!supportsMaxReasoningEffort && configuredInfo.reasoningEffort === "max"
+				? { ...configuredInfo, reasoningEffort: undefined }
+				: configuredInfo
 		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
-		return { id, info, ...params }
+		const guardedParams =
+			!supportsMaxReasoningEffort && params.reasoningEffort === "max"
+				? { ...params, reasoningEffort: undefined, reasoning: undefined }
+				: params
+		// kilocode_change end
+		return { id, info, ...guardedParams }
 	}
 
 	async completePrompt(prompt: string): Promise<string> {
@@ -439,6 +520,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	): ApiStream {
 		const modelInfo = this.getModel().info
 		const methodIsAzureAiInference = this._isAzureAiInference(this.options.openAiBaseUrl)
+		const toolRequestOptions = this.getToolRequestOptions(metadata)
 
 		if (this.options.openAiStreamingEnabled ?? true) {
 			const isGrokXAI = this._isGrokXAI(this.options.openAiBaseUrl)
@@ -456,12 +538,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
-				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
-				...(metadata?.toolProtocol === "native" &&
-					metadata.parallelToolCalls === true && {
-						parallel_tool_calls: true,
-					}),
+				...toolRequestOptions,
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter
@@ -492,12 +569,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				],
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				...(metadata?.tools && { tools: this.convertToolsForOpenAI(metadata.tools) }),
-				...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
-				...(metadata?.toolProtocol === "native" &&
-					metadata.parallelToolCalls === true && {
-						parallel_tool_calls: true,
-					}),
+				...toolRequestOptions,
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter

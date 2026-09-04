@@ -13,7 +13,7 @@ describe("fetchRouterModels", () => {
 		vi.clearAllMocks()
 	})
 
-	it.each(["openai", "openai-codex", "claude-code"] as const)(
+	it.each(["openai", "claude-code"] as const)(
 		"returns immediately for static provider %s without starting the extension",
 		async (provider) => {
 			await expect(
@@ -41,39 +41,42 @@ describe("fetchRouterModels", () => {
 		},
 	)
 
-	it.each(["ollama", "lmstudio"] as const)("keeps local router discovery enabled for %s", async (provider) => {
-		const service = new EventEmitter() as EventEmitter & {
-			initialize: ReturnType<typeof vi.fn>
-			isReady: ReturnType<typeof vi.fn>
-			getExtensionHost: ReturnType<typeof vi.fn>
-			sendWebviewMessage: ReturnType<typeof vi.fn>
-			dispose: ReturnType<typeof vi.fn>
-		}
-		service.initialize = vi.fn().mockResolvedValue(undefined)
-		service.isReady = vi.fn().mockReturnValue(true)
-		service.getExtensionHost = vi.fn().mockReturnValue({
-			injectConfiguration: vi.fn().mockResolvedValue(undefined),
-		})
-		service.sendWebviewMessage = vi.fn().mockImplementation(async () => {
-			queueMicrotask(() => {
-				service.emit("message", { type: "routerModels", routerModels: { [provider]: {} } })
+	it.each(["openai-codex", "ollama", "lmstudio"] as const)(
+		"keeps personal router discovery enabled for %s",
+		async (provider) => {
+			const service = new EventEmitter() as EventEmitter & {
+				initialize: ReturnType<typeof vi.fn>
+				isReady: ReturnType<typeof vi.fn>
+				getExtensionHost: ReturnType<typeof vi.fn>
+				sendWebviewMessage: ReturnType<typeof vi.fn>
+				dispose: ReturnType<typeof vi.fn>
+			}
+			service.initialize = vi.fn().mockResolvedValue(undefined)
+			service.isReady = vi.fn().mockReturnValue(true)
+			service.getExtensionHost = vi.fn().mockReturnValue({
+				injectConfiguration: vi.fn().mockResolvedValue(undefined),
 			})
-		})
-		service.dispose = vi.fn().mockResolvedValue(undefined)
-		vi.mocked(createExtensionService).mockReturnValue(service as never)
+			service.sendWebviewMessage = vi.fn().mockImplementation(async () => {
+				queueMicrotask(() => {
+					service.emit("message", { type: "routerModels", routerModels: { [provider]: {} } })
+				})
+			})
+			service.dispose = vi.fn().mockResolvedValue(undefined)
+			vi.mocked(createExtensionService).mockReturnValue(service as never)
 
-		await expect(
-			fetchRouterModels({
-				providerSettings: { apiProvider: provider },
-				timeoutMs: 100,
-			}),
-		).resolves.toEqual({ [provider]: {} })
+			await expect(
+				fetchRouterModels({
+					providerSettings: { apiProvider: provider },
+					timeoutMs: 100,
+				}),
+			).resolves.toEqual({ [provider]: {} })
 
-		expect(createExtensionService).toHaveBeenCalledTimes(1)
-		expect(service.sendWebviewMessage).toHaveBeenCalledWith({
-			type: "requestRouterModels",
-			values: { provider },
-		})
-		expect(service.dispose).toHaveBeenCalledTimes(1)
-	})
+			expect(createExtensionService).toHaveBeenCalledTimes(1)
+			expect(service.sendWebviewMessage).toHaveBeenCalledWith({
+				type: "requestRouterModels",
+				values: { provider },
+			})
+			expect(service.dispose).toHaveBeenCalledTimes(1)
+		},
+	)
 })

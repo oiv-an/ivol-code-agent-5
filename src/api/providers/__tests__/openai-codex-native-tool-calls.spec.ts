@@ -28,45 +28,46 @@ describe("OpenAiCodexHandler native tool calls", () => {
 		vi.spyOn(openAiCodexOAuthManager, "getAccountId").mockResolvedValue("acct_test")
 
 		// Mock OpenAI SDK streaming (preferred path).
-		;(handler as any).client = {
-			responses: {
-				create: vi.fn().mockResolvedValue({
-					async *[Symbol.asyncIterator]() {
-						yield {
-							type: "response.output_item.added",
-							item: {
+		const mockResponsesCreate = vi.fn().mockResolvedValue({
+			async *[Symbol.asyncIterator]() {
+				yield {
+					type: "response.output_item.added",
+					item: {
+						type: "function_call",
+						call_id: "call_1",
+						name: "attempt_completion",
+						arguments: "",
+					},
+					output_index: 0,
+				}
+				yield {
+					type: "response.function_call_arguments.delta",
+					delta: '{"result":"hi"}',
+					// Note: intentionally omit call_id + name to simulate tool-call-only streams.
+					item_id: "fc_1",
+					output_index: 0,
+				}
+				yield {
+					type: "response.completed",
+					response: {
+						id: "resp_1",
+						status: "completed",
+						output: [
+							{
 								type: "function_call",
 								call_id: "call_1",
 								name: "attempt_completion",
-								arguments: "",
+								arguments: '{"result":"hi"}',
 							},
-							output_index: 0,
-						}
-						yield {
-							type: "response.function_call_arguments.delta",
-							delta: '{"result":"hi"}',
-							// Note: intentionally omit call_id + name to simulate tool-call-only streams.
-							item_id: "fc_1",
-							output_index: 0,
-						}
-						yield {
-							type: "response.completed",
-							response: {
-								id: "resp_1",
-								status: "completed",
-								output: [
-									{
-										type: "function_call",
-										call_id: "call_1",
-										name: "attempt_completion",
-										arguments: '{"result":"hi"}',
-									},
-								],
-								usage: { input_tokens: 1, output_tokens: 1 },
-							},
-						}
+						],
+						usage: { input_tokens: 1, output_tokens: 1 },
 					},
-				}),
+				}
+			},
+		})
+		;(handler as any).client = {
+			responses: {
+				create: mockResponsesCreate,
 			},
 		}
 
@@ -97,5 +98,14 @@ describe("OpenAiCodexHandler native tool calls", () => {
 			id: "call_1",
 			name: "attempt_completion",
 		})
+		const requestBody = mockResponsesCreate.mock.calls[0][0]
+		expect(Array.isArray(requestBody.input)).toBe(true)
+		expect(requestBody.input).toEqual([
+			{
+				type: "message",
+				role: "user",
+				content: [{ type: "input_text", text: "hello" }],
+			},
+		])
 	})
 })

@@ -31,6 +31,7 @@ import {
 	// kilocode_change start
 	autocompleteServiceSettingsSchema,
 	fastApplyModelSchema,
+	openAiCodexModels,
 	// kilocode_change end
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	RooCodeSettings,
@@ -77,7 +78,7 @@ import { resolveImageMentions } from "../mentions/resolveImageMentions"
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { getWorkspacePath } from "../../utils/path"
 import { Mode, defaultModeSlug } from "../../shared/modes"
-import { getModels, flushModels } from "../../api/providers/fetchers/modelCache"
+import { getModels, flushModels, refreshModels } from "../../api/providers/fetchers/modelCache" // kilocode_change
 import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { getCommand } from "../../utils/commands"
@@ -873,23 +874,34 @@ export const webviewMessageHandler = async (
 
 			const { apiConfiguration } = await provider.getState()
 
-			// Only local discovery is available in the personal build. Keeping this
-			// list local-only makes future catalog additions fail closed by default.
+			// Only local discovery and the authenticated ChatGPT Codex catalog are
+			// available in the personal build. Everything else stays fail-closed.
 			const shouldRefresh = message?.values?.refresh === true
 			const routerModels = { [providerFilter]: {} } as Record<RouterName, ModelRecord>
 			const candidates: { key: RouterName; options: GetModelsOptions }[] = [
+				{ key: "openai-codex", options: { provider: "openai-codex" } },
 				{ key: "ollama", options: { provider: "ollama", baseUrl: apiConfiguration.ollamaBaseUrl } },
 				{ key: "lmstudio", options: { provider: "lmstudio", baseUrl: apiConfiguration.lmStudioBaseUrl } },
 			]
 			const targetCandidate = candidates.find(({ key }) => key === providerFilter)
 
-			if (shouldRefresh && targetCandidate) {
+			if (shouldRefresh && targetCandidate && providerFilter !== "openai-codex") {
 				await flushModels(targetCandidate.options, true)
 			}
 
 			if (targetCandidate) {
 				try {
-					routerModels[providerFilter] = await getModels(targetCandidate.options)
+					// The account catalog is refreshed whenever it is requested so a
+					// long-lived v5 installation automatically sees newly released models.
+					// On auth/network failure refreshModels returns the last known good cache;
+					// the bundled catalog is the final offline fallback.
+					if (providerFilter === "openai-codex") {
+						const accountModels = await refreshModels(targetCandidate.options)
+						routerModels[providerFilter] =
+							Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
+					} else {
+						routerModels[providerFilter] = await getModels(targetCandidate.options)
+					}
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error)
 					console.error(`Error fetching models for ${providerFilter}:`, error)

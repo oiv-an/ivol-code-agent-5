@@ -7,6 +7,22 @@ describe("NativeToolCallParser", () => {
 	})
 
 	describe("parseToolCall", () => {
+		it("parses the provider-specific web_search function call", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "web-search-1",
+				name: "web_search",
+				arguments: JSON.stringify({ query: "latest release" }),
+			})
+
+			expect(result).toMatchObject({
+				type: "tool_use",
+				name: "web_search",
+				params: { query: "latest release" },
+				nativeArgs: { query: "latest release" },
+				partial: false,
+			})
+		})
+
 		describe("read_file tool", () => {
 			it("should handle line_ranges as tuples (new format)", () => {
 				const toolCall = {

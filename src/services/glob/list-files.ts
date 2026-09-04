@@ -457,13 +457,19 @@ async function listFilteredDirectories(
 
 					// Use the same logic as shouldIncludeDirectory for recursion decisions
 					// When inside an explicitly targeted hidden directory, only block critical directories
+					// kilocode_change start
 					let shouldRecurseIntoDir = true
 					if (context.insideExplicitHiddenTarget) {
 						// Only apply the most critical ignore patterns when inside explicit hidden target
-						shouldRecurseIntoDir = !CRITICAL_IGNORE_PATTERNS.has(dirName)
+						shouldRecurseIntoDir =
+							!CRITICAL_IGNORE_PATTERNS.has(dirName) &&
+							!isIgnoredByGitignore(fullDirPath, context.basePath, context.ignoreInstance)
 					} else {
-						shouldRecurseIntoDir = !isDirectoryExplicitlyIgnored(dirName)
+						shouldRecurseIntoDir =
+							!isDirectoryExplicitlyIgnored(dirName) &&
+							!isIgnoredByGitignore(fullDirPath, context.basePath, context.ignoreInstance)
 					}
+					// kilocode_change end
 
 					const shouldRecurse =
 						recursive &&
@@ -515,7 +521,12 @@ const CRITICAL_IGNORE_PATTERNS = new Set(["node_modules", ".git", "__pycache__",
  */
 function matchesIgnorePattern(dirName: string, patterns: string[]): boolean {
 	for (const pattern of patterns) {
-		if (pattern === dirName || (pattern.includes("/") && pattern.split("/")[0] === dirName)) {
+		const matchesPrefixPattern = pattern.endsWith("*") && dirName.startsWith(pattern.slice(0, -1))
+		if (
+			pattern === dirName ||
+			matchesPrefixPattern ||
+			(pattern.includes("/") && pattern.split("/")[0] === dirName)
+		) {
 			return true
 		}
 	}
@@ -597,7 +608,7 @@ function shouldIncludeDirectory(dirName: string, fullDirPath: string, context: S
 function isDirectoryExplicitlyIgnored(dirName: string): boolean {
 	for (const pattern of DIRS_TO_IGNORE) {
 		// Exact name matching
-		if (pattern === dirName) {
+		if (pattern === dirName || (pattern.endsWith("*") && dirName.startsWith(pattern.slice(0, -1)))) {
 			return true
 		}
 

@@ -56,6 +56,8 @@ export const openAIProviderSchema = baseProviderSchema.extend({
 	openAiUseAzure: z.boolean().optional(),
 	azureApiVersion: z.string().optional(),
 	openAiStreamingEnabled: z.boolean().optional(),
+	openAiWebSearchEnabled: z.boolean().optional(),
+	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
 
@@ -71,6 +73,8 @@ export const openAIResponsesProviderSchema = baseProviderSchema.extend({
 	openAiUseAzure: z.boolean().optional(),
 	azureApiVersion: z.string().optional(),
 	openAiStreamingEnabled: z.boolean().optional(),
+	openAiWebSearchEnabled: z.boolean().optional(),
+	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
 // kilocode_change end
