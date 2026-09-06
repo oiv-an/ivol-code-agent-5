@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import type { ModelInfo } from "@roo-code/types"
+import { type ModelInfo, resolveReasoningEffortForModel } from "@roo-code/types" // kilocode_change
 
 import { type ApiHandlerOptions, getModelMaxOutputTokens } from "../../shared/api"
 import { XmlMatcher } from "../../utils/xml-matcher"
@@ -103,8 +103,9 @@ export abstract class BaseOpenAiCompatibleProvider<ModelName extends string>
 
 		// kilocode_change start - Add reasoning effort and thinking parameters
 		if (this.options.enableReasoningEffort) {
-			const effort = this.options.reasoningEffort || info.reasoningEffort
-			const isExplicitlyDisabled = effort === "disable"
+			const requestedEffort = this.options.reasoningEffort || info.reasoningEffort
+			const effort = resolveReasoningEffortForModel(requestedEffort, model, info)
+			const isExplicitlyDisabled = requestedEffort === "disable"
 
 			if (info.supportsReasoningBinary && !isExplicitlyDisabled) {
 				;(params as any).thinking = { type: "enabled" }
@@ -246,8 +247,9 @@ export abstract class BaseOpenAiCompatibleProvider<ModelName extends string>
 
 		// kilocode_change start - Add reasoning effort and thinking parameters
 		if (this.options.enableReasoningEffort) {
-			const effort = this.options.reasoningEffort || modelInfo.reasoningEffort
-			const isExplicitlyDisabled = effort === "disable"
+			const requestedEffort = this.options.reasoningEffort || modelInfo.reasoningEffort
+			const effort = resolveReasoningEffortForModel(requestedEffort, modelId, modelInfo)
+			const isExplicitlyDisabled = requestedEffort === "disable"
 
 			if (modelInfo.supportsReasoningBinary && !isExplicitlyDisabled) {
 				;(params as any).thinking = { type: "enabled" }

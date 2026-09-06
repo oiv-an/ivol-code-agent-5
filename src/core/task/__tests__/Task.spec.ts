@@ -18,6 +18,12 @@ import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-sear
 import { MultiFileSearchReplaceDiffStrategy } from "../../diff/strategies/multi-file-search-replace"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
 import { NonRetryableApiError } from "../../../api/providers/utils/non-retryable-api-error"
+import {
+	deleteContextHandoffFileIfOwned,
+	hydratePendingContextHandoff,
+	writeContextHandoffFile,
+} from "../../context-management/context-handoff"
+import { summarizeConversation } from "../../condense"
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
@@ -167,12 +173,44 @@ vi.mock("../../condense", async (importOriginal) => {
 	const actual = (await importOriginal()) as any
 	return {
 		...actual,
-		summarizeConversation: vi.fn().mockResolvedValue({
-			messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
-			summary: "summary",
-			cost: 0,
-			newContextTokens: 1,
+		summarizeConversation: vi.fn().mockImplementation(async (...args: any[]) => {
+			const handoff = args[9]
+			if (handoff?.enabled !== false) {
+				await handoff?.onBeforeRequest?.(handoff?.prompt ?? "Create a complete continuation snapshot")
+			}
+			return {
+				messages: [
+					{
+						role: "assistant",
+						content: [{ type: "text", text: "summary" }],
+						ts: Date.now(),
+						isSummary: true,
+						condenseId: "mock-condense-id",
+					},
+				],
+				summary: "summary",
+				cost: 0,
+				condenseId: "mock-condense-id",
+			}
 		}),
+	}
+})
+
+vi.mock("../../context-management/context-handoff", async (importOriginal) => {
+	const actual = (await importOriginal()) as any
+	return {
+		...actual,
+		writeContextHandoffFile: vi.fn().mockResolvedValue({
+			handoffId: "mock-handoff-id",
+			relativePath: "CONTEXT_RESTART.md",
+			absolutePath: "/mock/workspace/path/CONTEXT_RESTART.md",
+			content: "# IVOL Code — Context Restart\n\nsummary\n",
+			body: "summary",
+			sha256: "mock-sha256",
+			createdAt: 1,
+		}),
+		deleteContextHandoffFileIfOwned: vi.fn().mockResolvedValue(true),
+		hydratePendingContextHandoff: vi.fn().mockImplementation(({ messages }) => Promise.resolve({ messages })),
 	}
 })
 // Mock storagePathManager to prevent dynamic import issues.
@@ -2049,6 +2087,13 @@ describe("Cline", () => {
 })
 
 describe("Queued message processing after condense", () => {
+	beforeEach(() => {
+		vi.mocked(writeContextHandoffFile).mockClear()
+		vi.mocked(deleteContextHandoffFileIfOwned).mockClear()
+		vi.mocked(hydratePendingContextHandoff).mockClear()
+		vi.mocked(summarizeConversation).mockClear()
+	})
+
 	function createProvider(): any {
 		const storageUri = { fsPath: path.join(os.tmpdir(), "test-storage") }
 		const ctx = {
@@ -2106,6 +2151,8 @@ describe("Queued message processing after condense", () => {
 
 		// Make condense fast + deterministic
 		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		// Queue behavior is independent of timestamped progress persistence.
+		vi.spyOn(task, "say").mockResolvedValue(undefined)
 		const submitSpy = vi.spyOn(task, "submitUserMessage").mockResolvedValue(undefined)
 
 		// Queue a message during condensing
@@ -2144,6 +2191,8 @@ describe("Queued message processing after condense", () => {
 
 		vi.spyOn(taskA as any, "getSystemPrompt").mockResolvedValue("system")
 		vi.spyOn(taskB as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.spyOn(taskA, "say").mockResolvedValue(undefined)
+		vi.spyOn(taskB, "say").mockResolvedValue(undefined)
 
 		const spyA = vi.spyOn(taskA, "submitUserMessage").mockResolvedValue(undefined)
 		const spyB = vi.spyOn(taskB, "submitUserMessage").mockResolvedValue(undefined)
@@ -2170,6 +2219,957 @@ describe("Queued message processing after condense", () => {
 		expect(spyB).toHaveBeenCalledWith("B message", undefined)
 		expect(taskB.messageQueueService.isEmpty()).toBe(true)
 	})
+
+	it("writes the restart file before committing condensed history", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+
+		let resolveWrite!: (record: any) => void
+		const pendingWrite = new Promise<any>((resolve) => {
+			resolveWrite = resolve
+		})
+		vi.mocked(writeContextHandoffFile).mockImplementationOnce(() => pendingWrite)
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		const saySpy = vi.spyOn(task, "say").mockResolvedValue(undefined)
+
+		const condensePromise = task.condenseContext()
+		await vi.waitFor(() => expect(writeContextHandoffFile).toHaveBeenCalledOnce())
+		expect(saveSpy).not.toHaveBeenCalled()
+		expect(saySpy).toHaveBeenCalledWith(
+			"context_handoff",
+			expect.stringContaining('"phase":"preparing"'),
+			undefined,
+			false,
+			undefined,
+			undefined,
+			{ isNonInteractive: true },
+		)
+		expect(
+			saySpy.mock.calls.some(([type, text]) => type === "context_handoff" && text?.includes('"phase":"saved"')),
+		).toBe(false)
+		expect(provider.postMessageToWebview).not.toHaveBeenCalledWith({
+			type: "condenseTaskContextStarted",
+			text: task.taskId,
+		})
+
+		resolveWrite({
+			handoffId: "ordered-handoff",
+			relativePath: "CONTEXT_RESTART.md",
+			absolutePath: "/mock/workspace/path/CONTEXT_RESTART.md",
+			content: "# IVOL Code — Context Restart\n\nsummary\n",
+			body: "summary",
+			sha256: "ordered-sha256",
+			createdAt: 1,
+		})
+		await condensePromise
+
+		expect(saveSpy).toHaveBeenCalledOnce()
+		const preparingIndex = saySpy.mock.calls.findIndex(
+			([type, text]) => type === "context_handoff" && text?.includes('"phase":"preparing"'),
+		)
+		const savedIndex = saySpy.mock.calls.findIndex(
+			([type, text]) => type === "context_handoff" && text?.includes('"phase":"saved"'),
+		)
+		const startIndex = provider.postMessageToWebview.mock.calls.findIndex(
+			([message]: any[]) => message.type === "condenseTaskContextStarted",
+		)
+		expect(saySpy.mock.invocationCallOrder[preparingIndex]).toBeLessThan(
+			vi.mocked(writeContextHandoffFile).mock.invocationCallOrder[0],
+		)
+		expect(saySpy.mock.invocationCallOrder[savedIndex]).toBeLessThan(
+			provider.postMessageToWebview.mock.invocationCallOrder[startIndex],
+		)
+		expect(provider.postMessageToWebview.mock.invocationCallOrder[startIndex]).toBeLessThan(
+			saveSpy.mock.invocationCallOrder[0],
+		)
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith({
+			type: "condenseTaskContextResponse",
+			text: task.taskId,
+		})
+		expect(writeContextHandoffFile).toHaveBeenCalledWith(
+			expect.objectContaining({ knownSecrets: expect.arrayContaining(["test-api-key"]) }),
+		)
+	})
+
+	it("keeps the original history when the restart file cannot be written", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.mocked(writeContextHandoffFile).mockRejectedValueOnce(new Error("disk full"))
+		const originalHistory = task.apiConversationHistory
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		const saySpy = vi.spyOn(task, "say").mockResolvedValue(undefined as any)
+
+		await task.condenseContext()
+
+		expect(saveSpy).not.toHaveBeenCalled()
+		expect(task.apiConversationHistory).toBe(originalHistory)
+		expect(
+			saySpy.mock.calls.some(([type, text]) => type === "context_handoff" && text?.includes('"phase":"saved"')),
+		).toBe(false)
+		expect(provider.postMessageToWebview).not.toHaveBeenCalledWith({
+			type: "condenseTaskContextStarted",
+			text: task.taskId,
+		})
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith({
+			type: "condenseTaskContextResponse",
+			text: task.taskId,
+		})
+		expect(saySpy).toHaveBeenCalledWith(
+			"condense_context_error",
+			expect.stringContaining("disk full"),
+			undefined,
+			false,
+			undefined,
+			undefined,
+			{ isNonInteractive: true },
+		)
+	})
+
+	it("rolls history back when the condensed history cannot be saved", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		const originalHistory = task.apiConversationHistory
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(false)
+		const saySpy = vi.spyOn(task, "say").mockResolvedValue(undefined as any)
+
+		await task.condenseContext()
+
+		expect(task.apiConversationHistory).toBe(originalHistory)
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "mock-handoff-id",
+		})
+		expect(saySpy).toHaveBeenCalledWith(
+			"condense_context_error",
+			expect.stringContaining("conversation history could not be saved"),
+			undefined,
+			false,
+			undefined,
+			undefined,
+			{ isNonInteractive: true },
+		)
+	})
+
+	it("rejects a restart state that would not reduce the real first-request context", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const originalHistory = task.apiConversationHistory
+		vi.spyOn(task.api, "countTokens").mockResolvedValueOnce(10).mockResolvedValueOnce(25)
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await expect(
+			task.commitContextCondensation(
+				{
+					messages: [
+						{
+							role: "assistant",
+							content: [{ type: "text", text: "summary" }],
+							isSummary: true,
+							condenseId: "mock-condense-id",
+						},
+					],
+					summary: "summary",
+					cost: 0,
+					newContextTokens: 90,
+					condenseId: "mock-condense-id",
+				},
+				"manual",
+				100,
+			),
+		).rejects.toThrow("would grow context")
+
+		expect(task.apiConversationHistory).toBe(originalHistory)
+		expect(saveSpy).not.toHaveBeenCalled()
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "mock-handoff-id",
+		})
+	})
+
+	it("keeps only the redacted handoff body in the committed result and UI data", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.mocked(writeContextHandoffFile).mockResolvedValueOnce({
+			handoffId: "sanitized-handoff",
+			relativePath: "CONTEXT_RESTART.md",
+			absolutePath: "/mock/workspace/path/CONTEXT_RESTART.md",
+			body: "API key is [REDACTED_SECRET]",
+			content: "# IVOL Code — Context Restart\n\nAPI key is [REDACTED_SECRET]\n",
+			sha256: "sanitized-sha256",
+			createdAt: 1,
+		})
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		const result: any = {
+			messages: [
+				{
+					role: "assistant",
+					content: [{ type: "text", text: "API key is raw-secret" }],
+					isSummary: true,
+					condenseId: "mock-condense-id",
+				},
+			],
+			summary: "API key is raw-secret",
+			cost: 0,
+			condenseId: "mock-condense-id",
+		}
+
+		await task.commitContextCondensation(result, "manual")
+
+		expect(result.summary).toBe("API key is [REDACTED_SECRET]")
+		expect(JSON.stringify(task.apiConversationHistory)).not.toContain("raw-secret")
+	})
+
+	it("shows the actual preparation instruction with configured secrets removed", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({
+			intelligentContextResetPrompt: "Keep test-api-key configured; preserve the pending migration",
+		})
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		const saySpy = vi.spyOn(task, "say").mockResolvedValue(undefined)
+		await task.condenseContext()
+		const preparation = saySpy.mock.calls.find(
+			([type, text]) => type === "context_handoff" && text?.includes('"phase":"preparing"'),
+		)
+		expect(preparation?.[1]).toContain("preserve the pending migration")
+		expect(preparation?.[1]).not.toContain("test-api-key")
+		expect(preparation?.[1]).toContain("REDACTED")
+	})
+
+	it("clears preparation progress if an unexpected summarizer error escapes", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		vi.spyOn(task, "say").mockResolvedValue(undefined)
+		vi.mocked(summarizeConversation).mockRejectedValueOnce(new Error("unexpected provider error"))
+		await task.condenseContext()
+		expect(saveSpy).not.toHaveBeenCalled()
+		expect(writeContextHandoffFile).not.toHaveBeenCalled()
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith({
+			type: "condenseTaskContextResponse",
+			text: task.taskId,
+		})
+	})
+
+	it("uses the active task model even when a separate condensing profile is configured", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({
+			customCondensingPrompt: "Keep exact implementation state",
+			condensingApiConfigId: "another-profile",
+			listApiConfigMeta: [{ id: "another-profile" }],
+		})
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await task.condenseContext()
+
+		expect(summarizeConversation).toHaveBeenCalledWith(
+			expect.any(Array),
+			task.api,
+			"system",
+			task.taskId,
+			expect.any(Number),
+			false,
+			"Keep exact implementation state",
+			undefined,
+			expect.any(Boolean),
+			expect.objectContaining({ enabled: true }),
+		)
+	})
+
+	it("uses ordinary condensing without a restart file when intelligent reset is disabled", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({
+			intelligentContextResetEnabled: true,
+			apiConfiguration: { ...apiConfig, intelligentContextResetEnabled: true },
+			customCondensingPrompt: "Keep a compact summary",
+		})
+		const task = new Task({
+			provider,
+			apiConfiguration: { ...apiConfig, intelligentContextResetEnabled: false },
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		const saySpy = vi.spyOn(task, "say").mockResolvedValue(undefined)
+
+		await task.condenseContext()
+
+		expect(summarizeConversation).toHaveBeenCalledWith(
+			expect.any(Array),
+			task.api,
+			"system",
+			task.taskId,
+			expect.any(Number),
+			false,
+			"Keep a compact summary",
+			undefined,
+			expect.any(Boolean),
+			{ enabled: false, prompt: undefined },
+		)
+		expect(writeContextHandoffFile).not.toHaveBeenCalled()
+		expect(saySpy.mock.calls.some(([type]) => type === "context_handoff")).toBe(false)
+		expect(provider.postMessageToWebview).not.toHaveBeenCalledWith({
+			type: "contextHandoffStarted",
+			text: task.taskId,
+		})
+		expect(saveSpy).toHaveBeenCalledOnce()
+	})
+
+	// kilocode_change start: task-owned profile settings must not follow another
+	// window's currently selected profile; the shared wording still updates.
+	it.each([true, undefined])("keeps manual intelligent reset enabled for task setting %s", async (enabled) => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({
+			intelligentContextResetEnabled: false,
+			apiConfiguration: { ...apiConfig, intelligentContextResetEnabled: false },
+			intelligentContextResetPrompt: "Keep the current implementation state",
+		})
+		const task = new Task({
+			provider,
+			apiConfiguration: { ...apiConfig, intelligentContextResetEnabled: enabled },
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await task.condenseContext()
+
+		expect(vi.mocked(summarizeConversation).mock.calls.at(-1)?.[9]).toMatchObject({
+			enabled: true,
+			prompt: "Keep the current implementation state",
+		})
+		expect(writeContextHandoffFile).toHaveBeenCalledOnce()
+	})
+
+	it("resolves tool-invoked reset from each task profile and follows explicit task profile changes", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({
+			intelligentContextResetEnabled: false,
+			intelligentContextResetPrompt: "Shared snapshot instructions",
+		})
+		const enabledTask = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "enabled task",
+			startTask: false,
+			context: provider.context,
+		})
+		const disabledTask = new Task({
+			provider,
+			apiConfiguration: { ...apiConfig, intelligentContextResetEnabled: false },
+			task: "disabled task",
+			startTask: false,
+			context: provider.context,
+		})
+
+		expect(await enabledTask.getIntelligentContextResetConfig()).toMatchObject({
+			enabled: true,
+			prompt: "Shared snapshot instructions",
+		})
+		expect(await disabledTask.getIntelligentContextResetConfig()).toMatchObject({
+			enabled: false,
+			prompt: undefined,
+		})
+		disabledTask.updateApiConfiguration({ ...apiConfig, intelligentContextResetEnabled: true })
+		expect(await disabledTask.getIntelligentContextResetConfig()).toMatchObject({ enabled: true })
+		expect(await enabledTask.getIntelligentContextResetConfig()).toMatchObject({ enabled: true })
+	})
+	// kilocode_change end
+
+	// kilocode_change start: context restart handoff lifecycle regression coverage
+	it.each([
+		{
+			fileReady: true,
+			expectedInstruction: "first project action MUST be a read_file tool call",
+			unexpectedInstruction: "Do NOT read, modify, or delete",
+		},
+		{
+			fileReady: false,
+			expectedInstruction: "Do NOT read, modify, or delete CONTEXT_RESTART.md",
+			unexpectedInstruction: "first project action MUST be a read_file tool call",
+		},
+	])(
+		"adds the correct mandatory continuation instruction when fileReady=$fileReady",
+		async ({ fileReady, expectedInstruction, unexpectedInstruction }) => {
+			const provider = createProvider()
+			provider.getState.mockResolvedValue({ mode: "code", apiConfiguration: apiConfig })
+			const task = new Task({
+				provider,
+				apiConfiguration: apiConfig,
+				task: "initial task",
+				startTask: false,
+				context: provider.context,
+			})
+			vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("base system prompt")
+			vi.mocked(hydratePendingContextHandoff).mockResolvedValueOnce({
+				messages: [
+					{ role: "user", content: "initial task", ts: 1 },
+					{
+						role: "assistant",
+						content: "verified embedded continuation snapshot",
+						isSummary: true,
+						condenseId: "condense-instruction",
+						contextHandoffId: "handoff-instruction",
+					},
+				],
+				handoffId: "handoff-instruction",
+				fileReady,
+			})
+			const mockStream = (async function* () {
+				yield { type: "text", text: "ok" } as ApiStreamChunk
+			})()
+			const createMessageSpy = vi.spyOn(task.api, "createMessage").mockReturnValue(mockStream)
+
+			const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
+			await iterator.next()
+			await iterator.return(undefined)
+
+			const [systemPrompt, messages] = createMessageSpy.mock.calls[0]
+			expect(systemPrompt).toContain(expectedInstruction)
+			expect(systemPrompt).not.toContain(unexpectedInstruction)
+			expect(JSON.stringify(messages)).toContain("verified embedded continuation snapshot")
+		},
+	)
+
+	it("consumes an embedded-only handoff after a real assistant continuation without touching the fixed file", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-1",
+			contextHandoffId: "handoff-1",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-1"
+		;(task as any).activeContextHandoffFileReady = false
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({ role: "assistant", content: "continued work" })
+
+		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
+		expect((task as any).activeContextHandoffId).toBeUndefined()
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+
+	it("keeps the handoff pending after an empty assistant response", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-1",
+			contextHandoffId: "handoff-1",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-1"
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({ role: "assistant", content: "" })
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect((task as any).activeContextHandoffId).toBe("handoff-1")
+	})
+
+	it("keeps the handoff pending after a reasoning-only assistant response", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-1",
+			contextHandoffId: "handoff-1",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-1"
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({
+			role: "assistant",
+			content: [{ type: "thinking", thinking: "private work", signature: "signature" }],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect((task as any).activeContextHandoffId).toBe("handoff-1")
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+
+	it("keeps an embedded-only handoff through a tool call and consumes it after the tool result is saved", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-1",
+			contextHandoffId: "handoff-1",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-1"
+		;(task as any).activeContextHandoffFileReady = false
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({
+			role: "assistant",
+			content: [{ type: "tool_use", id: "read-1", name: "read_file", input: {} }],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+
+		await (task as any).addToApiConversationHistory({
+			role: "user",
+			content: [{ type: "tool_result", tool_use_id: "read-1", content: "restart state" }],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
+		expect((task as any).activeContextHandoffId).toBeUndefined()
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+
+	it("does not consume a physical handoff when the model ignores the mandatory read", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-physical",
+			contextHandoffId: "handoff-physical",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-physical"
+		;(task as any).activeContextHandoffFileReady = true
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({ role: "assistant", content: "continued without reading" })
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect((task as any).activeContextHandoffId).toBe("handoff-physical")
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+
+	it("keeps a physical handoff through an XML tool call and consumes only its persisted successful exact read", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-xml",
+			contextHandoffId: "handoff-xml",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		const xmlRead: any = {
+			type: "tool_use",
+			name: "read_file",
+			params: { path: "CONTEXT_RESTART.md" },
+			partial: false,
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-xml"
+		;(task as any).activeContextHandoffFileReady = true
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory(
+			{ role: "assistant", content: "<read_file><path>CONTEXT_RESTART.md</path></read_file>" },
+			undefined,
+			{ hasPendingToolExecution: true },
+		)
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+		;(task as any).recordSuccessfulContextHandoffRead([xmlRead])
+		await (task as any).addToApiConversationHistory({
+			role: "user",
+			content: [
+				{
+					type: "text",
+					text: "[read_file] Result:\n<!-- IVOL_CODE_CONTEXT_RESTART_V1 handoff_id=handoff-xml -->\nrestart state",
+				},
+			],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
+		expect((task as any).activeContextHandoffId).toBeUndefined()
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "handoff-xml",
+		})
+		expect((task.apiConversationHistory.at(-1) as any).contextHandoffContinuationForId).toBe("handoff-xml")
+	})
+
+	it("consumes a physical native handoff only for the matching successful read_file result", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-native",
+			contextHandoffId: "handoff-native",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		const nativeRead: any = {
+			type: "tool_use",
+			id: "read-native",
+			name: "read_file",
+			params: {},
+			nativeArgs: { files: [{ path: "CONTEXT_RESTART.md" }] },
+			partial: false,
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-native"
+		;(task as any).activeContextHandoffFileReady = true
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({
+			role: "assistant",
+			content: [{ type: "tool_use", id: "read-native", name: "read_file", input: nativeRead.nativeArgs }],
+		})
+		await (task as any).addToApiConversationHistory({
+			role: "user",
+			content: [{ type: "tool_result", tool_use_id: "unrelated", content: "other result" }],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		;(task as any).recordSuccessfulContextHandoffRead([
+			{
+				...nativeRead,
+				nativeArgs: {
+					files: [{ path: "CONTEXT_RESTART.md", lineRanges: [{ start: 1, end: 2 }] }],
+				},
+			},
+		])
+		expect((task as any).completedContextHandoffReadToolUseIds).toEqual(new Set())
+		;(task as any).recordSuccessfulContextHandoffRead([nativeRead])
+		await (task as any).addToApiConversationHistory({
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "read-native",
+					content:
+						"File: CONTEXT_RESTART.md\n<!-- IVOL_CODE_CONTEXT_RESTART_V1 handoff_id=handoff-native -->\nrestart state",
+				},
+			],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "handoff-native",
+		})
+	})
+
+	it("consumes an embedded-only handoff after an accepted attempt_completion with no tool result", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "embedded restart state" }],
+			isSummary: true,
+			condenseId: "condense-completion",
+			contextHandoffId: "handoff-completion",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		const completion: any = {
+			type: "tool_use",
+			id: "completion-1",
+			name: "attempt_completion",
+			params: { result: "done" },
+			partial: false,
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-completion"
+		;(task as any).activeContextHandoffFileReady = false
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory(
+			{
+				role: "assistant",
+				content: [
+					{ type: "tool_use", id: "completion-1", name: "attempt_completion", input: { result: "done" } },
+				],
+			},
+			undefined,
+			{ hasPendingToolExecution: true },
+		)
+		await (task as any).consumeEmbeddedHandoffAfterAcceptedCompletion([completion])
+
+		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+		expect((task.apiConversationHistory.at(-1) as any).contextHandoffContinuationForId).toBe("handoff-completion")
+	})
+
+	it("rolls API history back and throws when overwrite persistence fails", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const originalHistory = task.apiConversationHistory
+		const replacement: any[] = [{ role: "user", content: "replacement" }]
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(false)
+
+		await expect(task.overwriteApiConversationHistory(replacement)).rejects.toThrow(
+			"API conversation history could not be saved",
+		)
+		expect(task.apiConversationHistory).toBe(originalHistory)
+	})
+
+	it("clears an uncondensed summary's owned restart file only after the restored history is saved", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({ mode: "code", apiConfiguration: apiConfig })
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const currentModel = task.api.getModel()
+		vi.spyOn(task.api, "getModel").mockReturnValue({
+			...currentModel,
+			info: { ...currentModel.info, supportsReasoningBudget: true },
+		})
+		vi.spyOn(task.api, "countTokens").mockResolvedValue(100)
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		const saveSpy = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+		vi.mocked(summarizeConversation).mockResolvedValueOnce({
+			messages: [],
+			summary: "",
+			cost: 0,
+			condenseId: "recondense-skipped",
+			error: "skip recondense in lifecycle test",
+		})
+		task.apiConversationHistory = [
+			{ role: "user", content: "original", ts: 1, condenseParent: "old-condense" },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "old summary without thinking" }],
+				ts: 2,
+				isSummary: true,
+				condenseId: "old-condense",
+				contextHandoffId: "old-handoff",
+			} as any,
+		]
+		;(task as any).activeContextHandoffId = "old-handoff"
+		;(task as any).activeContextHandoffFileReady = true
+		const mockStream = (async function* () {
+			yield { type: "text", text: "ok" } as ApiStreamChunk
+		})()
+		vi.spyOn(task.api, "createMessage").mockReturnValue(mockStream)
+
+		const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
+		await iterator.next()
+		await iterator.return(undefined)
+
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "old-handoff",
+		})
+		expect(saveSpy.mock.invocationCallOrder[0]).toBeLessThan(
+			vi.mocked(deleteContextHandoffFileIfOwned).mock.invocationCallOrder[0],
+		)
+		expect((task as any).activeContextHandoffId).toBeUndefined()
+	})
+
+	it("does not clear an uncondensed restart file when restored history persistence fails", async () => {
+		const provider = createProvider()
+		provider.getState.mockResolvedValue({ mode: "code", apiConfiguration: apiConfig })
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const currentModel = task.api.getModel()
+		vi.spyOn(task.api, "getModel").mockReturnValue({
+			...currentModel,
+			info: { ...currentModel.info, supportsReasoningBudget: true },
+		})
+		vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(false)
+		const originalHistory: any[] = [
+			{ role: "user", content: "original", ts: 1, condenseParent: "old-condense" },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "old summary without thinking" }],
+				ts: 2,
+				isSummary: true,
+				condenseId: "old-condense",
+				contextHandoffId: "old-handoff",
+			},
+		]
+		task.apiConversationHistory = originalHistory
+
+		const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
+		await expect(iterator.next()).rejects.toThrow("API conversation history could not be saved")
+
+		expect(task.apiConversationHistory).toBe(originalHistory)
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+
+	it("does not consume the handoff for a synthetic empty-response failure", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial task",
+			startTask: false,
+			context: provider.context,
+		})
+		const summary: any = {
+			role: "assistant",
+			content: [{ type: "text", text: "restart state" }],
+			isSummary: true,
+			condenseId: "condense-1",
+			contextHandoffId: "handoff-1",
+			contextHandoffPath: "CONTEXT_RESTART.md",
+			contextHandoffSha256: "hash",
+		}
+		task.apiConversationHistory = [summary]
+		;(task as any).activeContextHandoffId = "handoff-1"
+		vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+
+		await (task as any).addToApiConversationHistory({
+			role: "assistant",
+			content: [{ type: "text", text: "Failure: I did not provide a response." }],
+		})
+
+		expect(summary.contextHandoffConsumedAt).toBeUndefined()
+		expect((task as any).activeContextHandoffId).toBe("handoff-1")
+		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+	})
+	// kilocode_change end
 })
 
 describe("pushToolResultToUserContent", () => {

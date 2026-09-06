@@ -47,6 +47,8 @@ import {
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_MODES,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
+	getIntelligentContextResetPrompt,
+	isIntelligentContextResetEnabled,
 	getModelId,
 	isPersonalProvider, // kilocode_change
 } from "@roo-code/types"
@@ -1147,23 +1149,12 @@ export class ClineProvider
 			setTimeout(async () => {
 				try {
 					// Find the message index in the restored state
-					const { messageIndex, apiConversationHistoryIndex } = (() => {
-						const messageIndex = task.clineMessages.findIndex((msg) => msg.ts === pendingEdit.messageTs)
-						const apiConversationHistoryIndex = task.apiConversationHistory.findIndex(
-							(msg) => msg.ts === pendingEdit.messageTs,
-						)
-						return { messageIndex, apiConversationHistoryIndex }
-					})()
+					const messageIndex = task.clineMessages.findIndex((msg) => msg.ts === pendingEdit.messageTs)
 
 					if (messageIndex !== -1) {
-						// Remove the target message and all subsequent messages
-						await task.overwriteClineMessages(task.clineMessages.slice(0, messageIndex))
-
-						if (apiConversationHistoryIndex !== -1) {
-							await task.overwriteApiConversationHistory(
-								task.apiConversationHistory.slice(0, apiConversationHistoryIndex),
-							)
-						}
+						// Keep context summaries and CONTEXT_RESTART.md in sync with the
+						// restored chat before resending the edited message.
+						await task.messageManager.rewindToTimestamp(pendingEdit.messageTs)
 
 						// Process the edited message
 						await task.handleWebviewAskResponse(
@@ -2315,6 +2306,8 @@ export class ClineProvider
 			ghostServiceSettings, // kilocode_changes
 			condensingApiConfigId,
 			customCondensingPrompt,
+			intelligentContextResetEnabled,
+			intelligentContextResetPrompt,
 			codebaseIndexConfig,
 			codebaseIndexModels,
 			profileThresholds,
@@ -2513,6 +2506,8 @@ export class ClineProvider
 			organizationSettingsVersion,
 			condensingApiConfigId,
 			customCondensingPrompt,
+			intelligentContextResetEnabled: isIntelligentContextResetEnabled(intelligentContextResetEnabled),
+			intelligentContextResetPrompt: getIntelligentContextResetPrompt(intelligentContextResetPrompt),
 			yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			codebaseIndexModels: codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: {
@@ -2832,6 +2827,10 @@ export class ClineProvider
 			organizationSettingsVersion,
 			condensingApiConfigId: stateValues.condensingApiConfigId,
 			customCondensingPrompt: stateValues.customCondensingPrompt,
+			intelligentContextResetEnabled: isIntelligentContextResetEnabled(
+				stateValues.intelligentContextResetEnabled,
+			),
+			intelligentContextResetPrompt: getIntelligentContextResetPrompt(stateValues.intelligentContextResetPrompt),
 			yoloGatekeeperApiConfigId: stateValues.yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			codebaseIndexModels: stateValues.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: {

@@ -298,6 +298,21 @@ describe("ContextProxy", () => {
 	})
 
 	describe("setProviderSettings", () => {
+		// kilocode_change: switching to an unset profile restores the enabled default.
+		it("clears another profile's reset flag while retaining the shared prompt", async () => {
+			await proxy.updateGlobalState("intelligentContextResetPrompt", "Shared prompt")
+			await proxy.setProviderSettings({ apiProvider: "openai", intelligentContextResetEnabled: false })
+			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBe(false)
+
+			await proxy.setProviderSettings({ apiProvider: "ollama" })
+			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBeUndefined()
+			expect(proxy.getGlobalState("intelligentContextResetPrompt")).toBe("Shared prompt")
+			expect(mockGlobalState.update).toHaveBeenCalledWith("intelligentContextResetEnabled", undefined)
+
+			await proxy.setProviderSettings({ apiProvider: "openai", intelligentContextResetEnabled: true })
+			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBe(true)
+		})
+
 		it("should clear old API configuration values and set new ones", async () => {
 			// Set up initial API configuration values
 			await proxy.updateGlobalState("apiModelId", "old-model")

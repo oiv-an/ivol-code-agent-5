@@ -35,6 +35,14 @@ export type ApiMessage = Anthropic.MessageParam & {
 	truncationParent?: string
 	// Identifies a message as a truncation boundary marker
 	isTruncationMarker?: boolean
+	// IVOL context restart handoff metadata. The summary text stays body-only;
+	// the complete verified document is injected into the first continuation.
+	contextHandoffId?: string
+	contextHandoffPath?: string
+	contextHandoffSha256?: string
+	contextHandoffContent?: string
+	contextHandoffCreatedAt?: number
+	contextHandoffConsumedAt?: number
 }
 
 export async function readApiMessages({

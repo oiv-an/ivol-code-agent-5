@@ -543,6 +543,83 @@ describe("getModelParams", () => {
 			expect(result.reasoning).toEqual({ reasoning_effort: "high" })
 		})
 
+		// kilocode_change start: maximum preference fallback
+		it("should keep max for a max-capable model", () => {
+			const model: ModelInfo = {
+				...baseModel,
+				supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+			}
+
+			const result = getModelParams({
+				...openaiParams,
+				modelId: "gpt-5.6-sol",
+				settings: { reasoningEffort: "max" },
+				model,
+			})
+
+			expect(result.reasoningEffort).toBe("max")
+			expect(result.reasoning).toEqual({ reasoning_effort: "max" })
+		})
+
+		it("should keep max for a recognized model when capability metadata is absent", () => {
+			const result = getModelParams({
+				...openaiParams,
+				modelId: "openai/gpt-5.6-sol",
+				settings: { reasoningEffort: "max" },
+				model: baseModel,
+			})
+
+			expect(result.reasoningEffort).toBe("max")
+			expect(result.reasoning).toEqual({ reasoning_effort: "max" })
+		})
+
+		it("should fall back from max to the strongest declared effort", () => {
+			const xhighModel: ModelInfo = {
+				...baseModel,
+				supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+			}
+			const highModel: ModelInfo = {
+				...baseModel,
+				supportsReasoningEffort: ["low", "medium", "high"],
+			}
+
+			const xhighResult = getModelParams({
+				...openaiParams,
+				modelId: "gpt-5.5",
+				settings: { reasoningEffort: "max" },
+				model: xhighModel,
+			})
+			const highResult = getModelParams({
+				...openaiParams,
+				modelId: "older-model",
+				settings: { reasoningEffort: "max" },
+				model: highModel,
+			})
+
+			expect(xhighResult.reasoningEffort).toBe("xhigh")
+			expect(xhighResult.reasoning).toEqual({ reasoning_effort: "xhigh" })
+			expect(highResult.reasoningEffort).toBe("high")
+			expect(highResult.reasoning).toEqual({ reasoning_effort: "high" })
+		})
+
+		it("should fall back from max to a valid Gemini thinking level", () => {
+			const model: ModelInfo = {
+				...baseModel,
+				supportsReasoningEffort: ["minimal", "low", "medium", "high"],
+			}
+
+			const result = getModelParams({
+				format: "gemini",
+				modelId: "gemini-3-pro-preview",
+				settings: { reasoningEffort: "max" },
+				model,
+			})
+
+			expect(result.reasoningEffort).toBe("high")
+			expect(result.reasoning).toEqual({ thinkingLevel: "high", includeThoughts: true })
+		})
+		// kilocode_change end
+
 		it("should not use reasoning effort when supportsReasoningEffort is true but no effort is specified", () => {
 			const model: ModelInfo = {
 				...baseModel,

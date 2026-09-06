@@ -5466,3 +5466,177 @@ index 6467e585843..eeb99f77f4a 100644
  			return Promise.reject(err);
  		}
  	}
+diff --git a/src/vs/workbench/api/common/extHost.protocol.ts b/src/vs/workbench/api/common/extHost.protocol.ts
+index 53350ba3e18..d1ff43b0ecf 100644
+--- a/src/vs/workbench/api/common/extHost.protocol.ts
++++ b/src/vs/workbench/api/common/extHost.protocol.ts
+@@ -716,9 +716,15 @@ export interface ExtHostStatusBarShape {
+ 	$provideTooltip(entryId: string, cancellation: CancellationToken): Promise<string | IMarkdownString | undefined>;
+ }
+ 
++export interface IExtensionMementoValueChange {
++	readonly key: string;
++	readonly previousValueExists: boolean;
++	readonly previousValue?: unknown;
++}
++
+ export interface MainThreadStorageShape extends IDisposable {
+ 	$initializeExtensionStorage(shared: boolean, extensionId: string): Promise<string | undefined>;
+-	$setValue(shared: boolean, extensionId: string, value: object): Promise<void>;
++	$setValue(shared: boolean, extensionId: string, value: object, changes?: readonly IExtensionMementoValueChange[]): Promise<void>;
+ 	$registerExtensionStorageKeysToSync(extension: IExtensionIdWithVersion, keys: string[]): void;
+ }
+ 
+diff --git a/src/vs/workbench/api/common/extHostMemento.ts b/src/vs/workbench/api/common/extHostMemento.ts
+index baad57cfd67..2a86b5e5338 100644
+--- a/src/vs/workbench/api/common/extHostMemento.ts
++++ b/src/vs/workbench/api/common/extHostMemento.ts
+@@ -6,6 +6,7 @@
+ import type * as vscode from 'vscode';
+ import { IDisposable } from '../../../base/common/lifecycle.js';
+ import { ExtHostStorage } from './extHostStorage.js';
++import type { IExtensionMementoValueChange } from './extHost.protocol.js';
+ import { IExtensionDescription } from '../../../platform/extensions/common/extensions.js';
+ import { DeferredPromise, RunOnceScheduler } from '../../../base/common/async.js';
+ 
+@@ -20,6 +21,11 @@ export class ExtensionMemento implements vscode.Memento {
+ 	private readonly _storageListener: IDisposable;
+ 
+ 	private _deferredPromises: Map<string, DeferredPromise<void>> = new Map();
++	private _pendingChanges: Map<string, IExtensionMementoValueChange> = new Map();
++	private _inFlightChangeCounts: Map<string, number> = new Map();
++	private _lastCanonicalValue?: { [n: string]: any };
++	private _canonicalVersion = 0;
++	private _writeQueue: Promise<void> = Promise.resolve();
+ 	private _scheduler: RunOnceScheduler;
+ 
+ 	constructor(id: string, global: boolean, storage: ExtHostStorage) {
+@@ -29,21 +35,33 @@ export class ExtensionMemento implements vscode.Memento {
+ 
+ 		this._init = this._storage.initializeExtensionStorage(this._shared, this._id, Object.create(null)).then(value => {
+ 			this._value = value;
++			this._lastCanonicalValue = this._cloneValue(value ?? Object.create(null));
+ 			return this;
+ 		});
+ 
+ 		this._storageListener = this._storage.onDidChangeStorage(e => {
+ 			if (e.shared === this._shared && e.key === this._id) {
+-				this._value = e.value;
++				this._canonicalVersion++;
++				this._lastCanonicalValue = this._cloneValue(e.value);
++				this._applyLatestCanonicalValue();
+ 			}
+ 		});
+ 
+ 		this._scheduler = new RunOnceScheduler(() => {
+ 			const records = this._deferredPromises;
+ 			this._deferredPromises = new Map();
++			const changes = Array.from(records.keys(), key => this._pendingChanges.get(key)!);
++			for (const key of records.keys()) {
++				this._pendingChanges.delete(key);
++				this._inFlightChangeCounts.set(key, (this._inFlightChangeCounts.get(key) ?? 0) + 1);
++			}
++			const value = this._cloneValue(this._value!);
++			const canonicalVersionBeforeWrite = this._canonicalVersion;
+ 			(async () => {
+ 				try {
+-					await this._storage.setValue(this._shared, this._id, this._value!);
++					const write = this._writeQueue.then(() => this._storage.setValue(this._shared, this._id, value, changes));
++					this._writeQueue = write.then(() => undefined, () => undefined);
++					await write;
+ 					for (const value of records.values()) {
+ 						value.complete();
+ 					}
+@@ -51,6 +69,18 @@ export class ExtensionMemento implements vscode.Memento {
+ 					for (const value of records.values()) {
+ 						value.error(e);
+ 					}
++				} finally {
++					for (const key of records.keys()) {
++						const count = this._inFlightChangeCounts.get(key) ?? 0;
++						if (count <= 1) {
++							this._inFlightChangeCounts.delete(key);
++						} else {
++							this._inFlightChangeCounts.set(key, count - 1);
++						}
++					}
++					if (this._canonicalVersion > canonicalVersionBeforeWrite) {
++						this._applyLatestCanonicalValue();
++					}
+ 				}
+ 			})();
+ 		}, 0);
+@@ -76,6 +106,17 @@ export class ExtensionMemento implements vscode.Memento {
+ 	}
+ 
+ 	update(key: string, value: any): Promise<void> {
++		if (!this._pendingChanges.has(key)) {
++			const previousValue = this._value![key];
++			this._pendingChanges.set(key, {
++				key,
++				previousValueExists: typeof previousValue !== 'undefined',
++				...(typeof previousValue !== 'undefined'
++					? { previousValue: this._cloneValue(previousValue) }
++					: {}),
++			});
++		}
++
+ 		if (value !== null && typeof value === 'object') {
+ 			// Prevent the value from being as-is for until we have
+ 			// received the change event from the main side by emulating
+@@ -101,6 +142,32 @@ export class ExtensionMemento implements vscode.Memento {
+ 		return promise.p;
+ 	}
+ 
++	private _applyLatestCanonicalValue(): void {
++		if (!this._lastCanonicalValue) {
++			return;
++		}
++
++		const localValue = this._value ?? Object.create(null);
++		const canonicalValue = this._cloneValue(this._lastCanonicalValue);
++		const protectedKeys = new Set([
++			...this._pendingChanges.keys(),
++			...this._inFlightChangeCounts.keys(),
++		]);
++		for (const key of protectedKeys) {
++			const value = localValue[key];
++			if (typeof value === 'undefined') {
++				delete canonicalValue[key];
++			} else {
++				canonicalValue[key] = this._cloneValue(value);
++			}
++		}
++		this._value = canonicalValue;
++	}
++
++	private _cloneValue<T>(value: T): T {
++		return JSON.parse(JSON.stringify(value));
++	}
++
+ 	dispose(): void {
+ 		this._storageListener.dispose();
+ 	}
+diff --git a/src/vs/workbench/api/common/extHostStorage.ts b/src/vs/workbench/api/common/extHostStorage.ts
+index f4cc16fc026..867d00c390e 100644
+--- a/src/vs/workbench/api/common/extHostStorage.ts
++++ b/src/vs/workbench/api/common/extHostStorage.ts
+@@ -4,6 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import { MainContext, MainThreadStorageShape, ExtHostStorageShape } from './extHost.protocol.js';
++import type { IExtensionMementoValueChange } from './extHost.protocol.js';
+ import { Emitter } from '../../../base/common/event.js';
+ import { IExtHostRpcService } from './extHostRpcService.js';
+ import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
+@@ -47,8 +48,8 @@ export class ExtHostStorage implements ExtHostStorageShape {
+ 		return parsedValue || defaultValue;
+ 	}
+ 
+-	setValue(shared: boolean, key: string, value: object): Promise<void> {
+-		return this._proxy.$setValue(shared, key, value);
++	setValue(shared: boolean, key: string, value: object, changes?: readonly IExtensionMementoValueChange[]): Promise<void> {
++		return this._proxy.$setValue(shared, key, value, changes);
+ 	}
+ 
+ 	$acceptValue(shared: boolean, key: string, value: string): void {

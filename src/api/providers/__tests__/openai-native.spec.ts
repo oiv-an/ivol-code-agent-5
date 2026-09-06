@@ -698,6 +698,42 @@ describe("OpenAiNativeHandler", () => {
 			)
 		})
 
+		// kilocode_change start: maximum preference fallback
+		it("should fall back from maximum to xhigh for GPT-5.1 Codex Max", async () => {
+			const mockFetch = vitest.fn().mockResolvedValue({
+				ok: true,
+				body: new ReadableStream({
+					start(controller) {
+						controller.enqueue(
+							new TextEncoder().encode(
+								'data: {"type":"response.output_item.added","item":{"type":"text","text":"Fallback effort"}}\n\n',
+							),
+						)
+						controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"))
+						controller.close()
+					},
+				}),
+			})
+			global.fetch = mockFetch as any
+			mockResponsesCreate.mockRejectedValue(new Error("SDK not available"))
+
+			handler = new OpenAiNativeHandler({
+				...mockOptions,
+				apiModelId: "gpt-5.1-codex-max",
+				reasoningEffort: "max",
+			})
+
+			for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+				// drain
+			}
+
+			expect(mockFetch).toHaveBeenCalledWith(
+				"https://api.openai.com/v1/responses",
+				expect.objectContaining({ body: expect.stringContaining('"effort":"xhigh"') }),
+			)
+		})
+		// kilocode_change end
+
 		it("should omit reasoning when selection is 'disable'", async () => {
 			// Mock fetch for Responses API
 			const mockFetch = vitest.fn().mockResolvedValue({

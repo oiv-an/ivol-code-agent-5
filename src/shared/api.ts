@@ -9,6 +9,7 @@ import {
 	isDynamicProvider,
 	isLocalProvider,
 	ToolProtocol, // kilocode_change
+	resolveReasoningEffortForModel, // kilocode_change
 } from "@roo-code/types"
 
 // Re-export for legacy imports (some providers still import ModelRecord from this module).
@@ -85,10 +86,19 @@ export const shouldUseReasoningEffort = ({
 
 	const cap = model.supportsReasoningEffort as unknown
 
-	// Capability array: use only if selected is included (treat "none"/"minimal" as valid)
+	// kilocode_change start: Maximum remains usable through request-time fallback.
+	// Capability array: use only if selected is included (treat "none"/"minimal" as valid).
+	// `max` is a user preference: when the model does not expose it directly,
+	// it resolves to the strongest previous level in the request builder.
 	if (Array.isArray(cap)) {
-		return !!selectedEffort && (cap as ReadonlyArray<string>).includes(selectedEffort as string)
+		return (
+			!!selectedEffort &&
+			((cap as ReadonlyArray<string>).includes(selectedEffort as string) ||
+				(selectedEffort === "max" &&
+					resolveReasoningEffortForModel(selectedEffort, undefined, model) !== undefined))
+		)
 	}
+	// kilocode_change end
 
 	// Boolean capability: true → require a selected effort
 	if (model.supportsReasoningEffort === true) {

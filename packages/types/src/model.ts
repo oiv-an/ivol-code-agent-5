@@ -187,7 +187,7 @@ export type ModelInfo = z.infer<typeof modelInfoSchema>
 
 // kilocode_change start: recognize models that support the OpenAI API-level "max" reasoning effort
 const openAiMaxReasoningModelPattern =
-	/^gpt-5\.6(?:-(?:sol|terra|luna))?(?:-\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?$/
+	/^gpt-5\.6(?:(?:-(?:sol|terra|luna))(?:-\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?(?:-void)?|(?:-\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))?)$/
 
 export const supportsOpenAiMaxReasoningEffort = (
 	modelId: string | undefined,
@@ -197,11 +197,50 @@ export const supportsOpenAiMaxReasoningEffort = (
 		return true
 	}
 
-	const normalizedModelId = modelId?.trim().toLowerCase()
+	// Router-qualified IDs use the final path segment (for example,
+	// `openai/gpt-5.6-sol`). Personal proxy aliases may also append a routing
+	// suffix to a known GPT-5.6 variant.
+	const normalizedModelId = modelId?.trim().toLowerCase().split("/").pop()
 	return (
 		normalizedModelId === "1-gpt-sol" ||
 		(!!normalizedModelId && openAiMaxReasoningModelPattern.test(normalizedModelId))
 	)
+}
+
+const maximumReasoningFallbackOrder = ["xhigh", "high", "medium", "low", "minimal", "none"] as const
+
+/**
+ * Resolve the user-facing "maximum" preference to the strongest effort that
+ * the selected model can accept. Keep the saved preference as `max`; callers
+ * use this helper only when constructing a request, so switching back to a
+ * max-capable model restores the user's original choice automatically.
+ */
+export const resolveReasoningEffortForModel = (
+	requestedEffort: ReasoningEffortExtended | "disable" | undefined,
+	modelId: string | undefined,
+	modelInfo?: Pick<ModelInfo, "supportsReasoningEffort">,
+): ReasoningEffortExtended | undefined => {
+	if (!requestedEffort || requestedEffort === "disable") {
+		return undefined
+	}
+
+	if (requestedEffort !== "max") {
+		return requestedEffort
+	}
+
+	if (supportsOpenAiMaxReasoningEffort(modelId, modelInfo)) {
+		return "max"
+	}
+
+	const supportedEfforts = modelInfo?.supportsReasoningEffort
+	if (Array.isArray(supportedEfforts)) {
+		return maximumReasoningFallbackOrder.find((effort) => supportedEfforts.includes(effort))
+	}
+
+	// A boolean capability does not expose an exact list. `xhigh` was the
+	// strongest option already offered by the legacy selector, so it is the
+	// safest previous level for providers with incomplete model metadata.
+	return supportedEfforts === true || supportedEfforts === undefined ? "xhigh" : undefined
 }
 // kilocode_change end
 

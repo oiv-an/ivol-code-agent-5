@@ -45,6 +45,16 @@ vitest.mock("../fetchers/modelCache", () => ({
 				cacheReadsPrice: 0.3,
 				description: "Claude 4 Sonnet",
 			},
+			// kilocode_change: legacy effort model used to verify Maximum fallback.
+			"openai/gpt-5.5": {
+				maxTokens: 32768,
+				contextWindow: 200000,
+				supportsImages: true,
+				supportsPromptCache: true,
+				supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+				inputPrice: 0,
+				outputPrice: 0,
+			},
 		})
 	}),
 }))
@@ -132,6 +142,29 @@ describe("RequestyHandler", () => {
 	})
 
 	describe("createMessage", () => {
+		// kilocode_change start: Maximum remains a preference and Requesty receives
+		// the resolved strongest level supported by the selected model.
+		it("sends Requesty's max value for Maximum reasoning", async () => {
+			const handler = new RequestyHandler({
+				requestyApiKey: "test-key",
+				requestyModelId: "openai/gpt-5.5",
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+			})
+			mockCreate.mockResolvedValue({
+				async *[Symbol.asyncIterator]() {
+					yield { id: "test-id", choices: [{ delta: { content: "ok" } }] }
+				},
+			})
+
+			for await (const _chunk of handler.createMessage("system", [{ role: "user", content: "test" }])) {
+				// Drain the stream.
+			}
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "max" }))
+		})
+		// kilocode_change end
+
 		it("generates correct stream chunks", async () => {
 			const handler = new RequestyHandler(mockOptions)
 
@@ -383,6 +416,22 @@ describe("RequestyHandler", () => {
 	})
 
 	describe("completePrompt", () => {
+		// kilocode_change start
+		it("keeps Requesty's Maximum value for non-streaming requests", async () => {
+			const handler = new RequestyHandler({
+				requestyApiKey: "test-key",
+				requestyModelId: "openai/gpt-5.5",
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+			})
+			mockCreate.mockResolvedValue({ choices: [{ message: { content: "ok" } }] })
+
+			await handler.completePrompt("test")
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "max" }))
+		})
+		// kilocode_change end
+
 		it("returns correct response", async () => {
 			const handler = new RequestyHandler(mockOptions)
 			const mockResponse = { choices: [{ message: { content: "test completion" } }] }

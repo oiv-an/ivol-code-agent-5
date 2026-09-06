@@ -9,8 +9,6 @@ import { safeWriteJson } from "../safeWriteJson"
 const originalFsPromisesRename = actualFsPromises.rename
 const originalFsPromisesUnlink = actualFsPromises.unlink
 const originalFsPromisesWriteFile = actualFsPromises.writeFile
-const _originalFsPromisesAccess = actualFsPromises.access
-const originalFsPromisesMkdir = actualFsPromises.mkdir
 
 vi.mock("fs/promises", async () => {
 	const actual = await vi.importActual<typeof import("fs/promises")>("fs/promises")
@@ -23,6 +21,7 @@ vi.mock("fs/promises", async () => {
 	mockedFs.writeFile = vi.fn(actual.writeFile) as any
 	mockedFs.readFile = vi.fn(actual.readFile) as any
 	mockedFs.rename = vi.fn(actual.rename) as any
+	mockedFs.copyFile = vi.fn(actual.copyFile) as any
 	mockedFs.unlink = vi.fn(actual.unlink) as any
 	mockedFs.access = vi.fn(actual.access) as any
 	mockedFs.mkdtemp = vi.fn(actual.mkdtemp) as any
@@ -153,29 +152,27 @@ describe("safeWriteJson", () => {
 		expect(content).toEqual({ initial: "content" })
 	})
 
-	test("should handle failure when renaming filePath to tempBackupFilePath (filePath exists)", async () => {
+	test("should keep the target unchanged when copying its backup fails", async () => {
 		const initialData = { message: "Initial content, should remain" }
 		const newData = { message: "New content, should not be written" }
 
 		// Overwrite the pre-created file with specific initial data
 		await originalFsPromisesWriteFile(currentTestFilePath, JSON.stringify(initialData))
 
-		const renameSpy = vi.spyOn(fs, "rename")
-
-		// Mock rename to fail on the first call (filePath -> tempBackupFilePath)
-		renameSpy.mockImplementationOnce(async () => {
-			throw new Error("Rename to backup failed")
+		const copyFileSpy = vi.spyOn(fs, "copyFile")
+		copyFileSpy.mockImplementationOnce(async () => {
+			throw new Error("Backup copy failed")
 		})
 
-		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Rename to backup failed")
+		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Backup copy failed")
 
 		// Verify the original file still exists with initial content
 		const content = await readFileContent(currentTestFilePath)
 		expect(content).toEqual(initialData)
 	})
 
-	test("should handle failure when renaming tempNewFilePath to filePath (filePath exists, backup succeeded)", async () => {
-		const initialData = { message: "Initial content, should be restored" }
+	test("should keep the canonical target continuously available when the atomic commit fails", async () => {
+		const initialData = { message: "Initial content, should remain available" }
 		const newData = { message: "New content" }
 
 		// Overwrite the pre-created file with specific initial data
@@ -183,32 +180,22 @@ describe("safeWriteJson", () => {
 
 		const renameSpy = vi.spyOn(fs, "rename")
 
-		// Track rename calls
-		let renameCallCount = 0
-
-		// Mock rename to succeed on first call (filePath -> tempBackupFilePath)
-		// and fail on second call (tempNewFilePath -> filePath)
-		renameSpy.mockImplementation(async (oldPath, newPath) => {
-			renameCallCount++
-			if (renameCallCount === 1) {
-				// First call: filePath -> tempBackupFilePath (should succeed)
-				return originalFsPromisesRename(oldPath, newPath)
-			} else if (renameCallCount === 2) {
-				// Second call: tempNewFilePath -> filePath (should fail)
-				throw new Error("Rename from temp to final failed")
-			} else if (renameCallCount === 3) {
-				// Third call: tempBackupFilePath -> filePath (rollback, should succeed)
-				return originalFsPromisesRename(oldPath, newPath)
-			}
-			// Default: use original implementation
-			return originalFsPromisesRename(oldPath, newPath)
+		renameSpy.mockImplementationOnce(async (oldPath, newPath) => {
+			expect(newPath).toBe(currentTestFilePath)
+			expect(String(oldPath)).toContain(".new_")
+			// This assertion runs at the exact commit boundary. The old
+			// implementation had already moved the canonical file away here.
+			expect(await readFileContent(currentTestFilePath)).toEqual(initialData)
+			throw new Error("Atomic commit failed")
 		})
 
-		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Rename from temp to final failed")
+		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Atomic commit failed")
 
-		// Verify the file was restored to initial content
+		// No rollback is needed: the original never left its canonical path.
 		const content = await readFileContent(currentTestFilePath)
 		expect(content).toEqual(initialData)
+		expect(renameSpy).toHaveBeenCalledTimes(1)
+		expect((await fs.readdir(tempDir)).filter((entry) => entry.includes(".tmp"))).toEqual([])
 	})
 
 	// Tests for directory creation functionality
@@ -341,9 +328,7 @@ describe("safeWriteJson", () => {
 		unlinkSpy.mockRestore()
 	})
 
-	// The expected error message might need to change if the mock behaves differently.
-	test("should handle failure when renaming tempNewFilePath to filePath (filePath initially exists)", async () => {
-		// currentTestFilePath exists due to beforeEach.
+	test("should restore the copied backup if a non-conforming rename removes the target before failing", async () => {
 		const initialData = { message: "Initial content" }
 		const newData = { message: "New content" }
 
@@ -359,19 +344,18 @@ describe("safeWriteJson", () => {
 		let renameCallCount = 0
 		renameSpy.mockImplementation(async (oldPath, newPath) => {
 			renameCallCount++
-			if (renameCallCount === 2) {
-				// Second call: tempNewFilePath -> filePath (should fail)
-				throw new Error("Rename failed")
+			if (renameCallCount === 1) {
+				await originalFsPromisesUnlink(currentTestFilePath)
+				throw new Error("Broken filesystem rename")
 			}
-			// For all other calls, use the original implementation
 			return originalFsPromisesRename(oldPath, newPath)
 		})
 
-		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Rename failed")
+		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Broken filesystem rename")
 
-		// The file should be restored to its initial content
 		const content = await readFileContent(currentTestFilePath)
 		expect(content).toEqual(initialData)
+		expect(renameSpy).toHaveBeenCalledTimes(2)
 	})
 
 	test("should throw an error if an inter-process lock is already held for the filePath", async () => {
@@ -443,9 +427,8 @@ describe("safeWriteJson", () => {
 		expect(accessSpy).toHaveBeenCalled()
 	})
 
-	// Test for rollback failure scenario
-	test("should log error and re-throw original if rollback fails", async () => {
-		const initialData = { message: "Initial, should be lost if rollback fails" }
+	test("should preserve the backup and re-throw the commit error if emergency restoration fails", async () => {
+		const initialData = { message: "Initial, must remain recoverable" }
 		const newData = { message: "New content" }
 
 		await originalFsPromisesWriteFile(currentTestFilePath, JSON.stringify(initialData))
@@ -456,17 +439,15 @@ describe("safeWriteJson", () => {
 		let renameCallCount = 0
 		renameSpy.mockImplementation(async (oldPath, newPath) => {
 			renameCallCount++
-			if (renameCallCount === 2) {
-				// Second call: tempNewFilePath -> filePath (fail)
+			if (renameCallCount === 1) {
+				await originalFsPromisesUnlink(currentTestFilePath)
 				throw new Error("Primary rename failed")
-			} else if (renameCallCount === 3) {
-				// Third call: tempBackupFilePath -> filePath (rollback, also fail)
+			} else if (renameCallCount === 2) {
 				throw new Error("Rollback rename failed")
 			}
 			return originalFsPromisesRename(oldPath, newPath)
 		})
 
-		// Should throw the original error, not the rollback error
 		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Primary rename failed")
 
 		// Verify console.error was called for the rollback failure
@@ -474,6 +455,9 @@ describe("safeWriteJson", () => {
 			expect.stringContaining("Failed to restore backup"),
 			expect.objectContaining({ message: "Rollback rename failed" }),
 		)
+		const backupFiles = (await fs.readdir(tempDir)).filter((entry) => entry.includes(".bak_"))
+		expect(backupFiles).toHaveLength(1)
+		expect(await readFileContent(path.join(tempDir, backupFiles[0]))).toEqual(initialData)
 
 		consoleErrorSpy.mockRestore()
 	})

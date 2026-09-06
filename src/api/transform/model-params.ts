@@ -4,6 +4,8 @@ import {
 	type VerbosityLevel,
 	type ReasoningEffortExtended,
 	ANTHROPIC_DEFAULT_MAX_TOKENS,
+	resolveReasoningEffortForModel, // kilocode_change
+	supportsOpenAiMaxReasoningEffort, // kilocode_change
 } from "@roo-code/types"
 
 import {
@@ -111,6 +113,20 @@ export function getModelParams({
 	let reasoningBudget: ModelParams["reasoningBudget"] = undefined
 	let reasoningEffort: ModelParams["reasoningEffort"] = undefined
 	let verbosity: VerbosityLevel | undefined = model.supportsVerbosity ? customVerbosity : undefined // kilocode_change
+	// kilocode_change start: a recognized max-capable model remains usable even
+	// when a custom provider supplies incomplete capability metadata.
+	const requestedReasoningEffort =
+		customReasoningEffort !== undefined
+			? customReasoningEffort
+			: (model.reasoningEffort as ReasoningEffortExtended | "disable" | undefined)
+	const recognizedMaximumRequest =
+		requestedReasoningEffort === "max" &&
+		settings.enableReasoningEffort !== false &&
+		supportsOpenAiMaxReasoningEffort(modelId, model)
+	const requestReasoningModel: ModelInfo = recognizedMaximumRequest
+		? { ...model, supportsReasoningEffort: ["max"] }
+		: model
+	// kilocode_change end
 
 	// kilocode_change start
 	if (model.supportsAdaptiveThinking && settings.enableReasoningEffort !== false) {
@@ -144,19 +160,16 @@ export function getModelParams({
 		// Let's assume that "Hybrid" reasoning models require a temperature of
 		// 1.0 since Anthropic does.
 		temperature = 1.0
-	} else if (shouldUseReasoningEffort({ model, settings })) {
+	} else if (shouldUseReasoningEffort({ model, settings }) || recognizedMaximumRequest) {
 		// "Traditional" reasoning models use the `reasoningEffort` parameter.
 		// Only fallback to model default if user hasn't explicitly set a value.
 		// If customReasoningEffort is "disable", don't fallback to model default.
-		const effort =
-			customReasoningEffort !== undefined
-				? customReasoningEffort
-				: (model.reasoningEffort as ReasoningEffortExtended | "disable" | undefined)
+		const effort = requestedReasoningEffort
 		// Capability and settings checks are handled by shouldUseReasoningEffort.
-		// Here we simply propagate the resolved effort into the params, while
-		// still treating "disable" as an omission.
+		// Resolve the user-facing maximum preference at request time. Models that
+		// do not support API `max` receive their strongest previous level instead.
 		if (effort && effort !== "disable") {
-			reasoningEffort = effort as ReasoningEffortExtended
+			reasoningEffort = resolveReasoningEffortForModel(effort as ReasoningEffortExtended, modelId, model)
 		}
 	}
 
@@ -166,7 +179,12 @@ export function getModelParams({
 		return {
 			format,
 			...params,
-			reasoning: getAnthropicReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getAnthropicReasoning({
+				model: requestReasoningModel, // kilocode_change
+				reasoningBudget,
+				reasoningEffort,
+				settings,
+			}),
 		}
 	} else if (format === "openai") {
 		// Special case for o1 and o3-mini, which don't support temperature.
@@ -178,14 +196,24 @@ export function getModelParams({
 		return {
 			format,
 			...params,
-			reasoning: getOpenAiReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getOpenAiReasoning({
+				model: requestReasoningModel, // kilocode_change
+				reasoningBudget,
+				reasoningEffort,
+				settings,
+			}),
 			tools: model.supportsNativeTools,
 		}
 	} else if (format === "gemini") {
 		return {
 			format,
 			...params,
-			reasoning: getGeminiReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+			reasoning: getGeminiReasoning({
+				model: requestReasoningModel, // kilocode_change
+				reasoningBudget,
+				reasoningEffort,
+				settings,
+			}),
 		}
 	} else {
 		// Special case for o1-pro, which doesn't support temperature.
@@ -203,7 +231,12 @@ export function getModelParams({
 			// kilocode_change start
 			reasoning: shouldDisableReasoning(modelId, reasoningEffort)
 				? { enabled: false }
-				: getOpenRouterReasoning({ model, reasoningBudget, reasoningEffort, settings }),
+				: getOpenRouterReasoning({
+						model: requestReasoningModel, // kilocode_change
+						reasoningBudget,
+						reasoningEffort,
+						settings,
+					}),
 			// kilocode_change end
 		}
 	}

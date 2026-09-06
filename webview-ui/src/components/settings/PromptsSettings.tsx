@@ -1,7 +1,12 @@
-import { useState, useEffect, FormEvent } from "react"
+import { useState, useEffect, useRef, FormEvent } from "react" // kilocode_change
 import { VSCodeTextArea, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 
 import { supportPrompt, SupportPromptType } from "@roo/support-prompt"
+import {
+	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
+	getIntelligentContextResetPrompt,
+	isIntelligentContextResetEnabled,
+} from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -27,6 +32,11 @@ interface PromptsSettingsProps {
 	setCustomSupportPrompts: (prompts: Record<string, string | undefined>) => void
 	includeTaskHistoryInEnhance?: boolean
 	setIncludeTaskHistoryInEnhance?: (value: boolean) => void
+	// kilocode_change start: edit the selected provider profile, which may not be the active profile.
+	intelligentContextResetEnabled?: boolean
+	onIntelligentContextResetEnabledChange?: (enabled: boolean) => void
+	focusIntelligentContextResetPrompt?: boolean
+	// kilocode_change end
 }
 
 const PromptsSettings = ({
@@ -34,6 +44,11 @@ const PromptsSettings = ({
 	setCustomSupportPrompts,
 	includeTaskHistoryInEnhance: propsIncludeTaskHistoryInEnhance,
 	setIncludeTaskHistoryInEnhance: propsSetIncludeTaskHistoryInEnhance,
+	// kilocode_change start
+	intelligentContextResetEnabled: profileIntelligentContextResetEnabled,
+	onIntelligentContextResetEnabledChange,
+	focusIntelligentContextResetPrompt = false,
+	// kilocode_change end
 }: PromptsSettingsProps) => {
 	const { t } = useAppTranslation()
 	const {
@@ -44,6 +59,11 @@ const PromptsSettings = ({
 		setCondensingApiConfigId,
 		customCondensingPrompt,
 		setCustomCondensingPrompt,
+		apiConfiguration,
+		setApiConfiguration,
+		currentApiConfigName,
+		intelligentContextResetPrompt,
+		setIntelligentContextResetPrompt,
 		includeTaskHistoryInEnhance: contextIncludeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance: contextSetIncludeTaskHistoryInEnhance,
 	} = useExtensionState()
@@ -54,8 +74,29 @@ const PromptsSettings = ({
 
 	const [testPrompt, setTestPrompt] = useState("")
 	const [isEnhancing, setIsEnhancing] = useState(false)
-	const [activeSupportOption, setActiveSupportOption] = useState<SupportPromptType>("ENHANCE")
+	const [activeSupportOption, setActiveSupportOption] = useState<SupportPromptType>(
+		focusIntelligentContextResetPrompt ? "CONDENSE" : "ENHANCE",
+	) // kilocode_change
 	// kilocode_change start
+	const intelligentContextResetEnabled = onIntelligentContextResetEnabledChange
+		? profileIntelligentContextResetEnabled
+		: apiConfiguration?.intelligentContextResetEnabled
+	const intelligentContextResetSectionRef = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		if (focusIntelligentContextResetPrompt) {
+			setActiveSupportOption("CONDENSE")
+		}
+	}, [focusIntelligentContextResetPrompt])
+	useEffect(() => {
+		if (focusIntelligentContextResetPrompt && activeSupportOption === "CONDENSE") {
+			const section = intelligentContextResetSectionRef.current
+			section?.scrollIntoView?.({ block: "center" })
+			section
+				?.querySelector<HTMLElement>('[data-testid="intelligent-context-reset-prompt"]')
+				?.focus({ preventScroll: true })
+		}
+	}, [focusIntelligentContextResetPrompt, activeSupportOption])
+
 	// Local state for condensing prompt to prevent flickering during typing
 	const [localCondensingPrompt, setLocalCondensingPrompt] = useState<string | undefined>(undefined)
 	// kilocode_change end
@@ -150,6 +191,30 @@ const PromptsSettings = ({
 		vscode.postMessage({
 			type: "enhancePrompt",
 			text: testPrompt,
+		})
+	}
+
+	const updateIntelligentContextResetEnabled = (enabled: boolean) => {
+		// kilocode_change start: never save a provider checkbox as a global setting.
+		if (onIntelligentContextResetEnabledChange) {
+			onIntelligentContextResetEnabledChange(enabled)
+			return
+		}
+		const updatedConfiguration = { ...apiConfiguration, intelligentContextResetEnabled: enabled }
+		setApiConfiguration(updatedConfiguration)
+		vscode.postMessage({
+			type: "upsertApiConfiguration",
+			text: currentApiConfigName || "default",
+			apiConfiguration: updatedConfiguration,
+		})
+		// kilocode_change end
+	}
+
+	const updateIntelligentContextResetPrompt = (prompt: string) => {
+		setIntelligentContextResetPrompt(prompt)
+		vscode.postMessage({
+			type: "updateSettings",
+			updatedSettings: { intelligentContextResetPrompt: prompt },
 		})
 	}
 
@@ -295,6 +360,57 @@ const PromptsSettings = ({
 										: t("prompts:supportPrompts.condense.apiConfigDescription")}
 								</div>
 							</div>
+
+							{activeSupportOption === "CONDENSE" && (
+								<div ref={intelligentContextResetSectionRef}>
+									<VSCodeCheckbox
+										data-testid="intelligent-context-reset-checkbox"
+										checked={isIntelligentContextResetEnabled(intelligentContextResetEnabled)}
+										onChange={(e: Event | FormEvent<HTMLElement>) => {
+											const target = ("target" in e ? e.target : null) as HTMLInputElement | null
+											if (target) {
+												updateIntelligentContextResetEnabled(target.checked)
+											}
+										}}>
+										<span className="font-medium">
+											{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
+										</span>
+									</VSCodeCheckbox>
+									<div className="text-vscode-descriptionForeground text-sm mt-1">
+										{t("prompts:supportPrompts.condense.intelligentContextReset.description")}
+									</div>
+
+									{(isIntelligentContextResetEnabled(intelligentContextResetEnabled) ||
+										focusIntelligentContextResetPrompt) && (
+										<div className="mt-3">
+											<label className="block font-medium mb-1">
+												{t(
+													"prompts:supportPrompts.condense.intelligentContextReset.promptLabel",
+												)}
+											</label>
+											<VSCodeTextArea
+												data-testid="intelligent-context-reset-prompt"
+												resize="vertical"
+												rows={12}
+												className="w-full"
+												value={getIntelligentContextResetPrompt(intelligentContextResetPrompt)}
+												placeholder={DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT}
+												onInput={(e) => {
+													const value =
+														(e as unknown as CustomEvent)?.detail?.target?.value ??
+														((e as any).target as HTMLTextAreaElement).value
+													updateIntelligentContextResetPrompt(value)
+												}}
+											/>
+											<div className="text-vscode-descriptionForeground text-sm mt-1">
+												{t(
+													"prompts:supportPrompts.condense.intelligentContextReset.promptDescription",
+												)}
+											</div>
+										</div>
+									)}
+								</div>
+							)}
 
 							{activeSupportOption === "ENHANCE" && (
 								<>

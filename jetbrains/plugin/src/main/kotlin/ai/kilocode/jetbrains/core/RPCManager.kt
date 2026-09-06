@@ -233,7 +233,16 @@ class RPCManager(
         rpcProtocol.set(ServiceProxyRegistry.MainContext.MainThreadTextEditors, MainThreadTextEditors(project))
 
         // MainThreadStorage
-        rpcProtocol.set(ServiceProxyRegistry.MainContext.MainThreadStorage, MainThreadStorage())
+        val extHostStorage = rpcProtocol.getProxy(ServiceProxyRegistry.ExtHostContext.ExtHostStorage)
+        rpcProtocol.set(
+            ServiceProxyRegistry.MainContext.MainThreadStorage,
+            MainThreadStorage(
+                workspaceId = project.locationHash,
+                acceptValue = { shared, extensionId, value ->
+                    extHostStorage.acceptValue(shared, extensionId, value)
+                },
+            ),
+        )
 
         // MainThreadOutputService
         rpcProtocol.set(ServiceProxyRegistry.MainContext.MainThreadOutputService, MainThreadOutputService())

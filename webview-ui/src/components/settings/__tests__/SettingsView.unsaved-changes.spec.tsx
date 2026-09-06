@@ -138,6 +138,7 @@ vi.mock("../SettingsSearch", () => ({
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import ApiOptions from "../ApiOptions"
+import PromptsSettings from "../PromptsSettings" // kilocode_change
 
 describe("SettingsView - Unsaved Changes Detection", () => {
 	let queryClient: QueryClient
@@ -231,6 +232,74 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 		})
 		;(useExtensionState as any).mockReturnValue(defaultExtensionState)
 	})
+
+	// kilocode_change start
+	it("opens the intelligent prompt without losing unsaved settings or the non-active editing profile", async () => {
+		vi.mocked(ApiOptions).mockImplementation(
+			({
+				apiConfiguration,
+				currentApiConfigName,
+				setApiConfigurationField,
+				onEditIntelligentContextResetPrompt,
+			}) => (
+				<div data-testid="api-options">
+					<span data-testid="editing-profile">{currentApiConfigName}</span>
+					<span data-testid="editing-base-url">{apiConfiguration.openAiBaseUrl}</span>
+					<span data-testid="editing-reset-enabled">
+						{String(apiConfiguration.intelligentContextResetEnabled)}
+					</span>
+					<button onClick={() => setApiConfigurationField("openAiBaseUrl", "https://unsaved.example/v1")}>
+						Edit provider URL
+					</button>
+					<button onClick={onEditIntelligentContextResetPrompt}>Edit intelligent prompt</button>
+				</div>
+			),
+		)
+		vi.mocked(PromptsSettings).mockImplementation(
+			({
+				intelligentContextResetEnabled,
+				onIntelligentContextResetEnabledChange,
+				focusIntelligentContextResetPrompt,
+			}) => (
+				<div data-testid="prompts-settings">
+					<span data-testid="direct-prompt-navigation">{String(focusIntelligentContextResetPrompt)}</span>
+					<span data-testid="prompt-profile-enabled">{String(intelligentContextResetEnabled)}</span>
+					<button onClick={() => onIntelligentContextResetEnabledChange?.(true)}>
+						Enable edited profile
+					</button>
+				</div>
+			),
+		)
+		render(
+			<QueryClientProvider client={queryClient}>
+				<SettingsView onDone={vi.fn()} editingProfile="Second provider" />
+			</QueryClientProvider>,
+		)
+		fireEvent(
+			window,
+			new MessageEvent("message", {
+				data: {
+					type: "profileConfigurationForEditing",
+					text: "Second provider",
+					apiConfiguration: { apiProvider: "openai", intelligentContextResetEnabled: false },
+				},
+			}),
+		)
+		await waitFor(() => expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider"))
+		fireEvent.click(screen.getByText("Edit provider URL"))
+		fireEvent.click(screen.getByText("Edit intelligent prompt"))
+		expect(screen.getByTestId("direct-prompt-navigation")).toHaveTextContent("true")
+		expect(screen.getByTestId("prompt-profile-enabled")).toHaveTextContent("false")
+		fireEvent.click(screen.getByText("Enable edited profile"))
+		fireEvent.click(screen.getByText("settings:sections.providers"))
+		expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider")
+		expect(screen.getByTestId("editing-base-url")).toHaveTextContent("https://unsaved.example/v1")
+		expect(screen.getByTestId("editing-reset-enabled")).toHaveTextContent("true")
+		expect(screen.getByTestId("save-button")).toBeEnabled()
+		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "loadApiConfiguration" }))
+		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "upsertApiConfiguration" }))
+	})
+	// kilocode_change end
 
 	// TODO: Fix underlying issue - dialog appears even when no user changes have been made
 	// This happens because some component is triggering setCachedStateField during initialization

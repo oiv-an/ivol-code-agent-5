@@ -6,6 +6,9 @@ import type { ModelInfo } from "@roo-code/types"
 
 import { ThinkingBudget } from "../ThinkingBudget"
 
+// kilocode_change start: let SelectItem clicks exercise the real selection handler
+const selectMockState = vi.hoisted(() => ({ onValueChange: undefined as ((value: string) => void) | undefined }))
+
 vi.mock("@/components/ui", () => ({
 	Slider: ({ value, onValueChange, min, max, step }: any) => (
 		<input
@@ -18,20 +21,27 @@ vi.mock("@/components/ui", () => ({
 			onChange={(e) => onValueChange([parseInt(e.target.value)])}
 		/>
 	),
-	Select: ({ children, value, onValueChange: _onValueChange }: any) => (
-		<div data-testid="select" data-value={value}>
-			{children}
-		</div>
-	),
+	Select: ({ children, value, onValueChange }: any) => {
+		selectMockState.onValueChange = onValueChange
+		return (
+			<div data-testid="select" data-value={value}>
+				{children}
+			</div>
+		)
+	},
 	SelectTrigger: ({ children }: any) => <button data-testid="select-trigger">{children}</button>,
 	SelectValue: ({ placeholder }: any) => <span data-testid="select-value">{placeholder}</span>,
 	SelectContent: ({ children }: any) => <div data-testid="select-content">{children}</div>,
 	SelectItem: ({ children, value }: any) => (
-		<div data-testid={`select-item-${value}`} data-value={value}>
+		<div
+			data-testid={`select-item-${value}`}
+			data-value={value}
+			onClick={() => selectMockState.onValueChange?.(value)}>
 			{children}
 		</div>
 	),
 }))
+// kilocode_change end
 
 vi.mock("@/components/ui/hooks/useSelectedModel", () => ({
 	useSelectedModel: (apiConfiguration: any) => {
@@ -281,6 +291,7 @@ describe("ThinkingBudget", () => {
 			expect(screen.getByTestId("select-item-low")).toBeInTheDocument()
 			expect(screen.getByTestId("select-item-medium")).toBeInTheDocument()
 			expect(screen.getByTestId("select-item-high")).toBeInTheDocument()
+			expect(screen.getByTestId("select-item-max")).toBeInTheDocument()
 		})
 
 		it("should NOT show 'disable' option when supportsReasoningEffort is an explicit array without disable", () => {
@@ -300,6 +311,7 @@ describe("ThinkingBudget", () => {
 			expect(screen.getByTestId("select-item-low")).toBeInTheDocument()
 			expect(screen.queryByTestId("select-item-medium")).not.toBeInTheDocument()
 			expect(screen.getByTestId("select-item-high")).toBeInTheDocument()
+			expect(screen.getByTestId("select-item-max")).toBeInTheDocument()
 		})
 
 		it("should show 'disable' option when supportsReasoningEffort array explicitly includes disable", () => {
@@ -342,7 +354,7 @@ describe("ThinkingBudget", () => {
 		})
 
 		// kilocode_change start: GPT-5.6 maximum reasoning effort
-		it("should show max only when the model capability explicitly includes it", () => {
+		it("should show max once whether or not the capability explicitly includes it", () => {
 			const { rerender } = render(
 				<ThinkingBudget
 					{...defaultProps}
@@ -354,6 +366,7 @@ describe("ThinkingBudget", () => {
 			)
 
 			expect(screen.getByTestId("select-item-max")).toHaveTextContent("settings:providers.reasoningEffort.max")
+			expect(screen.getAllByTestId("select-item-max")).toHaveLength(1)
 
 			rerender(
 				<ThinkingBudget
@@ -365,7 +378,41 @@ describe("ThinkingBudget", () => {
 				/>,
 			)
 
-			expect(screen.queryByTestId("select-item-max")).not.toBeInTheDocument()
+			expect(screen.getByTestId("select-item-max")).toHaveTextContent("settings:providers.reasoningEffort.max")
+		})
+
+		it("keeps max as the selected preference", () => {
+			render(
+				<ThinkingBudget
+					{...defaultProps}
+					apiConfiguration={{ reasoningEffort: "max", enableReasoningEffort: true }}
+					modelInfo={{
+						...reasoningEffortModelInfo,
+						supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+					}}
+				/>,
+			)
+
+			expect(screen.getByTestId("select")).toHaveAttribute("data-value", "max")
+		})
+
+		it("enables reasoning and saves max when Maximum is selected", () => {
+			const setApiConfigurationField = vi.fn()
+			render(
+				<ThinkingBudget
+					{...defaultProps}
+					setApiConfigurationField={setApiConfigurationField}
+					modelInfo={{
+						...reasoningEffortModelInfo,
+						supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+					}}
+				/>,
+			)
+
+			fireEvent.click(screen.getByTestId("select-item-max"))
+
+			expect(setApiConfigurationField).toHaveBeenCalledWith("enableReasoningEffort", true)
+			expect(setApiConfigurationField).toHaveBeenCalledWith("reasoningEffort", "max")
 		})
 		// kilocode_change end
 	})

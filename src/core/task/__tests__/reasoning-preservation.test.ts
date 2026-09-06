@@ -163,6 +163,8 @@ describe("Task reasoning preservation", () => {
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
+		vi.spyOn(Task.prototype as any, "saveApiConversationHistory").mockResolvedValue(true)
+
 		// Mock provider with necessary methods
 		mockProvider = {
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
@@ -423,7 +425,7 @@ describe("Task reasoning preservation", () => {
 		})
 
 		// Avoid disk writes in this test
-		;(task as any).saveApiConversationHistory = vi.fn().mockResolvedValue(undefined)
+		;(task as any).saveApiConversationHistory = vi.fn().mockResolvedValue(true)
 
 		// Mock API handler to provide encrypted reasoning data and response id
 		task.api = {
@@ -470,7 +472,7 @@ describe("Task reasoning preservation", () => {
 		})
 
 		// Avoid disk writes in this test
-		;(task as any).saveApiConversationHistory = vi.fn().mockResolvedValue(undefined)
+		;(task as any).saveApiConversationHistory = vi.fn().mockResolvedValue(true)
 
 		// Mock API handler without getEncryptedContent (like Anthropic, Gemini, etc.)
 		task.api = {

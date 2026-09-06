@@ -655,7 +655,6 @@ describe("OpenAiHandler", () => {
 				openAiCustomModelInfo: {
 					contextWindow: 128_000,
 					supportsPromptCache: false,
-					supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
 				},
 			})
 
@@ -665,7 +664,7 @@ describe("OpenAiHandler", () => {
 			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("max")
 		})
 
-		it("should omit stale max reasoning effort from an unsupported streaming model", async () => {
+		it("should fall back from max to xhigh for an unsupported streaming model", async () => {
 			const reasoningHandler = new OpenAiHandler({
 				...mockOptions,
 				openAiModelId: "gpt-5.5",
@@ -683,10 +682,10 @@ describe("OpenAiHandler", () => {
 			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
 			}
 
-			expect(mockCreate.mock.calls[0][0]).not.toHaveProperty("reasoning_effort")
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("xhigh")
 		})
 
-		it("should omit stale max reasoning effort from an unrelated non-streaming model", async () => {
+		it("should fall back from max to xhigh for an unrelated non-streaming model", async () => {
 			const reasoningHandler = new OpenAiHandler({
 				...mockOptions,
 				openAiModelId: "my-gpt-sol-old",
@@ -704,7 +703,7 @@ describe("OpenAiHandler", () => {
 			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
 			}
 
-			expect(mockCreate.mock.calls[0][0]).not.toHaveProperty("reasoning_effort")
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("xhigh")
 		})
 		// kilocode_change end
 
@@ -1104,6 +1103,29 @@ describe("OpenAiHandler", () => {
 				reasoningEffort: "medium" as "low" | "medium" | "high",
 			},
 		}
+
+		// kilocode_change start: O-family requests must use the resolved Maximum fallback
+		it.each([true, false])("falls back from Maximum in O3 requests (stream=%s)", async (streaming) => {
+			const o3Handler = new OpenAiHandler({
+				...o3Options,
+				openAiStreamingEnabled: streaming,
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+				openAiCustomModelInfo: {
+					...o3Options.openAiCustomModelInfo,
+					supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+					reasoningEffort: "max",
+				},
+			})
+
+			for await (const _chunk of o3Handler.createMessage("system", [])) {
+				// drain
+			}
+
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("xhigh")
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).not.toBe("max")
+		})
+		// kilocode_change end
 
 		it("should handle O3 model with streaming and include max_completion_tokens when includeMaxTokens is true", async () => {
 			const o3Handler = new OpenAiHandler({

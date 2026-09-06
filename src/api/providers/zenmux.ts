@@ -118,26 +118,20 @@ export class ZenMuxHandler extends BaseProvider implements SingleCompletionHandl
 		client: OpenAI,
 		openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[],
 		model: { id: string; info: ModelInfo },
-		_reasoningEffort?: string,
-		thinkingBudgetTokens?: number,
+		reasoning?: OpenRouterReasoningParams,
 		zenMuxProviderSorting?: string,
 		tools?: Array<ChatCompletionTool>,
 		toolChoice?: OpenAI.Chat.ChatCompletionCreateParams["tool_choice"],
 		parallelToolCalls: boolean = false,
 		_geminiThinkingLevel?: string,
 	) {
-		// Build reasoning config if thinking budget is set
-		let reasoning: { max_tokens: number } | undefined
-		if (thinkingBudgetTokens && thinkingBudgetTokens > 0) {
-			reasoning = { max_tokens: thinkingBudgetTokens }
-		}
-
 		// @ts-ignore-next-line
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			messages: openAiMessages,
 			stream: true,
 			stream_options: { include_usage: true },
+			// kilocode_change: reasoning is resolved by getModelParams, including max fallback.
 			...(reasoning ? { reasoning } : {}),
 			...(zenMuxProviderSorting && zenMuxProviderSorting !== ""
 				? {
@@ -276,8 +270,8 @@ export class ZenMuxHandler extends BaseProvider implements SingleCompletionHandl
 				this.client,
 				openAiMessages,
 				model,
-				this.options.reasoningEffort,
-				this.options.modelMaxThinkingTokens,
+				// kilocode_change: never forward the raw saved preference to the API.
+				model.reasoning,
 				this.options.zenmuxProviderSort,
 				tools,
 				toolChoice,

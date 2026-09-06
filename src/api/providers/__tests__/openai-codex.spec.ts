@@ -71,10 +71,45 @@ describe("OpenAiCodexHandler.getModel", () => {
 		expect(body.prompt_cache_key).toBe("task-123")
 	})
 
-	it("does not send a stale max effort to GPT-5.5", () => {
+	// kilocode_change start: preserve max while retaining legacy stale-setting fallback
+	it("falls back from max to xhigh for GPT-5.5", () => {
 		const handler = new OpenAiCodexHandler({ apiModelId: "gpt-5.5", reasoningEffort: "max" })
 		const model = handler.getModel()
 
-		expect((handler as any).getReasoningEffort(model)).toBe("medium")
+		expect((handler as any).getReasoningEffort(model)).toBe("xhigh")
 	})
+
+	it("keeps max for GPT-5.6", () => {
+		const handler = new OpenAiCodexHandler({ apiModelId: "gpt-5.6-sol", reasoningEffort: "max" })
+		expect((handler as any).getReasoningEffort(handler.getModel())).toBe("max")
+	})
+
+	it("falls back to the strongest declared level for an account model", () => {
+		getModelsFromCacheMock.mockReturnValue({
+			"future-codex-model": {
+				contextWindow: 999_999,
+				supportsPromptCache: false,
+				supportsReasoningEffort: ["low", "medium"],
+				reasoningEffort: "low",
+			},
+		})
+		const handler = new OpenAiCodexHandler({ apiModelId: "future-codex-model", reasoningEffort: "max" })
+
+		expect((handler as any).getReasoningEffort(handler.getModel())).toBe("medium")
+	})
+
+	it("retains the model default for an unsupported older saved effort", () => {
+		const handler = new OpenAiCodexHandler({ apiModelId: "gpt-5.5", reasoningEffort: "minimal" })
+		expect((handler as any).getReasoningEffort(handler.getModel())).toBe("medium")
+	})
+
+	it("omits reasoning when the setting is disabled", () => {
+		const handler = new OpenAiCodexHandler({
+			apiModelId: "gpt-5.6-sol",
+			reasoningEffort: "max",
+			enableReasoningEffort: false,
+		})
+		expect((handler as any).getReasoningEffort(handler.getModel())).toBeUndefined()
+	})
+	// kilocode_change end
 })

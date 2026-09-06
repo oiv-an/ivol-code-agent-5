@@ -2,13 +2,14 @@ import Anthropic from "@anthropic-ai/sdk"
 import crypto from "crypto"
 
 import { TelemetryService } from "@roo-code/telemetry"
-import { ModelInfo } from "@roo-code/types"
+import { DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT, ModelInfo } from "@roo-code/types"
 
 import { t } from "../../i18n"
 import { ApiHandler } from "../../api"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "../../shared/array"
+import { buildContextHandoffPrompt } from "../context-management/context-handoff"
 
 /**
  * Checks if a message contains tool_result blocks.
@@ -211,6 +212,316 @@ export type SummarizeResponse = {
 	condenseId?: string // The unique ID of the created Summary message, for linking to condense_context clineMessage
 }
 
+export type ContextHandoffGenerationOptions = {
+	/** Defaults to true so existing callers use the lossless IVOL restart flow. */
+	enabled?: boolean
+	/** Editable task sent to the active model immediately before context compression. */
+	prompt?: string
+	/** Called only after validation, immediately before the real memory-task request. */
+	onBeforeRequest?: (prompt: string) => Promise<void> // kilocode_change
+}
+
+const HANDOFF_MAX_STRING_CHARS = 24_000
+const HANDOFF_MIN_PAYLOAD_CHARS = 8_000
+const HANDOFF_MAX_PAYLOAD_CHARS = 128_000
+// At roughly four characters per token this reserves at most ~7.5% of the active model's window.
+const HANDOFF_CONTEXT_WINDOW_CHAR_RATIO = 0.3
+const HANDOFF_MAX_COLLECTION_ITEMS = 40
+const HANDOFF_MAX_OBJECT_DEPTH = 6
+const HANDOFF_OMITTED_VALUE = "[opaque content omitted]"
+const HANDOFF_REDACTED_VALUE = "[REDACTED]"
+const OMIT_FROM_HANDOFF = Symbol("omit-from-handoff")
+
+type HandoffSanitizedValue = unknown | typeof OMIT_FROM_HANDOFF
+
+function truncateHandoffText(value: string, maxChars: number, omittedPartLabel: string): string {
+	if (value.length <= maxChars) {
+		return value
+	}
+
+	const marker = `\n... [${omittedPartLabel} omitted; beginning and end preserved] ...\n`
+	const retainedChars = Math.max(0, maxChars - marker.length)
+	const leadingChars = Math.ceil(retainedChars / 2)
+	const trailingChars = Math.floor(retainedChars / 2)
+
+	return `${value.slice(0, leadingChars)}${marker}${value.slice(value.length - trailingChars)}`
+}
+
+function redactCredentialPatterns(value: string): string {
+	return value
+		.replace(
+			/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----/gi,
+			HANDOFF_REDACTED_VALUE,
+		)
+		.replace(/\b(?:ivol-managed|sk-(?:ant-|proj-)?|rk-|pk-)[A-Za-z0-9_-]{12,}\b/gi, HANDOFF_REDACTED_VALUE)
+		.replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, HANDOFF_REDACTED_VALUE)
+		.replace(/\b(?:xox[baprs]-[A-Za-z0-9-]{12,}|npm_[A-Za-z0-9]{20,})\b/g, HANDOFF_REDACTED_VALUE)
+		.replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, HANDOFF_REDACTED_VALUE)
+		.replace(/\bAIza[A-Za-z0-9_-]{30,}\b/g, HANDOFF_REDACTED_VALUE)
+		.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, HANDOFF_REDACTED_VALUE)
+		.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${HANDOFF_REDACTED_VALUE}`)
+		.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${HANDOFF_REDACTED_VALUE}@`)
+		.replace(
+			/((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|auth(?:orization)?|password|passwd|secret(?:[_-]?access[_-]?key)?|client[_-]?secret|private[_-]?key|session[_-]?(?:id|token)|credential|cookie)(?:["']?)\s*(?:=|:)\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}\]]+)/gi,
+			`$1${HANDOFF_REDACTED_VALUE}`,
+		)
+}
+
+function sanitizeHandoffText(value: string): string {
+	if (/[^\t\n\r\x20-\x7e\u00a0-\uffff]/u.test(value)) {
+		return HANDOFF_OMITTED_VALUE
+	}
+
+	const redacted = redactCredentialPatterns(value)
+		.replace(/data:[\w.+-]+\/[\w.+-]+;base64,[A-Za-z0-9+/_=-]+/gi, HANDOFF_OMITTED_VALUE)
+		.replace(/\b[A-Za-z0-9+/_-]{200,}={0,2}\b/g, HANDOFF_OMITTED_VALUE)
+		.replace(/\b[0-9a-f]{160,}\b/gi, HANDOFF_OMITTED_VALUE)
+
+	return truncateHandoffText(redacted, HANDOFF_MAX_STRING_CHARS, "part of oversized raw output")
+}
+
+function normalizeHandoffKey(key: string): string {
+	return key.replace(/[^a-z0-9]/gi, "").toLowerCase()
+}
+
+function isOpaqueHandoffKey(key: string): boolean {
+	const normalized = normalizeHandoffKey(key)
+	return (
+		normalized.startsWith("reasoning") ||
+		normalized.startsWith("thinking") ||
+		normalized === "redactedthinking" ||
+		normalized === "chainofthought" ||
+		normalized.includes("thoughtsignature") ||
+		normalized.endsWith("signature") ||
+		normalized.startsWith("encryptedcontent") ||
+		normalized.startsWith("extracontent")
+	)
+}
+
+function isCredentialHandoffKey(key: string): boolean {
+	const normalized = normalizeHandoffKey(key)
+	return (
+		normalized === "key" ||
+		normalized.endsWith("apikey") ||
+		normalized.endsWith("accesstoken") ||
+		normalized.endsWith("refreshtoken") ||
+		normalized === "token" ||
+		normalized.endsWith("authtoken") ||
+		normalized === "auth" ||
+		normalized.endsWith("authorization") ||
+		normalized.endsWith("password") ||
+		normalized === "passwd" ||
+		normalized.endsWith("secret") ||
+		normalized.endsWith("secretaccesskey") ||
+		normalized.endsWith("privatekey") ||
+		normalized.endsWith("sessionid") ||
+		normalized.endsWith("sessiontoken") ||
+		normalized.endsWith("credential") ||
+		normalized.endsWith("credentials") ||
+		normalized.endsWith("cookie")
+	)
+}
+
+function isBinaryHandoffKey(key: string): boolean {
+	const normalized = normalizeHandoffKey(key)
+	return (
+		normalized === "base64" ||
+		normalized === "binary" ||
+		normalized === "blob" ||
+		normalized === "bytes" ||
+		normalized === "imagedata" ||
+		normalized === "audiodata" ||
+		normalized === "videodata" ||
+		normalized === "filedata" ||
+		normalized === "screenshot"
+	)
+}
+
+function isOpaqueOrBinaryHandoffObject(value: Record<string, unknown>): boolean {
+	const type = typeof value.type === "string" ? normalizeHandoffKey(value.type) : ""
+	const encoding = typeof value.encoding === "string" ? normalizeHandoffKey(value.encoding) : ""
+
+	return (
+		[
+			"reasoning",
+			"thinking",
+			"redactedthinking",
+			"thoughtsignature",
+			"encryptedcontent",
+			"extracontent",
+			"base64",
+			"binary",
+			"buffer",
+			"image",
+			"imageurl",
+			"audio",
+			"video",
+			"document",
+		].includes(type) ||
+		encoding === "base64" ||
+		(("media_type" in value || "mime_type" in value) && ("data" in value || "source" in value))
+	)
+}
+
+function selectHandoffCollectionEdges<T>(values: T[]): Array<T | string> {
+	if (values.length <= HANDOFF_MAX_COLLECTION_ITEMS) {
+		return values
+	}
+
+	const half = HANDOFF_MAX_COLLECTION_ITEMS / 2
+	return [
+		...values.slice(0, half),
+		`[${values.length - HANDOFF_MAX_COLLECTION_ITEMS} collection items omitted; beginning and end preserved]`,
+		...values.slice(-half),
+	]
+}
+
+function sanitizeToolValue(value: unknown, depth = 0, ancestors = new WeakSet<object>()): HandoffSanitizedValue {
+	if (value === null || typeof value === "number" || typeof value === "boolean") {
+		return value
+	}
+	if (typeof value === "string") {
+		return sanitizeHandoffText(value)
+	}
+	if (typeof value !== "object" || depth >= HANDOFF_MAX_OBJECT_DEPTH) {
+		return OMIT_FROM_HANDOFF
+	}
+	if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+		return OMIT_FROM_HANDOFF
+	}
+	if (ancestors.has(value)) {
+		return OMIT_FROM_HANDOFF
+	}
+
+	ancestors.add(value)
+	try {
+		if (Array.isArray(value)) {
+			return selectHandoffCollectionEdges(value)
+				.map((item) => sanitizeToolValue(item, depth + 1, ancestors))
+				.filter((item) => item !== OMIT_FROM_HANDOFF)
+		}
+
+		const record = value as Record<string, unknown>
+		if (isOpaqueOrBinaryHandoffObject(record)) {
+			return OMIT_FROM_HANDOFF
+		}
+
+		const entries = selectHandoffCollectionEdges(Object.entries(record))
+		const sanitized: Record<string, unknown> = {}
+		for (const entry of entries) {
+			if (typeof entry === "string") {
+				sanitized.__omitted_fields__ = entry
+				continue
+			}
+
+			const [key, nestedValue] = entry
+			if (isOpaqueHandoffKey(key) || isBinaryHandoffKey(key)) {
+				continue
+			}
+			if (isCredentialHandoffKey(key)) {
+				sanitized[key] = HANDOFF_REDACTED_VALUE
+				continue
+			}
+
+			const sanitizedValue = sanitizeToolValue(nestedValue, depth + 1, ancestors)
+			if (sanitizedValue !== OMIT_FROM_HANDOFF) {
+				sanitized[key] = sanitizedValue
+			}
+		}
+		return sanitized
+	} finally {
+		ancestors.delete(value)
+	}
+}
+
+function sanitizeToolResultContent(content: unknown): unknown {
+	if (typeof content === "string") {
+		return sanitizeHandoffText(content)
+	}
+	if (!Array.isArray(content)) {
+		const sanitized = sanitizeToolValue(content)
+		return sanitized === OMIT_FROM_HANDOFF ? HANDOFF_OMITTED_VALUE : sanitized
+	}
+
+	const sanitized = selectHandoffCollectionEdges(content)
+		.map((block) => {
+			if (typeof block === "string") {
+				return sanitizeHandoffText(block)
+			}
+			if (typeof block === "object" && block !== null && (block as Record<string, unknown>).type === "text") {
+				const text = (block as Record<string, unknown>).text
+				return typeof text === "string" ? { type: "text", text: sanitizeHandoffText(text) } : OMIT_FROM_HANDOFF
+			}
+
+			return sanitizeToolValue(block)
+		})
+		.filter((block) => block !== OMIT_FROM_HANDOFF)
+
+	return sanitized.length > 0 ? sanitized : HANDOFF_OMITTED_VALUE
+}
+
+function sanitizeHandoffContentBlock(block: unknown): HandoffSanitizedValue {
+	if (typeof block !== "object" || block === null) {
+		return typeof block === "string" ? sanitizeHandoffText(block) : OMIT_FROM_HANDOFF
+	}
+
+	const record = block as Record<string, unknown>
+	if (record.type === "text" && typeof record.text === "string") {
+		return { type: "text", text: sanitizeHandoffText(record.text) }
+	}
+	if (record.type === "tool_use" && typeof record.id === "string" && typeof record.name === "string") {
+		const input = sanitizeToolValue(record.input)
+		return {
+			type: "tool_use",
+			id: sanitizeHandoffText(record.id),
+			name: sanitizeHandoffText(record.name),
+			input: input === OMIT_FROM_HANDOFF ? HANDOFF_OMITTED_VALUE : input,
+		}
+	}
+	if (record.type === "tool_result" && typeof record.tool_use_id === "string") {
+		return {
+			type: "tool_result",
+			tool_use_id: sanitizeHandoffText(record.tool_use_id),
+			...(typeof record.is_error === "boolean" ? { is_error: record.is_error } : {}),
+			content: sanitizeToolResultContent(record.content),
+		}
+	}
+
+	return OMIT_FROM_HANDOFF
+}
+
+function getHandoffPayloadCharLimit(apiHandler: ApiHandler): number {
+	const contextWindow = apiHandler.getModel().info.contextWindow
+	if (!Number.isFinite(contextWindow) || contextWindow <= 0) {
+		return HANDOFF_MAX_PAYLOAD_CHARS
+	}
+
+	return Math.min(
+		HANDOFF_MAX_PAYLOAD_CHARS,
+		Math.max(HANDOFF_MIN_PAYLOAD_CHARS, Math.floor(contextWindow * HANDOFF_CONTEXT_WINDOW_CHAR_RATIO)),
+	)
+}
+
+function serializeRecentMessagesForHandoff(messages: ApiMessage[], maxPayloadChars: number): string {
+	const sanitizedMessages = messages.map(({ role, content }) => {
+		const sanitizedContent =
+			typeof content === "string"
+				? sanitizeHandoffText(content)
+				: content.map(sanitizeHandoffContentBlock).filter((block) => block !== OMIT_FROM_HANDOFF)
+
+		return {
+			role,
+			content:
+				Array.isArray(sanitizedContent) && sanitizedContent.length === 0
+					? HANDOFF_OMITTED_VALUE
+					: sanitizedContent,
+		}
+	})
+	const serialized = JSON.stringify(sanitizedMessages, null, 2)
+
+	return truncateHandoffText(serialized, maxPayloadChars, "middle of oversized recent messages payload")
+}
+
 /**
  * Summarizes the conversation messages using an LLM call
  *
@@ -233,6 +544,7 @@ export type SummarizeResponse = {
  * @param {string} customCondensingPrompt - Optional custom prompt to use for condensing
  * @param {ApiHandler} condensingApiHandler - Optional specific API handler to use for condensing
  * @param {boolean} useNativeTools - Whether native tools protocol is being used (requires tool_use/tool_result pairing)
+ * @param {ContextHandoffGenerationOptions} contextHandoff - Controls the optional lossless restart-file handoff
  * @returns {SummarizeResponse} - The result of the summarization operation (see above)
  */
 export async function summarizeConversation(
@@ -245,6 +557,7 @@ export async function summarizeConversation(
 	customCondensingPrompt?: string,
 	condensingApiHandler?: ApiHandler,
 	useNativeTools?: boolean,
+	contextHandoff: ContextHandoffGenerationOptions = { enabled: true },
 ): Promise<SummarizeResponse> {
 	TelemetryService.instance.captureContextCondensed(
 		taskId,
@@ -310,42 +623,53 @@ export async function summarizeConversation(
 		return { ...response, error }
 	}
 
-	const finalRequestMessage: Anthropic.MessageParam = {
-		role: "user",
-		content: "Summarize the conversation so far, as described in the prompt instructions.",
-	}
-
-	const requestMessages = maybeRemoveImageBlocks([...messagesToSummarize, finalRequestMessage], apiHandler).map(
-		({ role, content }) => ({ role, content }),
-	)
-
-	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
-	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
-	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
-
-	// Use condensing API handler if provided, otherwise use main API handler
+	// Use the handler that will actually receive the handoff request for capability checks and sizing.
 	let handlerToUse = condensingApiHandler || apiHandler
 
-	// Check if the chosen handler supports the required functionality
 	if (!handlerToUse || typeof handlerToUse.createMessage !== "function") {
 		console.warn(
 			"Chosen API handler for condensing does not support message creation or is invalid, falling back to main apiHandler.",
 		)
 
-		handlerToUse = apiHandler // Fallback to the main, presumably valid, apiHandler
+		handlerToUse = apiHandler
 
-		// Ensure the main apiHandler itself is valid before this point or add another check.
 		if (!handlerToUse || typeof handlerToUse.createMessage !== "function") {
-			// This case should ideally not happen if main apiHandler is always valid.
-			// Consider throwing an error or returning a specific error response.
 			console.error("Main API handler is also invalid for condensing. Cannot proceed.")
-			// Return an appropriate error structure for SummarizeResponse
 			const error = t("common:errors.condense_handler_invalid")
 			return { ...response, error }
 		}
 	}
 
-	const stream = handlerToUse.createMessage(promptToUse, requestMessages)
+	const contextHandoffEnabled = contextHandoff.enabled ?? true
+	const handoffTask = contextHandoff.prompt?.trim() || DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT
+	let requestSourceMessages = messagesToSummarize
+	if (contextHandoffEnabled) {
+		const recentMessagesForHandoff = serializeRecentMessagesForHandoff(
+			keepMessages,
+			getHandoffPayloadCharLimit(handlerToUse),
+		)
+		const finalRequestMessage: Anthropic.MessageParam = {
+			role: "user",
+			content: `${handoffTask}
+
+The recent messages below will remain in the live API context, but they must also be reflected in the standalone CONTEXT_RESTART.md continuation state. Use them to capture the exact current status and next action. Do not copy raw secrets.
+
+<recent_messages>
+${recentMessagesForHandoff}
+</recent_messages>`,
+		}
+		requestSourceMessages = [...messagesToSummarize, finalRequestMessage]
+	}
+
+	const requestMessages = maybeRemoveImageBlocks(requestSourceMessages, handlerToUse).map(({ role, content }) => ({
+		role,
+		content,
+	}))
+
+	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
+	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
+	const basePrompt = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
+	const promptToUse = contextHandoffEnabled ? buildContextHandoffPrompt(basePrompt) : basePrompt
 
 	let summary = ""
 	let cost = 0
@@ -361,32 +685,47 @@ export async function summarizeConversation(
 	let lastAntThinking: { thinking: string; signature: string } | null = null
 	// kilocode_change end
 
-	for await (const chunk of stream) {
-		if (chunk.type === "text") {
-			summary += chunk.text
-		} else if (chunk.type === "usage") {
-			// Record final usage chunk only
-			cost = chunk.totalCost ?? 0
-			outputTokens = chunk.outputTokens ?? 0
+	// kilocode_change start: expose the actual preparation before the provider call;
+	// failures remain a failed preparation, never a successful compression.
+	try {
+		if (contextHandoffEnabled) {
+			await contextHandoff.onBeforeRequest?.(handoffTask)
 		}
-		// kilocode_change start: Capture Anthropic thinking blocks from condensing response
-		else if (chunk.type === "ant_thinking") {
-			// Multiple ant_thinking chunks may be emitted during streaming:
-			// 1. From content_block_start (may have partial data)
-			// 2. From signature_delta (has full accumulated thinking + signature)
-			// Keep the last one with a valid signature as it has the complete data
-			if (chunk.thinking && chunk.signature) {
-				lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
+		const stream = handlerToUse.createMessage(promptToUse, requestMessages)
+		for await (const chunk of stream) {
+			if (chunk.type === "text") {
+				summary += chunk.text
+			} else if (chunk.type === "usage") {
+				// Record final usage chunk only
+				cost = chunk.totalCost ?? 0
+				outputTokens = chunk.outputTokens ?? 0
 			}
-		} else if (chunk.type === "ant_redacted_thinking") {
-			// Redacted thinking blocks should be preserved as-is
-			summaryThinkingBlocks.push({
-				type: "redacted_thinking",
-				data: chunk.data,
-			} as Anthropic.Messages.RedactedThinkingBlock)
+			// kilocode_change start: Capture Anthropic thinking blocks from condensing response
+			else if (chunk.type === "ant_thinking") {
+				// Multiple ant_thinking chunks may be emitted during streaming:
+				// 1. From content_block_start (may have partial data)
+				// 2. From signature_delta (has full accumulated thinking + signature)
+				// Keep the last one with a valid signature as it has the complete data
+				if (chunk.thinking && chunk.signature) {
+					lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
+				}
+			} else if (chunk.type === "ant_redacted_thinking") {
+				// Redacted thinking blocks should be preserved as-is
+				summaryThinkingBlocks.push({
+					type: "redacted_thinking",
+					data: chunk.data,
+				} as Anthropic.Messages.RedactedThinkingBlock)
+			}
+			// kilocode_change end
 		}
-		// kilocode_change end
+	} catch (error) {
+		return {
+			...response,
+			cost,
+			error: `Context preparation failed: ${error instanceof Error ? error.message : String(error)}`,
+		}
 	}
+	// kilocode_change end
 
 	// kilocode_change start: Finalize captured thinking blocks
 	// Add the final ant_thinking chunk as a proper thinking block
@@ -539,9 +878,13 @@ export async function summarizeConversation(
 	// We only estimate the tokens in summaryMesage if outputTokens is 0, otherwise we use outputTokens
 	const systemPromptMessage: ApiMessage = { role: "user", content: systemPrompt }
 
+	// The first user message is always reintroduced into the effective history
+	// below. Count it here as well (unless it is already among the kept tail),
+	// otherwise the post-condense estimate can under-report a large initial task.
+	const preservedFirstMessage = firstMessage && !keepMessages.includes(firstMessage) ? [firstMessage] : []
 	const contextMessages = outputTokens
-		? [systemPromptMessage, ...keepMessages]
-		: [systemPromptMessage, summaryMessage, ...keepMessages]
+		? [systemPromptMessage, ...preservedFirstMessage, ...keepMessages]
+		: [systemPromptMessage, ...preservedFirstMessage, summaryMessage, ...keepMessages]
 
 	const contextBlocks = contextMessages.flatMap((message) =>
 		typeof message.content === "string" ? [{ text: message.content, type: "text" as const }] : message.content,

@@ -8,6 +8,7 @@ import {
 	type ExtensionState,
 	openRouterDefaultModelId, // kilocode_change
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
+	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 } from "@roo-code/types"
 
 import {
@@ -64,6 +65,17 @@ const ApiConfigTestComponent = () => {
 	)
 }
 
+const IntelligentContextResetTestComponent = () => {
+	const { intelligentContextResetEnabled, intelligentContextResetPrompt } = useExtensionState()
+
+	return (
+		<div>
+			<div data-testid="intelligent-context-reset-enabled">{String(intelligentContextResetEnabled)}</div>
+			<div data-testid="intelligent-context-reset-prompt">{intelligentContextResetPrompt}</div>
+		</div>
+	)
+}
+
 describe("ExtensionStateContext", () => {
 	it("initializes with empty allowedCommands array", () => {
 		render(
@@ -83,6 +95,19 @@ describe("ExtensionStateContext", () => {
 		)
 
 		expect(JSON.parse(screen.getByTestId("sound-enabled").textContent!)).toBe(false)
+	})
+
+	it("initializes intelligent context reset as enabled with the complete prompt", () => {
+		render(
+			<ExtensionStateContextProvider>
+				<IntelligentContextResetTestComponent />
+			</ExtensionStateContextProvider>,
+		)
+
+		expect(screen.getByTestId("intelligent-context-reset-enabled")).toHaveTextContent("true")
+		expect(screen.getByTestId("intelligent-context-reset-prompt").textContent).toBe(
+			DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
+		)
 	})
 
 	it("initializes with showRooIgnoredFiles set to true", () => {

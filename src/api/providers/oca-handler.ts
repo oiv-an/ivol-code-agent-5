@@ -7,6 +7,7 @@ import {
 	OPENAI_NATIVE_DEFAULT_TEMPERATURE,
 	ReasoningEffortExtended,
 	VerbosityLevel,
+	resolveReasoningEffortForModel,
 } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
@@ -153,7 +154,7 @@ export class OcaHandler extends BaseProvider implements SingleCompletionHandler 
 
 		if (prefersResponses) {
 			// --- BEGIN: SDK + Fetch Fallback Pattern for OCA Responses API ---
-			const reasoningEffort = this.getReasoningEffort(modelInfo)
+			const reasoningEffort = this.getReasoningEffort(modelId, modelInfo)
 			const formattedInput = this.formatFullConversation(systemPrompt, messages)
 			const requestBody = this.buildResponsesRequestBody(
 				modelId,
@@ -283,7 +284,9 @@ export class OcaHandler extends BaseProvider implements SingleCompletionHandler 
 			...(useNativeTools && { tools: this.convertToolsForOpenAI(metadata!.tools) }),
 			...(finalToolChoice && { tool_choice: finalToolChoice }),
 			...(useNativeTools && { parallel_tool_calls: metadata?.parallelToolCalls ?? false }),
-			...(modelInfo.supportsReasoningEffort && { reasoning_effort: this.getReasoningEffort(modelInfo) as any }),
+			...(modelInfo.supportsReasoningEffort && {
+				reasoning_effort: this.getReasoningEffort(modelId, modelInfo) as any,
+			}),
 		}
 
 		let stream
@@ -681,7 +684,7 @@ export class OcaHandler extends BaseProvider implements SingleCompletionHandler 
 				return (resp as any).choices?.[0]?.message?.content || ""
 			} else {
 				// Resolve reasoning effort for models that support it
-				const reasoningEffort = this.getReasoningEffort(info)
+				const reasoningEffort = this.getReasoningEffort(id, info)
 
 				// Build request body for Responses API
 				const requestBody: any = {
@@ -765,13 +768,15 @@ export class OcaHandler extends BaseProvider implements SingleCompletionHandler 
 		return undefined
 	}
 
-	private getReasoningEffort(modelInfo: ModelInfo): ReasoningEffortExtended | undefined {
+	private getReasoningEffort(modelId: string, modelInfo: ModelInfo): ReasoningEffortExtended | undefined {
 		// Single source of truth: user setting overrides, else model default (from types).
-		if (!modelInfo.supportsReasoningEffort) {
+		if (this.options.enableReasoningEffort === false || !modelInfo.supportsReasoningEffort) {
 			return undefined
 		}
-		const selected = (this.options.reasoningEffort as any) ?? (modelInfo.reasoningEffort as any)
-		return selected && selected !== "disable" ? (selected as any) : undefined
+		const selected =
+			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ??
+			modelInfo.reasoningEffort
+		return resolveReasoningEffortForModel(selected, modelId, modelInfo)
 	}
 
 	override getModel() {

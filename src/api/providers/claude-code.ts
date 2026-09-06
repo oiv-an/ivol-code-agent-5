@@ -8,6 +8,7 @@ import {
 	type ClaudeCodeReasoningLevel,
 	type ModelInfo,
 	normalizeClaudeCodeModelId,
+	resolveReasoningEffortForModel, // kilocode_change
 } from "@roo-code/types"
 import { type ApiHandler, ApiHandlerCreateMessageMetadata, type SingleCompletionHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
@@ -93,17 +94,22 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 	 * Gets the reasoning effort level for the current request.
 	 * Returns the effective reasoning level (low/medium/high) or null if disabled.
 	 */
-	private getReasoningEffort(modelInfo: ModelInfo): ClaudeCodeReasoningLevel | null {
+	// kilocode_change start: preserve Maximum as a preference and use Claude's strongest supported level
+	private getReasoningEffort(modelId: string, modelInfo: ModelInfo): ClaudeCodeReasoningLevel | null {
 		// Check if reasoning is explicitly disabled
 		if (this.options.enableReasoningEffort === false) {
 			return null
 		}
 
 		// Get the selected effort from settings or model default
-		const selectedEffort = this.options.reasoningEffort ?? modelInfo.reasoningEffort
+		const selectedEffort = resolveReasoningEffortForModel(
+			this.options.reasoningEffort ?? modelInfo.reasoningEffort,
+			modelId,
+			modelInfo,
+		)
 
-		// "disable" or no selection means no reasoning
-		if (!selectedEffort || selectedEffort === "disable") {
+		// The resolver already turns "disable" or no selection into undefined.
+		if (!selectedEffort) {
 			return null
 		}
 
@@ -114,6 +120,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 
 		return null
 	}
+	// kilocode_change end
 
 	async *createMessage(
 		systemPrompt: string,
@@ -160,7 +167,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 				: undefined
 
 			// Determine reasoning effort and thinking configuration
-			const reasoningLevel = this.getReasoningEffort(model.info)
+			const reasoningLevel = this.getReasoningEffort(model.id, model.info)
 
 			let thinking: ThinkingConfig
 			// With interleaved thinking (enabled via beta header), budget_tokens can exceed max_tokens

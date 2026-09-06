@@ -42,9 +42,9 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.223`
+- Version: `5.16.226`
 
-Version `5.16.223` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
+Version `5.16.226` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## Development
 

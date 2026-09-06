@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { convertHeadersToObject } from "./utils/headers"
 import { useDebounce } from "react-use"
-import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react" // kilocode_change
 // import { ExternalLinkIcon } from "@radix-ui/react-icons" // kilocode_change
 
 import {
@@ -52,6 +52,7 @@ import {
 	nanoGptDefaultModelId, //kilocode_change
 	poeDefaultModelId, // kilocode_change
 	isDynamicProvider, // kilocode_change
+	isIntelligentContextResetEnabled, // kilocode_change
 } from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
@@ -68,6 +69,7 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 // kilocode_change start
 import { filterModels } from "./utils/organizationFilters"
 import {
+	Button, // kilocode_change
 	Select,
 	SelectTrigger,
 	SelectValue,
@@ -165,6 +167,7 @@ export interface ApiOptionsProps {
 	setErrorMessage: React.Dispatch<React.SetStateAction<string | undefined>>
 	hideKiloCodeButton?: boolean // kilocode_change
 	currentApiConfigName?: string // kilocode_change
+	onEditIntelligentContextResetPrompt?: () => void // kilocode_change
 }
 
 const ApiOptions = ({
@@ -176,6 +179,7 @@ const ApiOptions = ({
 	setErrorMessage,
 	hideKiloCodeButton = false,
 	currentApiConfigName, // kilocode_change
+	onEditIntelligentContextResetPrompt, // kilocode_change
 }: ApiOptionsProps) => {
 	const { t } = useAppTranslation()
 	const {
@@ -606,6 +610,37 @@ const ApiOptions = ({
 					data-testid="provider-select"
 				/>
 			</div>
+
+			{/* kilocode_change start: per-profile context reset is a primary provider setting. */}
+			{!fromWelcomeView && (
+				<div className="flex flex-col gap-1">
+					<VSCodeCheckbox
+						data-testid="provider-intelligent-context-reset-checkbox"
+						checked={isIntelligentContextResetEnabled(apiConfiguration.intelligentContextResetEnabled)}
+						onChange={(event) =>
+							setApiConfigurationField(
+								"intelligentContextResetEnabled",
+								(event.target as HTMLInputElement).checked,
+							)
+						}>
+						{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
+					</VSCodeCheckbox>
+					<div className="text-vscode-descriptionForeground text-sm">
+						{t("prompts:supportPrompts.condense.intelligentContextReset.profileDescription")}
+					</div>
+					{onEditIntelligentContextResetPrompt && (
+						<Button
+							type="button"
+							variant="link"
+							className="self-start h-auto p-0"
+							data-testid="edit-intelligent-context-reset-prompt"
+							onClick={onEditIntelligentContextResetPrompt}>
+							{t("prompts:supportPrompts.condense.intelligentContextReset.editPrompt")}
+						</Button>
+					)}
+				</div>
+			)}
+			{/* kilocode_change end */}
 
 			{errorMessage && <ApiErrorMessage errorMessage={errorMessage} />}
 

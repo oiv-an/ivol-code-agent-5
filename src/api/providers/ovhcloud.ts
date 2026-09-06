@@ -1,5 +1,5 @@
 // kilocode_change - file added
-import { ovhCloudAiEndpointsDefaultModelId, ovhCloudAiEndpointsDefaultModelInfo } from "@roo-code/types"
+import { type ModelInfo, ovhCloudAiEndpointsDefaultModelId, ovhCloudAiEndpointsDefaultModelInfo } from "@roo-code/types"
 import type { ApiHandlerOptions } from "../../shared/api"
 
 import { RouterProvider } from "./router-provider"
@@ -12,6 +12,7 @@ import { calculateApiCostOpenAI } from "../../shared/cost"
 import { convertToR1Format } from "../transform/r1-format"
 import { XmlMatcher } from "../../utils/xml-matcher"
 import { verifyFinishReason } from "./kilocode/verifyFinishReason"
+import { getModelParams } from "../transform/model-params"
 
 export class OVHcloudAIEndpointsHandler extends RouterProvider implements SingleCompletionHandler {
 	constructor(options: ApiHandlerOptions) {
@@ -26,12 +27,43 @@ export class OVHcloudAIEndpointsHandler extends RouterProvider implements Single
 		})
 	}
 
+	// kilocode_change start: OVH's catalog does not expose the effort enum for
+	// GPT-OSS models. Declare the known levels locally, then use the common
+	// request-time resolver so Maximum safely becomes high.
+	override getModel() {
+		const selected = super.getModel()
+		const info: ModelInfo = selected.id.toLowerCase().includes("gpt-oss")
+			? {
+					...selected.info,
+					supportsReasoningEffort: Array.isArray(selected.info.supportsReasoningEffort)
+						? selected.info.supportsReasoningEffort
+						: ["low", "medium", "high"],
+				}
+			: selected.info
+		const params = getModelParams({
+			format: "openai",
+			modelId: selected.id,
+			model: info,
+			settings: this.options,
+		})
+
+		return { id: selected.id, info, ...params }
+	}
+
+	public override async fetchModel() {
+		// Let RouterProvider refresh its cache, then expose this handler's enriched
+		// request model (including resolved reasoning) to both request paths.
+		await super.fetchModel()
+		return this.getModel()
+	}
+	// kilocode_change end
+
 	override async *createMessage(
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		const { id: modelId, info } = await this.fetchModel()
+		const { id: modelId, info, reasoning } = await this.fetchModel()
 
 		const useR1Format = modelId.toLowerCase().includes("deepseek-r1")
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -44,6 +76,8 @@ export class OVHcloudAIEndpointsHandler extends RouterProvider implements Single
 			messages: openAiMessages,
 			stream: true,
 			stream_options: { include_usage: true },
+			// kilocode_change: include the resolved Maximum/fallback effort.
+			...(reasoning && reasoning),
 			...(metadata?.tools && { tools: metadata.tools }),
 			...(metadata?.tool_choice && { tool_choice: metadata.tool_choice }),
 		}
@@ -111,12 +145,14 @@ export class OVHcloudAIEndpointsHandler extends RouterProvider implements Single
 	}
 
 	async completePrompt(prompt: string): Promise<string> {
-		const { id: modelId } = await this.fetchModel()
+		const { id: modelId, reasoning } = await this.fetchModel()
 
 		try {
 			const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 				model: modelId,
 				messages: [{ role: "user", content: prompt }],
+				// kilocode_change: keep non-streaming requests aligned with the main path.
+				...(reasoning && reasoning),
 			}
 
 			if (this.supportsTemperature(modelId)) {

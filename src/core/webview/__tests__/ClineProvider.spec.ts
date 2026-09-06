@@ -12,6 +12,7 @@ import {
 	type ExtensionState,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
+	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
@@ -914,6 +915,38 @@ describe("ClineProvider", () => {
 		expect(updateGlobalStateSpy).toHaveBeenCalledWith("autoCondenseContextPercent", 75)
 		expect(mockContext.globalState.update).toHaveBeenCalledWith("autoCondenseContextPercent", 75)
 		expect(mockPostMessage).toHaveBeenCalled()
+	})
+
+	test("intelligent context reset defaults to enabled with the complete built-in prompt", async () => {
+		;(mockContext.globalState.get as any).mockImplementation((key: string) =>
+			key === "intelligentContextResetEnabled" || key === "intelligentContextResetPrompt" ? undefined : null,
+		)
+
+		const state = await provider.getState()
+		expect(state.intelligentContextResetEnabled).toBe(true)
+		expect(state.intelligentContextResetPrompt).toBe(DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT)
+	})
+
+	test("persists the shared intelligent context reset prompt independently of provider settings", async () => {
+		await provider.resolveWebviewView(mockWebviewView)
+		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as any).mock.calls[0][0]
+
+		await messageHandler({
+			type: "updateSettings",
+			updatedSettings: {
+				intelligentContextResetPrompt: "Custom complete snapshot prompt",
+			},
+		})
+
+		expect(updateGlobalStateSpy).not.toHaveBeenCalledWith("intelligentContextResetEnabled", expect.anything())
+		expect(updateGlobalStateSpy).toHaveBeenCalledWith(
+			"intelligentContextResetPrompt",
+			"Custom complete snapshot prompt",
+		)
+		expect(mockContext.globalState.update).toHaveBeenCalledWith(
+			"intelligentContextResetPrompt",
+			"Custom complete snapshot prompt",
+		)
 	})
 
 	it("loads saved API config when switching modes", async () => {

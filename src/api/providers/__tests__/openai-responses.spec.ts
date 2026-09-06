@@ -546,7 +546,7 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		expect(body).not.toHaveProperty("temperature")
 	})
 
-	it("does not leak a saved max effort to an older secondary search model", async () => {
+	it("falls back from max to xhigh for an older secondary search model", async () => {
 		mockResponsesCreate.mockResolvedValue({
 			[Symbol.asyncIterator]: async function* () {
 				yield { type: "response.output_text.delta", delta: "ok" }
@@ -574,7 +574,7 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		}
 
 		expect(mockResponsesCreate.mock.calls[0][0].model).toBe("older-model")
-		expect(mockResponsesCreate.mock.calls[0][0].reasoning).toEqual({ summary: "auto" })
+		expect(mockResponsesCreate.mock.calls[0][0].reasoning).toEqual({ summary: "auto", effort: "xhigh" })
 	})
 
 	it("keeps completePrompt on the primary model even when a search model is configured", async () => {

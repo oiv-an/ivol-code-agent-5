@@ -95,19 +95,13 @@ export async function fetchKilocodeNotificationsOnStartup(
 
 // Helper function to delete messages for resending
 const deleteMessagesForResend = async (cline: Task, originalMessageIndex: number, originalMessageTs: number) => {
-	// Delete UI messages after the edited message
-	const newClineMessages = cline.clineMessages.slice(0, originalMessageIndex)
-	await cline.overwriteClineMessages(newClineMessages)
-
-	// Delete API messages after the edited message
-	const apiHistory = [...cline.apiConversationHistory]
-	const timeCutoff = originalMessageTs - 1000
-	const apiHistoryIndex = apiHistory.findIndex((entry) => entry.ts && entry.ts >= timeCutoff)
-
-	if (apiHistoryIndex !== -1) {
-		const newApiHistory = apiHistory.slice(0, apiHistoryIndex)
-		await cline.overwriteApiConversationHistory(newApiHistory)
+	if (cline.clineMessages[originalMessageIndex]?.ts !== originalMessageTs) {
+		throw new Error("The message selected for resend no longer matches the active task history")
 	}
+
+	// Use the central rewind transaction so condensed-history links and the
+	// CONTEXT_RESTART.md lifecycle are restored together with the edited chat.
+	await cline.messageManager.rewindToTimestamp(originalMessageTs)
 }
 
 // Helper function to encapsulate the common sequence of actions for resending a message

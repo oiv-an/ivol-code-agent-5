@@ -250,6 +250,34 @@ describe("ClaudeCodeHandler", () => {
 		})
 	})
 
+	// kilocode_change start: maximum preference falls back to Claude's strongest level
+	test("should fall back from maximum to high reasoning", async () => {
+		const handlerMaximumThinking = new ClaudeCodeHandler({
+			apiModelId: "claude-sonnet-4-5",
+			reasoningEffort: "max",
+		})
+		const systemPrompt = "You are a helpful assistant"
+		const messages = [{ role: "user" as const, content: "Hello" }]
+
+		mockGetAccessToken.mockResolvedValue("test-access-token")
+		mockCreateStreamingMessage.mockReturnValue(
+			(async function* (): AsyncGenerator<StreamChunk> {
+				// Empty generator for request-shape verification.
+			})(),
+		)
+
+		const iterator = handlerMaximumThinking.createMessage(systemPrompt, messages)[Symbol.asyncIterator]()
+		await iterator.next()
+
+		expect(mockCreateStreamingMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				model: "claude-sonnet-4-5",
+				thinking: { type: "enabled", budget_tokens: 64000 },
+			}),
+		)
+	})
+	// kilocode_change end
+
 	test("should handle text content from streaming", async () => {
 		const systemPrompt = "You are a helpful assistant"
 		const messages = [{ role: "user" as const, content: "Hello" }]

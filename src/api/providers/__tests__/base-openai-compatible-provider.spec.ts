@@ -6,6 +6,7 @@ import OpenAI from "openai"
 import type { ModelInfo } from "@roo-code/types"
 
 import { BaseOpenAiCompatibleProvider } from "../base-openai-compatible-provider"
+import type { ApiHandlerOptions } from "../../../shared/api" // kilocode_change
 
 // Create mock functions
 const mockCreate = vi.fn()
@@ -23,7 +24,8 @@ vi.mock("openai", () => ({
 
 // Create a concrete test implementation of the abstract base class
 class TestOpenAiCompatibleProvider extends BaseOpenAiCompatibleProvider<"test-model"> {
-	constructor(apiKey: string) {
+	// kilocode_change start: allow tests to exercise custom reasoning capabilities
+	constructor(apiKey: string, options: Partial<ApiHandlerOptions> = {}, modelOverrides: Partial<ModelInfo> = {}) {
 		const testModels: Record<"test-model", ModelInfo> = {
 			"test-model": {
 				maxTokens: 4096,
@@ -32,6 +34,7 @@ class TestOpenAiCompatibleProvider extends BaseOpenAiCompatibleProvider<"test-mo
 				supportsPromptCache: false,
 				inputPrice: 0.5,
 				outputPrice: 1.5,
+				...modelOverrides,
 			},
 		}
 
@@ -41,8 +44,10 @@ class TestOpenAiCompatibleProvider extends BaseOpenAiCompatibleProvider<"test-mo
 			defaultProviderModelId: "test-model",
 			providerModels: testModels,
 			apiKey,
+			...options,
 		})
 	}
+	// kilocode_change end
 }
 
 describe("BaseOpenAiCompatibleProvider", () => {
@@ -227,6 +232,29 @@ describe("BaseOpenAiCompatibleProvider", () => {
 			])
 		})
 	})
+
+	// kilocode_change start: request-time maximum fallback
+	describe("maximum reasoning preference", () => {
+		it("uses the strongest declared previous effort", async () => {
+			handler = new TestOpenAiCompatibleProvider(
+				"test-api-key",
+				{ enableReasoningEffort: true, reasoningEffort: "max" },
+				{ supportsReasoningEffort: ["low", "medium", "high"] },
+			)
+			mockCreate.mockReturnValue(
+				(async function* () {
+					yield { choices: [{ delta: {} }] }
+				})(),
+			)
+
+			for await (const _chunk of handler.createMessage("system", [{ role: "user", content: "hello" }])) {
+				// drain
+			}
+
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("high")
+		})
+	})
+	// kilocode_change end
 
 	describe("reasoning_content field", () => {
 		it("should filter out whitespace-only reasoning_content", async () => {

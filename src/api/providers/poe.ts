@@ -26,7 +26,10 @@ import { handleOpenAIError } from "./utils/openai-error-handler"
 
 // Extended params type for Poe-specific fields
 type PoeExtensions = {
-	thinking_budget?: number
+	extra_body?: {
+		thinking_budget?: number
+		reasoning_effort?: ReasoningEffortExtended
+	}
 }
 
 type PoeChatCompletionParamsStreaming = OpenAI.Chat.ChatCompletionCreateParamsStreaming & PoeExtensions
@@ -78,22 +81,23 @@ export class PoeHandler extends RouterProvider implements SingleCompletionHandle
 		modelId: string,
 		reasoningBudget: number | undefined,
 		reasoningEffort: ReasoningEffortExtended | undefined,
-	): { thinking_budget?: number; reasoning_effort?: OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"] } {
-		const isAnthropicModel = modelId.startsWith("claude-")
-		const isOpenAiModel = modelId.startsWith("gpt-")
+	): PoeExtensions {
+		const normalizedModelId = modelId.toLowerCase()
+		const isAnthropicModel = normalizedModelId.startsWith("claude-")
+		const isOpenAiModel = normalizedModelId.startsWith("gpt-")
 
 		if (isAnthropicModel && reasoningBudget) {
-			return { thinking_budget: reasoningBudget }
+			return { extra_body: { thinking_budget: reasoningBudget } }
 		}
 
-		// OpenAI only supports "low" | "medium" | "high" - filter out unsupported values
+		// kilocode_change start: getModelParams has already converted the stable
+		// Maximum preference to the strongest level advertised by this exact model.
+		// Poe documents custom reasoning values under `extra_body`; a top-level
+		// `reasoning_effort` field is silently ignored by its compatibility layer.
 		if (isOpenAiModel && reasoningEffort) {
-			if (["low", "medium", "high"].includes(reasoningEffort)) {
-				return {
-					reasoning_effort: reasoningEffort as OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"],
-				}
-			}
+			return { extra_body: { reasoning_effort: reasoningEffort } }
 		}
+		// kilocode_change end
 
 		// Other providers (Gemini, etc.) - no reasoning params for now
 		return {}

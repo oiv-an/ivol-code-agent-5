@@ -2,7 +2,7 @@
 
 import { ExtensionContext } from "vscode"
 
-import type { ProviderSettings } from "@roo-code/types"
+import { isIntelligentContextResetEnabled, type ProviderSettings } from "@roo-code/types"
 
 import { getOpenAiModelCatalogStorageKey } from "../../../api/providers/openai-model-cache" // kilocode_change
 import { ProviderSettingsManager, ProviderProfiles, SyncCloudProfilesResult } from "../ProviderSettingsManager"
@@ -57,6 +57,73 @@ describe("ProviderSettingsManager", () => {
 		//kilocode_change end
 	})
 
+	// kilocode_change start: use real persisted JSON across operations so these
+	// assertions cover schema filtering, migration markers, and export/import.
+	describe("per-profile intelligent context reset", () => {
+		let persisted: string | undefined
+
+		beforeEach(() => {
+			persisted = undefined
+			mockSecrets.get.mockImplementation(async () => persisted)
+			mockSecrets.store.mockImplementation(async (_key: string, value: string) => {
+				persisted = value
+			})
+		})
+
+		it("keeps opposite profile choices through save, activation, export and import", async () => {
+			const manager = new ProviderSettingsManager(mockContext)
+			await manager.initialize()
+			await manager.saveConfig("work", { apiProvider: "openai", intelligentContextResetEnabled: false })
+			await manager.saveConfig("local", { apiProvider: "ollama", intelligentContextResetEnabled: true })
+			expect((await manager.activateProfile({ name: "work" })).intelligentContextResetEnabled).toBe(false)
+			expect((await manager.activateProfile({ name: "local" })).intelligentContextResetEnabled).toBe(true)
+			expect((await manager.getProfile({ name: "work" })).intelligentContextResetEnabled).toBe(false)
+
+			const exported = await manager.export()
+			expect(exported.apiConfigs.work.intelligentContextResetEnabled).toBe(false)
+			expect(exported.apiConfigs.local.intelligentContextResetEnabled).toBe(true)
+			await manager.import(JSON.parse(JSON.stringify(exported)))
+			expect((await manager.activateProfile({ name: "work" })).intelligentContextResetEnabled).toBe(false)
+			expect((await manager.getProfile({ name: "local" })).intelligentContextResetEnabled).toBe(true)
+		})
+
+		it("migrates the previous global OFF once, preserves explicit values, and defaults later profiles ON", async () => {
+			persisted = JSON.stringify({
+				currentApiConfigName: "legacy",
+				apiConfigs: {
+					legacy: { id: "legacy-id", apiProvider: "openai" },
+					explicit: { id: "explicit-id", apiProvider: "ollama", intelligentContextResetEnabled: true },
+				},
+			})
+			mockGlobalState.get.mockImplementation((key) =>
+				key === "intelligentContextResetEnabled" ? false : undefined,
+			)
+			const manager = new ProviderSettingsManager(mockContext)
+			await manager.initialize()
+			expect((await manager.getProfile({ name: "legacy" })).intelligentContextResetEnabled).toBe(false)
+			expect((await manager.getProfile({ name: "explicit" })).intelligentContextResetEnabled).toBe(true)
+			expect(JSON.parse(persisted!).migrations.intelligentContextResetMigrated).toBe(true)
+
+			await manager.saveConfig("new", { apiProvider: "lmstudio" })
+			const restarted = new ProviderSettingsManager(mockContext)
+			await restarted.initialize()
+			const newProfile = await restarted.getProfile({ name: "new" })
+			expect(isIntelligentContextResetEnabled(newProfile.intelligentContextResetEnabled)).toBe(true)
+			expect((await restarted.getProfile({ name: "legacy" })).intelligentContextResetEnabled).toBe(false)
+		})
+
+		it("defaults fresh profiles ON even if an obsolete active-state value is false", async () => {
+			mockGlobalState.get.mockImplementation((key) =>
+				key === "intelligentContextResetEnabled" ? false : undefined,
+			)
+			const manager = new ProviderSettingsManager(mockContext)
+			await manager.initialize()
+			const profile = await manager.getProfile({ name: "default" })
+			expect(isIntelligentContextResetEnabled(profile.intelligentContextResetEnabled)).toBe(true)
+		})
+	})
+	// kilocode_change end
+
 	describe("initialize", () => {
 		// kilocode_change start: personal build starts with an inert OpenAI-compatible profile
 		it("should initialize the personal OpenAI default profile when secrets.get returns null", async () => {
@@ -96,6 +163,7 @@ describe("ProviderSettingsManager", () => {
 						consecutiveMistakeLimitMigrated: true,
 						todoListEnabledMigrated: true,
 						claudeCodeLegacySettingsMigrated: true,
+						intelligentContextResetMigrated: true, // kilocode_change
 					},
 				}),
 			)
@@ -153,6 +221,7 @@ describe("ProviderSettingsManager", () => {
 						todoListEnabledMigrated: true,
 						morphApiKeyMigrated: true,
 						claudeCodeLegacySettingsMigrated: true,
+						intelligentContextResetMigrated: true, // kilocode_change
 					},
 				}),
 			)

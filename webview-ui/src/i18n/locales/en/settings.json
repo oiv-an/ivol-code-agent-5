@@ -662,7 +662,7 @@
 			"medium": "Medium",
 			"high": "High",
 			"xhigh": "Extra High",
-			"max": "Ultra (API Max)"
+			"max": "Maximum"
 		},
 		"verbosity": {
 			"label": "Output Verbosity",

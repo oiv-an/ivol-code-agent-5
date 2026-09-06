@@ -11,3 +11,4 @@ export { InProgressRow } from "./InProgressRow"
 export { CondensationResultRow } from "./CondensationResultRow"
 export { CondensationErrorRow } from "./CondensationErrorRow"
 export { TruncationResultRow } from "./TruncationResultRow"
+export { ContextHandoffRow } from "./ContextHandoffRow" // kilocode_change

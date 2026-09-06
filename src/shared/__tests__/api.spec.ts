@@ -561,4 +561,16 @@ describe("shouldUseReasoningEffort", () => {
 		expect(shouldUseReasoningEffort({ model, settings: { reasoningEffort: "none" as any } })).toBe(true)
 		expect(shouldUseReasoningEffort({ model, settings: { reasoningEffort: "minimal" as any } })).toBe(true)
 	})
+
+	// kilocode_change start: max remains enabled when request-time fallback is available
+	test("array capability without max accepts the maximum preference via fallback", () => {
+		const model: ModelInfo = {
+			contextWindow: 100_000,
+			supportsPromptCache: true,
+			supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+		}
+
+		expect(shouldUseReasoningEffort({ model, settings: { reasoningEffort: "max" } })).toBe(true)
+	})
+	// kilocode_change end
 })

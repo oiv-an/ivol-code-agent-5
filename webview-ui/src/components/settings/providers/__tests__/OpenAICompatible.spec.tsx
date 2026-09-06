@@ -400,7 +400,7 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 		expect(screen.queryByTestId("openai-web-search-model-select")).not.toBeInTheDocument()
 	})
 
-	it("bases reasoning options only on the primary model, not the web-search model", () => {
+	it("offers the maximum reasoning preference for every custom primary model", () => {
 		const { rerender } = render(
 			<OpenAICompatible
 				apiConfiguration={{
@@ -436,7 +436,7 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 
 		expect(screen.getByTestId("thinking-budget")).toHaveAttribute(
 			"data-reasoning-efforts",
-			JSON.stringify(["low", "medium", "high", "xhigh"]),
+			JSON.stringify(["low", "medium", "high", "xhigh", "max"]),
 		)
 	})
 

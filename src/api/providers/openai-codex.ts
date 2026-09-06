@@ -994,8 +994,16 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	}
 
 	private getReasoningEffort(model: OpenAiCodexModel): ReasoningEffortExtended | undefined {
+		// kilocode_change start: Maximum uses the request-time resolved value while
+		// every older saved value keeps the legacy fallback to the model default.
+		if (this.options.enableReasoningEffort === false) return undefined
+
 		const configured =
 			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ?? undefined
+		if (configured === "max") {
+			return model.reasoningEffort && model.reasoningEffort !== "none" ? model.reasoningEffort : undefined
+		}
+
 		const supported = model.info.supportsReasoningEffort
 		const configuredIsSupported =
 			configured && configured !== "disable" && configured !== "none"
@@ -1003,6 +1011,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 				: false
 		const selected = configuredIsSupported ? configured : model.info.reasoningEffort
 		return selected && selected !== "disable" && selected !== "none" ? selected : undefined
+		// kilocode_change end
 	}
 
 	override getModel() {

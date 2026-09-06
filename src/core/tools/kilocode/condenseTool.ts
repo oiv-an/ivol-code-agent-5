@@ -40,23 +40,58 @@ export const condenseTool = async (
 				pushToolResult(formatResponse.toolResult(formatResponse.condense()))
 
 				const { contextTokens: prevContextTokens } = cline.getTokenUsage()
+				const intelligentReset = await cline.getIntelligentContextResetConfig()
 
 				// Use summarizeConversation to create a condensed version of the conversation
 				const summarizedMessages = await summarizeConversation(
 					cline.apiConversationHistory,
 					cline.api,
 					await cline.getSystemPrompt(),
-					"TaskId condenseTool",
+					cline.taskId,
 					prevContextTokens,
+					false,
+					undefined,
+					undefined,
+					intelligentReset.useNativeTools,
+					{
+						enabled: intelligentReset.enabled,
+						prompt: intelligentReset.prompt,
+						...(intelligentReset.enabled ? { onBeforeRequest: cline.notifyContextHandoffPreparing } : {}),
+					},
 				)
 
-				// Overwrite the apiConversationHistory with the summarized messages
-				await cline.overwriteApiConversationHistory(summarizedMessages.messages)
+				// Persist and verify the restart handoff before changing history.
+				await cline.commitContextCondensation(
+					summarizedMessages,
+					"tool",
+					prevContextTokens,
+					intelligentReset.enabled,
+				)
+				await cline.say(
+					"condense_context",
+					undefined,
+					undefined,
+					false,
+					undefined,
+					undefined,
+					{ isNonInteractive: true },
+					{
+						summary: summarizedMessages.summary,
+						cost: summarizedMessages.cost,
+						newContextTokens: summarizedMessages.newContextTokens ?? 0,
+						prevContextTokens,
+						condenseId: summarizedMessages.condenseId,
+					},
+				)
 			}
 			return
 		}
 	} catch (error) {
 		await handleError("condensing context window", error)
 		return
+	} finally {
+		if (!block.partial) {
+			await cline.finishContextCondensation()
+		}
 	}
 }

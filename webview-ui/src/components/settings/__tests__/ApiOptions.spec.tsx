@@ -60,6 +60,12 @@ vi.mock("vscrui", () => ({
 
 // Mock @shadcn/ui components
 vi.mock("@/components/ui", () => ({
+	Checkbox: ({ children, checked, disabled }: any) => (
+		<label>
+			<input type="checkbox" checked={checked} disabled={disabled} readOnly />
+			{children}
+		</label>
+	),
 	Select: ({ children, value, onValueChange }: any) => (
 		<div className="select-mock">
 			<select value={value} onChange={(e) => onValueChange && onValueChange(e.target.value)}>
@@ -314,6 +320,31 @@ const renderApiOptions = (props: Partial<ApiOptionsProps> = {}) => {
 }
 
 describe("ApiOptions", () => {
+	// kilocode_change start
+	it("shows intelligent reset enabled by default in the main provider settings", () => {
+		const setApiConfigurationField = vi.fn()
+		renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, setApiConfigurationField })
+		const checkbox = screen.getByRole("checkbox", { name: /intelligent|Интеллектуальный/i })
+		expect(checkbox).toBeChecked()
+		fireEvent.click(checkbox)
+		expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentContextResetEnabled", false)
+	})
+
+	it.each(["anthropic", "ollama", "lmstudio", "openai-codex"] as const)(
+		"keeps intelligent reset specific to a disabled %s profile and offers prompt navigation",
+		(apiProvider) => {
+			const editPrompt = vi.fn()
+			renderApiOptions({
+				apiConfiguration: { apiProvider, intelligentContextResetEnabled: false },
+				onEditIntelligentContextResetPrompt: editPrompt,
+			})
+			expect(screen.getByRole("checkbox", { name: /intelligent|Интеллектуальный/i })).not.toBeChecked()
+			fireEvent.click(screen.getByRole("button", { name: /edit.*prompt|редактировать.*промпт|editPrompt/i }))
+			expect(editPrompt).toHaveBeenCalledTimes(1)
+		},
+	)
+	// kilocode_change end
+
 	it("resets model to provider default when switching to openai-codex with an invalid prior apiModelId", () => {
 		const mockSetApiConfigurationField = vi.fn()
 

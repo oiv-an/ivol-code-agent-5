@@ -10,7 +10,7 @@ import {
 	NATIVE_TOOL_DEFAULTS,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
-	supportsOpenAiMaxReasoningEffort, // kilocode_change: gate API-level max by the actual request model
+	supportsOpenAiMaxReasoningEffort, // kilocode_change
 } from "@roo-code/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
@@ -461,21 +461,21 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			supportsPromptCache: true,
 			// kilocode_change end
 		}
-		// kilocode_change start: never send stale API-level max to an unsupported Chat Completions model
-		// Deliberately gate by the actual request model ID only. A stale custom capability
-		// array must not opt an older or unrelated model into the GPT-5.6-only value.
-		const supportsMaxReasoningEffort = supportsOpenAiMaxReasoningEffort(id)
-		const info: ModelInfo =
-			!supportsMaxReasoningEffort && configuredInfo.reasoningEffort === "max"
-				? { ...configuredInfo, reasoningEffort: undefined }
+		// kilocode_change start: custom capability data may outlive a model change.
+		// Trust API `max` only for a recognized request model; otherwise let the
+		// common resolver choose the strongest previous declared effort.
+		const requestInfo: ModelInfo =
+			!supportsOpenAiMaxReasoningEffort(id) && Array.isArray(configuredInfo.supportsReasoningEffort)
+				? {
+						...configuredInfo,
+						supportsReasoningEffort: configuredInfo.supportsReasoningEffort.filter(
+							(effort) => effort !== "max",
+						),
+					}
 				: configuredInfo
-		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
-		const guardedParams =
-			!supportsMaxReasoningEffort && params.reasoningEffort === "max"
-				? { ...params, reasoningEffort: undefined, reasoning: undefined }
-				: params
+		const params = getModelParams({ format: "openai", modelId: id, model: requestInfo, settings: this.options })
 		// kilocode_change end
-		return { id, info, ...guardedParams }
+		return { id, info: configuredInfo, ...params }
 	}
 
 	async completePrompt(prompt: string): Promise<string> {
@@ -518,7 +518,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		const modelInfo = this.getModel().info
+		// kilocode_change start: use the request-time resolved effort instead of
+		// reading a potentially stale raw value from custom model metadata.
+		const model = this.getModel()
+		const modelInfo = model.info
+		const reasoningEffort = model.reasoningEffort as OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"]
+		// kilocode_change end
 		const methodIsAzureAiInference = this._isAzureAiInference(this.options.openAiBaseUrl)
 		const toolRequestOptions = this.getToolRequestOptions(metadata)
 
@@ -536,7 +541,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				],
 				stream: true,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
-				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
+				reasoning_effort: reasoningEffort,
 				temperature: undefined,
 				...toolRequestOptions,
 			}
@@ -567,7 +572,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					},
 					...convertToOpenAiMessages(messages),
 				],
-				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
+				reasoning_effort: reasoningEffort,
 				temperature: undefined,
 				...toolRequestOptions,
 			}

@@ -1,5 +1,27 @@
 # IVOL Code Agent 5
 
+## 5.16.226
+
+### Patch Changes
+
+- Show the model's continuation task and verified `CONTEXT_RESTART.md` file in the project root before context compression begins, while preserving safe recovery from earlier handoffs.
+
+## 5.16.225
+
+### Patch Changes
+
+- Configure intelligent context compression independently for each provider profile, enabled by default, with a direct link to edit its shared prompt.
+
+## 5.16.224
+
+### Patch Changes
+
+- Add an enabled-by-default intelligent context reset with an editable prompt, a verified working-state snapshot, and safe continuation after compression.
+
+- Add maximum model reasoning with automatic fallback when a provider does not support the highest level.
+
+- Preserve shared JetBrains task history when several projects are open and avoid disposed-project initialization failures.
+
 ## 5.16.223
 
 ### Patch Changes

@@ -3,8 +3,8 @@ Semantics for Reasoning Effort (ThinkingBudget)
 
 Capability surface:
 - modelInfo.supportsReasoningEffort: boolean | Array&lt;"disable" | "none" | "minimal" | "low" | "medium" | "high"&gt;
-  - true  → UI shows ["low","medium","high"]
-  - array → UI shows exactly the provided values
+  - true  → UI shows the standard values plus the maximum preference
+  - array → UI shows the provided values plus the maximum preference
 
 Selection behavior:
 - "disable":
@@ -27,7 +27,8 @@ Required:
 - On mount, if unset and a default exists, set enableReasoningEffort = true and use modelInfo.reasoningEffort.
 
 Notes:
-- Current selection is normalized to the capability: unsupported persisted values are not shown.
+- "max" is stored as a preference. Request builders fall back to the strongest
+  supported previous level without changing the saved preference.
 - Both "disable" and "none" display as the "None" label per UX, but are wired differently as above.
 - Every effort value uses its matching settings:providers.reasoningEffort translation.
 */
@@ -76,14 +77,21 @@ export const ThinkingBudget = ({ apiConfiguration, setApiConfigurationField, mod
 	const isReasoningBudgetRequired = !!modelInfo && modelInfo.requiredReasoningBudget
 	const isReasoningEffortSupported = !!modelInfo && modelInfo.supportsReasoningEffort
 
+	// kilocode_change start: add one stable Maximum preference to every effort selector.
 	// Build available reasoning efforts list from capability
 	const supports = modelInfo?.supportsReasoningEffort
-	const baseAvailableOptions: ReadonlyArray<ReasoningEffortWithMinimal> =
+	const declaredAvailableOptions: ReadonlyArray<ReasoningEffortWithMinimal> =
 		supports === true
 			? (reasoningEfforts as readonly ReasoningEffortWithMinimal[])
 			: Array.isArray(supports)
 				? (supports as ReadonlyArray<ReasoningEffortWithMinimal>)
 				: (reasoningEfforts as readonly ReasoningEffortWithMinimal[])
+	// Expose one stable maximum preference for every
+	// effort-capable model; request builders resolve it to max/xhigh/high/etc.
+	const baseAvailableOptions: ReadonlyArray<ReasoningEffortWithMinimal> = declaredAvailableOptions.includes("max")
+		? declaredAvailableOptions
+		: [...declaredAvailableOptions, "max"]
+	// kilocode_change end
 
 	// "disable" turns off reasoning entirely; "none" is a valid reasoning level.
 	// Both display as "None" in the UI but behave differently.

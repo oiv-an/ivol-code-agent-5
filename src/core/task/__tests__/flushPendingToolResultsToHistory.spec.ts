@@ -151,6 +151,8 @@ describe("flushPendingToolResultsToHistory", () => {
 	let mockExtensionContext: vscode.ExtensionContext
 
 	beforeEach(() => {
+		vi.spyOn(Task.prototype as any, "saveApiConversationHistory").mockResolvedValue(true)
+
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])
 		}

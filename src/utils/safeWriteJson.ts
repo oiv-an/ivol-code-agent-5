@@ -9,9 +9,10 @@ import Stringer from "stream-json/Stringer"
  * Safely writes JSON data to a file.
  * - Creates parent directories if they don't exist
  * - Uses 'proper-lockfile' for inter-process advisory locking to prevent concurrent writes to the same path.
- * - Writes to a temporary file first.
- * - If the target file exists, it's backed up before being replaced.
- * - Attempts to roll back and clean up in case of errors.
+ * - Writes and fsyncs a temporary file in the target directory first.
+ * - Copies (rather than moves) the old target to a backup before commit.
+ * - Atomically replaces the target and best-effort fsyncs its directory.
+ * - Keeps the canonical target available throughout a failed commit.
  *
  * @param {string} filePath - The absolute path to the target file.
  * @param {any} data - The data to serialize to JSON and write.
@@ -64,7 +65,7 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 		throw lockError
 	}
 
-	// Variables to hold the actual paths of temp files if they are created.
+	// Variables to hold the actual paths of temporary files if they are created.
 	let actualTempNewFilePath: string | null = null
 	let actualTempBackupFilePath: string | null = null
 
@@ -76,40 +77,32 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 		)
 
 		await _streamDataToFile(actualTempNewFilePath, data)
+		await syncFile(actualTempNewFilePath)
 
-		// Step 2: Check if the target file exists. If so, rename it to a backup path.
-		try {
-			// Check for target file existence
-			await fs.access(absoluteFilePath)
-			// Target exists, create a backup path and rename.
+		// Step 2: Preserve the previous version without ever removing the
+		// canonical target. This avoids a crash window between two renames.
+		if (await fileExists(absoluteFilePath)) {
 			actualTempBackupFilePath = path.join(
 				path.dirname(absoluteFilePath),
 				`.${path.basename(absoluteFilePath)}.bak_${Date.now()}_${Math.random().toString(36).substring(2)}.tmp`,
 			)
-			await fs.rename(absoluteFilePath, actualTempBackupFilePath)
-		} catch (accessError: any) {
-			// Explicitly type accessError
-			if (accessError.code !== "ENOENT") {
-				// An error other than "file not found" occurred during access check.
-				throw accessError
-			}
-			// Target file does not exist, so no backup is made. actualTempBackupFilePath remains null.
+			await fs.copyFile(absoluteFilePath, actualTempBackupFilePath, fsSync.constants.COPYFILE_EXCL)
+			await syncFile(actualTempBackupFilePath)
+			await syncDirectoryBestEffort(dirPath)
 		}
 
 		// Step 3: Rename the new temporary file to the target file path.
-		// This is the main "commit" step.
+		// Same-directory rename is the single atomic commit step: on failure the
+		// old target remains at its canonical path.
 		await fs.rename(actualTempNewFilePath, absoluteFilePath)
-
-		// If we reach here, the new file is successfully in place.
-		// The original actualTempNewFilePath is now the main file, so we shouldn't try to clean it up as "temp".
-		// Mark as "used" or "committed"
 		actualTempNewFilePath = null
+		await syncDirectoryBestEffort(dirPath)
 
-		// Step 4: If a backup was created, attempt to delete it.
+		// Step 4: The commit is complete. A stale backup is harmless and more
+		// useful than turning a successful write into an error.
 		if (actualTempBackupFilePath) {
 			try {
 				await fs.unlink(actualTempBackupFilePath)
-				// Mark backup as handled
 				actualTempBackupFilePath = null
 			} catch (unlinkBackupError) {
 				// Log this error, but do not re-throw. The main operation was successful.
@@ -123,48 +116,63 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 	} catch (originalError) {
 		console.error(`Operation failed for ${absoluteFilePath}: [Original Error Caught]`, originalError)
 
-		const newFileToCleanupWithinCatch = actualTempNewFilePath
-		const backupFileToRollbackOrCleanupWithinCatch = actualTempBackupFilePath
+		// Atomic rename failures should leave the old target in place. If an
+		// unusual filesystem violates that guarantee, restore the copied backup.
+		let canonicalFileExists: boolean | undefined
+		try {
+			canonicalFileExists = await fileExists(absoluteFilePath)
+		} catch (availabilityError) {
+			console.error(`Could not verify ${absoluteFilePath} after a failed write:`, availabilityError)
+		}
 
-		// Attempt rollback if a backup was made
-		if (backupFileToRollbackOrCleanupWithinCatch) {
+		if (actualTempBackupFilePath && canonicalFileExists === false) {
 			try {
-				await fs.rename(backupFileToRollbackOrCleanupWithinCatch, absoluteFilePath)
-				// Mark as handled, prevent later unlink of this path
+				await fs.rename(actualTempBackupFilePath, absoluteFilePath)
 				actualTempBackupFilePath = null
+				canonicalFileExists = true
+				await syncDirectoryBestEffort(dirPath)
 			} catch (rollbackError) {
-				// actualTempBackupFilePath (outer scope) remains pointing to backupFileToRollbackOrCleanupWithinCatch
 				console.error(
-					`[Catch] Failed to restore backup ${backupFileToRollbackOrCleanupWithinCatch} to ${absoluteFilePath}:`,
+					`[Catch] Failed to restore backup ${actualTempBackupFilePath} to ${absoluteFilePath}:`,
 					rollbackError,
 				)
 			}
 		}
 
-		// Cleanup the .new file if it exists
-		if (newFileToCleanupWithinCatch) {
+		if (actualTempNewFilePath) {
 			try {
-				await fs.unlink(newFileToCleanupWithinCatch)
-			} catch (cleanupError) {
-				console.error(
-					`[Catch] Failed to clean up temporary new file ${newFileToCleanupWithinCatch}:`,
-					cleanupError,
-				)
+				await fs.unlink(actualTempNewFilePath)
+				actualTempNewFilePath = null
+			} catch (cleanupError: any) {
+				if (cleanupError?.code === "ENOENT") {
+					actualTempNewFilePath = null
+				} else {
+					console.error(
+						`[Catch] Failed to clean up temporary new file ${actualTempNewFilePath}:`,
+						cleanupError,
+					)
+				}
 			}
 		}
 
-		// Cleanup the .bak file if it still needs to be (i.e., wasn't successfully restored)
-		if (actualTempBackupFilePath) {
+		// Delete a backup only when the canonical file is known to be available.
+		// Otherwise preserve the backup as the last recoverable copy.
+		if (actualTempBackupFilePath && canonicalFileExists === true) {
 			try {
 				await fs.unlink(actualTempBackupFilePath)
+				actualTempBackupFilePath = null
 			} catch (cleanupError) {
 				console.error(
 					`[Catch] Failed to clean up temporary backup file ${actualTempBackupFilePath}:`,
 					cleanupError,
 				)
 			}
+		} else if (actualTempBackupFilePath) {
+			console.error(
+				`Preserving backup ${actualTempBackupFilePath} because ${absoluteFilePath} could not be restored or verified`,
+			)
 		}
-		throw originalError // This MUST be the error that rejects the promise.
+		throw originalError
 	} finally {
 		// Release the lock in the main finally block.
 		try {
@@ -178,6 +186,40 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 	}
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+	try {
+		await fs.lstat(filePath)
+		return true
+	} catch (error: any) {
+		if (error?.code === "ENOENT") {
+			return false
+		}
+		throw error
+	}
+}
+
+async function syncFile(filePath: string): Promise<void> {
+	const handle = await fs.open(filePath, "r")
+	try {
+		await handle.sync()
+	} finally {
+		await handle.close()
+	}
+}
+
+async function syncDirectoryBestEffort(directoryPath: string): Promise<void> {
+	let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+	try {
+		handle = await fs.open(directoryPath, "r")
+		await handle.sync()
+	} catch {
+		// Opening or fsyncing directories is unavailable on some supported
+		// platforms/filesystems. The atomic rename still preserves availability.
+	} finally {
+		await handle?.close().catch(() => undefined)
+	}
+}
+
 /**
  * Helper function to stream JSON data to a file.
  * @param targetPath The path to write the stream to.
@@ -186,7 +228,11 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
  */
 async function _streamDataToFile(targetPath: string, data: any): Promise<void> {
 	// Stream data to avoid high memory usage for large JSON objects.
-	const fileWriteStream = fsSync.createWriteStream(targetPath, { encoding: "utf8" })
+	const fileWriteStream = fsSync.createWriteStream(targetPath, {
+		encoding: "utf8",
+		flags: "wx",
+		mode: 0o600,
+	})
 	const disassembler = Disassembler.disassembler()
 	// Output will be compact JSON as standard Stringer is used.
 	const stringer = Stringer.stringer()

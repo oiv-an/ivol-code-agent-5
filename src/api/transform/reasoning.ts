@@ -153,14 +153,13 @@ export const getGeminiReasoning = ({
 	}
 	// kilocode_change end
 
-	// For effort-based Gemini models, rely directly on the selected effort value.
+	// kilocode_change start: use the request-time resolved Maximum fallback.
+	// For effort-based Gemini models, use the request-time resolved effort value.
 	// We intentionally ignore enableReasoningEffort here so that explicitly chosen
 	// efforts in the UI (e.g. "High" for gemini-3-pro-preview) always translate
 	// into a thinkingConfig, regardless of legacy boolean flags.
-	const selectedEffort = (settings.reasoningEffort ?? model.reasoningEffort) as
-		| ReasoningEffortExtended
-		| "disable"
-		| undefined
+	const selectedEffort = reasoningEffort ?? settings.reasoningEffort ?? model.reasoningEffort
+	// kilocode_change end
 
 	// Respect "off" / unset semantics from the effort selector itself.
 	if (!selectedEffort || selectedEffort === "disable") {

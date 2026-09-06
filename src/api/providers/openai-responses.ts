@@ -941,26 +941,15 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 					supportsVerbosity: supportsMaxReasoning || undefined,
 					supportsReasoningEffort: supportsMaxReasoning
 						? (["none", "low", "medium", "high", "xhigh", "max"] as const)
-						: undefined,
+						: (["none", "low", "medium", "high", "xhigh"] as const),
 					reasoningEffort: undefined,
 				}
 		const params = usesPrimaryModel
 			? primaryModel
 			: getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
-		const selectedReasoningEffort = this.options.reasoningEffort ?? info.reasoningEffort
-
-		// `max` is deliberately validated against the model actually sent in this
-		// request. This prevents a saved GPT-5.6 setting from leaking to an older
-		// secondary model, while still supporting the user's proxy alias.
-		const reasoningEffort =
-			selectedReasoningEffort === "max"
-				? this.options.enableReasoningEffort !== false &&
-					supportsOpenAiMaxReasoningEffort(id, usesPrimaryModel ? info : undefined)
-					? "max"
-					: undefined
-				: params.reasoningEffort
-
-		return { ...params, id, info, reasoningEffort }
+		// getModelParams resolves the saved maximum preference against the model
+		// used by this exact request (max -> strongest supported previous level).
+		return { ...params, id, info }
 	}
 	// kilocode_change end
 
@@ -1176,7 +1165,17 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 			...(this.options.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults),
 			supportsPromptCache: true, // kilocode_change: Responses caching is automatic in the personal build
 		}
-		const params = getModelParams({ format: "openai", modelId: id, model: info, settings: this.options })
+		// kilocode_change start: do not trust a stale custom `max` capability after
+		// the profile switches to an older or unrelated primary model.
+		const requestInfo: ModelInfo =
+			!supportsOpenAiMaxReasoningEffort(id) && Array.isArray(info.supportsReasoningEffort)
+				? {
+						...info,
+						supportsReasoningEffort: info.supportsReasoningEffort.filter((effort) => effort !== "max"),
+					}
+				: info
+		const params = getModelParams({ format: "openai", modelId: id, model: requestInfo, settings: this.options })
+		// kilocode_change end
 		return { id, info, ...params }
 	}
 

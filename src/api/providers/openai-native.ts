@@ -1299,9 +1299,14 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 	}
 
 	private getReasoningEffort(model: OpenAiNativeModel): ReasoningEffortExtended | undefined {
-		// Single source of truth: user setting overrides, else model default (from types).
-		const selected = (this.options.reasoningEffort as any) ?? (model.info.reasoningEffort as any)
-		return selected && selected !== "disable" ? (selected as any) : undefined
+		// kilocode_change start: resolve only the new Maximum preference here;
+		// preserve the legacy behavior of every existing effort value.
+		const selected =
+			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ??
+			model.info.reasoningEffort
+		if (selected === "max") return model.reasoningEffort
+		return selected && selected !== "disable" ? selected : undefined
+		// kilocode_change end
 	}
 
 	/**

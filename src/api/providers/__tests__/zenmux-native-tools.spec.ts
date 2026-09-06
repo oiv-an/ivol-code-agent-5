@@ -92,9 +92,9 @@ describe("ZenMuxHandler native tools and message pipeline", () => {
 		await consume(handler.createMessage("system", [{ role: "user", content: "hi" }], metadata))
 
 		expect(streamSpy).toHaveBeenCalledTimes(1)
-		expect(streamSpy.mock.calls[0][6]).toEqual(tools)
-		expect(streamSpy.mock.calls[0][7]).toBe("auto")
-		expect(streamSpy.mock.calls[0][8]).toBe(true)
+		expect(streamSpy.mock.calls[0][5]).toEqual(tools)
+		expect(streamSpy.mock.calls[0][6]).toBe("auto")
+		expect(streamSpy.mock.calls[0][7]).toBe(true)
 	})
 
 	it("omits tools when task protocol is xml even if tools are provided", async () => {
@@ -138,9 +138,9 @@ describe("ZenMuxHandler native tools and message pipeline", () => {
 		)
 
 		expect(streamSpy).toHaveBeenCalledTimes(1)
+		expect(streamSpy.mock.calls[0][5]).toBeUndefined()
 		expect(streamSpy.mock.calls[0][6]).toBeUndefined()
-		expect(streamSpy.mock.calls[0][7]).toBeUndefined()
-		expect(streamSpy.mock.calls[0][8]).toBe(false)
+		expect(streamSpy.mock.calls[0][7]).toBe(false)
 	})
 
 	it("passes transformed DeepSeek R1 messages into stream creation", async () => {
@@ -172,4 +172,36 @@ describe("ZenMuxHandler native tools and message pipeline", () => {
 		expect(sentMessages.some((message: any) => message.role === "system")).toBe(false)
 		expect((sentMessages[0] as any).role).toBe("user")
 	})
+
+	// kilocode_change start: the main streaming path must use the common
+	// request-time Maximum resolver rather than forwarding raw profile state.
+	it("passes the resolved Maximum fallback into the ZenMux request", async () => {
+		const handler = new ZenMuxHandler({
+			...baseOptions,
+			zenmuxModelId: "openai/gpt-5.5",
+			enableReasoningEffort: true,
+			reasoningEffort: "max",
+		})
+
+		vi.spyOn(handler, "fetchModel").mockImplementation(async () => {
+			;(handler as unknown as { models: Record<string, unknown> }).models = {
+				"openai/gpt-5.5": {
+					maxTokens: 8192,
+					contextWindow: 128000,
+					supportsImages: false,
+					supportsPromptCache: false,
+					supportsReasoningEffort: ["low", "medium", "high"],
+					inputPrice: 0,
+					outputPrice: 0,
+				},
+			}
+			return handler.getModel()
+		})
+		const streamSpy = vi.spyOn(handler, "createZenMuxStream").mockResolvedValue(createMockStream() as any)
+
+		await consume(handler.createMessage("system", [{ role: "user", content: "hi" }]))
+
+		expect(streamSpy.mock.calls[0][3]).toEqual({ effort: "high" })
+	})
+	// kilocode_change end
 })

@@ -215,6 +215,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		{ type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"; timeout: number } | undefined
 	>(undefined)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
+	const [isPreparingContextHandoff, setIsPreparingContextHandoff] = useState(false) // kilocode_change
+	const isManualContextManagementRef = useRef(false) // kilocode_change: release input even after a terminal row clears progress.
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
 		new LRUCache({
@@ -551,6 +553,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		everVisibleMessagesTsRef.current.clear() // Clear for new task
 		setCurrentFollowUpTs(null) // Clear follow-up answered state for new task
 		setIsCondensing(false) // Reset condensing state when switching tasks
+		setIsPreparingContextHandoff(false) // kilocode_change: never carry live preparation into another task.
+		isManualContextManagementRef.current = false // kilocode_change
 		// Note: sendingDisabled is not reset here as it's managed by message effects
 
 		// Clear any pending auto-approval timeout from previous task
@@ -561,6 +565,30 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Reset user response flag for new task
 		userRespondedRef.current = false
 	}, [task?.ts])
+
+	// kilocode_change start: completion/error rows are also authoritative if a progress event was missed.
+	useEffect(() => {
+		if (
+			lastMessage &&
+			!lastMessage.partial &&
+			((lastMessage.say &&
+				["condense_context", "condense_context_error", "error", "completion_result"].includes(
+					lastMessage.say,
+				)) ||
+				(lastMessage.ask &&
+					["api_req_failed", "resume_task", "resume_completed_task", "completion_result"].includes(
+						lastMessage.ask,
+					)))
+		) {
+			setIsPreparingContextHandoff(false)
+			setIsCondensing(false)
+			if (isManualContextManagementRef.current) {
+				isManualContextManagementRef.current = false
+				setSendingDisabled(false)
+			}
+		}
+	}, [lastMessage])
+	// kilocode_change end
 
 	const taskTs = task?.ts
 
@@ -976,6 +1004,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 					}
 					break
+				// kilocode_change start: file generation is a separate operation, not condensation.
+				case "contextHandoffStarted":
+					if (message.text) {
+						setIsPreparingContextHandoff(true)
+						setIsCondensing(false)
+					}
+					break
+				// kilocode_change end
 				case "condenseTaskContextStarted":
 					// Handle both manual and automatic condensation start
 					// We don't check the task ID because:
@@ -983,6 +1019,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// 2. Task switching resets isCondensing to false (see useEffect with task?.ts dependency)
 					// 3. For new tasks, currentTaskItem may not be populated yet due to async state updates
 					if (message.text) {
+						setIsPreparingContextHandoff(false) // kilocode_change: file has been saved and verified.
 						setIsCondensing(true)
 						// Note: sendingDisabled is only set for manual condensation via handleCondenseContext
 						// Automatic condensation doesn't disable sending since the task is already running
@@ -991,10 +1028,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "condenseTaskContextResponse":
 					// Same reasoning as above - we trust this is for the current task
 					if (message.text) {
-						if (isCondensing && sendingDisabled) {
+						if (isManualContextManagementRef.current) {
 							setSendingDisabled(false)
 						}
+						isManualContextManagementRef.current = false // kilocode_change
 						setIsCondensing(false)
+						setIsPreparingContextHandoff(false) // kilocode_change
 					}
 					break
 				case "checkpointInitWarning":
@@ -1026,7 +1065,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			// not using its value but its reference.
 		},
 		[
-			isCondensing,
 			isHidden,
 			sendingDisabled,
 			enableButtons,
@@ -1236,7 +1274,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Only filter out the launch ask and result messages - browser actions appear in chat
 		const result: ClineMessage[] = visibleMessages.filter((msg) => !isBrowserSessionMessage(msg))
 
-		if (isCondensing) {
+		// kilocode_change start: only live synthetic rows spin; saved history remains static.
+		if (isPreparingContextHandoff) {
+			result.push({
+				type: "say",
+				say: "context_handoff",
+				ts: Date.now(),
+				partial: true,
+			})
+		} else if (isCondensing) {
+			// kilocode_change end
 			result.push({
 				type: "say",
 				say: "condense_context",
@@ -1245,7 +1292,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			} as any)
 		}
 		return result
-	}, [isCondensing, visibleMessages, isBrowserSessionMessage])
+	}, [isCondensing, isPreparingContextHandoff, visibleMessages, isBrowserSessionMessage]) // kilocode_change
 
 	// scrolling
 
@@ -1604,10 +1651,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}))
 
 	const handleCondenseContext = (taskId: string) => {
-		if (isCondensing || sendingDisabled) {
+		if (isCondensing || isPreparingContextHandoff || sendingDisabled) {
 			return
 		}
-		setIsCondensing(true)
+		// kilocode_change start: do not show compression until the continuation file is verified.
+		const prepareHandoff = apiConfiguration?.intelligentContextResetEnabled ?? true
+		isManualContextManagementRef.current = true
+		setIsPreparingContextHandoff(prepareHandoff)
+		setIsCondensing(!prepareHandoff)
+		// kilocode_change end
 		setSendingDisabled(true)
 		vscode.postMessage({ type: "condenseTaskContextRequest", text: taskId })
 	}

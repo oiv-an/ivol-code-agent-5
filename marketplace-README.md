@@ -40,7 +40,7 @@ Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-
 
 ## Versioning
 
-Version `5.16.223` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
+Version `5.16.226` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## License and attribution
 

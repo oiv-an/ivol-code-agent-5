@@ -4,6 +4,7 @@ import type { Mock } from "vitest"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@roo-code/telemetry"
+import { DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT } from "@roo-code/types"
 
 import { ApiHandler } from "../../../api"
 import { ApiMessage } from "../../task-persistence/apiMessages"
@@ -756,6 +757,22 @@ describe("summarizeConversation", () => {
 	// Default system prompt for tests
 	const defaultSystemPrompt = "You are a helpful assistant."
 
+	function getRecentHandoffPayload(handler: ApiHandler): string {
+		const createMessageCalls = (handler.createMessage as Mock).mock.calls
+		const requestMessages = createMessageCalls.at(-1)?.[1] as Array<{ role: string; content: unknown }>
+		const finalContent = requestMessages?.at(-1)?.content
+		if (typeof finalContent !== "string") {
+			throw new Error("Expected a text handoff request")
+		}
+
+		const match = finalContent.match(/<recent_messages>\n([\s\S]*?)\n<\/recent_messages>/)
+		if (!match) {
+			throw new Error("Expected serialized recent messages in the handoff request")
+		}
+
+		return match[1]
+	}
+
 	it("should not summarize when there are not enough messages", async () => {
 		const messages: ApiMessage[] = [
 			{ role: "user", content: "Hello", ts: 1 },
@@ -920,11 +937,6 @@ describe("summarizeConversation", () => {
 		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
 
 		// Verify the final request message
-		const expectedFinalMessage = {
-			role: "user",
-			content: "Summarize the conversation so far, as described in the prompt instructions.",
-		}
-
 		// Verify that createMessage was called with the correct prompt
 		expect(mockApiHandler.createMessage).toHaveBeenCalledWith(
 			expect.stringContaining("Your task is to create a detailed summary of the conversation"),
@@ -933,8 +945,199 @@ describe("summarizeConversation", () => {
 
 		// Check that maybeRemoveImageBlocks was called with the correct messages
 		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0][0] as any[]
-		expect(mockCallArgs[mockCallArgs.length - 1]).toEqual(expectedFinalMessage)
+		expect(mockCallArgs[mockCallArgs.length - 1]).toEqual({
+			role: "user",
+			content: expect.stringContaining(DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT),
+		})
+		expect(mockCallArgs[mockCallArgs.length - 1].content).toContain("Tell me more")
 	})
+
+	it("should preserve safe tool details while excluding opaque reasoning and binary fields", async () => {
+		const messages: ApiMessage[] = [
+			{ role: "user", content: "Initial request", ts: 1 },
+			{ role: "assistant", content: "Initial response", ts: 2 },
+			{ role: "user", content: "Please inspect the file", ts: 3 },
+			{ role: "assistant", content: "I will inspect it", ts: 4 },
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "Reading the requested file now" },
+					{ type: "reasoning", text: "private-reasoning-value" },
+					{ type: "thinking", thinking: "private-thinking-value", signature: "private-signature-value" },
+					{ type: "redacted_thinking", data: "private-redacted-value" },
+					{ type: "thoughtSignature", thoughtSignature: "private-thought-signature-value" },
+					{
+						type: "tool_use",
+						id: "toolu_safe_handoff",
+						name: "read_file",
+						input: {
+							path: "src/safe-file.ts",
+							line: 42,
+							encrypted_content: "nested-encrypted-value",
+							reasoning: "nested-reasoning-value",
+							thought_signature: "nested-signature-value",
+							extra_content: { private: "nested-extra-value" },
+							image_data: "raw-image-value",
+							payload: { type: "Buffer", data: [137, 80, 78, 71] },
+						},
+					},
+				] as any,
+				ts: 5,
+			},
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "toolu_safe_handoff",
+						content: [
+							{
+								type: "text",
+								text: `export const safeResult = 42\ndata:image/png;base64,${"A".repeat(400)}`,
+							},
+							{
+								type: "image",
+								source: { type: "base64", media_type: "image/png", data: "raw-base64-image-value" },
+							},
+							{ type: "reasoning", text: "tool-result-reasoning-value" },
+						],
+					},
+				] as any,
+				ts: 6,
+			},
+			{ role: "user", content: "Continue from the inspected file", ts: 7 },
+		]
+
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+
+		const payload = getRecentHandoffPayload(mockApiHandler)
+		expect(payload).toContain("Reading the requested file now")
+		expect(payload).toContain("toolu_safe_handoff")
+		expect(payload).toContain("read_file")
+		expect(payload).toContain("src/safe-file.ts")
+		expect(payload).toContain("export const safeResult = 42")
+		expect(payload).toContain("Continue from the inspected file")
+		expect(payload).not.toContain("private-reasoning-value")
+		expect(payload).not.toContain("private-thinking-value")
+		expect(payload).not.toContain("private-redacted-value")
+		expect(payload).not.toContain("private-thought-signature-value")
+		expect(payload).not.toContain("nested-encrypted-value")
+		expect(payload).not.toContain("nested-reasoning-value")
+		expect(payload).not.toContain("nested-signature-value")
+		expect(payload).not.toContain("nested-extra-value")
+		expect(payload).not.toContain("raw-image-value")
+		expect(payload).not.toContain("raw-base64-image-value")
+		expect(payload).not.toContain("A".repeat(400))
+		expect(payload).not.toContain('"payload"')
+		expect(payload).not.toContain('"Buffer"')
+		expect(payload).not.toContain("tool-result-reasoning-value")
+	})
+
+	it("should redact credential patterns from recent text and tool input", async () => {
+		const managedKey = "ivol-managed-0000000000000000000000000000000000000000"
+		const openAiKey = "sk-proj-1234567890abcdefghijklmnop"
+		const bearerToken = "bearer-token-1234567890abcdef"
+		const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature1234567890"
+		const messages: ApiMessage[] = [
+			{ role: "user", content: "Initial request", ts: 1 },
+			{ role: "assistant", content: "Initial response", ts: 2 },
+			{ role: "user", content: "Configure the provider", ts: 3 },
+			{ role: "assistant", content: "Checking configuration", ts: 4 },
+			{
+				role: "user",
+				content: `Use ${managedKey}, ${openAiKey}, Authorization: Bearer ${bearerToken}, api_key="raw-api-key-value", password: hunter2 and ${jwt}`,
+				ts: 5,
+			},
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "tool_use",
+						id: "toolu_credentials",
+						name: "configure_provider",
+						input: { endpoint: "https://proxy.example.test", apiKey: "nested-raw-api-key" },
+					},
+				] as any,
+				ts: 6,
+			},
+			{ role: "user", content: "Keep the endpoint, not the credentials", ts: 7 },
+		]
+
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+
+		const payload = getRecentHandoffPayload(mockApiHandler)
+		expect(payload).toContain("https://proxy.example.test")
+		expect(payload).toContain("[REDACTED]")
+		expect(payload).not.toContain(managedKey)
+		expect(payload).not.toContain(openAiKey)
+		expect(payload).not.toContain(bearerToken)
+		expect(payload).not.toContain(jwt)
+		expect(payload).not.toContain("raw-api-key-value")
+		expect(payload).not.toContain("hunter2")
+		expect(payload).not.toContain("nested-raw-api-key")
+	})
+
+	it("should truncate only an oversized raw output while retaining its beginning and end", async () => {
+		;(mockApiHandler.getModel as Mock).mockReturnValue({
+			id: "large-context-model",
+			info: { contextWindow: 400_000 },
+		})
+		const messages: ApiMessage[] = [
+			{ role: "user", content: "Initial request", ts: 1 },
+			{ role: "assistant", content: "Initial response", ts: 2 },
+			{ role: "user", content: "Continue", ts: 3 },
+			{ role: "assistant", content: "Working", ts: 4 },
+			{ role: "user", content: "Normal recent decision stays intact", ts: 5 },
+			{
+				role: "assistant",
+				content: `RAW-OUTPUT-BEGIN ${"large tool output line with useful context\n".repeat(1_500)} RAW-OUTPUT-END`,
+				ts: 6,
+			},
+			{ role: "user", content: "Continue after the raw output", ts: 7 },
+		]
+
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+
+		const payload = getRecentHandoffPayload(mockApiHandler)
+		expect(payload).toContain("Normal recent decision stays intact")
+		expect(payload).toContain("RAW-OUTPUT-BEGIN")
+		expect(payload).toContain("RAW-OUTPUT-END")
+		expect(payload).toContain("part of oversized raw output omitted; beginning and end preserved")
+		expect(payload).toContain("Continue after the raw output")
+	})
+
+	it("should cap oversized recent-message payloads while retaining the beginning and end", async () => {
+		const messages: ApiMessage[] = [
+			{ role: "user", content: "Initial request", ts: 1 },
+			{ role: "assistant", content: "Initial response", ts: 2 },
+			{ role: "user", content: "Continue", ts: 3 },
+			{ role: "assistant", content: "Working", ts: 4 },
+			{
+				role: "user",
+				content: `FIRST-MESSAGE-BEGIN ${"first payload words ".repeat(500)} FIRST-MESSAGE-END`,
+				ts: 5,
+			},
+			{
+				role: "assistant",
+				content: `SECOND-MESSAGE-BEGIN ${"second payload words ".repeat(500)} SECOND-MESSAGE-END`,
+				ts: 6,
+			},
+			{
+				role: "user",
+				content: `LAST-MESSAGE-BEGIN ${"last payload words ".repeat(500)} LAST-MESSAGE-END`,
+				ts: 7,
+			},
+		]
+
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+
+		const payload = getRecentHandoffPayload(mockApiHandler)
+		expect(payload.length).toBeLessThanOrEqual(8_000)
+		expect(payload).toContain("FIRST-MESSAGE-BEGIN")
+		expect(payload).toContain("LAST-MESSAGE-END")
+		expect(payload).toContain("middle of oversized recent messages payload omitted; beginning and end preserved")
+	})
+
 	it("should include the original first user message in summarization input", async () => {
 		const messages: ApiMessage[] = [
 			{ role: "user", content: "Initial ask", ts: 1 },
@@ -1085,6 +1288,11 @@ describe("summarizeConversation", () => {
 		expect(result.error).toBeUndefined()
 		expect(result.newContextTokens).toBe(80) // 50 output tokens + 30 from countTokens
 		expect(result.newContextTokens).toBeLessThan(prevContextTokens)
+		const countedBlocks = (mockApiHandler.countTokens as Mock).mock.calls.at(-1)?.[0] as Array<{
+			type: string
+			text?: string
+		}>
+		expect(countedBlocks.some((block) => block.type === "text" && block.text === "Hello")).toBe(true)
 	})
 
 	it("should return error when not enough messages to summarize", async () => {
@@ -1328,7 +1536,7 @@ describe("summarizeConversation", () => {
 		const requestMessages = capturedRequestMessages!
 		expect(requestMessages[requestMessages.length - 1]).toEqual({
 			role: "user",
-			content: "Summarize the conversation so far, as described in the prompt instructions.",
+			content: expect.stringContaining(DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT),
 		})
 
 		const historyMessages = requestMessages.slice(0, -1)
@@ -2009,6 +2217,93 @@ describe("summarizeConversation with custom settings", () => {
 		{ role: "user", content: "Tell me more", ts: 7 },
 	]
 
+	// kilocode_change start: preparation is observable only for an actual model request.
+	it("announces the memory task before requesting the active model, without exposing recent history", async () => {
+		const events: string[] = []
+		const onBeforeRequest = vi.fn(async (prompt: string) => {
+			events.push("prepare")
+			expect(prompt).toBe("Save the exact current work")
+			expect(prompt).not.toContain("Tell me more")
+		})
+		vi.mocked(mockMainApiHandler.createMessage).mockImplementation(() => {
+			events.push("model")
+			return (async function* () {
+				yield { type: "text" as const, text: "Current work snapshot" }
+			})()
+		})
+		const result = await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			1000,
+			false,
+			undefined,
+			undefined,
+			false,
+			{ enabled: true, prompt: "Save the exact current work", onBeforeRequest },
+		)
+		expect(result.error).toBeUndefined()
+		expect(events).toEqual(["prepare", "model"])
+		expect(onBeforeRequest).toHaveBeenCalledOnce()
+	})
+
+	it("does not announce a preparation that guards reject or the profile disables", async () => {
+		const onBeforeRequest = vi.fn()
+		await summarizeConversation(
+			sampleMessages.slice(0, 2),
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			1000,
+			false,
+			undefined,
+			undefined,
+			false,
+			{ enabled: true, onBeforeRequest },
+		)
+		expect(onBeforeRequest).not.toHaveBeenCalled()
+		expect(mockMainApiHandler.createMessage).not.toHaveBeenCalled()
+		await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			1000,
+			false,
+			undefined,
+			undefined,
+			false,
+			{ enabled: false, onBeforeRequest },
+		)
+		expect(onBeforeRequest).not.toHaveBeenCalled()
+		expect(mockMainApiHandler.createMessage).toHaveBeenCalledOnce()
+	})
+
+	it("returns the unchanged history when the preparation request fails", async () => {
+		const onBeforeRequest = vi.fn().mockResolvedValue(undefined)
+		vi.mocked(mockMainApiHandler.createMessage).mockImplementation(() => {
+			throw new Error("provider offline")
+		})
+		const result = await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			1000,
+			false,
+			undefined,
+			undefined,
+			false,
+			{ enabled: true, onBeforeRequest },
+		)
+		expect(onBeforeRequest).toHaveBeenCalledOnce()
+		expect(result.error).toContain("provider offline")
+		expect(result.messages).toBe(sampleMessages)
+		expect(result.summary).toBe("")
+	})
+	// kilocode_change end
+
 	beforeEach(() => {
 		// Reset mocks
 		vi.clearAllMocks()
@@ -2083,7 +2378,87 @@ describe("summarizeConversation with custom settings", () => {
 		// Verify the custom prompt was used
 		const createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
 		expect(createMessageCalls.length).toBe(1)
-		expect(createMessageCalls[0][0]).toBe(customPrompt)
+		expect(createMessageCalls[0][0]).toContain(customPrompt)
+		expect(createMessageCalls[0][0]).toContain("CONTEXT_RESTART.md")
+		expect(createMessageCalls[0][0]).toContain("Never include API keys")
+	})
+
+	it("uses the editable intelligent-reset task as the final command", async () => {
+		const resetPrompt = "Preserve the deployment state and exact next command."
+		const onBeforeRequest = vi.fn().mockImplementation(async () => {
+			expect(mockMainApiHandler.createMessage).not.toHaveBeenCalled()
+		})
+
+		await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			DEFAULT_PREV_CONTEXT_TOKENS,
+			false,
+			undefined,
+			undefined,
+			undefined,
+			{ enabled: true, prompt: resetPrompt, onBeforeRequest },
+		)
+
+		const requestMessages = (mockMainApiHandler.createMessage as Mock).mock.calls[0][1] as Array<{
+			role: string
+			content: unknown
+		}>
+		expect(requestMessages.at(-1)).toMatchObject({ role: "user" })
+		expect(requestMessages.at(-1)?.content).toEqual(expect.stringContaining(resetPrompt))
+		expect(requestMessages.at(-1)?.content).toEqual(expect.stringContaining("<recent_messages>"))
+		expect(onBeforeRequest).toHaveBeenCalledExactlyOnceWith(resetPrompt)
+		expect(onBeforeRequest.mock.invocationCallOrder[0]).toBeLessThan(
+			vi.mocked(mockMainApiHandler.createMessage).mock.invocationCallOrder[0],
+		)
+	})
+
+	it("does not call the provider if publishing the real preparation task fails", async () => {
+		const result = await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			DEFAULT_PREV_CONTEXT_TOKENS,
+			false,
+			undefined,
+			undefined,
+			undefined,
+			{ enabled: true, onBeforeRequest: vi.fn().mockRejectedValue(new Error("preparation unavailable")) },
+		)
+		expect(result.error).toContain("preparation unavailable")
+		expect(result.messages).toEqual(sampleMessages)
+		expect(mockMainApiHandler.createMessage).not.toHaveBeenCalled()
+	})
+
+	it("keeps ordinary condensing when intelligent reset is disabled", async () => {
+		const customPrompt = "Ordinary compact summary only"
+		const onBeforeRequest = vi.fn()
+
+		await summarizeConversation(
+			sampleMessages,
+			mockMainApiHandler,
+			defaultSystemPrompt,
+			taskId,
+			DEFAULT_PREV_CONTEXT_TOKENS,
+			false,
+			customPrompt,
+			undefined,
+			undefined,
+			{ enabled: false, onBeforeRequest },
+		)
+
+		const [prompt, requestMessages] = (mockMainApiHandler.createMessage as Mock).mock.calls[0] as [
+			string,
+			Array<{ role: string; content: unknown }>,
+		]
+		expect(prompt).toBe(customPrompt)
+		expect(prompt).not.toContain("CONTEXT_RESTART.md")
+		expect(requestMessages).toHaveLength(sampleMessages.length - N_MESSAGES_TO_KEEP)
+		expect(requestMessages.at(-1)?.content).not.toEqual(expect.stringContaining("<recent_messages>"))
+		expect(onBeforeRequest).not.toHaveBeenCalled()
 	})
 
 	/**
@@ -2142,6 +2517,7 @@ describe("summarizeConversation with custom settings", () => {
 		// Verify the condensing handler was used
 		expect((mockCondensingApiHandler.createMessage as Mock).mock.calls.length).toBe(1)
 		expect((mockMainApiHandler.createMessage as Mock).mock.calls.length).toBe(0)
+		expect(maybeRemoveImageBlocks).toHaveBeenCalledWith(expect.any(Array), mockCondensingApiHandler)
 	})
 
 	/**

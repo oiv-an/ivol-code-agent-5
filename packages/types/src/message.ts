@@ -198,6 +198,7 @@ export const clineSays = [
 	"diff_error",
 	"condense_context",
 	"condense_context_error",
+	"context_handoff", // kilocode_change: visible restart preparation and verified file receipt
 	"sliding_window_truncation",
 	"codebase_search_result",
 	"user_edit_todos",
@@ -240,6 +241,17 @@ export const contextCondenseSchema = z.object({
 })
 
 export type ContextCondense = z.infer<typeof contextCondenseSchema>
+
+// kilocode_change start: persisted progress for the real pre-compression memory task.
+export const contextHandoffProgressSchema = z.object({
+	phase: z.enum(["preparing", "saved"]),
+	path: z.string(),
+	prompt: z.string().optional(),
+	content: z.string().optional(),
+})
+
+export type ContextHandoffProgress = z.infer<typeof contextHandoffProgressSchema>
+// kilocode_change end
 
 /**
  * ContextTruncation

@@ -1,5 +1,15 @@
 {
 	"greeting": "What can IVOL Code do for you?",
+	"contextHandoff": {
+		"inProgress": "Creating continuation file",
+		"invalidDetails": "Continuation file details are unavailable.",
+		"preparingTitle": "Task before context compression",
+		"preparingDescription": "This instruction is sent to the model. It prepares the continuation text; the plugin then saves and verifies the file before compressing context.",
+		"savedTitle": "Continuation file saved",
+		"savedDescription": "The model's text has been written to the project root and verified. Context compression can now begin. After the file is read and continuation is saved, the plugin removes it.",
+		"promptLabel": "Instruction to the model",
+		"contentLabel": "Saved file contents"
+	},
 	"task": {
 		"title": "Task",
 		"expand": "Expand task",
@@ -197,7 +207,7 @@
 		"tokens": "tokens",
 		"condensation": {
 			"title": "Context Condensed",
-			"inProgress": "Condensing context...",
+			"inProgress": "Compressing context",
 			"errorHeader": "Failed to condense context"
 		},
 		"truncation": {

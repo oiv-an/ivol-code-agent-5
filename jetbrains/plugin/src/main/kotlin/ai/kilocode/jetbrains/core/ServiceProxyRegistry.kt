@@ -41,6 +41,7 @@ import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostEditorTabsProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostEditorsProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostExtensionServiceProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostFileSystemEventServiceProxy
+import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostStorageProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostTerminalServiceProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostTerminalShellIntegrationProxy
 import ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostWebviewViewsProxy
@@ -351,7 +352,9 @@ class ServiceProxyRegistry private constructor() {
         val ExtHostProgress = createProxyIdentifier<Any>("ExtHostProgress")
         val ExtHostComments = createProxyIdentifier<Any>("ExtHostComments")
         val ExtHostSecretState = createProxyIdentifier<Any>("ExtHostSecretState")
-        val ExtHostStorage = createProxyIdentifier<Any>("ExtHostStorage")
+        val ExtHostStorage = createProxyIdentifier<ExtHostStorageProxy>(
+            "ai.kilocode.jetbrains.ipc.proxy.interfaces.ExtHostStorageProxy",
+        )
         val ExtHostUrls = createProxyIdentifier<Any>("ExtHostUrls")
         val ExtHostUriOpeners = createProxyIdentifier<Any>("ExtHostUriOpeners")
         val ExtHostProfileContentHandlers = createProxyIdentifier<Any>("ExtHostProfileContentHandlers")

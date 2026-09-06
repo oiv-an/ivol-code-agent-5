@@ -48,6 +48,7 @@ import ReportBugPreview from "./ReportBugPreview"
 
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
 import { InProgressRow, CondensationResultRow, CondensationErrorRow, TruncationResultRow } from "./context-management"
+import { ContextHandoffRow } from "./context-management" // kilocode_change
 import CodebaseSearchResultsDisplay from "./CodebaseSearchResultsDisplay"
 import { appendImages } from "@src/utils/imageUtils"
 import { McpExecution } from "./McpExecution"
@@ -1543,6 +1544,10 @@ export const ChatRowContent = ({
 							checkpoint={message.checkpoint}
 						/>
 					)
+				// kilocode_change start: show the real pre-condensation instruction and verified file.
+				case "context_handoff":
+					return <ContextHandoffRow text={message.text} isInProgress={message.partial === true} />
+				// kilocode_change end
 				case "condense_context":
 					// In-progress state
 					if (message.partial) {

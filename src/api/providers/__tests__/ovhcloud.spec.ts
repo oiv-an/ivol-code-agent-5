@@ -143,6 +143,29 @@ describe("OVHcloudAIEndpointsHandler", () => {
 	})
 
 	describe("Streaming Message Creation", () => {
+		// kilocode_change start: OVH GPT-OSS models expose Maximum in the UI but
+		// accept high as their strongest declared effort.
+		it("sends high when Maximum reasoning is selected", async () => {
+			const maximumHandler = new OVHcloudAIEndpointsHandler({
+				ovhCloudAiEndpointsApiKey,
+				ovhCloudAiEndpointsModelId: "gpt-oss-120b",
+				enableReasoningEffort: true,
+				reasoningEffort: "max",
+			})
+			vitest.spyOn(maximumHandler, "fetchModel").mockResolvedValue(maximumHandler.getModel())
+			mockCreate.mockImplementationOnce(() => ({
+				async *[Symbol.asyncIterator]() {
+					yield { choices: [{ delta: { content: "ok" } }] }
+				},
+			}))
+
+			const stream = maximumHandler.createMessage("system", [{ role: "user", content: "test" }])
+			await stream.next()
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "high" }))
+		})
+		// kilocode_change end
+
 		it("should stream text content from OVHcloud AI response", async () => {
 			const streamContent = "Streaming response from OVHcloud AI Endpoints"
 

@@ -1158,6 +1158,124 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		vi.clearAllMocks()
 	})
 
+	// kilocode_change start: preparation and condensation must never be conflated.
+	const taskMessages: ClineMessage[] = [
+		{ type: "say", say: "text", ts: 1000, text: "Initial task" },
+		{ type: "say", say: "text", ts: 2000, text: "Working on the task" },
+	]
+	const dispatchProgress = async (type: string) => {
+		await act(async () => {
+			window.dispatchEvent(new MessageEvent("message", { data: { type, text: "test-task-id" } }))
+		})
+	}
+	const partialRows = (container: HTMLElement) =>
+		Array.from(container.querySelectorAll('[data-testid="chat-row"]'))
+			.map((row) => JSON.parse(row.textContent || "{}") as ClineMessage)
+			.filter((message) => message.partial)
+
+	it("shows preparation before compression and clears both indicators on response", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({ clineMessages: taskMessages })
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+
+		await dispatchProgress("contextHandoffStarted")
+		expect(partialRows(container).map((row) => row.say)).toEqual(["context_handoff"])
+
+		await dispatchProgress("condenseTaskContextStarted")
+		expect(partialRows(container).map((row) => row.say)).toEqual(["condense_context"])
+
+		await dispatchProgress("condenseTaskContextResponse")
+		expect(partialRows(container)).toEqual([])
+	})
+
+	it("clears preparation when the file operation fails before compression", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({ clineMessages: taskMessages })
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		await dispatchProgress("contextHandoffStarted")
+		expect(partialRows(container).map((row) => row.say)).toEqual(["context_handoff"])
+
+		mockPostMessage({
+			clineMessages: [
+				...taskMessages,
+				{ type: "say", say: "condense_context_error", ts: 3000, text: "Could not save continuation file" },
+			],
+		})
+		await waitFor(() => expect(partialRows(container)).toEqual([]))
+	})
+
+	it("does not carry a live preparation indicator into another task", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({ clineMessages: taskMessages })
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		await dispatchProgress("contextHandoffStarted")
+
+		mockPostMessage({
+			clineMessages: [
+				{ type: "say", say: "text", ts: 4000, text: "Different task" },
+				{ type: "say", say: "text", ts: 5000, text: "Different work" },
+			],
+		})
+		await waitFor(() => expect(container.textContent).toContain("Different work"))
+		expect(partialRows(container)).toEqual([])
+	})
+
+	it.each([undefined, true, false])(
+		"chooses the correct initial manual progress for intelligent reset %s",
+		async (intelligentContextResetEnabled) => {
+			const { container } = renderChatView()
+			mockPostMessage({
+				clineMessages: taskMessages,
+				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+				apiConfiguration: { apiProvider: "anthropic", intelligentContextResetEnabled },
+			})
+			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+			const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+			expect(button).not.toBeNull()
+			await act(async () => fireEvent.click(button!))
+
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "condenseTaskContextRequest",
+				text: "test-task-id",
+			})
+			expect(partialRows(container).map((row) => row.say)).toEqual([
+				intelligentContextResetEnabled === false ? "condense_context" : "context_handoff",
+			])
+			await dispatchProgress("condenseTaskContextResponse")
+			expect(partialRows(container)).toEqual([])
+			expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute(
+				"data-sending-disabled",
+				"false",
+			)
+		},
+	)
+
+	it("unlocks manual input on a terminal error row even if the response event is missing", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({
+			clineMessages: taskMessages,
+			currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+		})
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+		expect(button).not.toBeNull()
+		await act(async () => fireEvent.click(button!))
+		expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute("data-sending-disabled", "true")
+
+		mockPostMessage({
+			clineMessages: [
+				...taskMessages,
+				{ type: "say", say: "condense_context_error", ts: 3000, text: "Could not save continuation file" },
+			],
+		})
+		await waitFor(() => expect(partialRows(container)).toEqual([]))
+		expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute(
+			"data-sending-disabled",
+			"false",
+		)
+	})
+	// kilocode_change end
+
 	it("should add a condensing message to groupedMessages when isCondensing is true", async () => {
 		// This test verifies that when the condenseTaskContextStarted message is received,
 		// the isCondensing state is set to true and a synthetic condensing message is added

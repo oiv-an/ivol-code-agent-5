@@ -444,7 +444,7 @@ describe("PoeHandler", () => {
 
 			expect(mockCreate).toHaveBeenCalledWith(
 				expect.objectContaining({
-					thinking_budget: 10000,
+					extra_body: { thinking_budget: 10000 },
 				}),
 			)
 		})
@@ -468,16 +468,18 @@ describe("PoeHandler", () => {
 
 			expect(mockCreate).toHaveBeenCalledWith(
 				expect.objectContaining({
-					reasoning_effort: "high",
+					extra_body: { reasoning_effort: "high" },
 				}),
 			)
 		})
 
-		it("filters out unsupported reasoning_effort values for OpenAI", async () => {
+		// kilocode_change start: Maximum is resolved by getModelParams before Poe
+		// constructs the provider request.
+		it("uses the xhigh fallback for Maximum reasoning", async () => {
 			const handler = new PoeHandler({
 				poeApiKey: "test-key",
 				poeModelId: "gpt-4o",
-				reasoningEffort: "xhigh" as any, // Unsupported value
+				reasoningEffort: "max",
 			})
 
 			const mockStream = {
@@ -491,11 +493,10 @@ describe("PoeHandler", () => {
 			await iterator.next()
 
 			expect(mockCreate).toHaveBeenCalledWith(
-				expect.not.objectContaining({
-					reasoning_effort: expect.anything(),
-				}),
+				expect.objectContaining({ extra_body: { reasoning_effort: "xhigh" } }),
 			)
 		})
+		// kilocode_change end
 	})
 
 	describe("completePrompt", () => {

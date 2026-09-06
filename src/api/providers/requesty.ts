@@ -144,10 +144,12 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 			...convertToOpenAiMessages(messages),
 		]
 
-		// Map extended efforts to OpenAI Chat Completions-accepted values (omit unsupported)
-		const allowedEffort = (["low", "medium", "high"] as const).includes(reasoning_effort as any)
-			? (reasoning_effort as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming["reasoning_effort"])
-			: undefined
+		// kilocode_change start: Requesty accepts `max` but not OpenAI's newer
+		// `xhigh` spelling. It safely maps `max` to the strongest level supported by
+		// the upstream model, so both Very High and Maximum remain effective.
+		const resolvedReasoningEffort =
+			reasoning_effort === "xhigh" ? "max" : reasoning_effort === "minimal" ? "min" : reasoning_effort
+		// kilocode_change end
 
 		// Check if native tool protocol is enabled
 		// IMPORTANT: Use metadata.toolProtocol if provided (task's locked protocol) for consistency
@@ -159,7 +161,7 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 			model,
 			max_tokens,
 			temperature,
-			...(allowedEffort && { reasoning_effort: allowedEffort }),
+			...(resolvedReasoningEffort && { reasoning_effort: resolvedReasoningEffort as any }),
 			...(thinking && { thinking }),
 			stream: true,
 			stream_options: { include_usage: true },
@@ -212,7 +214,21 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 	}
 
 	async completePrompt(prompt: string): Promise<string> {
-		const { id: model, maxTokens: max_tokens, temperature } = await this.fetchModel()
+		// kilocode_change start: keep Maximum/fallback behavior in non-streaming requests.
+		const {
+			id: model,
+			maxTokens: max_tokens,
+			temperature,
+			reasoningEffort: resolvedReasoningEffort,
+		} = await this.fetchModel()
+		// Normalize extended UI values to Requesty's documented dialect.
+		const requestyReasoningEffort =
+			resolvedReasoningEffort === "xhigh"
+				? "max"
+				: resolvedReasoningEffort === "minimal"
+					? "min"
+					: resolvedReasoningEffort
+		// kilocode_change end
 
 		let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: "system", content: prompt }]
 
@@ -221,6 +237,8 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 			max_tokens,
 			messages: openAiMessages,
 			temperature: temperature,
+			// kilocode_change: keep Maximum/fallback behavior consistent with streaming requests.
+			...(requestyReasoningEffort && { reasoning_effort: requestyReasoningEffort as any }),
 		}
 
 		let response: OpenAI.Chat.ChatCompletion

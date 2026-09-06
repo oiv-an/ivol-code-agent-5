@@ -163,6 +163,8 @@ describe("Task grounding sources handling", () => {
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
+		vi.spyOn(Task.prototype as any, "saveApiConversationHistory").mockResolvedValue(true)
+
 		// Mock provider with necessary methods
 		mockProvider = {
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),

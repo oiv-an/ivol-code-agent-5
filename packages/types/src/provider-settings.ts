@@ -245,6 +245,7 @@ export type ProviderSettingsEntry = z.infer<typeof providerSettingsEntrySchema>
 
 const baseProviderSettingsSchema = z.object({
 	profileType: profileTypeSchema.optional(), // kilocode_change - autocomplete profile type system
+	intelligentContextResetEnabled: z.boolean().optional(), // kilocode_change: per-profile, enabled when unset
 	includeMaxTokens: z.boolean().optional(),
 	diffEnabled: z.boolean().optional(),
 	todoListEnabled: z.boolean().optional(),

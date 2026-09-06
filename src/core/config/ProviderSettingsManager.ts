@@ -59,6 +59,7 @@ export const providerProfilesSchema = z.object({
 			todoListEnabledMigrated: z.boolean().optional(),
 			morphApiKeyMigrated: z.boolean().optional(), // kilocode_change: Morph API key migration
 			claudeCodeLegacySettingsMigrated: z.boolean().optional(),
+			intelligentContextResetMigrated: z.boolean().optional(), // kilocode_change
 		})
 		.optional(),
 })
@@ -95,6 +96,7 @@ export class ProviderSettingsManager {
 			consecutiveMistakeLimitMigrated: true, // Mark as migrated on fresh installs
 			todoListEnabledMigrated: true, // Mark as migrated on fresh installs
 			claudeCodeLegacySettingsMigrated: true, // Mark as migrated on fresh installs
+			intelligentContextResetMigrated: true,
 		},
 	}
 	// kilocode_change end
@@ -310,6 +312,20 @@ export class ProviderSettingsManager {
 					providerProfiles.migrations.todoListEnabledMigrated = true
 					isDirty = true
 				}
+
+				// kilocode_change start: preserve the former global choice once for existing
+				// profiles. New profiles resolve an unset value to true independently.
+				if (!providerProfiles.migrations.intelligentContextResetMigrated) {
+					const legacyEnabled = this.context.globalState.get<boolean>("intelligentContextResetEnabled")
+					for (const apiConfig of Object.values(providerProfiles.apiConfigs)) {
+						if (apiConfig.intelligentContextResetEnabled === undefined) {
+							apiConfig.intelligentContextResetEnabled = legacyEnabled !== false
+						}
+					}
+					providerProfiles.migrations.intelligentContextResetMigrated = true
+					isDirty = true
+				}
+				// kilocode_change end
 
 				// kilocode_change start
 				if (!providerProfiles.migrations.morphApiKeyMigrated) {

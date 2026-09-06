@@ -208,6 +208,7 @@ export interface ExtensionMessage {
 		| "profileConfigurationForEditing" // kilocode_change: Response with profile config for editing
 		| "authenticatedUser"
 		| "condenseTaskContextStarted"
+		| "contextHandoffStarted" // kilocode_change: preparation is not yet compression
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
 		| "rooCreditBalance"
@@ -571,6 +572,7 @@ export type ExtensionState = Pick<
 	| "autoPurgeLastRunTimestamp" // kilocode_change
 	| "condensingApiConfigId"
 	| "customCondensingPrompt"
+	| "intelligentContextResetPrompt"
 	| "yoloGatekeeperApiConfigId" // kilocode_change: AI gatekeeper for YOLO mode
 	| "codebaseIndexConfig"
 	| "codebaseIndexModels"
@@ -596,6 +598,7 @@ export type ExtensionState = Pick<
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	currentTaskCumulativeCost?: number // kilocode_change: cumulative cost including deleted messages
 	apiConfiguration: ProviderSettings
+	intelligentContextResetEnabled?: boolean // kilocode_change: effective active-profile alias for older clients
 	uriScheme?: string
 	uiKind?: string // kilocode_change
 

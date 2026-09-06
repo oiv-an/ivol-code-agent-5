@@ -13,7 +13,6 @@ import {
 	DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
 	DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID,
 	openAiModelInfoSaneDefaults,
-	supportsOpenAiMaxReasoningEffort,
 } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -139,11 +138,6 @@ export const OpenAICompatible = ({
 				),
 			),
 		[apiConfiguration?.openAiModelId, openAiModels, webSearchModelId],
-	)
-	const primaryModelId = apiConfiguration?.openAiModelId?.trim()
-	const supportsMaxReasoning = supportsOpenAiMaxReasoningEffort(
-		primaryModelId,
-		apiConfiguration?.openAiCustomModelInfo ?? undefined,
 	)
 	// kilocode_change end
 
@@ -335,9 +329,9 @@ export const OpenAICompatible = ({
 						}}
 						modelInfo={{
 							...(apiConfiguration.openAiCustomModelInfo || openAiModelInfoSaneDefaults),
-							supportsReasoningEffort: supportsMaxReasoning
-								? ["low", "medium", "high", "xhigh", "max"]
-								: ["low", "medium", "high", "xhigh"], // kilocode_change: max is GPT-5.6 only
+							// `max` remains the saved preference. Unsupported custom models
+							// receive xhigh from the request-time fallback.
+							supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"], // kilocode_change
 						}}
 					/>
 				)}
