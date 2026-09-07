@@ -321,6 +321,72 @@ describe("ChatView - restored task controls", () => {
 		vi.mocked(vscode.postMessage).mockClear()
 	})
 
+	// kilocode_change: exhausted transport retries must expose user controls, not a stale Cancel state.
+	it("shows an enabled Retry after a terminated countdown even with auto-approval enabled", async () => {
+		const view = renderChatView()
+		const taskTs = Date.now() - 2_000
+		mockPostMessage({
+			autoApprovalEnabled: true,
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: taskTs, task: "Original task" },
+			clineMessages: [
+				{ type: "say", say: "text", ts: taskTs, text: "Original task" },
+				{
+					type: "say",
+					say: "api_req_started",
+					ts: taskTs + 1,
+					text: JSON.stringify({ apiProtocol: "openai" }),
+				},
+				{
+					type: "say",
+					say: "api_req_retry_delayed",
+					ts: taskTs + 2,
+					text: "terminated\n<retry_timer>1</retry_timer>",
+					partial: true,
+				},
+				{
+					type: "ask",
+					ask: "api_req_failed",
+					ts: taskTs + 3,
+					text: "OpenAI response stream timed out. Automatic retry limit reached.",
+					partial: false,
+				},
+			],
+		})
+
+		await waitFor(() => {
+			expect(view.getByText("chat:retry.title")).toBeEnabled()
+			expect(view.getByText("chat:startNewTask.title")).toBeEnabled()
+			expect(view.queryByText("chat:cancel.title")).not.toBeInTheDocument()
+		})
+		vi.mocked(vscode.postMessage).mockClear()
+		fireEvent.click(view.getByText("chat:retry.title"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "askResponse", askResponse: "yesButtonClicked" })
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "cancelTask" })
+
+		// The backend clears the failed request marker before starting the explicit retry.
+		mockPostMessage({
+			autoApprovalEnabled: true,
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: taskTs, task: "Original task" },
+			clineMessages: [
+				{ type: "say", say: "text", ts: taskTs, text: "Original task" },
+				{
+					type: "say",
+					say: "api_req_started",
+					ts: taskTs + 1,
+					text: JSON.stringify({ apiProtocol: "openai" }),
+				},
+				{ type: "ask", ask: "api_req_failed", ts: taskTs + 3, text: "Previous error", partial: false },
+				{ type: "say", say: "api_req_retried", ts: taskTs + 4 },
+			],
+		})
+		await waitFor(() => {
+			expect(view.getByText("chat:cancel.title")).toBeEnabled()
+			expect(view.queryByText("chat:retry.title")).not.toBeInTheDocument()
+		})
+	})
+
 	it.each(["user_cancelled", "streaming_failed"])(
 		"shows Resume/Terminate instead of a false Cancel after %s",
 		async (cancelReason) => {

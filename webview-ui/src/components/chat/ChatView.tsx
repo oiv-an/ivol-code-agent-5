@@ -638,14 +638,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [expandedRows])
 
 	const isStreaming = useMemo(() => {
-		// A persisted resume prompt is terminal UI state, even when the request
+		// kilocode_change: a retry/resume prompt is terminal UI state, even when the request
 		// before it ended with a partial retry/error marker. This guard does not
 		// depend on the button-state effect having run yet, so a restored task can
 		// never briefly turn its Resume action into a false Cancel action.
 		const latestMessage = messages.at(-1)
 		if (
 			latestMessage?.type === "ask" &&
-			(latestMessage.ask === "resume_task" || latestMessage.ask === "resume_completed_task") &&
+			(latestMessage.ask === "resume_task" ||
+				latestMessage.ask === "resume_completed_task" ||
+				latestMessage.ask === "api_req_failed") &&
 			latestMessage.partial !== true
 		) {
 			return false

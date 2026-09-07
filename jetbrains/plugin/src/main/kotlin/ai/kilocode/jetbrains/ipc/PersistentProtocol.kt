@@ -144,7 +144,24 @@ class PersistentProtocol(opts: PersistentProtocolOptions, msgListener: ((ByteArr
             synchronized(this) {
                 if (isDisposed()) throw IOException("Extension host IPC connection is closed")
                 if (outgoingBytes + buffer.size > maxBytes || outgoing.size >= maxMessages) {
-                    throw IOException("Extension host stopped acknowledging IPC messages; safe queue limit reached")
+                    val byteLimitReached = outgoingBytes + buffer.size > maxBytes
+                    val countLimitReached = outgoing.size >= maxMessages
+                    val reason = when {
+                        byteLimitReached && countLimitReached -> "bytes_and_count"
+                        byteLimitReached -> "bytes"
+                        else -> "count"
+                    }
+                    val now = System.currentTimeMillis()
+                    val oldestMessageAgeMillis = outgoing.peekFirst()?.let { (now - it.writtenTime).coerceAtLeast(0) } ?: 0L
+                    // Queue pressure alone does not prove a stalled peer. Log only transport counters,
+                    // never message contents, so a healthy burst can be distinguished from an ACK stall.
+                    throw IOException(
+                        "Extension host IPC safe queue limit reached: reason=$reason, " +
+                            "count=${outgoing.size}, maxCount=$maxMessages, bytes=$outgoingBytes, maxBytes=$maxBytes, " +
+                            "nextPayloadBytes=${buffer.size}, oldestMessageAgeMillis=$oldestMessageAgeMillis, " +
+                            "outgoingAckId=$outgoingAckId, outgoingId=$outgoingId, " +
+                            "lastReadAgeMillis=${(now - reader.getLastReadTime()).coerceAtLeast(0)}",
+                    )
                 }
                 incomingAckId = incomingId
                 val msg = ProtocolMessage(ProtocolMessageType.REGULAR, ++outgoingId, incomingId, buffer)

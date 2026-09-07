@@ -562,11 +562,22 @@ describe("context restart handoff", () => {
 		expect((secondRequest.messages[0].content as any[])[1].text).not.toContain("IVOL_CODE_CONTEXT_RESTART_V1")
 	})
 
-	it("adds mandatory continuation and secret-safety requirements to custom prompts", () => {
+	// kilocode_change start
+	it("adds only file delivery and safety rules without replacing the handoff structure", () => {
 		const prompt = buildContextHandoffPrompt("My custom condensing command")
-		expect(prompt).toContain("My custom condensing command")
+		expect(prompt.startsWith("My custom condensing command")).toBe(true)
 		expect(prompt).toContain(CONTEXT_HANDOFF_RELATIVE_PATH)
 		expect(prompt).toContain("Never include API keys")
-		expect(prompt).toContain("exact next action")
+		expect(prompt).toContain("or private reasoning")
+		expect(prompt).toContain("IVOL Code saves your output")
+		expect(prompt).toContain("verifies the file before compaction")
+		expect(prompt).toContain("Do not call tools")
+		expect(prompt).toContain("Do not continue the underlying task")
+		expect(prompt).toContain("IVOL Code manages reading and cleanup")
+		expect(prompt).not.toContain("full working-memory snapshot")
+		expect(prompt).not.toContain("more important than brevity")
+		expect(prompt).not.toContain("code snippets")
+		expect(prompt).not.toContain("End with an explicit note")
 	})
+	// kilocode_change end
 })

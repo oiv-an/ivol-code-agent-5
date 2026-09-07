@@ -1,5 +1,9 @@
 {
 	"errors": {
+		"extensionHostDisconnected": {
+			"title": "IVOL Code connection lost",
+			"message": "The command could not be delivered reliably. Reopen this project to reconnect, then check the task state before repeating any action."
+		},
 		"nodejsMissing": {
 			"title": "Node.js environment missing",
 			"message": "Node.js environment not detected, please install Node.js and try again. Recommended version: {{minVersion}} or higher."

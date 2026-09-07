@@ -8,9 +8,11 @@ import ai.kilocode.jetbrains.core.PluginContext
 import ai.kilocode.jetbrains.core.ServiceProxyRegistry
 import ai.kilocode.jetbrains.events.WebviewHtmlUpdateData
 import ai.kilocode.jetbrains.events.WebviewViewProviderData
+import ai.kilocode.jetbrains.i18n.t
 import ai.kilocode.jetbrains.ipc.proxy.SerializableObjectWithBuffers
 import ai.kilocode.jetbrains.theme.ThemeChangeListener
 import ai.kilocode.jetbrains.theme.ThemeManager
+import ai.kilocode.jetbrains.util.NotificationUtil
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.intellij.ide.BrowserUtil
@@ -28,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.cef.CefSettings
 import org.cef.browser.CefBrowser
@@ -605,7 +608,8 @@ class WebViewInstance(
     // JCEF browser instance with off-screen rendering
     val browser = JBCefBrowser.createBuilder().setOffScreenRendering(true).build()
     
-    // WebView state
+    // WebView state is also read by bridge worker threads.
+    @Volatile
     private var isDisposed = false
 
     // Alarm for scheduling JavaScript execution retries
@@ -629,6 +633,33 @@ class WebViewInstance(
 
     // Coroutine scope
     private val coroutineScope = CoroutineScope(SupervisorJob() + boundedIODispatcher)
+
+    private val messageBridge = WebViewMessageBridge(
+        isDisposed = { isDisposed || project.isDisposed },
+        sendMessage = { message ->
+            val protocol = project.getService(PluginContext::class.java).getRPCProtocol()
+            if (protocol == null) {
+                false
+            } else {
+                val buffers = SerializableObjectWithBuffers(emptyList<ByteArray>())
+                protocol.getProxy(ServiceProxyRegistry.ExtHostContext.ExtHostWebviews)
+                    .onMessage(viewId, message, buffers)
+                true
+            }
+        },
+        onUnavailable = {
+            logger.warn("Cannot forward WebView command: extension host IPC is unavailable; delivery is unconfirmed")
+            ApplicationManager.getApplication().invokeLater {
+                if (!isDisposed && !project.isDisposed) {
+                    NotificationUtil.showWarning(
+                        t("jetbrains:errors.extensionHostDisconnected.title"),
+                        t("jetbrains:errors.extensionHostDisconnected.message"),
+                        project,
+                    )
+                }
+            }
+        },
+    )
 
     // Synchronization for page load state
     private val pageLoadLock = Any()
@@ -1355,17 +1386,8 @@ class WebViewInstance(
 
         // Set callback for receiving messages from webview
         jsQuery?.addHandler { message ->
-            coroutineScope.launch {
-                // Handle message
-                val protocol = project.getService(PluginContext::class.java).getRPCProtocol()
-                if (protocol != null) {
-                    logger.info("Received message from WebView: $message")
-                    // Send message to plugin host
-                    val serializeParam = SerializableObjectWithBuffers(emptyList<ByteArray>())
-                    protocol.getProxy(ServiceProxyRegistry.ExtHostContext.ExtHostWebviews).onMessage(viewId, message, serializeParam)
-                } else {
-                    logger.error("Cannot get RPC protocol instance, cannot handle message: $message")
-                }
+            if (!isDisposed && !project.isDisposed) {
+                coroutineScope.launch { messageBridge.forward(message) }
             }
             null // No return value needed
         }
@@ -1655,19 +1677,23 @@ class WebViewInstance(
         }
     }
 
+    @Synchronized
     override fun dispose() {
         if (!isDisposed) {
+            isDisposed = true
+            coroutineScope.cancel()
             ScopeRegistry.unregister("WebViewInstance.coroutineScope-$viewId")
+            jsQuery?.dispose()
+            jsQuery = null
             alarm.dispose()
             browser.dispose()
             
             try {
-                (boundedIODispatcher as? java.util.concurrent.ExecutorService)?.shutdown()
+                boundedIODispatcher.close()
             } catch (e: Exception) {
                 logger.error("Error shutting down bounded IO dispatcher", e)
             }
             
-            isDisposed = true
             logger.info("WebView instance released: $viewType/$viewId")
         }
     }

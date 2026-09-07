@@ -50,8 +50,13 @@ class IpcMemoryLifecycleTest {
     @Test fun byteLimitFailsConnectionInsteadOfSilentlyDroppingMessages() {
         val socket = FakeSocket()
         val protocol = protocol(socket, bytes = 600)
-        protocol.send(ByteArray(400))
-        assertThrows(IOException::class.java) { protocol.send(ByteArray(201)) }
+        val queuedPayload = "private-queued-payload".padEnd(400, 'x').toByteArray()
+        val nextPayload = "private-next-payload".padEnd(201, 'y').toByteArray()
+        protocol.send(queuedPayload)
+        val error = assertThrows(IOException::class.java) { protocol.send(nextPayload) }
+        assertQueueLimitDiagnostics(error, "bytes", 1, 20, 400, 600, 201, 0, 1)
+        assertFalse(error.message!!.contains("private-queued-payload"))
+        assertFalse(error.message!!.contains("private-next-payload"))
         assertTrue(protocol.isDisposed())
         assertEquals(0L, protocol.unacknowledgedBytes)
         assertEquals(1, socket.disposeCount)
@@ -61,7 +66,24 @@ class IpcMemoryLifecycleTest {
         val protocol = protocol(FakeSocket(), messages = 2)
         protocol.send(ByteArray(0))
         protocol.send(ByteArray(0))
-        assertThrows(IOException::class.java) { protocol.send(ByteArray(0)) }
+        val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(0)) }
+        assertQueueLimitDiagnostics(error, "count", 2, 2, 0, 1024, 0, 0, 2)
+        assertTrue(protocol.isDisposed())
+    }
+
+    @Test fun oversizedPayloadReportsAnEmptyQueueInsteadOfClaimingPeerStoppedAcknowledging() {
+        val protocol = protocol(FakeSocket(), bytes = 100)
+        val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(101)) }
+        assertQueueLimitDiagnostics(error, "bytes", 0, 20, 0, 100, 101, 0, 0)
+        assertTrue(error.message!!.contains("oldestMessageAgeMillis=0,"))
+        assertTrue(protocol.isDisposed())
+    }
+
+    @Test fun diagnosticsIdentifySimultaneousByteAndCountLimits() {
+        val protocol = protocol(FakeSocket(), bytes = 100, messages = 1)
+        protocol.send(ByteArray(100))
+        val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(1)) }
+        assertQueueLimitDiagnostics(error, "bytes_and_count", 1, 1, 100, 100, 1, 0, 1)
         assertTrue(protocol.isDisposed())
     }
 
@@ -79,6 +101,38 @@ class IpcMemoryLifecycleTest {
             assertEquals(0L, protocol.unacknowledgedBytes)
             assertFalse(protocol.isDisposed())
         } finally { protocol.dispose() }
+    }
+
+    @Test fun regularAndKeepAlivePiggybackAcknowledgementsReleaseTheReplayQueue() {
+        for (type in listOf(ProtocolMessageType.REGULAR, ProtocolMessageType.KEEP_ALIVE)) {
+            val socket = FakeSocket()
+            val protocol = protocol(socket, bytes = 600)
+            try {
+                protocol.send(ByteArray(200))
+                protocol.send(ByteArray(300))
+                socket.receive(frame(type, if (type == ProtocolMessageType.REGULAR) 1 else 0, 1))
+                assertEquals(1, protocol.unacknowledgedCount)
+                assertEquals(300L, protocol.unacknowledgedBytes)
+                protocol.send(ByteArray(200))
+                socket.receive(frame(type, if (type == ProtocolMessageType.REGULAR) 2 else 0, 3))
+                assertEquals(0, protocol.unacknowledgedCount)
+                assertEquals(0L, protocol.unacknowledgedBytes)
+                assertFalse(protocol.isDisposed())
+            } finally { protocol.dispose() }
+        }
+    }
+
+    private fun assertQueueLimitDiagnostics(
+        error: IOException, reason: String, count: Int, maxCount: Int, bytes: Long, maxBytes: Long,
+        nextPayloadBytes: Int, outgoingAckId: Int, outgoingId: Int,
+    ) {
+        val expected = "Extension host IPC safe queue limit reached: reason=$reason, " +
+            "count=$count, maxCount=$maxCount, bytes=$bytes, maxBytes=$maxBytes, nextPayloadBytes=$nextPayloadBytes, "
+        val message = requireNotNull(error.message) { "Missing queue limit diagnostics" }
+        assertTrue(message, Regex(
+            Regex.escape(expected) + "oldestMessageAgeMillis=\\d+, outgoingAckId=$outgoingAckId, " +
+                "outgoingId=$outgoingId, lastReadAgeMillis=\\d+",
+        ).matches(message))
     }
 
     @Test fun socketCloseAndPeerDisconnectAreFinalAndIdempotent() {

@@ -939,7 +939,7 @@ describe("summarizeConversation", () => {
 		// Verify the final request message
 		// Verify that createMessage was called with the correct prompt
 		expect(mockApiHandler.createMessage).toHaveBeenCalledWith(
-			expect.stringContaining("Your task is to create a detailed summary of the conversation"),
+			expect.stringContaining(DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT),
 			expect.any(Array),
 		)
 
@@ -2359,10 +2359,8 @@ describe("summarizeConversation with custom settings", () => {
 		} as unknown as ApiHandler
 	})
 
-	/**
-	 * Test that custom prompt is used when provided
-	 */
-	it("should use custom prompt when provided", async () => {
+	// kilocode_change start
+	it("does not let the conversation-summary prompt override the intelligent handoff", async () => {
 		const customPrompt = "Custom summarization prompt"
 
 		await summarizeConversation(
@@ -2375,16 +2373,21 @@ describe("summarizeConversation with custom settings", () => {
 			customPrompt,
 		)
 
-		// Verify the custom prompt was used
 		const createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
 		expect(createMessageCalls.length).toBe(1)
-		expect(createMessageCalls[0][0]).toContain(customPrompt)
+		expect(createMessageCalls[0][0]).not.toContain(customPrompt)
+		expect(createMessageCalls[0][0]).toContain("This file is a task handoff, not a conversation summary")
+		expect(createMessageCalls[0][0]).toContain("# Resume here")
 		expect(createMessageCalls[0][0]).toContain("CONTEXT_RESTART.md")
 		expect(createMessageCalls[0][0]).toContain("Never include API keys")
+		expect(createMessageCalls[0][0]).not.toContain("Your task is to create a detailed summary")
+		expect(createMessageCalls[0][0]).not.toContain("full working-memory snapshot")
 	})
+	// kilocode_change end
 
 	it("uses the editable intelligent-reset task as the final command", async () => {
 		const resetPrompt = "Preserve the deployment state and exact next command."
+		const ordinaryPrompt = "Ordinary conversation-summary instructions" // kilocode_change
 		const onBeforeRequest = vi.fn().mockImplementation(async () => {
 			expect(mockMainApiHandler.createMessage).not.toHaveBeenCalled()
 		})
@@ -2396,12 +2399,18 @@ describe("summarizeConversation with custom settings", () => {
 			taskId,
 			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
-			undefined,
+			ordinaryPrompt, // kilocode_change
 			undefined,
 			undefined,
 			{ enabled: true, prompt: resetPrompt, onBeforeRequest },
 		)
 
+		// kilocode_change start: the custom handoff governs both instruction roles.
+		const requestSystemPrompt = (mockMainApiHandler.createMessage as Mock).mock.calls[0][0] as string
+		expect(requestSystemPrompt.startsWith(resetPrompt)).toBe(true)
+		expect(requestSystemPrompt).not.toContain(ordinaryPrompt)
+		expect(requestSystemPrompt).not.toContain("# Resume here")
+		// kilocode_change end
 		const requestMessages = (mockMainApiHandler.createMessage as Mock).mock.calls[0][1] as Array<{
 			role: string
 			content: unknown
@@ -2464,7 +2473,7 @@ describe("summarizeConversation with custom settings", () => {
 	/**
 	 * Test that default system prompt is used when custom prompt is empty
 	 */
-	it("should use default systemPrompt when custom prompt is empty or not provided", async () => {
+	it("uses the default summary prompt when intelligent reset is off and custom summary is empty", async () => {
 		// Test with empty string
 		await summarizeConversation(
 			sampleMessages,
@@ -2474,6 +2483,9 @@ describe("summarizeConversation with custom settings", () => {
 			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
 			"  ", // Empty custom prompt
+			undefined,
+			undefined,
+			{ enabled: false }, // kilocode_change
 		)
 
 		// Verify the default prompt was used
@@ -2491,6 +2503,9 @@ describe("summarizeConversation with custom settings", () => {
 			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
 			undefined, // No custom prompt
+			undefined,
+			undefined,
+			{ enabled: false }, // kilocode_change
 		)
 
 		// Verify the default prompt was used again

@@ -18,6 +18,8 @@ import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-sear
 import { MultiFileSearchReplaceDiffStrategy } from "../../diff/strategies/multi-file-search-replace"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
 import { NonRetryableApiError } from "../../../api/providers/utils/non-retryable-api-error"
+import { OpenAiTransportError } from "../../../api/providers/utils/openai-transport-error" // kilocode_change
+import * as assistantPresentation from "../../assistant-message/presentAssistantMessage" // kilocode_change
 import {
 	deleteContextHandoffFileIfOwned,
 	hydratePendingContextHandoff,
@@ -462,6 +464,374 @@ describe("Cline", () => {
 			}).toThrow("Either historyItem or task/images must be provided")
 		})
 	})
+
+	// kilocode_change start
+	describe("OpenAI transport interruption safety", () => {
+		const transportTasks: Task[] = []
+
+		function createTransportTask(autoApprovalEnabled = true) {
+			const config: ProviderSettings = {
+				apiProvider: "openai",
+				openAiModelId: "test-model",
+				openAiBaseUrl: "https://proxy.example.invalid/v1",
+				toolProtocol: "native",
+			}
+			mockProvider.getState = vi.fn().mockResolvedValue({
+				apiConfiguration: config,
+				autoApprovalEnabled,
+				mode: "code",
+				autoCondenseContext: false,
+			})
+			const task = new Task({
+				provider: mockProvider,
+				apiConfiguration: config,
+				task: "transport regression",
+				startTask: false,
+				context: mockExtensionContext,
+			})
+			vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("Test system prompt")
+			vi.spyOn(task.diffViewProvider, "reset").mockResolvedValue(undefined)
+			vi.spyOn(task as any, "saveClineMessages").mockResolvedValue(undefined)
+			vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+			vi.spyOn(task as any, "updateClineMessage").mockResolvedValue(undefined)
+			vi.spyOn(task as any, "backoffAndAnnounce").mockResolvedValue(undefined)
+			vi.spyOn(task, "say").mockImplementation(async (type, text, _images, partial) => {
+				task.clineMessages.push({ ts: Date.now(), type: "say", say: type, text, partial })
+			})
+			transportTasks.push(task)
+			return task
+		}
+
+		async function* failedTransport(): AsyncGenerator<ApiStreamChunk> {
+			yield* []
+			throw new OpenAiTransportError("UND_ERR_BODY_TIMEOUT")
+		}
+
+		afterEach(() => {
+			for (const task of transportTasks.splice(0)) {
+				task.abort = true
+				task.cancelCurrentRequest()
+			}
+			if (vi.isMockFunction(assistantPresentation.presentAssistantMessage)) {
+				vi.mocked(assistantPresentation.presentAssistantMessage).mockRestore()
+			}
+		})
+
+		it("stops after three first-chunk attempts and offers manual Retry even with auto-approval", async () => {
+			const task = createTransportTask()
+			const signals: AbortSignal[] = []
+			const createMessage = vi
+				.spyOn(task.api, "createMessage")
+				.mockImplementation((_prompt, _history, metadata) => {
+					expect(signals.every((signal) => signal.aborted)).toBe(true)
+					expect(metadata?.signal).toBe(task.currentRequestAbortController?.signal)
+					signals.push(metadata!.signal!)
+					return failedTransport()
+				})
+			task.clineMessages.push({ ts: 1, type: "say", say: "api_req_started", text: "{}" })
+			const ask = vi.spyOn(task, "ask").mockImplementation(async (type) => {
+				expect(type).toBe("api_req_failed")
+				expect(createMessage).toHaveBeenCalledTimes(3)
+				expect(task.isStreaming).toBe(false)
+				expect(task.isWaitingForFirstChunk).toBe(false)
+				expect(task.currentRequestAbortController).toBeUndefined()
+				expect(JSON.parse(task.clineMessages[0].text!).cancelReason).toBe("streaming_failed")
+				return { response: "noButtonClicked" }
+			})
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("automatic retries stopped")
+			expect(ask).toHaveBeenCalledTimes(1)
+			expect((task as any).backoffAndAnnounce).toHaveBeenCalledTimes(2)
+			expect(signals).toHaveLength(3)
+			expect(signals.every((signal) => signal.aborted)).toBe(true)
+		})
+
+		it("manual Retry starts a fresh bounded budget without changing conversation history", async () => {
+			const task = createTransportTask()
+			task.apiConversationHistory = [{ role: "user", content: [{ type: "text", text: "keep exactly once" }] }]
+			task.clineMessages.push({ ts: 1, type: "say", say: "api_req_started", text: "{}" })
+			const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() => {
+				expect(JSON.parse(task.clineMessages[0].text!)).not.toHaveProperty("cancelReason")
+				expect(JSON.parse(task.clineMessages[0].text!)).not.toHaveProperty("streamingFailedMessage")
+				return failedTransport()
+			})
+			const ask = vi
+				.spyOn(task, "ask")
+				.mockResolvedValueOnce({ response: "yesButtonClicked" })
+				.mockResolvedValueOnce({ response: "noButtonClicked" })
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("automatic retries stopped")
+			expect(createMessage).toHaveBeenCalledTimes(6)
+			expect((task as any).backoffAndAnnounce).toHaveBeenCalledTimes(4)
+			expect(ask).toHaveBeenCalledTimes(2)
+			expect(task.apiConversationHistory).toHaveLength(1)
+		})
+
+		it("does not retry any first-chunk transport failure when automatic approval is disabled", async () => {
+			const task = createTransportTask(false)
+			const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() => failedTransport())
+			vi.spyOn(task, "ask").mockResolvedValue({ response: "noButtonClicked" })
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("automatic retries stopped")
+			expect(createMessage).toHaveBeenCalledTimes(1)
+			expect((task as any).backoffAndAnnounce).not.toHaveBeenCalled()
+		})
+
+		it("applies the bounded policy to a branded OpenAI failure inside a fallback profile", async () => {
+			const task = createTransportTask()
+			;(task as any).apiConfiguration = { apiProvider: "virtual-quota-fallback" }
+			const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() => failedTransport())
+			vi.spyOn(task, "ask").mockResolvedValue({ response: "noButtonClicked" })
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("automatic retries stopped")
+			expect(createMessage).toHaveBeenCalledTimes(3)
+			expect((task as any).isOpenAiRequestTransportError(new TypeError("terminated"))).toBe(false)
+		})
+
+		it("cancels the HTTP signal while waiting for the first chunk without asking or retrying", async () => {
+			const task = createTransportTask()
+			let signal!: AbortSignal
+			let requestStarted!: () => void
+			const started = new Promise<void>((resolve) => {
+				requestStarted = resolve
+			})
+			const createMessage = vi
+				.spyOn(task.api, "createMessage")
+				.mockImplementation((_prompt, _history, metadata) => {
+					signal = metadata!.signal!
+					return (async function* () {
+						requestStarted()
+						await new Promise<void>((_resolve, reject) => {
+							signal.addEventListener(
+								"abort",
+								() => reject(new DOMException("Cancelled", "AbortError")),
+								{ once: true },
+							)
+						})
+						yield { type: "text" as const, text: "must not arrive" }
+					})()
+				})
+			const ask = vi.spyOn(task, "ask")
+			const pending = task.attemptApiRequest().next()
+			await started
+			expect(signal).toBe(task.currentRequestAbortController?.signal)
+			task.cancelCurrentRequest()
+			await expect(pending).rejects.toThrow("cancelled by user")
+			expect(signal.aborted).toBe(true)
+			expect(createMessage).toHaveBeenCalledTimes(1)
+			expect(ask).not.toHaveBeenCalled()
+			expect((task as any).backoffAndAnnounce).not.toHaveBeenCalled()
+		})
+
+		it("retains the live request controller after the first chunk and releases it on completion", async () => {
+			const task = createTransportTask()
+			let signal!: AbortSignal
+			vi.spyOn(task.api, "createMessage").mockImplementation((_prompt, _history, metadata) => {
+				signal = metadata!.signal!
+				return (async function* () {
+					yield { type: "text" as const, text: "one" }
+					yield { type: "text" as const, text: "two" }
+				})()
+			})
+			const iterator = task.attemptApiRequest()
+			await expect(iterator.next()).resolves.toMatchObject({ value: { text: "one" } })
+			expect(task.currentRequestAbortController?.signal).toBe(signal)
+			expect(signal.aborted).toBe(false)
+			await expect(iterator.next()).resolves.toMatchObject({ value: { text: "two" } })
+			await expect(iterator.next()).resolves.toMatchObject({ done: true })
+			expect(signal.aborted).toBe(true)
+			expect(task.currentRequestAbortController).toBeUndefined()
+		})
+
+		it("cancels the same HTTP signal after the first chunk without another request", async () => {
+			const task = createTransportTask()
+			let signal!: AbortSignal
+			let waitingForBody!: () => void
+			const waiting = new Promise<void>((resolve) => {
+				waitingForBody = resolve
+			})
+			const createMessage = vi
+				.spyOn(task.api, "createMessage")
+				.mockImplementation((_prompt, _history, metadata) => {
+					signal = metadata!.signal!
+					return (async function* () {
+						yield { type: "text" as const, text: "first chunk" }
+						await new Promise<void>((_resolve, reject) => {
+							signal.addEventListener(
+								"abort",
+								() => reject(new DOMException("Cancelled", "AbortError")),
+								{ once: true },
+							)
+							waitingForBody()
+						})
+					})()
+				})
+			const iterator = task.attemptApiRequest()
+			await iterator.next()
+			const pending = iterator.next()
+			await waiting
+			task.cancelCurrentRequest()
+			await expect(pending).rejects.toThrow("Cancelled")
+			expect(signal.aborted).toBe(true)
+			expect(createMessage).toHaveBeenCalledTimes(1)
+			expect((task as any).backoffAndAnnounce).not.toHaveBeenCalled()
+		})
+
+		it("does not start a new HTTP attempt after cancellation during backoff", async () => {
+			const task = createTransportTask()
+			const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() => failedTransport())
+			vi.mocked((task as any).backoffAndAnnounce).mockImplementation(async () => {
+				task.abort = true
+			})
+			const ask = vi.spyOn(task, "ask")
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("aborted during retry")
+			expect(createMessage).toHaveBeenCalledTimes(1)
+			expect(ask).not.toHaveBeenCalled()
+			expect(task.currentRequestAbortController).toBeUndefined()
+		})
+
+		it.each([false, true])(
+			"does not confuse successful EOF with cancellation (old background controller: %s)",
+			async (oldBackgroundController) => {
+				const task = createTransportTask()
+				if (oldBackgroundController) {
+					const oldController = new AbortController()
+					task.currentRequestAbortController = oldController
+					vi.mocked(task.getSystemPrompt).mockImplementation(async () => {
+						oldController.abort()
+						return "system"
+					})
+				}
+				vi.spyOn(assistantPresentation, "presentAssistantMessage").mockImplementation(async () => {
+					task.userMessageContentReady = true
+				})
+				const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() =>
+					(async function* () {
+						yield { type: "text" as const, text: "completed response" }
+						yield {
+							type: "tool_call" as const,
+							id: "call_complete",
+							name: "attempt_completion",
+							arguments: '{"result":"done"}',
+						}
+					})(),
+				)
+				const aborted = vi.spyOn(task, "abortTask").mockResolvedValue(undefined)
+				await expect(task.recursivelyMakeClineRequests([{ type: "text", text: "test" }])).resolves.toBe(false)
+				expect(createMessage).toHaveBeenCalledTimes(1)
+				expect(aborted).not.toHaveBeenCalled()
+				expect(task.abort).toBe(false)
+				expect(task.apiConversationHistory.at(-1)?.content).toContainEqual({
+					type: "text",
+					text: "completed response",
+				})
+			},
+		)
+
+		it("an older generator's cleanup cannot clear or abort a replacement controller", async () => {
+			const task = createTransportTask()
+			vi.spyOn(task.api, "createMessage").mockImplementation(() =>
+				(async function* () {
+					yield { type: "text" as const, text: "one" }
+				})(),
+			)
+			const iterator = task.attemptApiRequest()
+			await iterator.next()
+			const previous = task.currentRequestAbortController!
+			const replacement = new AbortController()
+			task.currentRequestAbortController = replacement
+			await iterator.return(undefined)
+			expect(previous.signal.aborted).toBe(true)
+			expect(task.currentRequestAbortController).toBe(replacement)
+			expect(replacement.signal.aborted).toBe(false)
+			task.cancelCurrentRequest()
+		})
+
+		it.each<ApiStreamChunk>([
+			{ type: "text", text: "Already received text" },
+			{ type: "tool_call", id: "call_pending", name: "execute_command", arguments: '{"command":"test"}' },
+		])("does not replay $type received immediately before a lookahead transport failure", async (chunk) => {
+			const task = createTransportTask()
+			task.diffViewProvider.isEditing = true
+			const revert = vi.spyOn(task.diffViewProvider, "revertChanges").mockImplementation(async () => {
+				// The freeze must happen before asynchronous cleanup gives any
+				// pending tool presentation callback another chance to execute.
+				expect(task.abort).toBe(true)
+			})
+			const presentation = vi.spyOn(assistantPresentation, "presentAssistantMessage").mockResolvedValue(undefined)
+			const createMessage = vi.spyOn(task.api, "createMessage").mockImplementation(() =>
+				(async function* () {
+					yield chunk
+					throw new OpenAiTransportError("UND_ERR_SOCKET")
+				})(),
+			)
+			const aborted = vi.spyOn(task, "abortTask").mockResolvedValue(undefined)
+			const ask = vi.spyOn(task, "ask")
+			await expect(task.recursivelyMakeClineRequests([{ type: "text", text: "perform task" }])).resolves.toBe(
+				true,
+			)
+			expect(createMessage).toHaveBeenCalledTimes(1)
+			expect((task as any).backoffAndAnnounce).not.toHaveBeenCalled()
+			expect(ask).not.toHaveBeenCalled()
+			expect(presentation).not.toHaveBeenCalled()
+			expect(revert).toHaveBeenCalledTimes(1)
+			expect(aborted).toHaveBeenCalledTimes(1)
+			expect(task.abortReason).toBe("streaming_failed")
+			expect(task.abort).toBe(true)
+			expect(task.apiConversationHistory.at(-2)?.role).toBe("assistant")
+			if (chunk.type === "text") {
+				expect(task.apiConversationHistory.at(-2)?.content).toContainEqual({ type: "text", text: chunk.text })
+			}
+		})
+
+		it("persists completed tool results and uncertain native pairs before rehydrating manual Resume", async () => {
+			const task = createTransportTask()
+			task.assistantMessageContent = [
+				{
+					type: "tool_use",
+					id: "call_done",
+					name: "search_and_replace",
+					originalName: "edit_file",
+					params: { path: "one.ts" },
+					partial: false,
+				},
+				{
+					type: "tool_use",
+					id: "call_pending",
+					name: "execute_command",
+					params: { command: "test" },
+					partial: true,
+				},
+			]
+			task.userMessageContent = [
+				{ type: "tool_result", tool_use_id: "call_done", content: "Successfully edited one.ts" },
+			]
+			const aborted = vi.spyOn(task, "abortTask").mockImplementation(async () => {
+				expect(task.abort).toBe(true)
+				expect(task.apiConversationHistory).toHaveLength(2)
+			})
+			await (task as any).stopAfterOpenAiStreamInterruption("Partial assistant answer")
+			const assistant = task.apiConversationHistory[0].content
+			const user = task.apiConversationHistory[1].content
+			expect(assistant).toContainEqual(
+				expect.objectContaining({ type: "tool_use", id: "call_done", name: "edit_file" }),
+			)
+			expect(assistant).toContainEqual(expect.objectContaining({ type: "tool_use", id: "call_pending" }))
+			expect(user).toContainEqual({
+				type: "tool_result",
+				tool_use_id: "call_done",
+				content: "Successfully edited one.ts",
+			})
+			expect(user).toContainEqual(
+				expect.objectContaining({
+					type: "tool_result",
+					tool_use_id: "call_pending",
+					is_error: true,
+					content: expect.stringContaining("outcome is unknown"),
+				}),
+			)
+			expect(task.assistantMessageContent[1].partial).toBe(true)
+			expect(aborted).toHaveBeenCalledTimes(1)
+			expect(task.abortReason).toBe("streaming_failed")
+		})
+	})
+	// kilocode_change end
 
 	describe("getEnvironmentDetails", () => {
 		describe("API conversation handling", () => {

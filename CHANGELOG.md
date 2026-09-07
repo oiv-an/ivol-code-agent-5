@@ -1,5 +1,19 @@
 # IVOL Code Agent 5
 
+## 5.16.230
+
+### Patch Changes
+
+- Fix OpenAI-compatible stream timeouts and cancellation, limit failed automatic retries, and restore manual retry controls without replaying partial tool work.
+
+## 5.16.229
+
+### Patch Changes
+
+- Prepare context compaction with a task-focused handoff that preserves unfinished work and exact resume steps without duplicating project files.
+- Handle an unavailable JetBrains extension host without reporting a secondary internal error when stopping a task.
+- Reduce internal message traffic by avoiding repeated state reads and warnings about intentionally disabled cloud services.
+
 ## 5.16.228
 
 ### Patch Changes

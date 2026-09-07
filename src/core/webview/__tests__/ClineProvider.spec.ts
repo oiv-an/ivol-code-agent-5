@@ -15,6 +15,7 @@ import {
 	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
+import { CloudService } from "@roo-code/cloud" // kilocode_change
 
 import { defaultModeSlug } from "../../../shared/modes"
 import { experimentDefault } from "../../../shared/experiments"
@@ -809,6 +810,132 @@ describe("ClineProvider", () => {
 		expect(state).toHaveProperty("diffEnabled")
 		expect(state).toHaveProperty("writeDelayMs")
 	})
+
+	// kilocode_change start: offline state reads must not flood the JetBrains console RPC channel
+	describe("bounded offline state publication", () => {
+		let instanceSpy: ReturnType<typeof vi.spyOn>
+		let errorSpy: ReturnType<typeof vi.spyOn>
+		const createCloud = () => ({
+			isCloudAgent: false,
+			getAllowList: vi.fn().mockResolvedValue(ORGANIZATION_ALLOW_ALL),
+			getUserInfo: vi.fn().mockReturnValue({ id: "test-user", organizationId: "test-organization" }),
+			isAuthenticated: vi.fn().mockReturnValue(true),
+			canShareTask: vi.fn().mockResolvedValue(true),
+			canSharePublicly: vi.fn().mockResolvedValue(true),
+			getOrganizationSettings: vi.fn().mockReturnValue({ version: 7 }),
+			isTaskSyncEnabled: vi.fn().mockReturnValue(true),
+			getUserSettings: vi.fn().mockReturnValue({
+				settings: { extensionBridgeEnabled: true },
+				features: { roomoteControlEnabled: true },
+			}),
+			getOrganizationMemberships: vi.fn().mockResolvedValue([]),
+		})
+		let cloud: ReturnType<typeof createCloud>
+
+		beforeEach(async () => {
+			// Finish the fixture's background migrations before measuring state reads.
+			await provider.providerSettingsManager.initialize()
+			cloud = createCloud()
+			instanceSpy = vi.spyOn(CloudService, "instance", "get").mockImplementation(() => {
+				if (!CloudService.hasInstance()) throw new Error("CloudService not initialized")
+				return cloud as unknown as typeof CloudService.instance
+			})
+			errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+		})
+
+		afterEach(() => {
+			instanceSpy.mockRestore()
+			errorSpy.mockRestore()
+			vi.mocked(CloudService.hasInstance).mockReturnValue(true)
+		})
+
+		test("repeated offline reads keep fallback values without accessing or logging the absent cloud", async () => {
+			vi.mocked(CloudService.hasInstance).mockReturnValue(false)
+			for (let index = 0; index < 20; index++) {
+				const state = await provider.getState()
+				expect(state).toMatchObject({
+					organizationAllowList: ORGANIZATION_ALLOW_ALL,
+					cloudUserInfo: null,
+					cloudIsAuthenticated: false,
+					sharingEnabled: false,
+					publicSharingEnabled: false,
+					organizationSettingsVersion: -1,
+					taskSyncEnabled: false,
+					remoteControlEnabled: false,
+					featureRoomoteControlEnabled: false,
+				})
+			}
+			expect(instanceSpy).not.toHaveBeenCalled()
+			expect(errorSpy).not.toHaveBeenCalled()
+		})
+
+		test("preserves initialized cloud values", async () => {
+			const state = await provider.getState()
+			expect(state).toMatchObject({
+				organizationAllowList: ORGANIZATION_ALLOW_ALL,
+				cloudUserInfo: { id: "test-user", organizationId: "test-organization" },
+				cloudIsAuthenticated: true,
+				sharingEnabled: true,
+				publicSharingEnabled: true,
+				organizationSettingsVersion: 7,
+				taskSyncEnabled: true,
+				remoteControlEnabled: true,
+				featureRoomoteControlEnabled: true,
+			})
+			expect(cloud.getAllowList).toHaveBeenCalledTimes(1)
+			expect(cloud.getUserSettings).toHaveBeenCalledTimes(2)
+			expect(errorSpy).not.toHaveBeenCalled()
+		})
+
+		test("still reports real initialized cloud failures and preserves their fallback values", async () => {
+			cloud.getAllowList.mockRejectedValue(new Error("test allow-list failure"))
+			cloud.getUserSettings.mockImplementation(() => {
+				throw new Error("test user-settings failure")
+			})
+			const state = await provider.getState()
+			expect(state.organizationAllowList).toEqual(ORGANIZATION_ALLOW_ALL)
+			expect(state.remoteControlEnabled).toBe(false)
+			expect(state.featureRoomoteControlEnabled).toBe(false)
+			expect(state.cloudIsAuthenticated).toBe(true)
+			expect(errorSpy).toHaveBeenCalledTimes(3)
+		})
+
+		test("publishes all retention settings and custom prompts from one resolved snapshot", async () => {
+			vi.mocked(CloudService.hasInstance).mockReturnValue(false)
+			const savedState = await provider.getState()
+			const unchangedSettings = {
+				autoPurgeEnabled: true,
+				autoPurgeDefaultRetentionDays: 31,
+				autoPurgeFavoritedTaskRetentionDays: 62,
+				autoPurgeCompletedTaskRetentionDays: 17,
+				autoPurgeIncompleteTaskRetentionDays: 93,
+				autoPurgeLastRunTimestamp: 123456789,
+				customInstructions: "Keep my project instructions unchanged.",
+				customCondensingPrompt: "Keep my compression instructions unchanged.",
+				intelligentContextResetPrompt: "Keep my restart instructions unchanged.",
+			}
+			const stateSpy = vi.spyOn(provider, "getState").mockResolvedValue({ ...savedState, ...unchangedSettings })
+			const postSpy = vi.spyOn(provider, "postMessageToWebview").mockResolvedValue(undefined)
+			try {
+				await provider.postStateToWebview()
+				expect(stateSpy).toHaveBeenCalledTimes(1)
+				expect(postSpy).toHaveBeenCalledTimes(1)
+				expect(postSpy).toHaveBeenCalledWith({
+					type: "state",
+					state: expect.objectContaining({
+						...unchangedSettings,
+						apiConfiguration: savedState.apiConfiguration,
+					}),
+				})
+				expect(instanceSpy).not.toHaveBeenCalled()
+				expect(errorSpy).not.toHaveBeenCalled()
+			} finally {
+				stateSpy.mockRestore()
+				postSpy.mockRestore()
+			}
+		})
+	})
+	// kilocode_change end
 
 	test("language is set to VSCode language", async () => {
 		// Mock VSCode language as Spanish

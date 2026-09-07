@@ -75,6 +75,9 @@ export interface SingleCompletionHandler {
 }
 
 export interface ApiHandlerCreateMessageMetadata {
+	// kilocode_change start: request-local cancellation, never part of the API payload or persisted history.
+	signal?: AbortSignal
+	// kilocode_change end
 	/**
 	 * Task ID used for tracking and provider-specific features:
 	 * - DeepInfra: Used as prompt_cache_key for caching

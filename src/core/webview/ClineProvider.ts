@@ -2335,6 +2335,14 @@ export class ClineProvider
 			yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			selectedMicrophoneDevice, // kilocode_change: Selected microphone device for STT
 			isBrowserSessionActive,
+			// kilocode_change start: publish one coherent snapshot, not six additional state reads
+			autoPurgeEnabled,
+			autoPurgeDefaultRetentionDays,
+			autoPurgeFavoritedTaskRetentionDays,
+			autoPurgeCompletedTaskRetentionDays,
+			autoPurgeIncompleteTaskRetentionDays,
+			autoPurgeLastRunTimestamp,
+			// kilocode_change end
 		} = await this.getState()
 
 		// kilocode_change start: Get active model for virtual quota fallback UI display
@@ -2353,7 +2361,8 @@ export class ClineProvider
 		let cloudOrganizations: CloudOrganizationMembership[] = []
 
 		try {
-			if (!CloudService.instance.isCloudAgent) {
+			if (CloudService.hasInstance() && !CloudService.instance.isCloudAgent) {
+				// kilocode_change: offline is normal
 				const now = Date.now()
 
 				if (
@@ -2557,18 +2566,12 @@ export class ClineProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			// kilocode_change start - Auto-purge settings
-			autoPurgeEnabled: await this.getState().then((s) => s.autoPurgeEnabled),
-			autoPurgeDefaultRetentionDays: await this.getState().then((s) => s.autoPurgeDefaultRetentionDays),
-			autoPurgeFavoritedTaskRetentionDays: await this.getState().then(
-				(s) => s.autoPurgeFavoritedTaskRetentionDays,
-			),
-			autoPurgeCompletedTaskRetentionDays: await this.getState().then(
-				(s) => s.autoPurgeCompletedTaskRetentionDays,
-			),
-			autoPurgeIncompleteTaskRetentionDays: await this.getState().then(
-				(s) => s.autoPurgeIncompleteTaskRetentionDays,
-			),
-			autoPurgeLastRunTimestamp: await this.getState().then((s) => s.autoPurgeLastRunTimestamp),
+			autoPurgeEnabled,
+			autoPurgeDefaultRetentionDays,
+			autoPurgeFavoritedTaskRetentionDays,
+			autoPurgeCompletedTaskRetentionDays,
+			autoPurgeIncompleteTaskRetentionDays,
+			autoPurgeLastRunTimestamp,
 			selectedMicrophoneDevice, // kilocode_change: Selected microphone device for STT
 			// kilocode_change end
 			kiloCodeImageApiKey,
@@ -2636,7 +2639,9 @@ export class ClineProvider
 		let organizationAllowList = ORGANIZATION_ALLOW_ALL
 
 		try {
-			organizationAllowList = await CloudService.instance.getAllowList()
+			// kilocode_change: personal builds intentionally have no cloud instance;
+			// avoid generating remote console RPCs for this expected offline state.
+			if (CloudService.hasInstance()) organizationAllowList = await CloudService.instance.getAllowList()
 		} catch (error) {
 			console.error(
 				`[getState] failed to get organization allow list: ${error instanceof Error ? error.message : String(error)}`,
@@ -2646,7 +2651,7 @@ export class ClineProvider
 		let cloudUserInfo: CloudUserInfo | null = null
 
 		try {
-			cloudUserInfo = CloudService.instance.getUserInfo()
+			if (CloudService.hasInstance()) cloudUserInfo = CloudService.instance.getUserInfo() // kilocode_change
 		} catch (error) {
 			console.error(
 				`[getState] failed to get cloud user info: ${error instanceof Error ? error.message : String(error)}`,
@@ -2656,7 +2661,7 @@ export class ClineProvider
 		let cloudIsAuthenticated: boolean = false
 
 		try {
-			cloudIsAuthenticated = CloudService.instance.isAuthenticated()
+			if (CloudService.hasInstance()) cloudIsAuthenticated = CloudService.instance.isAuthenticated() // kilocode_change
 		} catch (error) {
 			console.error(
 				`[getState] failed to get cloud authentication state: ${error instanceof Error ? error.message : String(error)}`,
@@ -2666,7 +2671,7 @@ export class ClineProvider
 		let sharingEnabled: boolean = false
 
 		try {
-			sharingEnabled = await CloudService.instance.canShareTask()
+			if (CloudService.hasInstance()) sharingEnabled = await CloudService.instance.canShareTask() // kilocode_change
 		} catch (error) {
 			console.error(
 				`[getState] failed to get sharing enabled state: ${error instanceof Error ? error.message : String(error)}`,
@@ -2676,7 +2681,7 @@ export class ClineProvider
 		let publicSharingEnabled: boolean = false
 
 		try {
-			publicSharingEnabled = await CloudService.instance.canSharePublicly()
+			if (CloudService.hasInstance()) publicSharingEnabled = await CloudService.instance.canSharePublicly() // kilocode_change
 		} catch (error) {
 			console.error(
 				`[getState] failed to get public sharing enabled state: ${error instanceof Error ? error.message : String(error)}`,
@@ -2699,7 +2704,7 @@ export class ClineProvider
 		let taskSyncEnabled: boolean = false
 
 		try {
-			taskSyncEnabled = CloudService.instance.isTaskSyncEnabled()
+			if (CloudService.hasInstance()) taskSyncEnabled = CloudService.instance.isTaskSyncEnabled() // kilocode_change
 		} catch (error) {
 			console.error(
 				`[getState] failed to get task sync enabled state: ${error instanceof Error ? error.message : String(error)}`,
@@ -2873,6 +2878,7 @@ export class ClineProvider
 			taskSyncEnabled,
 			remoteControlEnabled: (() => {
 				try {
+					if (!CloudService.hasInstance()) return false // kilocode_change: offline is normal
 					const cloudSettings = CloudService.instance.getUserSettings()
 					return cloudSettings?.settings?.extensionBridgeEnabled ?? false
 				} catch (error) {
@@ -2888,6 +2894,7 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
 			featureRoomoteControlEnabled: (() => {
 				try {
+					if (!CloudService.hasInstance()) return false // kilocode_change: offline is normal
 					const userSettings = CloudService.instance.getUserSettings()
 					const hasOrganization = cloudUserInfo?.organizationId != null
 					return hasOrganization || (userSettings?.features?.roomoteControlEnabled ?? false)

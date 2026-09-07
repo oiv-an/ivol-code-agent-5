@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import crypto from "crypto"
 
 import { TelemetryService } from "@roo-code/telemetry"
-import { DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT, ModelInfo } from "@roo-code/types"
+import { getIntelligentContextResetPrompt, ModelInfo } from "@roo-code/types" // kilocode_change
 
 import { t } from "../../i18n"
 import { ApiHandler } from "../../api"
@@ -641,7 +641,7 @@ export async function summarizeConversation(
 	}
 
 	const contextHandoffEnabled = contextHandoff.enabled ?? true
-	const handoffTask = contextHandoff.prompt?.trim() || DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT
+	const handoffTask = getIntelligentContextResetPrompt(contextHandoff.prompt) // kilocode_change
 	let requestSourceMessages = messagesToSummarize
 	if (contextHandoffEnabled) {
 		const recentMessagesForHandoff = serializeRecentMessagesForHandoff(
@@ -649,10 +649,11 @@ export async function summarizeConversation(
 			getHandoffPayloadCharLimit(handlerToUse),
 		)
 		const finalRequestMessage: Anthropic.MessageParam = {
+			// kilocode_change: recent state supplements the task-focused handoff.
 			role: "user",
 			content: `${handoffTask}
 
-The recent messages below will remain in the live API context, but they must also be reflected in the standalone CONTEXT_RESTART.md continuation state. Use them to capture the exact current status and next action. Do not copy raw secrets.
+The recent messages below will remain in the live API context. Use them as task evidence to identify the current state, unresolved obligations, and next action. Include only details needed to continue; prefer file references over copying project contents. Do not copy raw secrets.
 
 <recent_messages>
 ${recentMessagesForHandoff}
@@ -666,10 +667,11 @@ ${recentMessagesForHandoff}
 		content,
 	}))
 
-	// Note: this doesn't need to be a stream, consider using something like apiHandler.completePrompt
-	// Use custom prompt if provided and non-empty, otherwise use the default SUMMARY_PROMPT
+	// kilocode_change start: preparation follows the handoff task, never the
+	// separate conversation-summary prompt (which imposes a conflicting structure).
 	const basePrompt = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
-	const promptToUse = contextHandoffEnabled ? buildContextHandoffPrompt(basePrompt) : basePrompt
+	const promptToUse = contextHandoffEnabled ? buildContextHandoffPrompt(handoffTask) : basePrompt
+	// kilocode_change end
 
 	let summary = ""
 	let cost = 0

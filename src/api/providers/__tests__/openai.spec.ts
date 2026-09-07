@@ -122,6 +122,7 @@ describe("OpenAiHandler", () => {
 					"User-Agent": `IVOL-Code-Agent-5/${Package.version}`,
 				},
 				timeout: expect.any(Number),
+				fetch: expect.any(Function), // kilocode_change
 			})
 		})
 	})
@@ -980,7 +981,7 @@ describe("OpenAiHandler", () => {
 					stream_options: { include_usage: true },
 					temperature: 0,
 				},
-				{ path: "/models/chat/completions" },
+				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
 
 			// Verify max_tokens is NOT included when includeMaxTokens is not set
@@ -1026,7 +1027,7 @@ describe("OpenAiHandler", () => {
 						{ role: "user", content: "Hello!" },
 					],
 				},
-				{ path: "/models/chat/completions" },
+				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
 
 			// Verify max_tokens is NOT included when includeMaxTokens is not set
@@ -1083,7 +1084,7 @@ describe("OpenAiHandler", () => {
 					model: grokOptions.openAiModelId,
 					stream: true,
 				}),
-				{},
+				{ maxRetries: 0 }, // kilocode_change
 			)
 
 			const mockCalls = mockCreate.mock.calls
@@ -1165,7 +1166,7 @@ describe("OpenAiHandler", () => {
 					// O3 models do not support deprecated max_tokens but do support max_completion_tokens
 					max_completion_tokens: 32000,
 				}),
-				{},
+				{ maxRetries: 0 }, // kilocode_change
 			)
 		})
 
@@ -1322,7 +1323,7 @@ describe("OpenAiHandler", () => {
 					reasoning_effort: "medium",
 					temperature: undefined,
 				}),
-				{},
+				{ maxRetries: 0 }, // kilocode_change
 			)
 
 			// Verify max_tokens is NOT included
@@ -1366,7 +1367,7 @@ describe("OpenAiHandler", () => {
 					// O3 models do not support deprecated max_tokens but do support max_completion_tokens
 					max_completion_tokens: 65536, // Using default maxTokens from o3Options
 				}),
-				{},
+				{ maxRetries: 0 }, // kilocode_change
 			)
 
 			// Verify stream is not set
@@ -1443,7 +1444,7 @@ describe("OpenAiHandler", () => {
 				expect.objectContaining({
 					temperature: undefined, // Temperature is not supported for O3 models
 				}),
-				{},
+				{ maxRetries: 0 }, // kilocode_change
 			)
 		})
 
@@ -1468,7 +1469,7 @@ describe("OpenAiHandler", () => {
 				expect.objectContaining({
 					model: "o3-mini",
 				}),
-				{ path: "/models/chat/completions" },
+				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
 
 			// Verify max_tokens is NOT included when includeMaxTokens is false
@@ -1498,7 +1499,7 @@ describe("OpenAiHandler", () => {
 					model: "o3-mini",
 					// O3 models do not support max_tokens
 				}),
-				{ path: "/models/chat/completions" },
+				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
 		})
 	})

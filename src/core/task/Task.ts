@@ -67,7 +67,10 @@ import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "..
 import { ApiStream, GroundingSource } from "../../api/transform/stream"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { VirtualQuotaFallbackHandler } from "../../api/providers/virtual-quota-fallback" // kilocode_change: Import VirtualQuotaFallbackHandler for model change notifications
-import { isNonRetryableApiError } from "../../api/providers/utils/non-retryable-api-error"
+// kilocode_change start
+import { NonRetryableApiError, isNonRetryableApiError } from "../../api/providers/utils/non-retryable-api-error"
+import { OpenAiTransportError, isOpenAiTransportError } from "../../api/providers/utils/openai-transport-error"
+// kilocode_change end
 
 // shared
 import { findLastIndex } from "../../shared/array"
@@ -185,6 +188,8 @@ const FORCED_CONTEXT_REDUCTION_PERCENT = 75 // Keep 75% of context (remove 25%) 
 const MAX_CONTEXT_WINDOW_RETRIES = 3 // Maximum retries for context window errors
 // kilocode_change start
 const MAX_CHUTES_TERMINATED_RETRY_ATTEMPTS = 2 // Allow up to 2 retries (3 total attempts) before failing fast
+const MAX_OPENAI_TRANSPORT_RETRY_ATTEMPTS = 2 // First-chunk failures: initial request plus two automatic retries.
+const REQUEST_CLEANUP_ABORT_REASON = Symbol("completed request cleanup")
 // kilocode_change end
 
 const CONFIGURED_SECRET_KEY_PATTERN =
@@ -3579,6 +3584,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				let assistantMessage = ""
 				let reasoningMessage = ""
 				let pendingGroundingSources: GroundingSource[] = []
+				let unprocessedAssistantText = "" // kilocode_change: preserve the chunk awaiting lookahead if that read fails
 				this.isStreaming = true
 
 				// kilocode_change start
@@ -3590,6 +3596,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				let streamAbortSignal: AbortSignal | undefined
 				let streamAbortListener: (() => void) | undefined
 				let streamAbortPromise: Promise<never> | undefined
+				let receivedFirstChunk = false // kilocode_change
 
 				try {
 					const iterator = stream[Symbol.asyncIterator]()
@@ -3604,7 +3611,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							if (streamAbortSignal!.aborted) {
 								reject(new Error("Request cancelled by user"))
 							} else {
-								streamAbortListener = () => reject(new Error("Request cancelled by user"))
+								// kilocode_change: internal cleanup must not turn a real
+								// transport error or successful EOF into user cancellation.
+								streamAbortListener = () => {
+									if (streamAbortSignal!.reason !== REQUEST_CLEANUP_ABORT_REASON) {
+										reject(new Error("Request cancelled by user"))
+									}
+								}
 								streamAbortSignal!.addEventListener("abort", streamAbortListener)
 							}
 						})
@@ -3613,6 +3626,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Helper to race iterator.next() with abort signal
 					const nextChunkWithAbort = async () => {
 						const nextPromise = iterator.next()
+						// kilocode_change start: attemptApiRequest owns cancellation
+						// before its first yield. Only then can we bind to this
+						// attempt's controller, not a previous background usage drain.
+						if (!receivedFirstChunk) {
+							const result = await nextPromise
+							receivedFirstChunk = true
+							ensureAbortPromise()
+							return result
+						}
+						// kilocode_change end
 
 						// If we have an abort controller, race it with the next chunk.
 						// Reuse a single abort promise/listener across all chunks to avoid accumulating listeners.
@@ -3628,7 +3651,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					let item = await nextChunkWithAbort()
 					while (!item.done) {
 						const chunk = item.value
+						unprocessedAssistantText = chunk?.type === "text" ? chunk.text : "" // kilocode_change
 						item = await nextChunkWithAbort()
+						unprocessedAssistantText = "" // kilocode_change
 						if (!chunk) {
 							// Sometimes chunk is undefined, no idea that can cause
 							// it, but this workaround seems to fix it.
@@ -4194,17 +4219,37 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Cline instance to finish aborting (error is thrown here when
 					// any function in the for loop throws due to this.abort).
 					if (!this.abandoned) {
+						// kilocode_change start: freeze queued tool presentation
+						// before even the first asynchronous cleanup/storage operation.
+						const stopInterruptedOpenAiRequest = !this.abort && this.isOpenAiRequestTransportError(error)
+						if (stopInterruptedOpenAiRequest) {
+							this.abort = true
+							this.cancelCurrentRequest()
+						}
+						// kilocode_change end
 						// Determine cancellation reason
-						const cancelReason: ClineApiReqCancelReason = this.abort ? "user_cancelled" : "streaming_failed"
+						const cancelReason: ClineApiReqCancelReason =
+							this.abort && !stopInterruptedOpenAiRequest ? "user_cancelled" : "streaming_failed" // kilocode_change
 
 						const rawErrorMessage = error.message ?? JSON.stringify(serializeError(error), null, 2)
-						const streamingFailedMessage = this.abort
-							? undefined
-							: `${t("common:interruption.streamTerminatedByProvider")}: ${rawErrorMessage}`
+						const streamingFailedMessage =
+							this.abort && !stopInterruptedOpenAiRequest // kilocode_change
+								? undefined
+								: `${t("common:interruption.streamTerminatedByProvider")}: ${rawErrorMessage}`
 
 						// Clean up partial state
 						await abortStream(cancelReason, streamingFailedMessage)
 						// kilocode_change start
+						if (stopInterruptedOpenAiRequest) {
+							// Once any chunk was yielded, the request may already have
+							// executed tools. Persist it and use manual Resume, never
+							// replay the original user input through the retry stack.
+							await this.stopAfterOpenAiStreamInterruption(
+								assistantMessage + unprocessedAssistantText,
+								reasoningMessage || undefined,
+							)
+							return true
+						}
 						if (isNonRetryableApiError(error)) {
 							console.error(
 								`[Task#${this.taskId}.${this.instanceId}] Provider marked the completed request as non-retryable.`,
@@ -4267,8 +4312,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					if (streamAbortSignal && streamAbortListener) {
 						streamAbortSignal.removeEventListener("abort", streamAbortListener)
 					}
-					// Clean up the abort controller when streaming completes
-					this.currentRequestAbortController = undefined
+					// kilocode_change: each attempt owns its controller and cleanup;
+					// never clear a newer request or a background usage drain here.
 				}
 
 				// Need to call here in case the stream was aborted.
@@ -5031,6 +5076,116 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private hasExceededChutesTerminatedRetryLimit(error: unknown, retryAttempt: number): boolean {
 		return this.isChutesTerminatedError(error) && retryAttempt >= MAX_CHUTES_TERMINATED_RETRY_ATTEMPTS
 	}
+
+	private isOpenAiRequestTransportError(error: unknown): boolean {
+		// A quota-fallback profile can wrap OpenAiHandler without changing the
+		// task's provider id. Only normalized errors identify that case safely.
+		return (
+			error instanceof OpenAiTransportError ||
+			(this.apiConfiguration.apiProvider === "openai" && isOpenAiTransportError(error))
+		)
+	}
+
+	private async askToRetryApiRequest(error: unknown): Promise<boolean> {
+		this.isWaitingForFirstChunk = false
+		this.isStreaming = false
+		const message = error instanceof Error ? error.message : JSON.stringify(serializeError(error), null, 2)
+		const requestMessage =
+			this.clineMessages[findLastIndex(this.clineMessages, (item) => item.say === "api_req_started")]
+		if (requestMessage) {
+			requestMessage.text = JSON.stringify({
+				...JSON.parse(requestMessage.text || "{}"),
+				cancelReason: "streaming_failed",
+				streamingFailedMessage: message,
+			} satisfies ClineApiReqInfo)
+			await this.saveClineMessages()
+			await this.updateClineMessage(requestMessage)
+		}
+
+		// api_req_failed is always interactive, including auto-approval/YOLO.
+		const { response } = await this.ask("api_req_failed", message)
+		if (this.abort || response !== "yesButtonClicked") {
+			return false
+		}
+
+		if (requestMessage) {
+			const requestInfo = JSON.parse(requestMessage.text || "{}") as ClineApiReqInfo
+			delete requestInfo.cancelReason
+			delete requestInfo.streamingFailedMessage
+			requestMessage.text = JSON.stringify(requestInfo)
+			await this.saveClineMessages()
+			await this.updateClineMessage(requestMessage)
+		}
+		await this.say("api_req_retried")
+		this.isStreaming = true
+		return true
+	}
+
+	private async stopAfterOpenAiStreamInterruption(assistantText: string, reasoning?: string): Promise<void> {
+		// Do not finalize partial tools, replay the request, or let subsequent
+		// presentation callbacks start another tool while history is persisted.
+		this.abort = true
+		this.cancelCurrentRequest()
+		this.isStreaming = false
+		this.isWaitingForFirstChunk = false
+
+		const assistantContent: Anthropic.Messages.ContentBlockParam[] = []
+		if (assistantText) {
+			assistantContent.push({ type: "text", text: assistantText })
+		}
+		const toolResults = [...this.userMessageContent]
+		const savedToolIds = new Set<string>()
+		for (const block of this.assistantMessageContent) {
+			if ((block.type !== "tool_use" && block.type !== "mcp_tool_use") || !block.id) {
+				continue
+			}
+			const id = sanitizeToolUseId(block.id)
+			if (savedToolIds.has(id)) {
+				continue
+			}
+			savedToolIds.add(id)
+			assistantContent.push({
+				type: "tool_use",
+				id,
+				name: block.type === "mcp_tool_use" ? block.name : (block.originalName ?? block.name),
+				input: block.type === "mcp_tool_use" ? block.arguments : (block.nativeArgs ?? block.params),
+			})
+			if (
+				!toolResults.some(
+					(result) => result.type === "tool_result" && sanitizeToolUseId(result.tool_use_id) === id,
+				)
+			) {
+				toolResults.push({
+					type: "tool_result",
+					tool_use_id: id,
+					is_error: true,
+					content:
+						"The connection was interrupted before this tool's completion was recorded. Its outcome is unknown. Verify the current state before retrying; do not repeat completed actions.",
+				})
+			}
+		}
+		if (assistantContent.length === 0) {
+			assistantContent.push({ type: "text", text: "The response was interrupted by a connection failure." })
+		}
+		await this.addToApiConversationHistory({ role: "assistant", content: assistantContent }, reasoning, {
+			hasPendingToolExecution: true,
+		})
+		await this.addToApiConversationHistory({
+			role: "user",
+			content: [
+				...toolResults,
+				{
+					type: "text",
+					text: "The previous response was interrupted. Preserve completed work and recorded tool results. Check any operation whose outcome is unknown before continuing; do not blindly replay the interrupted request.",
+				},
+			],
+		})
+
+		// ClineProvider's existing streaming_failed event handler rehydrates the
+		// durable history and presents Resume task, without submitting a request.
+		this.abortReason = "streaming_failed"
+		await this.abortTask()
+	}
 	// kilocode_change end
 
 	public async *attemptApiRequest(
@@ -5412,211 +5567,246 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Previously resolved from experiments.isEnabled(..., EXPERIMENT_IDS.MULTIPLE_NATIVE_TOOL_CALLS)
 		const parallelToolCallsEnabled = false
 
-		const metadata: ApiHandlerCreateMessageMetadata = {
-			mode: mode,
-			taskId: this.taskId,
-			suppressPreviousResponseId: this.skipPrevResponseIdOnce,
-			// Include tools and tool protocol when using native protocol and model supports it
-			...(shouldIncludeTools
-				? {
-						tools: allTools,
-						tool_choice: "auto",
-						toolProtocol: taskProtocol,
-						parallelToolCalls: parallelToolCallsEnabled,
-						// When mode restricts tools, provide allowedFunctionNames so providers
-						// like Gemini can see all tools in history but only call allowed ones
-						...(allowedFunctionNames ? { allowedFunctionNames } : {}),
-					}
-				: {}),
-			projectId: (await kiloConfig)?.project?.id, // kilocode_change: pass projectId for backend tracking (ignored by other providers)
-			// kilocode_change: child tasks (spawned via new_task tool) are parallel agents
-			...(this.parentTaskId ? { feature: "parallel-agent" } : {}),
+		// kilocode_change start: the same signal must reach the HTTP transport,
+		// not merely stop the UI's wait for its first chunk.
+		if (this.abort) {
+			throw new NonRetryableApiError("Request cancelled by user")
 		}
-
-		// Create an AbortController to allow cancelling the request mid-stream
-		this.currentRequestAbortController = new AbortController()
-		const abortSignal = this.currentRequestAbortController.signal
-		// Reset the flag after using it
-		this.skipPrevResponseIdOnce = false
-
-		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
-		const stream = this.api.createMessage(
-			systemPrompt,
-			cleanConversationHistory as unknown as Anthropic.Messages.MessageParam[],
-			metadata,
-		)
-		const iterator = stream[Symbol.asyncIterator]()
-
-		// Set up abort handling - store listener reference for cleanup
-		// to avoid accumulating listeners on the AbortSignal
-		const abortCleanupListener = () => {
-			console.log(`[Task#${this.taskId}.${this.instanceId}] AbortSignal triggered for current request`)
-			this.currentRequestAbortController = undefined
-		}
-		abortSignal.addEventListener("abort", abortCleanupListener)
-
-		// Create a single abort promise/listener for racing with first chunk
-		// to avoid accumulating listeners per attempt
+		const requestAbortController = new AbortController()
+		this.currentRequestAbortController = requestAbortController
+		const abortSignal = requestAbortController.signal
 		let firstChunkAbortListener: (() => void) | undefined
-		const abortPromise = new Promise<never>((_, reject) => {
-			if (abortSignal.aborted) {
-				reject(new Error("Request cancelled by user"))
-			} else {
-				firstChunkAbortListener = () => reject(new Error("Request cancelled by user"))
-				abortSignal.addEventListener("abort", firstChunkAbortListener)
-			}
-		})
-
-		try {
-			// Awaiting first chunk to see if it will throw an error.
-			this.isWaitingForFirstChunk = true
-
-			// Race between the first chunk and the abort signal
-			const firstChunkPromise = iterator.next()
-
-			const firstChunk = await Promise.race([firstChunkPromise, abortPromise])
-			yield firstChunk.value
-			this.isWaitingForFirstChunk = false
-		} catch (error) {
-			this.isWaitingForFirstChunk = false
-			// kilocode_change start
-			if (autoApprovalEnabled && isNonRetryableApiError(error)) {
-				throw error
-			}
-
-			if (apiConfiguration?.apiProvider === "kilocode" && isAnyRecognizedKiloCodeError(error)) {
-				const defaultFreeModel = (
-					await getKilocodeDefaultModel(
-						apiConfiguration.kilocodeToken,
-						apiConfiguration.kilocodeOrganizationId,
-					)
-				).defaultFreeModel
-
-				let askResponse: { response: string }
-
-				if (isPaymentRequiredError(error)) {
-					askResponse = await this.ask(
-						"payment_required_prompt",
-						JSON.stringify({
-							title: error.error?.title ?? t("kilocode:lowCreditWarning.title"),
-							message: error.error?.message ?? t("kilocode:lowCreditWarning.message"),
-							balance: error.error?.balance ?? "0.00",
-							buyCreditsUrl: error.error?.buyCreditsUrl ?? getAppUrl("/profile"),
-							defaultFreeModel,
-						}),
-					)
-				} else if (isUnauthorizedPromotionLimitError(error)) {
-					askResponse = await this.ask(
-						"promotion_model_sign_up_required_prompt",
-						JSON.stringify({
-							modelId: apiConfiguration.kilocodeModel,
-						}),
-					)
-				} else if (isUnauthorizedPaidModelError(error) || isUnauthorizedGenericError(error)) {
-					askResponse = await this.ask(
-						"unauthorized_prompt",
-						JSON.stringify({
-							modelId: apiConfiguration.kilocodeModel,
-						}),
-					)
-				} else {
-					askResponse = await this.ask(
-						"invalid_model",
-						JSON.stringify({
-							modelId: apiConfiguration.kilocodeModel,
-							error: {
-								status: error.status,
-								message: error.message,
-							},
-						}),
-					)
-				}
-
-				const { response } = askResponse
-
-				this.currentRequestAbortController = undefined
-				const isContextWindowExceededError = checkContextWindowExceededError(error)
-
-				if (response === "retry_clicked") {
-					yield* this.attemptApiRequest(retryAttempt + 1)
-				} else {
-					// Handle other responses or cancellations if necessary
-					// If the user cancels the dialog, we should probably abort.
-					throw error // Rethrow to signal failure upwards
-				}
-				return
-			}
-			// kilocode_change end
-			// kilocode_change start
-			// Chutes can occasionally terminate streams abruptly; avoid recursive
-			// first-chunk auto-retries here and delegate retry policy to the
-			// outer request loop, which applies a bounded retry cap.
-			if (this.isChutesTerminatedError(error)) {
-				throw error
-			}
-			// kilocode_change end
-			// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
-			if (autoApprovalEnabled) {
-				// Apply shared exponential backoff and countdown UX
-				await this.backoffAndAnnounce(retryAttempt, error)
-
-				// CRITICAL: Check if task was aborted during the backoff countdown
-				// This prevents infinite loops when users cancel during auto-retry
-				// Without this check, the recursive call below would continue even after abort
-				if (this.abort) {
-					throw new Error(
-						`[Task#attemptApiRequest] task ${this.taskId}.${this.instanceId} aborted during retry`,
-					)
-				}
-
-				// Delegate generator output from the recursive call with
-				// incremented retry count.
-				yield* this.attemptApiRequest(retryAttempt + 1)
-
-				return
-			} else {
-				const { response } = await this.ask(
-					"api_req_failed",
-					error.message ?? JSON.stringify(serializeError(error), null, 2),
-				)
-
-				if (response !== "yesButtonClicked") {
-					// This will never happen since if noButtonClicked, we will
-					// clear current task, aborting this instance.
-					throw new Error("API request failed")
-				}
-
-				await this.say("api_req_retried")
-
-				// Delegate generator output from the recursive call.
-				yield* this.attemptApiRequest()
-				return
-			}
-			// kilocode_change start
-		} finally {
-			// Clean up abort listeners to prevent memory leaks.
-			// Both listeners are only needed during the first-chunk phase,
-			// so it's safe to remove them here before consuming the rest of the stream.
-			abortSignal.removeEventListener("abort", abortCleanupListener)
+		const releaseRequest = () => {
 			if (firstChunkAbortListener) {
 				abortSignal.removeEventListener("abort", firstChunkAbortListener)
+				firstChunkAbortListener = undefined
+			}
+			requestAbortController.abort(REQUEST_CLEANUP_ABORT_REASON)
+			// An older attempt's finally must not clear a newer request's signal.
+			if (this.currentRequestAbortController === requestAbortController) {
+				this.currentRequestAbortController = undefined
 			}
 		}
-		// kilocode_change end
+		try {
+			const metadata: ApiHandlerCreateMessageMetadata = {
+				signal: abortSignal,
+				mode: mode,
+				taskId: this.taskId,
+				suppressPreviousResponseId: this.skipPrevResponseIdOnce,
+				// Include tools and tool protocol when using native protocol and model supports it
+				...(shouldIncludeTools
+					? {
+							tools: allTools,
+							tool_choice: "auto",
+							toolProtocol: taskProtocol,
+							parallelToolCalls: parallelToolCallsEnabled,
+							// When mode restricts tools, provide allowedFunctionNames so providers
+							// like Gemini can see all tools in history but only call allowed ones
+							...(allowedFunctionNames ? { allowedFunctionNames } : {}),
+						}
+					: {}),
+				projectId: (await kiloConfig)?.project?.id, // kilocode_change: pass projectId for backend tracking (ignored by other providers)
+				// kilocode_change: child tasks (spawned via new_task tool) are parallel agents
+				...(this.parentTaskId ? { feature: "parallel-agent" } : {}),
+			}
 
-		// No error, so we can continue to yield all remaining chunks.
-		// (Needs to be placed outside of try/catch since it we want caller to
-		// handle errors not with api_req_failed as that is reserved for first
-		// chunk failures only.)
-		// This delegates to another generator or iterable object. In this case,
-		// it's saying "yield all remaining values from this iterator". This
-		// effectively passes along all subsequent chunks from the original
-		// stream.
-		yield* iterator
+			// Reset the flag after using it
+			this.skipPrevResponseIdOnce = false
 
-		// kilocode_change start
-		if (apiConfiguration?.rateLimitAfter) {
-			Task.lastGlobalApiRequestTime = performance.now()
+			let iterator: ApiStream
+
+			// Create a single abort promise/listener for racing with first chunk
+			// to avoid accumulating listeners per attempt
+			const abortPromise = new Promise<never>((_, reject) => {
+				if (abortSignal.aborted) {
+					reject(new Error("Request cancelled by user"))
+				} else {
+					firstChunkAbortListener = () => reject(new Error("Request cancelled by user"))
+					abortSignal.addEventListener("abort", firstChunkAbortListener)
+				}
+			})
+
+			try {
+				// Awaiting first chunk to see if it will throw an error.
+				this.isWaitingForFirstChunk = true
+				// The provider accepts reasoning items alongside standard messages.
+				const stream = this.api.createMessage(
+					systemPrompt,
+					cleanConversationHistory as unknown as Anthropic.Messages.MessageParam[],
+					metadata,
+				)
+				iterator = stream[Symbol.asyncIterator]()
+
+				// Race between the first chunk and the abort signal
+				const firstChunkPromise = iterator.next()
+
+				const firstChunk = await Promise.race([firstChunkPromise, abortPromise])
+				this.isWaitingForFirstChunk = false
+				if (!firstChunk.done) {
+					yield firstChunk.value
+				}
+			} catch (error) {
+				this.isWaitingForFirstChunk = false
+				// kilocode_change start
+				const requestWasCancelled = this.abort || abortSignal.aborted
+				// End the old HTTP request before backoff, an interactive wait, or a
+				// recursive retry; a previous request must never survive its retry.
+				releaseRequest()
+				if (requestWasCancelled) {
+					throw new NonRetryableApiError("Request cancelled by user")
+				}
+				if (autoApprovalEnabled && isNonRetryableApiError(error)) {
+					throw error
+				}
+
+				if (apiConfiguration?.apiProvider === "kilocode" && isAnyRecognizedKiloCodeError(error)) {
+					const defaultFreeModel = (
+						await getKilocodeDefaultModel(
+							apiConfiguration.kilocodeToken,
+							apiConfiguration.kilocodeOrganizationId,
+						)
+					).defaultFreeModel
+
+					let askResponse: { response: string }
+
+					if (isPaymentRequiredError(error)) {
+						askResponse = await this.ask(
+							"payment_required_prompt",
+							JSON.stringify({
+								title: error.error?.title ?? t("kilocode:lowCreditWarning.title"),
+								message: error.error?.message ?? t("kilocode:lowCreditWarning.message"),
+								balance: error.error?.balance ?? "0.00",
+								buyCreditsUrl: error.error?.buyCreditsUrl ?? getAppUrl("/profile"),
+								defaultFreeModel,
+							}),
+						)
+					} else if (isUnauthorizedPromotionLimitError(error)) {
+						askResponse = await this.ask(
+							"promotion_model_sign_up_required_prompt",
+							JSON.stringify({
+								modelId: apiConfiguration.kilocodeModel,
+							}),
+						)
+					} else if (isUnauthorizedPaidModelError(error) || isUnauthorizedGenericError(error)) {
+						askResponse = await this.ask(
+							"unauthorized_prompt",
+							JSON.stringify({
+								modelId: apiConfiguration.kilocodeModel,
+							}),
+						)
+					} else {
+						askResponse = await this.ask(
+							"invalid_model",
+							JSON.stringify({
+								modelId: apiConfiguration.kilocodeModel,
+								error: {
+									status: error.status,
+									message: error.message,
+								},
+							}),
+						)
+					}
+
+					const { response } = askResponse
+
+					const isContextWindowExceededError = checkContextWindowExceededError(error)
+
+					if (response === "retry_clicked") {
+						yield* this.attemptApiRequest(retryAttempt + 1)
+					} else {
+						// Handle other responses or cancellations if necessary
+						// If the user cancels the dialog, we should probably abort.
+						throw error // Rethrow to signal failure upwards
+					}
+					return
+				}
+				// kilocode_change end
+				// kilocode_change start
+				// Chutes can occasionally terminate streams abruptly; avoid recursive
+				// first-chunk auto-retries here and delegate retry policy to the
+				// outer request loop, which applies a bounded retry cap.
+				if (this.isChutesTerminatedError(error)) {
+					throw error
+				}
+				// kilocode_change end
+				// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
+				if (
+					autoApprovalEnabled &&
+					(!this.isOpenAiRequestTransportError(error) || retryAttempt < MAX_OPENAI_TRANSPORT_RETRY_ATTEMPTS)
+				) {
+					// Apply shared exponential backoff and countdown UX
+					await this.backoffAndAnnounce(retryAttempt, error)
+
+					// CRITICAL: Check if task was aborted during the backoff countdown
+					// This prevents infinite loops when users cancel during auto-retry
+					// Without this check, the recursive call below would continue even after abort
+					if (this.abort) {
+						throw new Error(
+							`[Task#attemptApiRequest] task ${this.taskId}.${this.instanceId} aborted during retry`,
+						)
+					}
+
+					// Delegate generator output from the recursive call with
+					// incremented retry count.
+					yield* this.attemptApiRequest(retryAttempt + 1)
+
+					return
+				} else {
+					// kilocode_change start: a bounded transport failure is a genuine
+					// manual decision, never another outer-loop automatic replay.
+					if (this.isOpenAiRequestTransportError(error)) {
+						if (!(await this.askToRetryApiRequest(error))) {
+							throw new NonRetryableApiError("API request failed; automatic retries stopped")
+						}
+						yield* this.attemptApiRequest()
+						return
+					}
+					// kilocode_change end
+					const { response } = await this.ask(
+						"api_req_failed",
+						error.message ?? JSON.stringify(serializeError(error), null, 2),
+					)
+
+					if (response !== "yesButtonClicked") {
+						// This will never happen since if noButtonClicked, we will
+						// clear current task, aborting this instance.
+						throw new Error("API request failed")
+					}
+
+					await this.say("api_req_retried")
+
+					// Delegate generator output from the recursive call.
+					yield* this.attemptApiRequest()
+					return
+				}
+				// kilocode_change start
+			} finally {
+				// Clean up abort listeners to prevent memory leaks.
+				// Both listeners are only needed during the first-chunk phase,
+				// so it's safe to remove them here before consuming the rest of the stream.
+				if (firstChunkAbortListener) {
+					abortSignal.removeEventListener("abort", firstChunkAbortListener)
+					firstChunkAbortListener = undefined
+				}
+			}
+			// kilocode_change end
+
+			// No error, so we can continue to yield all remaining chunks.
+			// (Needs to be placed outside of try/catch since it we want caller to
+			// handle errors not with api_req_failed as that is reserved for first
+			// chunk failures only.)
+			// This delegates to another generator or iterable object. In this case,
+			// it's saying "yield all remaining values from this iterator". This
+			// effectively passes along all subsequent chunks from the original
+			// stream.
+			yield* iterator
+
+			// kilocode_change start
+			if (apiConfiguration?.rateLimitAfter) {
+				Task.lastGlobalApiRequestTime = performance.now()
+			}
+		} finally {
+			releaseRequest()
 		}
 		// kilocode_change end
 	}

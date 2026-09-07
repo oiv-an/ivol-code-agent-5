@@ -27,6 +27,10 @@ import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { getApiRequestTimeout } from "./utils/timeout-config"
 import { handleOpenAIError } from "./utils/openai-error-handler"
+// kilocode_change start: task-scoped cancellation and transport diagnostics
+import { createOpenAiFetch } from "./utils/openai-fetch"
+import { isOpenAiAbortError, normalizeOpenAiTransportError } from "./utils/openai-transport-error"
+// kilocode_change end
 
 // kilocode_change start: keep normal OpenAI turns on Chat Completions and expose
 // native Responses web search as a provider-local function tool. The tool is
@@ -152,6 +156,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 
 		const timeout = getApiRequestTimeout()
+		const fetch = createOpenAiFetch(timeout) // kilocode_change: preserve the configured dispatcher/proxy
 
 		if (isAzureAiInference) {
 			// Azure AI Inference Service (e.g., for DeepSeek) uses a different path structure
@@ -161,6 +166,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				defaultHeaders: headers,
 				defaultQuery: { "api-version": this.options.azureApiVersion || "2024-05-01-preview" },
 				timeout,
+				fetch, // kilocode_change
 			})
 		} else if (isAzureOpenAi) {
 			// Azure API shape slightly differs from the core API shape:
@@ -171,6 +177,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				apiVersion: this.options.azureApiVersion || azureOpenAiDefaultApiVersion,
 				defaultHeaders: headers,
 				timeout,
+				fetch, // kilocode_change
 			})
 		} else {
 			this.client = new OpenAI({
@@ -178,6 +185,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				apiKey,
 				defaultHeaders: headers,
 				timeout,
+				fetch, // kilocode_change
 			})
 		}
 	}
@@ -187,11 +195,48 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
+		// kilocode_change start: include iterator failures, not only response headers.
+		try {
+			yield* this.createMessageInternal(systemPrompt, messages, metadata)
+			// The SDK silently ends an aborted SSE iterator. Preserve cancellation
+			// instead of letting callers mistake it for a successful empty response.
+			metadata?.signal?.throwIfAborted()
+		} catch (error) {
+			if (metadata?.signal?.aborted) {
+				const cancelled = new Error("OpenAI request cancelled.")
+				cancelled.name = "AbortError"
+				throw cancelled
+			}
+			throw normalizeOpenAiTransportError(error) ?? error
+		}
+		// kilocode_change end
+	}
+
+	// kilocode_change start
+	private getMainRequestConfig(metadata?: ApiHandlerCreateMessageMetadata): Record<string, unknown> {
+		return {
+			...(this._isAzureAiInference(this.options.openAiBaseUrl) ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {}),
+			...(metadata?.signal ? { signal: metadata.signal } : {}),
+			// Task owns the retry budget. Do not multiply it by the SDK's retries.
+			maxRetries: 0,
+		}
+	}
+
+	private handleCompletionError(error: unknown): Error {
+		if (isOpenAiAbortError(error) && error instanceof Error) return error
+		return normalizeOpenAiTransportError(error) ?? handleOpenAIError(error, this.providerName)
+	}
+	// kilocode_change end
+
+	private async *createMessageInternal(
+		systemPrompt: string,
+		messages: Anthropic.Messages.MessageParam[],
+		metadata?: ApiHandlerCreateMessageMetadata,
+	): ApiStream {
 		const { info: modelInfo, reasoning } = this.getModel()
 		const modelUrl = this.options.openAiBaseUrl ?? ""
 		const modelId = this.options.openAiModelId ?? ""
 		const enabledR1Format = this.options.openAiR1FormatEnabled ?? false
-		const isAzureAiInference = this._isAzureAiInference(modelUrl)
 		const deepseekReasoner = modelId.includes("deepseek-reasoner") || enabledR1Format
 		const toolRequestOptions = this.getToolRequestOptions(metadata)
 		// kilocode_change start: keep a plain payload for incompatible cache dialects
@@ -233,7 +278,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const stream = await this.createChatCompletionWithCacheFallback(
 				requestOptions,
-				isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+				this.getMainRequestConfig(metadata), // kilocode_change
 				usePromptCacheBreakpoints ? plainMessages : undefined,
 			)
 			// kilocode_change end
@@ -303,7 +348,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const response = await this.createChatCompletionWithCacheFallback(
 				requestOptions,
-				this._isAzureAiInference(modelUrl) ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+				this.getMainRequestConfig(metadata), // kilocode_change
 				usePromptCacheBreakpoints ? plainMessages : undefined,
 			)
 			// kilocode_change end
@@ -368,7 +413,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			return await this.client.chat.completions.create(requestOptions as any, requestConfig)
 		} catch (error) {
 			if (!plainMessages || !isUnsupportedPromptCacheError(error)) {
-				throw handleOpenAIError(error, this.providerName)
+				throw this.handleCompletionError(error)
 			}
 
 			this.promptCacheBreakpointsUnsupported = true
@@ -381,7 +426,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			try {
 				return await this.client.chat.completions.create(fallbackOptions as any, requestConfig)
 			} catch (fallbackError) {
-				throw handleOpenAIError(fallbackError, this.providerName)
+				throw this.handleCompletionError(fallbackError)
 			}
 		}
 	}
@@ -499,11 +544,15 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					isAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
 				)
 			} catch (error) {
-				throw handleOpenAIError(error, this.providerName)
+				throw this.handleCompletionError(error) // kilocode_change
 			}
 
 			return response.choices?.[0]?.message.content || ""
 		} catch (error) {
+			// kilocode_change: preserve sanitized transport metadata for completion callers too.
+			const transportError = normalizeOpenAiTransportError(error)
+			if (transportError) throw transportError
+			if (isOpenAiAbortError(error)) throw error
 			if (error instanceof Error) {
 				throw new Error(`${this.providerName} completion error: ${error.message}`)
 			}
@@ -524,7 +573,6 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const modelInfo = model.info
 		const reasoningEffort = model.reasoningEffort as OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"]
 		// kilocode_change end
-		const methodIsAzureAiInference = this._isAzureAiInference(this.options.openAiBaseUrl)
 		const toolRequestOptions = this.getToolRequestOptions(metadata)
 
 		if (this.options.openAiStreamingEnabled ?? true) {
@@ -555,10 +603,10 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			try {
 				stream = await this.client.chat.completions.create(
 					requestOptions,
-					methodIsAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+					this.getMainRequestConfig(metadata), // kilocode_change
 				)
 			} catch (error) {
-				throw handleOpenAIError(error, this.providerName)
+				throw this.handleCompletionError(error) // kilocode_change
 			}
 
 			yield* this.handleStreamResponse(stream)
@@ -586,10 +634,10 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			try {
 				response = await this.client.chat.completions.create(
 					requestOptions,
-					methodIsAzureAiInference ? { path: OPENAI_AZURE_AI_INFERENCE_PATH } : {},
+					this.getMainRequestConfig(metadata), // kilocode_change
 				)
 			} catch (error) {
-				throw handleOpenAIError(error, this.providerName)
+				throw this.handleCompletionError(error) // kilocode_change
 			}
 
 			const message = response.choices?.[0]?.message
