@@ -1,5 +1,12 @@
 # IVOL Code Agent 5
 
+## 5.16.228
+
+### Patch Changes
+
+- Change reasoning effort directly beside the model selector in chat, with the same provider settings and maximum-effort fallback.
+- Preserve the JetBrains memory and editor-lifecycle fixes from the local 5.16.227 update.
+
 ## 5.16.226
 
 ### Patch Changes

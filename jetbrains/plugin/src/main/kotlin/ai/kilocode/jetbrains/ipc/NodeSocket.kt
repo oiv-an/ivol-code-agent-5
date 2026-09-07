@@ -6,6 +6,7 @@ package ai.kilocode.jetbrains.ipc
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.diagnostic.ControlFlowException
 import java.io.IOException
 import java.net.Socket
 import java.nio.channels.Channels
@@ -27,6 +28,7 @@ class NodeSocket : ISocket {
     private val canWrite = AtomicBoolean(true)
     private var receiveThread: Thread? = null
     private val isDisposed = AtomicBoolean(false)
+    private val closeNotified = AtomicBoolean(false)
     private var endTimeoutHandle: Thread? = null
     private val socketEndTimeoutMs = 30_000L // 30 second timeout
     private val debugLabel: String
@@ -93,6 +95,7 @@ class NodeSocket : ISocket {
                                 try {
                                     listener.onData(data)
                                 } catch (e: Exception) {
+                                    if (e is ControlFlowException) throw e
                                     logger.error("Socket[$debugLabel] Data listener processing exception", e)
                                 }
                             }
@@ -113,6 +116,7 @@ class NodeSocket : ISocket {
                     }
                 }
             } catch (e: Exception) {
+                if (e is ControlFlowException) throw e
                 if (!isDisposed.get()) {
                     logger.error("Socket[$debugLabel] Unhandled exception in receive thread", e)
                     handleSocketError(e)
@@ -134,25 +138,13 @@ class NodeSocket : ISocket {
             try {
                 listener.invoke()
             } catch (e: Exception) {
+                if (e is ControlFlowException) throw e
                 logger.error("Socket[$debugLabel] END event listener processing exception", e)
             }
         }
 
-        // Set delayed close timer
-        logger.info("Socket[$debugLabel] Will execute delayed close after ${socketEndTimeoutMs}ms")
-        endTimeoutHandle = thread(start = true, name = "NodeSocket-EndTimeout-$debugLabel") {
-            try {
-                Thread.sleep(socketEndTimeoutMs)
-                if (!isDisposed.get()) {
-                    logger.info("Socket[$debugLabel] Executing delayed close")
-                    closeAction()
-                }
-            } catch (e: InterruptedException) {
-                logger.info("Socket[$debugLabel] Delayed close thread interrupted")
-            } catch (e: Exception) {
-                logger.error("Socket[$debugLabel] Delayed close processing exception", e)
-            }
-        }
+        // A local extension host has no socket reconnection owner. EOF is final.
+        closeSocket(false)
     }
 
     private fun handleSocketError(error: Exception) {
@@ -181,7 +173,7 @@ class NodeSocket : ISocket {
     }
 
     private fun closeSocket(hadError: Boolean) {
-        if (isDisposed.get()) return
+        if (isDisposed.get() || !closeNotified.compareAndSet(false, true)) return
         logger.info("Socket[$debugLabel] Closing connection, hadError=$hadError")
         try {
             if (!isClosed()) {
@@ -205,6 +197,7 @@ class NodeSocket : ISocket {
             try {
                 listener.onClose(closeEvent)
             } catch (e: Exception) {
+                if (e is ControlFlowException) throw e
                 logger.error("Socket[$debugLabel] Close listener processing exception", e)
             }
         }
@@ -232,17 +225,8 @@ class NodeSocket : ISocket {
     }
 
     override fun write(buffer: ByteArray) {
-        if (isDisposed.get()) {
-            logger.debug("Socket[$debugLabel] Write ignored: Socket disposed")
-            return
-        }
-        if (isClosed()) {
-            logger.info("Socket[$debugLabel] Write ignored: Socket closed")
-            return
-        }
-        if (!canWrite.get()) {
-            logger.info("Socket[$debugLabel] Write ignored: canWrite=false")
-            return
+        if (isDisposed.get() || isClosed() || !canWrite.get()) {
+            throw IOException("Socket[$debugLabel] is closed for writing")
         }
 
         try {
@@ -251,17 +235,13 @@ class NodeSocket : ISocket {
         } catch (e: java.nio.channels.ClosedChannelException) {
             logger.warn("Socket[$debugLabel] ClosedChannelException detected during write, connection closed")
             handleSocketError(e)
+            throw e
         } catch (e: IOException) {
-            logger.error("Socket[$debugLabel] IO exception occurred during write", e)
-            // Filter out EPIPE errors
-            if (e.message?.contains("Broken pipe") == true) {
-                logger.warn("Socket[$debugLabel] Broken pipe detected during write")
-                return
-            }
             handleSocketError(e)
+            throw e
         } catch (e: Exception) {
-            logger.error("Socket[$debugLabel] Unknown exception occurred during write", e)
             handleSocketError(e)
+            throw e
         }
     }
 
@@ -322,22 +302,9 @@ class NodeSocket : ISocket {
         receiveThread?.interrupt()
         endTimeoutHandle?.interrupt()
 
-        // Wait for threads to finish
-        try {
-            receiveThread?.join(2000) // Wait up to 2 seconds for receive thread
-        } catch (e: InterruptedException) {
-            logger.warn("Socket[$debugLabel] Interrupted while waiting for receive thread")
-            Thread.currentThread().interrupt()
-        }
-
-        try {
-            endTimeoutHandle?.join(1000) // Wait up to 1 second for timeout thread
-        } catch (e: InterruptedException) {
-            logger.warn("Socket[$debugLabel] Interrupted while waiting for timeout thread")
-            Thread.currentThread().interrupt()
-        }
-
-        // Close Socket after threads are stopped
+        // Close first to unblock read/write. Never join a receiver from its own callback,
+        // or while the protocol lock is held by a shutdown on another thread.
+        canWrite.set(false)
         try {
             if (!isClosed()) {
                 closeAction()

@@ -8,12 +8,44 @@ import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.ref.WeakReference
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Test suite for ScopeRegistry to validate coroutine scope tracking
  * and lifecycle management.
  */
 class ScopeRegistryTest {
+    @Test
+    fun `diagnostic registry holds scopes weakly and removes cleared references`() {
+        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        ScopeRegistry.register("weak-test-scope", scope)
+        val field = ScopeRegistry.javaClass.getDeclaredField("scopes")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val entries = field.get(ScopeRegistry) as ConcurrentHashMap<String, WeakReference<CoroutineScope>>
+        val reference = entries["weak-test-scope"]!!
+        assertTrue(reference.get() === scope)
+        // Deterministically model collection instead of relying on System.gc timing.
+        reference.clear()
+        assertFalse(ScopeRegistry.getActiveScopes().containsKey("weak-test-scope"))
+        assertFalse(entries.containsKey("weak-test-scope"))
+        scope.cancel()
+    }
+
+    @Test
+    fun `unregistering a previous owner does not remove a replacement scope`() {
+        val previous = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val replacement = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        ScopeRegistry.register("shared-name", previous)
+        ScopeRegistry.register("shared-name", replacement)
+        ScopeRegistry.unregister("shared-name", previous)
+        assertTrue(ScopeRegistry.getActiveScopes()["shared-name"] == true)
+        ScopeRegistry.unregister("shared-name", replacement)
+        assertFalse(ScopeRegistry.getActiveScopes().containsKey("shared-name"))
+        previous.cancel()
+        replacement.cancel()
+    }
     
     @After
     fun cleanup() {

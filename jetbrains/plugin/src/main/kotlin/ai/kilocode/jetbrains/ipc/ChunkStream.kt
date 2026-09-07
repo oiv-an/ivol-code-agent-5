@@ -21,7 +21,7 @@ class ChunkStream {
      * Accept a data chunk
      * @param buff Data chunk
      */
-    fun acceptChunk(buff: ByteArray) {
+    @Synchronized fun acceptChunk(buff: ByteArray) {
         if (buff.isEmpty()) {
             return
         }
@@ -34,7 +34,7 @@ class ChunkStream {
      * @param byteCount Number of bytes to read
      * @return Data read
      */
-    fun read(byteCount: Int): ByteArray {
+    @Synchronized fun read(byteCount: Int): ByteArray {
         return _read(byteCount, true)
     }
 
@@ -43,8 +43,13 @@ class ChunkStream {
      * @param byteCount Number of bytes to peek
      * @return Data peeked
      */
-    fun peek(byteCount: Int): ByteArray {
+    @Synchronized fun peek(byteCount: Int): ByteArray {
         return _read(byteCount, false)
+    }
+
+    @Synchronized fun clear() {
+        chunks.clear()
+        byteLength = 0
     }
 
     /**

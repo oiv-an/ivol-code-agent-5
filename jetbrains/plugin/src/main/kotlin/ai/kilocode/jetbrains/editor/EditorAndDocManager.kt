@@ -3,7 +3,6 @@ package ai.kilocode.jetbrains.editor
 import ai.kilocode.jetbrains.core.ExtensionHostManager
 import ai.kilocode.jetbrains.core.PluginContext
 import ai.kilocode.jetbrains.monitoring.ScopeRegistry
-import ai.kilocode.jetbrains.monitoring.DisposableTracker
 import ai.kilocode.jetbrains.plugin.SystemObjectProvider
 import ai.kilocode.jetbrains.util.URI
 import com.intellij.diff.DiffContentFactory
@@ -38,6 +37,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -46,6 +47,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 private data class FileEvent(
@@ -67,6 +69,9 @@ class EditorAndDocManager(val project: Project) : Disposable {
     private var editorHandles = ConcurrentHashMap<String, EditorHolder>()
     private val ideaOpenedEditor = ConcurrentHashMap<String, Editor>()
     private var tabManager: TabStateManager = TabStateManager(project)
+    private val lifecycleLock = Any()
+    private val disposed = AtomicBoolean(false)
+    private val scopeName = "EditorAndDocManager.fileEventScope-${java.util.UUID.randomUUID()}"
 
     private suspend fun <T> runOnNonModalEdt(block: () -> T): T {
         val application = ApplicationManager.getApplication()
@@ -100,9 +105,10 @@ class EditorAndDocManager(val project: Project) : Disposable {
     
     private val fileEventScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val fileEventChannel = Channel<FileEvent>(Channel.CONFLATED)
+    internal val editorParentJob: Job? get() = fileEventScope.coroutineContext[Job]
 
     init {
-        ScopeRegistry.register("EditorAndDocManager.fileEventScope", fileEventScope)
+        ScopeRegistry.register(scopeName, fileEventScope)
         
         @OptIn(FlowPreview::class)
         fileEventScope.launch {
@@ -116,6 +122,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
         ideaEditorListener = object : FileEditorManagerListener {
             // Update and synchronize editor state when file is opened
             override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+                if (disposed.get() || project.isDisposed) return
                 source.getEditorList(file).forEach { editor ->
                     if (file == editor.file) {
                         // Record and synchronize
@@ -137,6 +144,9 @@ class EditorAndDocManager(val project: Project) : Disposable {
                                 // Store editor reference for later use
                                 fileEventScope.launch {
                                     delay(100) // Wait for debounced sync to complete
+                                    if (disposed.get() || project.isDisposed || !editor.isValid || !source.isFileOpen(file)) {
+                                        return@launch
+                                    }
                                     val handle = getEditorHandleByUri(uri, false)
                                     if (handle != null) {
                                         handle.ideaEditor = editor
@@ -166,6 +176,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
             }
 
             override fun fileClosed(source: FileEditorManager, cFile: VirtualFile) {
+                if (disposed.get()) return
                 logger.info("file closed $cFile")
                 var diff = false
                 var path = cFile.path
@@ -190,7 +201,8 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     fun initCurrentIdeaEditor() {
-        CoroutineScope(Dispatchers.Default).launch {
+        fileEventScope.launch {
+            if (disposed.get() || project.isDisposed) return@launch
             // Wait for extension host to be ready before initializing editors
             try {
                 // Get ExtensionHostManager from SystemObjectProvider with PluginContext fallback
@@ -205,12 +217,15 @@ class EditorAndDocManager(val project: Project) : Disposable {
                 }
                 
                 val isReady = try {
-                    extensionHostManager.waitForReady().get()
+                    extensionHostManager.waitForReady().await()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logger.error("Error waiting for extension host to be ready", e)
                     false
                 }
                 
+                if (disposed.get() || project.isDisposed) return@launch
                 if (!isReady) {
                     logger.error("Extension host failed to initialize, skipping editor initialization")
                     return@launch
@@ -220,7 +235,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
                 
                 FileEditorManager.getInstance(project).allEditors.forEach { editor ->
                     // Record and synchronize
-                    if (editor is FileEditor) {
+                    if (editor.isValid && !disposed.get() && !project.isDisposed) {
                         val uri = URI.file(editor.file.path)
                         val handle = sync2ExtHost(uri, false)
                         handle.ideaEditor = editor
@@ -233,6 +248,8 @@ class EditorAndDocManager(val project: Project) : Disposable {
                 }
                 
                 logger.info("Completed initialization of ${FileEditorManager.getInstance(project).allEditors.size} editors")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.error("Error during editor initialization", e)
             }
@@ -240,6 +257,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     suspend fun sync2ExtHost(documentUri: URI, diff: Boolean, isText: Boolean = true, options: ResolvedTextEditorConfiguration = ResolvedTextEditorConfiguration()): EditorHolder {
+        if (disposed.get() || project.isDisposed) throw CancellationException("Editor manager disposed")
         val eh = getEditorHandleByUri(documentUri, diff)
         if (eh != null) {
             return eh
@@ -259,11 +277,17 @@ class EditorAndDocManager(val project: Project) : Disposable {
             editorPosition = null,
         )
         // Create editor handle
-        val handle = EditorHolder(id, editorState, documentState, diff, this)
-        // Update state
-        state.documents[documentUri] = documentState
-        state.editors[id] = editorState
-        editorHandles[id] = handle
+        val handle = synchronized(lifecycleLock) {
+            if (disposed.get() || project.isDisposed) throw CancellationException("Editor manager disposed")
+            // File-open notifications and explicit open requests can arrive together.
+            // Never create an unowned holder when another request already opened this URI.
+            getEditorHandleByUri(documentUri, diff)?.let { return it }
+            EditorHolder(id, editorState, documentState, diff, this).also {
+                state.documents[documentUri] = documentState
+                state.editors[id] = editorState
+                editorHandles[id] = it
+            }
+        }
         handle.setActive(true)
         processUpdates()
         return handle
@@ -397,6 +421,7 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     suspend fun openDocument(uri: URI, isText: Boolean = true): ModelAddedData {
+        if (disposed.get() || project.isDisposed) throw CancellationException("Editor manager disposed")
         // Update document content - Use ReadAction to wrap file system operations
         val text = if (isText) {
             ApplicationManager.getApplication().runReadAction<String> {
@@ -420,108 +445,73 @@ class EditorAndDocManager(val project: Project) : Disposable {
         } else {
             "bin"
         }
-        if (state.documents[uri] == null) {
-            val document = ModelAddedData(
-                uri = uri,
-                versionId = 1,
-                lines = text.lines(),
-                EOL = "\n",
-                languageId = "",
-                isDirty = false,
-                encoding = "utf8",
-            )
-            state.documents[uri] = document
-            processUpdates()
+        val result = synchronized(lifecycleLock) {
+            if (disposed.get() || project.isDisposed) throw CancellationException("Editor manager disposed")
+            state.documents[uri] ?: run {
+                val document = ModelAddedData(
+                    uri = uri,
+                    versionId = 1,
+                    lines = text.lines(),
+                    EOL = "\n",
+                    languageId = "",
+                    isDirty = false,
+                    encoding = "utf8",
+                )
+                state.documents[uri] = document
+                document
+            }
         }
-        return state.documents[uri]!!
+        processUpdates()
+        return result
     }
 
     fun removeEditor(id: String) {
-        state.editors.remove(id)
-        val handler = editorHandles.remove(id)
-        var needDeleteDoc = true
-        val values = editorHandles.values
-        values.forEach { value ->
-            if (value.document.uri == handler?.document?.uri) {
-                needDeleteDoc = false
+        synchronized(lifecycleLock) {
+            state.editors.remove(id)
+            val handler = editorHandles.remove(id) ?: return
+            val tab = handler.tab
+            val group = handler.group
+            val documentUri = handler.document.uri
+            // Cancel the collectors on every close path, not just when the IDE shuts down.
+            handler.dispose()
+            if (editorHandles.values.none { it.document.uri == documentUri }) {
+                state.documents.remove(documentUri)
             }
-        }
-        if (needDeleteDoc) {
-            state.documents.remove(handler?.document?.uri)
-        }
-        if (state.activeEditorId == id) {
-            state.activeEditorId = null
+            if (state.activeEditorId == id) state.activeEditorId = null
+            tab?.let { tabManager.removeTab(it.id) }
+            group?.let { tabManager.removeGroup(it.groupId) }
         }
         scheduleUpdate()
-
-        handler?.tab?.let {
-            tabManager.removeTab(it.id)
-        }
-        handler?.group?.let {
-            tabManager.removeGroup(it.groupId)
-        }
     }
 
     // from exthost
     fun closeTab(id: String) {
-        val tab = tabManager.removeTab(id)
-        tab?.let { tab ->
-            val handler = getEditorHandleByTabId(id)
-            handler?.let {
-                state.editors.remove(it.id)
-                val handler = editorHandles.remove(it.id)
-                this.state.documents.remove(it.document.uri)
-                if (state.activeEditorId == it.id) {
-                    state.activeEditorId = null
-                }
-                handler?.let { h ->
-                    runLaterOnNonModalEdt {
-                        if (h.ideaEditor != null) {
-                            h.ideaEditor?.dispose()
-                        } else {
-                            // Note: DiffRequestProcessorEditor is deprecated, but we need to handle existing diff editors
-                            // The new API uses DiffEditorViewerFileEditors, but for compatibility we still check the old type
-                            @Suppress("DEPRECATION")
-                            FileEditorManager.getInstance(project).allEditors.forEach { editor ->
-                                // Check if it's a diff editor by class name to avoid direct type reference
-                                if (handler.diff && editor.javaClass.simpleName.contains("DiffRequestProcessorEditor")) {
-                                    try {
-                                        // Use reflection to access processor and activeRequest
-                                        val processorField = editor.javaClass.getDeclaredField("processor")
-                                        processorField.isAccessible = true
-                                        val processor = processorField.get(editor)
-
-                                        val activeRequestMethod = processor.javaClass.getMethod("getActiveRequest")
-                                        val activeRequest = activeRequestMethod.invoke(processor)
-
-                                        if (activeRequest != null) {
-                                            val filesToRefreshMethod = activeRequest.javaClass.getMethod("getFilesToRefresh")
-
-                                            @Suppress("UNCHECKED_CAST")
-                                            val filesToRefresh = filesToRefreshMethod.invoke(activeRequest) as? List<*>
-
-                                            filesToRefresh?.forEach { file ->
-                                                val pathMethod = file?.javaClass?.getMethod("getPath")
-                                                val path = pathMethod?.invoke(file) as? String
-                                                if (path == handler.document.uri.path) {
-                                                    editor.dispose()
-                                                }
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        logger.warn("Failed to handle diff editor disposal: ${e.message}")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                scheduleUpdate()
+        val handle = getEditorHandleByTabId(id) ?: run {
+            tabManager.removeTab(id)
+            return
+        }
+        val ideaEditor = handle.ideaEditor
+        val path = handle.document.uri.path
+        val isDiff = handle.diff
+        removeEditor(handle.id)
+        runLaterOnNonModalEdt {
+            if (disposed.get() || project.isDisposed) return@runLaterOnNonModalEdt
+            val manager = FileEditorManager.getInstance(project)
+            // FileEditor belongs to the IDE. Its owner must close the tab and dispose
+            // the editor tree; calling editor.dispose() directly leaves stale IDE tabs.
+            if (ideaEditor != null && ideaEditor.isValid) {
+                manager.closeFile(ideaEditor.file)
+            } else if (isDiff) {
+                manager.allEditors.filter { editor ->
+                    editor.isValid && editor.filesToRefresh.any { it.path == path }
+                }.forEach { manager.closeFile(it.file) }
             }
         }
     }
 
     fun closeGroup(id: Int) {
+        editorHandles.values.filter { it.group?.groupId == id }
+            .mapNotNull { it.tab?.id }.forEach(::closeTab)
         tabManager.removeGroup(id)
     }
 
@@ -535,13 +525,27 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     override fun dispose() {
-        ScopeRegistry.unregister("EditorAndDocManager.fileEventScope")
-        fileEventChannel.close()
+        synchronized(lifecycleLock) {
+            if (!disposed.compareAndSet(false, true)) return
+            editorHandles.values.forEach { handle ->
+                handle.group?.let { tabManager.removeGroup(it.groupId) }
+                handle.dispose()
+            }
+            editorHandles.clear()
+            ideaOpenedEditor.clear()
+            state = DocumentsAndEditorsState()
+            lastNotifiedState = DocumentsAndEditorsState()
+        }
+        ScopeRegistry.unregister(scopeName, fileEventScope)
+        fileEventChannel.cancel()
         fileEventScope.cancel()
+        job?.cancel()
+        job = null
         messageBusConnection.dispose()
     }
 
     fun didUpdateActive(handle: EditorHolder) {
+        if (disposed.get() || handle.isDisposed || editorHandles[handle.id] !== handle) return
         if (handle.isActive) {
             setActiveEditor(id = handle.id)
         } else if (state.activeEditorId == handle.id) {
@@ -553,11 +557,15 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     private fun setActiveEditor(id: String) {
-        state.activeEditorId = id
+        synchronized(lifecycleLock) {
+            if (disposed.get() || !editorHandles.containsKey(id)) return
+            state.activeEditorId = id
+        }
         scheduleUpdate()
     }
 
     private fun scheduleUpdate() {
+        if (disposed.get()) return
         job?.cancel()
         job = fileEventScope.launch {
             delay(10)
@@ -575,10 +583,14 @@ class EditorAndDocManager(val project: Project) : Disposable {
         return rst
     }
     private suspend fun processUpdates() {
-        val delta = state.delta(lastNotifiedState)
-
-        // Update last notified state
-        lastNotifiedState = copy(state)
+        val delta = synchronized(lifecycleLock) {
+            if (disposed.get() || project.isDisposed) return
+            state.delta(lastNotifiedState).also {
+                // Disposal cannot race this snapshot and leave the previous document graph retained.
+                lastNotifiedState = copy(state)
+            }
+        }
+        if (disposed.get() || project.isDisposed) return
 
         // Send document and editor change notifications
         delta.itemsDelta?.let { itemsDelta ->
@@ -598,19 +610,19 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     suspend fun updateDocumentAsync(document: ModelAddedData) {
-        // Check if the document exists
-        if (state.documents[document.uri] != null) {
+        synchronized(lifecycleLock) {
+            if (disposed.get() || state.documents[document.uri] == null) return
             state.documents[document.uri] = document
-            processUpdates()
         }
+        processUpdates()
     }
 
     fun updateDocument(document: ModelAddedData) {
-        // Check if the document exists
-        if (state.documents[document.uri] != null) {
+        synchronized(lifecycleLock) {
+            if (disposed.get() || state.documents[document.uri] == null) return
             state.documents[document.uri] = document
-            scheduleUpdate()
         }
+        scheduleUpdate()
     }
 
     suspend fun syncUpdates() {
@@ -619,10 +631,11 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     fun updateEditor(state: TextEditorAddData) {
-        if (this.state.editors[state.id] != null) {
+        synchronized(lifecycleLock) {
+            if (disposed.get() || this.state.editors[state.id] == null) return
             this.state.editors[state.id] = state
-            scheduleUpdate()
         }
+        scheduleUpdate()
     }
 
     fun getIdeaDiffEditor(uri: URI): WeakReference<Editor>? {
@@ -631,11 +644,14 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     fun onIdeaDiffEditorCreated(url: URI, editor: Editor) {
-        ideaOpenedEditor.put(url.path, editor)
+        synchronized(lifecycleLock) {
+            if (!disposed.get() && !editor.isDisposed) ideaOpenedEditor[url.path] = editor
+        }
     }
 
     fun onIdeaDiffEditorReleased(url: URI, editor: Editor) {
-        ideaOpenedEditor.remove(url.path)
+        // A delayed release of the previous diff must not remove its replacement.
+        ideaOpenedEditor.remove(url.path, editor)
     }
 }
 

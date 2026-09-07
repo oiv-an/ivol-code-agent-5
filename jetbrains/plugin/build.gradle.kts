@@ -92,7 +92,12 @@ repositories {
 }
 
 dependencies {
-    implementation("com.squareup.okhttp3:okhttp:4.10.0")
+    implementation("com.squareup.okhttp3:okhttp:4.10.0") {
+        // Kotlin is provided by the IDE. OkHttp/Okio otherwise package old stdlib
+        // jars that shadow the IDE runtime and break cancellation/stack recovery
+        // for coroutines compiled with the current Kotlin compiler.
+        exclude(group = "org.jetbrains.kotlin")
+    }
     implementation("com.google.code.gson:gson:2.10.1")
     testImplementation("junit:junit:4.13.2")
     intellijPlatform {

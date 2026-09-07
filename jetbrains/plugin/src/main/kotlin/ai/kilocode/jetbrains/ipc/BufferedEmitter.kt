@@ -1,127 +1,68 @@
 // SPDX-FileCopyrightText: 2025 Weibo, Inc.
-//
 // SPDX-License-Identifier: Apache-2.0
-
 package ai.kilocode.jetbrains.ipc
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.intellij.openapi.diagnostic.ControlFlowException
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Buffered event emitter
- * Ensures messages are not lost when there are no event listeners
- * Corresponds to BufferedEmitter in VSCode
- * @param T Event data type
- */
-class BufferedEmitter<T> {
-    private val listeners = mutableListOf<(T) -> Unit>()
+/** Serial delivery without an unowned coroutine that can retain a retired connection. */
+class BufferedEmitter<T> : Disposable {
+    private val listeners = CopyOnWriteArrayList<(T) -> Unit>()
     private val bufferedMessages = ConcurrentLinkedQueue<T>()
-    private var hasListeners = false
-    private var isDeliveringMessages = false
-
-    private val coroutineContext = Dispatchers.IO
-    private val scope = CoroutineScope(coroutineContext)
+    private val disposed = AtomicBoolean(false)
+    private val delivering = AtomicBoolean(false)
+    val event: EventListener<T> = this::onEvent
 
     companion object {
         private val LOG = Logger.getInstance(BufferedEmitter::class.java)
     }
 
-    /**
-     * Event listener property, similar to the event property in TypeScript version
-     */
-    val event: EventListener<T> = this::onEvent
-
-    /**
-     * Add event listener
-     * @param listener Event listener
-     * @return Listener registration identifier for removing the listener
-     */
     fun onEvent(listener: (T) -> Unit): Disposable {
-        val wasEmpty = listeners.isEmpty()
+        if (disposed.get()) return Disposable { }
         listeners.add(listener)
-
-        if (wasEmpty) {
-            hasListeners = true
-            // Use microtask queue to ensure these messages are delivered before other messages have a chance to be received
-            scope.launch { deliverMessages() }
-        }
-
-        return Disposable {
-            synchronized(listeners) {
-                listeners.remove(listener)
-                if (listeners.isEmpty()) {
-                    hasListeners = false
-                }
-            }
-        }
+        if (disposed.get()) listeners.remove(listener) else deliverMessages()
+        return Disposable { listeners.remove(listener) }
     }
 
-    /**
-     * Fire event
-     * @param event Event data
-     */
     fun fire(event: T) {
-        if (hasListeners) {
-            if (bufferedMessages.isNotEmpty()) {
-                bufferedMessages.offer(event)
-            } else {
-                synchronized(listeners) {
-                    ArrayList(listeners).forEach { listener ->
-                        try {
-                            listener(event)
-                        } catch (e: Exception) {
-                            // Log exception but do not interrupt processing
-                            LOG.warn("Error in event listener: ${e.message}", e)
-                        }
-                    }
-                }
-            }
-        } else {
-            bufferedMessages.offer(event)
-        }
+        if (disposed.get()) return
+        bufferedMessages.add(event)
+        if (disposed.get()) bufferedMessages.clear() else deliverMessages()
     }
 
-    /**
-     * Clear buffer
-     */
-    fun flushBuffer() {
-        bufferedMessages.clear()
-    }
+    fun flushBuffer() = bufferedMessages.clear()
 
-    /**
-     * Deliver buffered messages
-     */
     private fun deliverMessages() {
-        if (isDeliveringMessages) {
-            return
-        }
-
-        isDeliveringMessages = true
+        if (disposed.get() || listeners.isEmpty() || !delivering.compareAndSet(false, true)) return
         try {
-            while (hasListeners && bufferedMessages.isNotEmpty()) {
+            while (!disposed.get() && listeners.isNotEmpty()) {
                 val event = bufferedMessages.poll() ?: break
-                synchronized(listeners) {
-                    ArrayList(listeners).forEach { listener ->
+                listeners.forEach { listener ->
+                    if (!disposed.get()) {
                         try {
                             listener(event)
-                        } catch (e: Exception) {
-                            // Log exception but do not interrupt processing
-                            LOG.warn("Error in event listener: ${e.message}", e)
+                        } catch (error: Exception) {
+                            if (error is ControlFlowException) throw error
+                            LOG.warn("Error in event listener: ${error.message}", error)
                         }
                     }
                 }
             }
         } finally {
-            isDeliveringMessages = false
+            delivering.set(false)
+            if (!disposed.get() && listeners.isNotEmpty() && bufferedMessages.isNotEmpty()) deliverMessages()
         }
+    }
+
+    override fun dispose() {
+        disposed.set(true)
+        listeners.clear()
+        bufferedMessages.clear()
     }
 }
 
-/**
- * Event listener type alias
- */
 typealias EventListener<T> = ((T) -> Unit) -> Disposable

@@ -6,18 +6,20 @@ package ai.kilocode.jetbrains.ipc
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.diagnostic.ControlFlowException
 import java.nio.ByteBuffer
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Protocol reader
  * Corresponds to ProtocolReader in VSCode
  */
 class ProtocolReader(private val socket: ISocket) : Disposable {
-    private var isDisposed = false
+    @Volatile private var isDisposed = false
     private val incomingData = ChunkStream()
-    private var lastReadTime = System.currentTimeMillis()
+    @Volatile private var lastReadTime = System.currentTimeMillis()
 
-    private val messageListeners = mutableListOf<(ProtocolMessage) -> Unit>()
+    private val messageListeners = CopyOnWriteArrayList<(ProtocolMessage) -> Unit>()
 
     // Read state
     private val state = State()
@@ -26,9 +28,7 @@ class ProtocolReader(private val socket: ISocket) : Disposable {
         private val LOG = Logger.getInstance(ProtocolReader::class.java)
     }
 
-    init {
-        socket.onData(this::acceptChunk)
-    }
+    private val socketSubscription = socket.onData(this::acceptChunk)
 
     /**
      * Add message listener
@@ -45,15 +45,18 @@ class ProtocolReader(private val socket: ISocket) : Disposable {
      * @param data Data chunk
      */
     fun acceptChunk(data: ByteArray) {
-        if (data.isEmpty()) {
+        if (isDisposed || data.isEmpty()) {
             return
         }
         lastReadTime = System.currentTimeMillis()
 
         incomingData.acceptChunk(data)
 
-        while (incomingData.byteLength >= state.readLen) {
-            val buff = incomingData.read(state.readLen)
+        while (!isDisposed) {
+            val buff = synchronized(incomingData) {
+                if (isDisposed || incomingData.byteLength < state.readLen) return
+                incomingData.read(state.readLen)
+            }
 
             if (state.readHead) {
                 // buff is message header
@@ -105,6 +108,7 @@ class ProtocolReader(private val socket: ISocket) : Disposable {
                     try {
                         listener(message)
                     } catch (e: Exception) {
+                        if (e is ControlFlowException) throw e
                         // Log exception but do not interrupt processing
                         LOG.warn("Error in message listener: ${e.message}", e)
                     }
@@ -136,7 +140,9 @@ class ProtocolReader(private val socket: ISocket) : Disposable {
 
     override fun dispose() {
         isDisposed = true
+        socketSubscription.dispose()
         messageListeners.clear()
+        incomingData.clear()
     }
 
     /**

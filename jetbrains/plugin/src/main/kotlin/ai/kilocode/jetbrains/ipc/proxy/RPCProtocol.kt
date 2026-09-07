@@ -6,7 +6,9 @@ import ai.kilocode.jetbrains.ipc.proxy.uri.UriReplacer
 import ai.kilocode.jetbrains.util.doInvokeMethod
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.diagnostic.ControlFlowException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,6 +22,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.lang.reflect.Proxy
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.full.functions
 
@@ -137,7 +140,9 @@ class RPCProtocol(
     /**
      * Whether disposed
      */
-    private var isDisposed = false
+    @Volatile private var isDisposed = false
+    private val lifecycleLock = Any()
+    private val protocolSubscriptions = CopyOnWriteArrayList<Disposable>()
 
     /**
      * Local object list
@@ -191,7 +196,13 @@ class RPCProtocol(
     private val onDidChangeResponsiveStateListeners = mutableListOf<(ResponsiveState) -> Unit>()
 
     init {
-        protocol.onMessage { data -> receiveOneMessage(data) }
+        retainSubscription(protocol.onMessage { data -> receiveOneMessage(data) })
+        retainSubscription(protocol.onDidDispose { dispose() })
+    }
+
+    private fun retainSubscription(subscription: Disposable) = synchronized(lifecycleLock) {
+        // onDidDispose can fire synchronously when constructing RPC against a retired transport.
+        if (isDisposed) subscription.dispose() else protocolSubscriptions.add(subscription)
     }
 
     /**
@@ -205,10 +216,36 @@ class RPCProtocol(
     }
 
     override fun dispose() {
-        isDisposed = true
+        val actors = synchronized(lifecycleLock) {
+            if (isDisposed) return
+            isDisposed = true
+            val snapshot = locals.filterIsInstance<Disposable>().distinct()
+            locals.fill(null)
+            proxies.fill(null)
+            snapshot
+        }
+        protocolSubscriptions.forEach { it.dispose() }
+        protocolSubscriptions.clear()
+        asyncCheckUnresponsiveJob?.cancel()
+        asyncCheckUnresponsiveJob = null
+        onDidChangeResponsiveStateListeners.clear()
 
         // Cancel all coroutines
         coroutineScope.cancel()
+        cancelInvokedHandlers.values.forEach { it() }
+        cancelInvokedHandlers.clear()
+        actors.forEach { actor ->
+            try {
+                actor.dispose()
+            } catch (error: Exception) {
+                if (error is ControlFlowException || error is CancellationException) {
+                    // An actor already torn down by the IDE must not prevent the others' cleanup.
+                    LOG.debug("RPC actor disposal was already cancelled by the IDE")
+                } else {
+                    LOG.warn("Error releasing RPC actor on host shutdown", error)
+                }
+            }
+        }
 
         // Release all pending replies with cancel error
         pendingRPCReplies.keys.forEach { msgId ->
@@ -420,7 +457,13 @@ class RPCProtocol(
     }
 
     override fun <T, R : T> set(identifier: ProxyIdentifier<T>, instance: R): R {
-        locals[identifier.nid] = instance
+        synchronized(lifecycleLock) {
+            if (isDisposed) {
+                (instance as? Disposable)?.dispose()
+                throw CanceledException()
+            }
+            locals[identifier.nid] = instance
+        }
         return instance
     }
 
@@ -458,8 +501,6 @@ class RPCProtocol(
 
         val serializedRequestArguments = MessageIO.serializeRequestArguments(args.toList(), uriReplacer)
 
-        val req = ++lastMessageId
-        val callId = req.toString()
         val result = LazyPromise()
 
         // Use LazyPromise to implement Promise functionality
@@ -472,8 +513,13 @@ class RPCProtocol(
             }
         }
 
-        pendingRPCReplies[callId] = PendingRPCReply(result, disposable)
-        onWillSendRequest(req)
+        val req = synchronized(lifecycleLock) {
+            if (isDisposed) throw CanceledException()
+            val id = ++lastMessageId
+            pendingRPCReplies[id.toString()] = PendingRPCReply(result, disposable)
+            onWillSendRequest(id)
+            id
+        }
         
         // Monitor pending reply count
         checkPendingReplies()
@@ -489,7 +535,12 @@ class RPCProtocol(
             args,
         )
 
-        protocol.send(msg)
+        try {
+            protocol.send(msg)
+        } catch (error: Exception) {
+            pendingRPCReplies.remove(req.toString())?.resolveErr(error)
+            dispose()
+        }
 
         // Directly return Promise, do not block current thread
         return result
@@ -642,7 +693,7 @@ class RPCProtocol(
         // Use coroutine to handle request
         if (usesCancellationToken) {
             // Create coroutine job, can be cancelled
-            val job = Job()
+            val job = Job(coroutineScope.coroutineContext[Job])
 
             // Create coroutine context
             val context: kotlin.coroutines.CoroutineContext = job + Dispatchers.Default
@@ -686,6 +737,7 @@ class RPCProtocol(
                 protocol.send(msg)
             } catch (err: Throwable) {
                 cancelInvokedHandlers.remove(callId)
+                if (err is CancellationException || isDisposed) return@launch
                 val msg = MessageIO.serializeReplyErr(req, err)
                 logger?.logOutgoing(msg.size, req, RequestInitiator.OtherSide, "replyErr:", err)
                 protocol.send(msg)
@@ -743,9 +795,11 @@ class RPCProtocol(
         return try {
             doInvokeHandler(rpcId, methodName, args)
         } catch (err: Throwable) {
-//            throw err
-            LOG.error("Error invoking handler: $methodName(${args.joinToString(", ")})", err)
-            null
+            if (err !is CancellationException && err !is ControlFlowException) {
+                LOG.warn("Error invoking RPC handler: $methodName", err)
+            }
+            // In particular, a failed persistent storage write must not be acknowledged as success.
+            throw err
         }
     }
 

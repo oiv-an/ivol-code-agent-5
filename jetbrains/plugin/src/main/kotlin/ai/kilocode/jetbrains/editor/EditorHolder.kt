@@ -1,7 +1,6 @@
 package ai.kilocode.jetbrains.editor
 
 import ai.kilocode.jetbrains.monitoring.ScopeRegistry
-import ai.kilocode.jetbrains.monitoring.DisposableTracker
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
@@ -22,6 +21,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 
@@ -48,9 +48,11 @@ class EditorHolder(
     private val stateManager: EditorAndDocManager,
 ) {
     val logger = Logger.getInstance(EditorHolder::class.java)
-    private val editorOperationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val editorOperationScope = CoroutineScope(Dispatchers.IO + SupervisorJob(stateManager.editorParentJob))
     private val activationEventChannel = Channel<Boolean>(Channel.CONFLATED)
     private val editEventChannel = Channel<EditorEvent.Edit>(Channel.CONFLATED)
+    private val disposed = AtomicBoolean(false)
+    internal val isDisposed: Boolean get() = disposed.get()
      
     init {
         ScopeRegistry.register("EditorHolder.editorOperationScope-$id", editorOperationScope)
@@ -61,7 +63,7 @@ class EditorHolder(
                 .debounce(100) // 100ms debounce for activation
                 .collect { active ->
                     delay(100)
-                    stateManager.didUpdateActive(this@EditorHolder)
+                    if (!isDisposed) stateManager.didUpdateActive(this@EditorHolder)
                 }
         }
         
@@ -70,6 +72,7 @@ class EditorHolder(
             editEventChannel.consumeAsFlow()
                 .debounce(50) // 50ms debounce for edits
                 .collect { event ->
+                    if (isDisposed) return@collect
                     document.lines = event.lines
                     document.versionId = event.versionId ?: (document.versionId + 1)
                     stateManager.updateDocument(document)
@@ -92,6 +95,11 @@ class EditorHolder(
      * The IntelliJ FileEditor instance for this editor.
      */
     var ideaEditor: FileEditor? = null
+        set(value) {
+            synchronized(disposed) {
+                if (!isDisposed) field = value
+            }
+        }
 
     /**
      * The title of the editor tab, if any.
@@ -151,6 +159,7 @@ class EditorHolder(
     }
 
     fun setActive(active: Boolean) {
+        if (isDisposed) return
         if (isActive == active) return
         isActive = active
         if (editorDocument == null && active) {
@@ -318,8 +327,9 @@ class EditorHolder(
      * Updates editor state with debouncing to avoid excessive updates
      */
     private fun debouncedUpdateState() {
+        if (isDisposed) return
         editorUpdateJob?.cancel()
-        editorUpdateJob = CoroutineScope(Dispatchers.Default).launch {
+        editorUpdateJob = editorOperationScope.launch {
             delay(updateDelay)
             stateManager.updateEditor(state)
         }
@@ -329,8 +339,9 @@ class EditorHolder(
      * Updates document state with debouncing to avoid excessive updates.
      */
     private fun debouncedUpdateDocument() {
+        if (isDisposed) return
         documentUpdateJob?.cancel()
-        documentUpdateJob = CoroutineScope(Dispatchers.Default).launch {
+        documentUpdateJob = editorOperationScope.launch {
             delay(updateDelay)
             stateManager.updateDocument(document)
         }
@@ -341,11 +352,24 @@ class EditorHolder(
      * Should be called when the editor is no longer needed.
      */
     fun dispose() {
-        ScopeRegistry.unregister("EditorHolder.editorOperationScope-$id")
-        activationEventChannel.close()
-        editEventChannel.close()
+        synchronized(disposed) {
+            if (isDisposed) return
+            // Clear IDE references before preventing any late callback from attaching them again.
+            ideaEditor = null
+            disposed.set(true)
+        }
+        ScopeRegistry.unregister("EditorHolder.editorOperationScope-$id", editorOperationScope)
+        activationEventChannel.cancel()
+        editEventChannel.cancel()
         editorOperationScope.cancel()
         editorUpdateJob?.cancel()
         documentUpdateJob?.cancel()
+        editorUpdateJob = null
+        documentUpdateJob = null
+        editorDocument = null
+        isActive = false
+        title = null
+        tab = null
+        group = null
     }
 }
