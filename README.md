@@ -6,15 +6,15 @@ This is an independent, unofficial fork. It is not affiliated with or endorsed b
 
 ## Download and install
 
-**[Download version 5.16.233 — choose your IDE](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.16.233)** · **[Инструкция на русском](DOWNLOADS.md)**
+**[Download version 5.16.234 — choose your IDE](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.16.234)** · **[Инструкция на русском](DOWNLOADS.md)**
 
 | IDE / verified version                     | Download                                                                                                                                       |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code                                    | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233.vsix)                                |
-| PhpStorm 2026.2.2 — PS-262.10315.130       | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-phpstorm.zip)                |
-| IntelliJ IDEA 2026.2.2 — IU-262.10315.125  | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-intellij-idea.zip)        |
-| IntelliJ IDEA 2025.3.6.1 — IU-253.33813.55 | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-intellij-idea-2025.3.zip) |
-| PyCharm 2025.1.1.1 — PY-251.25410.159      | [PyCharm 2025.1 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-pycharm-2025.1.zip)    |
+| VS Code                                    | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234.vsix)                                |
+| PhpStorm 2026.2.2 — PS-262.10315.130       | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-phpstorm.zip)                |
+| IntelliJ IDEA 2026.2.2 — IU-262.10315.125  | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-intellij-idea.zip)        |
+| IntelliJ IDEA 2025.3.6.1 — IU-253.33813.55 | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-intellij-idea-2025.3.zip) |
+| PyCharm 2025.1.1.1 — PY-251.25410.159      | [PyCharm 2025.1 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-pycharm-2025.1.zip)    |
 
 For VS Code, open **Extensions → … → Install from VSIX…** and choose the VSIX. Restart when prompted and your work is finished.
 
@@ -24,7 +24,7 @@ The extension uses the independent ID `ivol.ivol-code-agent-5`, so an official u
 
 Open **Settings → Plugins → Settings menu → Install Plugin from Disk**, select the ZIP without unpacking it, and restart when your work is finished. Choose the correct IDE version: the IDEA 2026.2 ZIP cannot be installed in IDEA 2025.3.
 
-Install the update over your existing IVOL Code plugin. Do not delete its history or settings. Version 5.16.233 fixes the shared JetBrains startup race that could leave the native file watcher missing when multiple projects initialize together. The same adapter fix is included in all four JetBrains packages; VS Code does not use this initializer.
+Install the update over your existing IVOL Code plugin. Do not delete its history or settings. Version 5.16.234 fixes Windows task startup failing with `EPERM: operation not permitted, fsync` / `API conversation history could not be saved`. The shared JSON writer now synchronizes both new files and backup copies using writable, non-truncating handles. Atomic saves and protection of previous history on genuine write failures remain enabled. The fix is included in VS Code and all four JetBrains packages, together with the JetBrains native-startup fix from 5.16.233.
 
 JetBrains packages require Node.js **20.6.0 or newer** available to the IDE, its standard runtime with JCEF, and the enabled Terminal plugin. The 2026.2 targets require Java 25; IDEA 2025.3 and PyCharm 2025.1 use Java 21.
 
@@ -67,9 +67,9 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.233`
+- Version: `5.16.234`
 
-Version `5.16.233` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
+Version `5.16.234` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## Development
 

@@ -3,7 +3,7 @@
 	"displayName": "IVOL Code Agent 5",
 	"description": "%extension.description%",
 	"publisher": "ivol",
-	"version": "5.16.233",
+	"version": "5.16.234",
 	"icon": "assets/icons/logo-outline-black.png",
 	"license": "Apache-2.0",
 	"galleryBanner": {

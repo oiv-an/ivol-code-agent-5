@@ -1,18 +1,18 @@
 # Скачать IVOL Code Agent 5
 
-**[Общая страница релиза 5.16.233](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.16.233)** — эту ссылку можно отправлять другим пользователям.
+**[Общая страница релиза 5.16.234](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.16.234)** — эту ссылку можно отправлять другим пользователям.
 
 ## Выберите свою версию IDE
 
-Версию и номер сборки IDE можно посмотреть в **Help → About**. Версия плагина **5.16.233** не связана с номером версии IDE.
+Версию и номер сборки IDE можно посмотреть в **Help → About**. Версия плагина **5.16.234** не связана с номером версии IDE.
 
 | Приложение    | Проверенная версия и сборка      | Установочный файл                                                                                                                                      |
 | ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| VS Code       | Пакет VSIX                       | [Скачать для VS Code](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233.vsix)                         |
-| PhpStorm      | **2026.2.2**, PS-262.10315.130   | [Скачать для PhpStorm](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-phpstorm.zip)                |
-| IntelliJ IDEA | **2026.2.2**, IU-262.10315.125   | [Скачать для IDEA 2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-intellij-idea.zip)        |
-| IntelliJ IDEA | **2025.3.6.1**, IU-253.33813.55  | [Скачать для IDEA 2025.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-intellij-idea-2025.3.zip) |
-| PyCharm       | **2025.1.1.1**, PY-251.25410.159 | [Скачать для PyCharm 2025.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/ivol-code-agent-5-5.16.233-pycharm-2025.1.zip)    |
+| VS Code       | Пакет VSIX                       | [Скачать для VS Code](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234.vsix)                         |
+| PhpStorm      | **2026.2.2**, PS-262.10315.130   | [Скачать для PhpStorm](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-phpstorm.zip)                |
+| IntelliJ IDEA | **2026.2.2**, IU-262.10315.125   | [Скачать для IDEA 2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-intellij-idea.zip)        |
+| IntelliJ IDEA | **2025.3.6.1**, IU-253.33813.55  | [Скачать для IDEA 2025.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-intellij-idea-2025.3.zip) |
+| PyCharm       | **2025.1.1.1**, PY-251.25410.159 | [Скачать для PyCharm 2025.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/ivol-code-agent-5-5.16.234-pycharm-2025.1.zip)    |
 
 **Для IDEA 2025.3 нужен файл с `intellij-idea-2025.3` в имени.** Архив `intellij-idea.zip` предназначен для IDEA 2026.2 и не подходит для 2025.3. Другие основные версии IDE здесь не заявлены.
 
@@ -33,12 +33,14 @@
 - PhpStorm и IDEA 2026.2 используют Java 25; IDEA 2025.3 и PyCharm 2025.1 — Java 21.
 - В JetBrains-пакетах есть нативные зависимости для Windows x64, Linux x64, macOS Intel и Apple Silicon. Windows ARM64 и Linux ARM64 не заявлены. Наличие зависимостей не означает проверку запуска на всех ОС.
 
-## Что изменилось в 5.16.233
+## Что изменилось в 5.16.234
 
-- Исправлена ошибка запуска `NoSuchFileException` для `watcher.node`, которая могла возникать при одновременном открытии нескольких проектов.
-- Подготовка нативных библиотек защищена от повторного и параллельного запуска. Исправление общего адаптера включено в PhpStorm, оба целевых варианта IntelliJ IDEA и PyCharm.
-- VS Code собран из той же версии исходников; ошибочный механизм запуска JetBrains в нём не используется. Все функции предыдущего релиза сохранены.
+- Исправлена ошибка Windows `EPERM: operation not permitted, fsync`, из-за которой задача останавливалась с сообщением `API conversation history could not be saved`.
+- Общий механизм записи истории открывает временные файлы и резервные копии с необходимым доступом на запись, без обнуления содержимого. Защита старой истории при настоящих ошибках диска сохранена.
+- Исправление включено в VS Code, PhpStorm, оба целевых варианта IntelliJ IDEA и PyCharm. Исправление запуска нативных библиотек из 5.16.233 и все остальные функции сохранены.
 
-Общее ядро, интерфейс и функции 5.16.233 одинаковы во всех пакетах. Проверки JetBrains включают автоматические тесты, состав архивов и Plugin Verifier на указанной версии IDE. Интерактивный запуск после установки проверяется отдельно; проверка совместимости не гарантирует работу на любых будущих версиях IDE.
+Сбой воспроизведён автоматическим тестом ограничения Windows на `fsync`; проверены создание и обновление истории, сохранность старого файла и повторная запись после ошибки. Интерактивный запуск на Windows в рамках этой сборки не выполнялся. Менять сервер, ключ API или отключать антивирус для исправления этого дефекта не нужно.
 
-Контрольные суммы установочных файлов находятся в [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.233/SHA256SUMS.txt).
+Общее ядро, интерфейс и функции 5.16.234 одинаковы во всех пакетах. Проверки JetBrains включают автоматические тесты, состав архивов и Plugin Verifier на указанной версии IDE. Интерактивный запуск после установки проверяется отдельно; проверка совместимости не гарантирует работу на любых будущих версиях IDE.
+
+Контрольные суммы установочных файлов находятся в [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.234/SHA256SUMS.txt).

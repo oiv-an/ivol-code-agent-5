@@ -199,7 +199,10 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function syncFile(filePath: string): Promise<void> {
-	const handle = await fs.open(filePath, "r")
+	// kilocode_change start: Windows FlushFileBuffers requires write access.
+	// Reopen without truncation; both the new JSON and copied backup must sync.
+	const handle = await fs.open(filePath, "r+")
+	// kilocode_change end
 	try {
 		await handle.sync()
 	} finally {

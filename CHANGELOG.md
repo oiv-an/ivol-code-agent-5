@@ -1,5 +1,12 @@
 # IVOL Code Agent 5
 
+## 5.16.234
+
+### Patch Changes
+
+- Fix Windows task startup failing with `EPERM: operation not permitted, fsync` and `API conversation history could not be saved`.
+- Synchronize new JSON files and backup copies through writable, non-truncating handles across all editions, retaining atomic saves and protection of previous history on real write failures.
+
 ## 5.16.233
 
 ### Patch Changes
