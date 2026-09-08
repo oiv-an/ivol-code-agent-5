@@ -5,8 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.tasks.InstrumentCodeTask
 import org.jetbrains.intellij.platform.gradle.tasks.PatchPluginXmlTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import java.nio.file.Files
 import java.util.Locale
 import java.util.Properties
 
@@ -58,6 +60,38 @@ fun compareBuildNumbers(left: List<Int>, right: List<Int>): Int {
 
 fun parseBuildNumber(value: String): List<Int> = value.substringAfterLast('-').split('.').map {
     it.toIntOrNull() ?: throw GradleException("Invalid IDE build number '$value'.")
+}
+
+fun checkedInstrumentationOutput(buildDirectory: File, outputDirectory: File, taskName: String): File {
+    require(taskName.matches(Regex("instrument[A-Za-z0-9_]*Code"))) { "Unexpected instrumentation task: $taskName" }
+    val buildRoot = buildDirectory.canonicalFile.toPath()
+    val expected = buildRoot.resolve("instrumented").resolve(taskName)
+    val actual = outputDirectory.canonicalFile.toPath()
+    require(actual != buildRoot && actual.startsWith(buildRoot) && actual == expected) {
+        "Refusing to reconcile instrumentation outside its exact generated directory: $actual"
+    }
+    return actual.toFile()
+}
+
+/** Preserve incremental outputs, removing only classes absent from every current compiler output. */
+fun pruneObsoleteInstrumentedClasses(buildDirectory: File, outputDirectory: File, taskName: String, classesDirs: Set<File>): Int {
+    val output = checkedInstrumentationOutput(buildDirectory, outputDirectory, taskName)
+    if (!output.isDirectory) return 0
+    val compiledClasses = classesDirs.filter(File::isDirectory).flatMap { root ->
+        root.walkTopDown().filter { it.isFile && it.extension == "class" }.map { it.relativeTo(root).invariantSeparatorsPath }.toList()
+    }.toSet()
+    val instrumentedClasses = output.walkTopDown().filter { it.isFile && it.extension == "class" }.toList()
+    require(compiledClasses.isNotEmpty() || instrumentedClasses.isEmpty()) {
+        "Compiler outputs are missing; refusing to remove instrumented classes for $taskName."
+    }
+    val obsolete = instrumentedClasses.filter { it.relativeTo(output).invariantSeparatorsPath !in compiledClasses }
+    obsolete.forEach { file ->
+        require(file.canonicalFile.toPath().startsWith(output.toPath()) && !Files.isSymbolicLink(file.toPath())) {
+            "Refusing to remove a linked instrumentation output: $file"
+        }
+        Files.delete(file.toPath())
+    }
+    return obsolete.size
 }
 
 fun descriptorForPlatform(source: String, platformCode: String): String {
@@ -369,6 +403,22 @@ intellijPlatform {
 }
 
 tasks {
+    withType<InstrumentCodeTask>().configureEach {
+        doLast {
+            // Upstream 2.18.1 overlays incremental changes and can retain orphaned
+            // coroutine classes after classpath/output-history changes. Never
+            // clear the whole directory: unchanged classes are not regenerated
+            // during an incremental invocation.
+            val removed = pruneObsoleteInstrumentedClasses(
+                layout.buildDirectory.get().asFile,
+                outputDirectory.get().asFile,
+                name,
+                classesDirs.files,
+            )
+            if (removed > 0) logger.lifecycle("Removed $removed obsolete instrumented classes from $name")
+        }
+    }
+
     val pycharmDescriptor = layout.buildDirectory.file("generated/plugin-descriptor/META-INF/plugin.xml")
     val generatePyCharmDescriptor = if (platformCode == "PY") {
         register("generatePyCharmPluginDescriptor") {
@@ -404,6 +454,30 @@ tasks {
         description = "Check the supported IDE targets and local SDK validation without launching an IDE."
         if (generatePyCharmDescriptor != null) dependsOn(generatePyCharmDescriptor)
         doLast {
+            temporaryDir.mkdirs()
+            val fixture = Files.createTempDirectory(temporaryDir.toPath(), "instrumentation-check-").toFile()
+            try {
+                val fixtureBuild = fixture.resolve("build")
+                val compiled = fixtureBuild.resolve("classes/kotlin/main").apply { mkdirs() }
+                val instrumented = fixtureBuild.resolve("instrumented/instrumentCode").apply { mkdirs() }
+                compiled.resolve("Current.class").writeText("compiler")
+                instrumented.resolve("Current.class").writeText("instrumented unchanged")
+                instrumented.resolve("Obsolete.class").writeText("old coroutine")
+                fixtureBuild.resolve("keep.txt").writeText("other build output")
+                check(pruneObsoleteInstrumentedClasses(fixtureBuild, instrumented, "instrumentCode", setOf(compiled)) == 1)
+                check(instrumented.resolve("Current.class").readText() == "instrumented unchanged")
+                check(!instrumented.resolve("Obsolete.class").exists())
+                check(fixtureBuild.resolve("keep.txt").readText() == "other build output")
+                check(pruneObsoleteInstrumentedClasses(fixtureBuild, instrumented, "instrumentCode", setOf(compiled)) == 0)
+                check(runCatching { pruneObsoleteInstrumentedClasses(fixtureBuild, instrumented, "instrumentCode", emptySet()) }.isFailure)
+                check(instrumented.resolve("Current.class").exists())
+                check(runCatching { checkedInstrumentationOutput(fixtureBuild, fixtureBuild, "instrumentCode") }.isFailure)
+                check(runCatching { checkedInstrumentationOutput(fixtureBuild, fixtureBuild.resolve("other"), "instrumentCode") }.isFailure)
+                check(runCatching { checkedInstrumentationOutput(fixtureBuild, fixture.resolve("outside"), "instrumentCode") }.isFailure)
+                check(runCatching { checkedInstrumentationOutput(fixtureBuild, instrumented, "../instrumentCode") }.isFailure)
+            } finally {
+                check(fixture.deleteRecursively()) { "Cannot remove instrumentation test fixture: $fixture" }
+            }
             check(resolvePlatformType("PS") == IntelliJPlatformType.PhpStorm)
             check(resolvePlatformType("IU") == IntelliJPlatformType.IntellijIdea)
             check(resolvePlatformType("PY") == IntelliJPlatformType.PyCharmProfessional)

@@ -18,6 +18,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
@@ -28,17 +29,16 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.jcef.JBCefApp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.InputStream
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.Properties
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
 /**
@@ -58,6 +58,7 @@ class WecoderPlugin : StartupActivity.DumbAware {
                     val pluginService = getInstance(project)
                     pluginService.initialize(project)
                 } catch (e: Exception) {
+                    if (e is ControlFlowException || e is CancellationException) throw e
                     LOG.error("Failed to initialize plugin for opened project: ${project.name}", e)
                 }
             }
@@ -70,6 +71,7 @@ class WecoderPlugin : StartupActivity.DumbAware {
                     val pluginService = project.getServiceIfCreated(WecoderPluginService::class.java)
                     pluginService?.dispose()
                 } catch (e: Exception) {
+                    if (e is ControlFlowException || e is CancellationException) throw e
                     LOG.error("Failed to dispose plugin for closed project: ${project.name}", e)
                 }
             }
@@ -79,8 +81,9 @@ class WecoderPlugin : StartupActivity.DumbAware {
                 // Perform any pre-close cleanup
                 try {
                     // Notify WebViewManager about impending project close
-                    project.getService(WebViewManager::class.java).onProjectSwitch()
+                    project.getServiceIfCreated(WebViewManager::class.java)?.onProjectSwitch()
                 } catch (e: Exception) {
+                    if (e is ControlFlowException || e is CancellationException) throw e
                     LOG.error("Failed to handle project closing for: ${project.name}", e)
                 }
             }
@@ -151,6 +154,7 @@ class WecoderPlugin : StartupActivity.DumbAware {
 
             LOG.info("IVOL Code plugin initialized successfully for project: ${project.name}")
         } catch (e: Exception) {
+            if (e is ControlFlowException || e is CancellationException) throw e
             LOG.error("Failed to initialize IVOL Code plugin", e)
         }
     }
@@ -187,12 +191,10 @@ enum class DebugMode {
  * Plugin service class, provides global access point and core functionality
  */
 @Service(Service.Level.PROJECT)
-class WecoderPluginService(private var currentProject: Project) : Disposable {
+class WecoderPluginService(private val currentProject: Project) : Disposable {
     private val LOG = Logger.getInstance(WecoderPluginService::class.java)
 
-    // Whether initialized
-    @Volatile
-    private var isInitialized = false
+    private val initializationGate = PluginInitializationGate()
     
     // Disposal state
     @Volatile
@@ -200,9 +202,6 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
     
     @Volatile
     private var isDisposed = false
-
-    // Plugin initialization complete flag
-    private var initializationComplete = CompletableFuture<Boolean>()
 
     private val boundedIODispatcher = Executors.newFixedThreadPool(
         Runtime.getRuntime().availableProcessors() * 2,
@@ -280,95 +279,95 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
      * Initialize plugin service
      */
     fun initialize(project: Project) {
-        // Check if disposing or disposed
-        if (isDisposing || isDisposed) {
+        if (isDisposing || isDisposed || project.isDisposed) {
             LOG.warn("Cannot initialize: service is disposing or disposed")
             return
         }
-        
-        // Check if already initialized for the same project
-        if (isInitialized && this.currentProject == project) {
-            LOG.info("WecoderPluginService already initialized for project: ${project.name}")
+        // This is a project service. Never transfer its sockets/scope to another project.
+        if (project !== currentProject) {
+            LOG.warn("Cannot initialize a project service for a different project")
             return
         }
-
-        // If initialized for a different project, clean up first
-        if (isInitialized && this.currentProject != project) {
-            LOG.info("Switching projects from ${this.currentProject?.name} to ${project.name}, cleaning up previous state")
-
-            // Notify WebViewManager about project switch
-            this.currentProject?.getService(WebViewManager::class.java)?.onProjectSwitch()
-
-            cleanup()
-            isInitialized = false
-            initializationComplete = CompletableFuture<Boolean>() // Reset completion flag
+        // StartupActivity, projectOpened and the tool window can all arrive before
+        // asynchronous initialization finishes. Claim the attempt before any work.
+        val attempt = initializationGate.tryBegin() ?: run {
+            LOG.info("WecoderPluginService already starting or initialized for project: ${project.name}")
+            return
         }
-
         LOG.info("Initializing WecoderPluginService for project: ${project.name}, debug mode: $DEBUG_TYPE")
+        try {
+            ensureInitializationActive(attempt)
+            val systemObjectProvider = project.getService(SystemObjectProvider::class.java)
+            systemObjectProvider.initialize(project)
+            socketServer.project = project
+            udsSocketServer.project = project
+            systemObjectProvider.register("pluginService", this)
+            threadMonitor.startMonitoring()
+            ScopeRegistry.register("WecoderPluginService", coroutineScope)
 
-        // Initialize system object provider
-        var systemObjectProvider = project.getService(SystemObjectProvider::class.java)
-        systemObjectProvider.initialize(project)
-        this.currentProject = project
-        socketServer.project = project
-        udsSocketServer.project = project
+            val job = coroutineScope.launch {
+                var succeeded = false
+                try {
+                    coroutineContext.ensureActive()
+                    ensureInitializationActive(attempt)
+                    initPlatformFiles()
+                    coroutineContext.ensureActive()
+                    ensureInitializationActive(attempt)
+                    project.getService(ServiceProxyRegistry::class.java).initialize()
+                    ensureInitializationActive(attempt)
 
-        // Register to system object provider
-        systemObjectProvider.register("pluginService", this)
-        threadMonitor.startMonitoring()
-        ScopeRegistry.register("WecoderPluginService", coroutineScope)
-
-        // Start initialization in background thread
-        coroutineScope.launch {
-            try {
-                initPlatformFiles()
-                // Get project path
-                val projectPath = project.basePath ?: ""
-
-                // Initialize service registration
-                project.getService(ServiceProxyRegistry::class.java).initialize()
-//                ServiceProxyRegistry.getInstance().initialize()
-
-                if (DEBUG_TYPE == DebugMode.ALL) {
-                    // Debug mode: directly connect to extension process in debug
-                    LOG.info("Running in debug mode: ${DEBUG_TYPE}, will directly connect to $DEBUG_HOST:$DEBUG_PORT")
-
-                    // connet to debug port
-                    socketServer.connectToDebugHost(DEBUG_HOST, DEBUG_PORT)
-
-                    // Initialization successful
-                    isInitialized = true
-                    initializationComplete.complete(true)
-                    LOG.info("Debug mode connection successful, WecoderPluginService initialized for project: ${project.name}")
-                } else {
-                    // Normal mode: start Socket server and extension process
-                    // 1. Start Socket server according to system, use UDS except on Windows
-                    val server: ISocketServer = if (SystemInfo.isWindows) socketServer else udsSocketServer
-                    val portOrPath = server.start(projectPath)
-                    if (!ExtensionUtils.isValidPortOrPath(portOrPath)) {
-                        LOG.error("Failed to start socket server for project: ${project.name}")
-                        initializationComplete.complete(false)
-                        return@launch
+                    if (DEBUG_TYPE == DebugMode.ALL) {
+                        socketServer.connectToDebugHost(DEBUG_HOST, DEBUG_PORT)
+                    } else {
+                        val server: ISocketServer = if (SystemInfo.isWindows) socketServer else udsSocketServer
+                        val portOrPath = server.start(project.basePath ?: "")
+                        check(ExtensionUtils.isValidPortOrPath(portOrPath)) {
+                            "Failed to start socket server for project: ${project.name}"
+                        }
+                        coroutineContext.ensureActive()
+                        ensureInitializationActive(attempt)
+                        check(processManager.start(portOrPath)) {
+                            "Failed to start extension process for project: ${project.name}"
+                        }
                     }
-
-                    LOG.info("Socket server started on: $portOrPath for project: ${project.name}")
-                    // 2. Start extension process
-                    if (!processManager.start(portOrPath)) {
-                        LOG.error("Failed to start extension process for project: ${project.name}")
-                        server.stop()
-                        initializationComplete.complete(false)
-                        return@launch
-                    }
-                    // Initialization successful
-                    isInitialized = true
-                    initializationComplete.complete(true)
+                    coroutineContext.ensureActive()
+                    ensureInitializationActive(attempt)
+                    succeeded = initializationGate.complete(attempt)
+                    if (!succeeded) throw CancellationException("Plugin initialization was closed")
                     LOG.info("WecoderPluginService initialization completed for project: ${project.name}")
+                } catch (e: Exception) {
+                    if (e is CancellationException || e is ControlFlowException) throw e
+                    LOG.error("Error during WecoderPluginService initialization for project: ${project.name}", e)
+                } finally {
+                    if (!succeeded) {
+                        // Keep the attempt claimed until resources from it are stopped.
+                        finishFailedInitialization(attempt)
+                    }
                 }
-            } catch (e: Exception) {
-                LOG.error("Error during WecoderPluginService initialization for project: ${project.name}", e)
-                cleanup()
-                initializationComplete.complete(false)
             }
+            // A cancelled scope may prevent the coroutine body/finally from starting.
+            job.invokeOnCompletion { initializationGate.fail(attempt) }
+        } catch (e: Exception) {
+            finishFailedInitialization(attempt)
+            if (e is CancellationException || e is ControlFlowException) throw e
+            LOG.error("Error preparing WecoderPluginService for project: ${project.name}", e)
+        }
+    }
+
+    private fun finishFailedInitialization(attempt: PluginInitializationGate.Attempt) {
+        var cleaned = false
+        try {
+            cleaned = cleanup()
+        } finally {
+            // A failed cleanup must release waiters, but cannot authorize another
+            // startup over resources whose state is unknown.
+            initializationGate.fail(attempt, retryable = cleaned)
+        }
+    }
+
+    private fun ensureInitializationActive(attempt: PluginInitializationGate.Attempt) {
+        if (isDisposing || isDisposed || currentProject.isDisposed || !initializationGate.isCurrent(attempt)) {
+            throw CancellationException("Plugin project was closed during initialization")
         }
     }
 
@@ -388,29 +387,7 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
             val pluginDir = PluginResourceUtil.getResourcePath(PluginConstants.PLUGIN_ID, "")
                 ?: throw IllegalStateException("Cannot get plugin directory")
 
-            val platformFile = File(pluginDir, "platform.txt")
-            if (platformFile.exists()) {
-                platformFile.readLines()
-                    .filter { it.isNotBlank() && !it.startsWith("#") }
-                    .forEach { originalPath ->
-                        val suffixedPath = "$originalPath$platformSuffix"
-                        val originalFile = File(pluginDir, "node_modules/$originalPath")
-                        val suffixedFile = File(pluginDir, "node_modules/$suffixedPath")
-
-                        if (suffixedFile.exists()) {
-                            if (originalFile.exists()) {
-                                originalFile.delete()
-                            }
-                            Files.move(
-                                suffixedFile.toPath(),
-                                originalFile.toPath(),
-                                StandardCopyOption.REPLACE_EXISTING,
-                            )
-                            originalFile.setExecutable(true)
-                        }
-                    }
-            }
-            platformFile.delete()
+            PlatformFileInitializer.initialize(File(pluginDir).toPath(), platformSuffix)
         }
     }
 
@@ -419,13 +396,15 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
      * @return Whether initialization was successful
      */
     fun waitForInitialization(): Boolean {
-        return initializationComplete.get()
+        return initializationGate.awaitInitialization()
     }
 
     /**
      * Clean up resources
      */
-    private fun cleanup() {
+    @Synchronized
+    private fun cleanup(): Boolean {
+        var cleaned = true
         LOG.info("Starting cleanup for project: ${currentProject?.name}")
 
         // First, stop the extension process to prevent new connections
@@ -435,13 +414,16 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
                 processManager.stop()
             }
         } catch (e: Exception) {
-            LOG.error("Error stopping process manager", e)
+            if (e is ControlFlowException) throw e
+            cleaned = false
+            LOG.warn("Error stopping process manager", e)
         }
 
         // Wait a bit for the process to fully stop
         try {
             Thread.sleep(500)
         } catch (e: InterruptedException) {
+            cleaned = false
             Thread.currentThread().interrupt()
         }
 
@@ -451,32 +433,28 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
             socketServer.stop()
             udsSocketServer.stop()
         } catch (e: Exception) {
-            LOG.error("Error stopping socket server", e)
+            if (e is ControlFlowException) throw e
+            cleaned = false
+            LOG.warn("Error stopping socket server", e)
         }
 
         // Wait for socket connections to be fully closed
         try {
             Thread.sleep(1000)
         } catch (e: InterruptedException) {
+            cleaned = false
             Thread.currentThread().interrupt()
         }
 
-        // Finally, clean up workspace file change listener
-        try {
-            currentProject?.getService(WorkspaceFileChangeManager::class.java)?.dispose()
-        } catch (e: Exception) {
-            LOG.error("Error disposing workspace file change manager", e)
-        }
-
-        isInitialized = false
         LOG.info("Cleanup completed for project: ${currentProject?.name}")
+        return cleaned
     }
 
     /**
      * Get whether initialized
      */
     fun isInitialized(): Boolean {
-        return isInitialized
+        return initializationGate.isInitialized
     }
 
     /**
@@ -504,38 +482,28 @@ class WecoderPluginService(private var currentProject: Project) : Disposable {
      * Close service
      */
     override fun dispose() {
-        if (isDisposed) {
-            LOG.warn("Service already disposed")
-            return
-        }
-        
-        if (!isInitialized) {
-            isDisposed = true
-            return
-        }
-
+        if (!initializationGate.close()) return
         isDisposing = true
         LOG.info("Disposing WecoderPluginService")
 
         threadMonitor.dispose()
         ScopeRegistry.unregister("WecoderPluginService")
 
-        currentProject?.getService(WebViewManager::class.java)?.dispose()
-
-        // Cancel all coroutines
+        // Cancel even when startup has not finished. Never create project services
+        // during disposal or permanently dispose them during a retryable failure.
         coroutineScope.cancel()
-
         try {
-            (boundedIODispatcher as? java.util.concurrent.ExecutorService)?.shutdown()
-        } catch (e: Exception) {
-            LOG.error("Error shutting down bounded IO dispatcher", e)
+            currentProject.getServiceIfCreated(WebViewManager::class.java)?.dispose()
+            currentProject.getServiceIfCreated(WorkspaceFileChangeManager::class.java)?.dispose()
+        } finally {
+            try {
+                cleanup()
+            } finally {
+                boundedIODispatcher.close()
+                isDisposed = true
+                isDisposing = false
+            }
         }
-        
-        // Clean up resources
-        cleanup()
-
-        isDisposed = true
-        isDisposing = false
         LOG.info("WecoderPluginService disposed")
     }
 }

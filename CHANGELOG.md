@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.16.233
+
+### Patch Changes
+
+- Fix concurrent JetBrains startup failing with a missing native watcher library, including IntelliJ IDEA 2025.3.6.1 on Apple Silicon.
+- Preserve packaged native libraries and prepare them safely across concurrent project windows and repeated starts.
+- Prevent duplicate project initialization and stop unfinished startup when the project closes.
+
 ## 5.16.232
 
 ### Patch Changes
