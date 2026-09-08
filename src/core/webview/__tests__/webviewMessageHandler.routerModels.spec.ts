@@ -395,6 +395,117 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 	})
 
 	// kilocode_change start: OpenAI-compatible quick model selector
+	it.each(["requestRouterModels", "requestOllamaModels"] as const)(
+		"does not copy saved credentials or TLS exceptions to a draft endpoint (%s)",
+		async (type) => {
+			mockProvider.getState.mockResolvedValue({
+				apiConfiguration: {
+					apiProvider: "ollama",
+					ollamaBaseUrl: "https://saved.example",
+					ollamaApiKey: "saved-private-key",
+					allowInsecureTls: true,
+				},
+			})
+			await webviewMessageHandler(
+				mockProvider as any,
+				{
+					type,
+					requestId: "draft-missing-options",
+					values: { provider: "ollama", baseUrl: "https://draft.example", allowInsecureTls: "true" },
+				} as any,
+			)
+			expect(getModelsMock).toHaveBeenCalledWith(
+				expect.objectContaining({ provider: "ollama", baseUrl: "https://draft.example", apiKey: undefined }),
+			)
+			expect(getModelsMock.mock.calls[0][0].allowInsecureTls).not.toBe(true)
+			expect(JSON.stringify(getModelsMock.mock.calls)).not.toContain("saved-private-key")
+		},
+	)
+
+	it("does not borrow another active provider's catalog TLS exception", async () => {
+		mockProvider.getState.mockResolvedValue({ apiConfiguration: { apiProvider: "openai", allowInsecureTls: true } })
+		await webviewMessageHandler(
+			mockProvider as any,
+			{ type: "requestRouterModels", values: { provider: "openai-codex" } } as any,
+		)
+		expect(refreshModelsMock).toHaveBeenCalledWith({ provider: "openai-codex" })
+	})
+
+	it.each(["ollama", "lmstudio", "openai-codex"] as const)(
+		"passes draft TLS settings and correlates %s catalog responses",
+		async (catalogProvider) => {
+			mockProvider.getState.mockResolvedValue({
+				apiConfiguration: {
+					allowInsecureTls: false,
+					ollamaBaseUrl: "https://saved.example",
+					lmStudioBaseUrl: "https://saved.example",
+				},
+			})
+			await webviewMessageHandler(
+				mockProvider as any,
+				{
+					type: "requestRouterModels",
+					requestId: `tls-${catalogProvider}`,
+					values: {
+						provider: catalogProvider,
+						baseUrl: "https://draft.example",
+						apiKey: "draft-key",
+						numCtx: 32768,
+						allowInsecureTls: true,
+					},
+				} as any,
+			)
+			const fetchMock = catalogProvider === "openai-codex" ? refreshModelsMock : getModelsMock
+			expect(fetchMock).toHaveBeenCalledWith(
+				expect.objectContaining({ provider: catalogProvider, allowInsecureTls: true }),
+			)
+			if (catalogProvider !== "openai-codex")
+				expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: "https://draft.example" }))
+			if (catalogProvider === "ollama")
+				expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "draft-key", numCtx: 32768 }))
+			expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith(
+				expect.objectContaining({ type: "routerModels", requestId: `tls-${catalogProvider}` }),
+			)
+		},
+	)
+
+	it("keeps a draft strict opt-out when the saved profile has an exception", async () => {
+		mockProvider.getState.mockResolvedValue({ apiConfiguration: { allowInsecureTls: true } })
+		await webviewMessageHandler(
+			mockProvider as any,
+			{
+				type: "requestRouterModels",
+				requestId: "strict-draft",
+				values: { provider: "openai-codex", allowInsecureTls: false },
+			} as any,
+		)
+		expect(refreshModelsMock).toHaveBeenCalledWith({ provider: "openai-codex", allowInsecureTls: false })
+	})
+
+	it("passes an explicit OpenAI TLS exception to authenticated and public discovery", async () => {
+		getOpenAiModelsMock.mockResolvedValueOnce([]).mockResolvedValueOnce(["model-one"])
+		await webviewMessageHandler(
+			mockProvider as any,
+			{
+				type: "requestOpenAiModels",
+				requestId: "insecure-catalog",
+				values: {
+					profileId: "profile-id",
+					baseUrl: "https://provider.example/v1",
+					apiKey: "test-key",
+					allowInsecureTls: true,
+				},
+			} as any,
+		)
+		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(1, "https://provider.example/v1", "test-key", {}, true)
+		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(2, "https://provider.example/v1", undefined, {}, true)
+		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "openAiModels",
+			requestId: "insecure-catalog",
+			openAiModels: ["model-one"],
+		})
+	})
+
 	it("echoes the request id with OpenAI-compatible models", async () => {
 		getOpenAiModelsMock.mockResolvedValue(["model-one", "model-two"])
 
@@ -412,9 +523,14 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 			} as any,
 		)
 
-		expect(getOpenAiModelsMock).toHaveBeenCalledWith("https://provider.example/v1", "test-key", {
-			"X-Test": "value",
-		})
+		expect(getOpenAiModelsMock).toHaveBeenCalledWith(
+			"https://provider.example/v1",
+			"test-key",
+			{
+				"X-Test": "value",
+			},
+			false,
+		)
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "openAiModels",
 			openAiModels: ["model-one", "model-two"],
@@ -439,13 +555,25 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 			} as any,
 		)
 
-		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(1, "https://provider.example/v1", "test-key", {
-			Authorization: "custom-secret",
-			"X-Test": "value",
-		})
-		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(2, "https://provider.example/v1", undefined, {
-			"X-Test": "value",
-		})
+		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(
+			1,
+			"https://provider.example/v1",
+			"test-key",
+			{
+				Authorization: "custom-secret",
+				"X-Test": "value",
+			},
+			false,
+		)
+		expect(getOpenAiModelsMock).toHaveBeenNthCalledWith(
+			2,
+			"https://provider.example/v1",
+			undefined,
+			{
+				"X-Test": "value",
+			},
+			false,
+		)
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "openAiModels",
 			openAiModels: ["model-one", "model-two"],

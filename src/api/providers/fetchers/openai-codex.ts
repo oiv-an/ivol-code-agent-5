@@ -3,6 +3,7 @@ import { type ModelInfo, type ModelRecord, OPENAI_CODEX_CONTEXT_WINDOW } from "@
 import { openAiCodexOAuthManager } from "../../../integrations/openai-codex/oauth"
 import { Package } from "../../../shared/package"
 import { DEFAULT_HEADERS } from "../constants"
+import { createProviderFetch } from "../utils/provider-tls" // kilocode_change
 
 const CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
 const CATALOG_TIMEOUT_MS = 30_000
@@ -100,12 +101,15 @@ export const normalizeOpenAiCodexCatalog = (payload: unknown): ModelRecord => {
 	return models
 }
 
-const requestCatalog = async (accessToken: string): Promise<Response> => {
+const requestCatalog = async (accessToken: string, allowInsecureTls = false): Promise<Response> => {
 	const url = new URL(CODEX_MODELS_URL)
 	url.searchParams.set("client_version", Package.version)
 
 	const accountId = await openAiCodexOAuthManager.getAccountId()
-	return fetch(url, {
+	const catalogFetch = allowInsecureTls
+		? createProviderFetch({ baseUrl: CODEX_MODELS_URL, allowInsecureTls, timeoutMs: CATALOG_TIMEOUT_MS })
+		: fetch // kilocode_change: OAuth token endpoints retain strict TLS
+	return catalogFetch(url, {
 		method: "GET",
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
@@ -118,18 +122,20 @@ const requestCatalog = async (accessToken: string): Promise<Response> => {
 }
 
 /** Fetch the model catalog available to the currently signed-in ChatGPT account. */
-export const getOpenAiCodexModels = async (): Promise<ModelRecord> => {
+export const getOpenAiCodexModels = async (allowInsecureTls = false): Promise<ModelRecord> => {
 	let accessToken = await openAiCodexOAuthManager.getAccessToken()
 	if (!accessToken) throw new Error("OpenAI Codex is not authenticated")
 
-	let response = await requestCatalog(accessToken)
+	let response = await requestCatalog(accessToken, allowInsecureTls)
 	if (response.status === 401) {
+		await response.body?.cancel() // kilocode_change: release the failed API request before strict OAuth refresh
 		accessToken = await openAiCodexOAuthManager.forceRefreshAccessToken()
 		if (!accessToken) throw new Error("OpenAI Codex authentication expired")
-		response = await requestCatalog(accessToken)
+		response = await requestCatalog(accessToken, allowInsecureTls)
 	}
 
 	if (!response.ok) {
+		await response.body?.cancel() // kilocode_change
 		throw new Error(`OpenAI Codex model catalog request failed (${response.status})`)
 	}
 

@@ -179,6 +179,7 @@ describe("webviewMessageHandler - requestLmStudioModels", () => {
 		mockClineProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				lmStudioModelId: "model-1",
+				apiProvider: "lmstudio",
 				lmStudioBaseUrl: "http://localhost:1234",
 			},
 		})
@@ -252,6 +253,7 @@ describe("webviewMessageHandler - requestOllamaModels", () => {
 		mockClineProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				ollamaModelId: "model-1",
+				apiProvider: "ollama",
 				ollamaBaseUrl: "http://localhost:1234",
 			},
 		})

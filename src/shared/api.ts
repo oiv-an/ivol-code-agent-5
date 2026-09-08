@@ -213,6 +213,7 @@ export const getModelMaxOutputTokens = ({
 type CommonFetchParams = {
 	apiKey?: string
 	baseUrl?: string
+	allowInsecureTls?: boolean // kilocode_change: explicit per-profile API transport opt-in
 }
 
 // Exhaustive, value-level map for all dynamic providers.

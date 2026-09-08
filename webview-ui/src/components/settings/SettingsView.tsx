@@ -1089,6 +1089,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 												text: configName,
 												apiConfiguration: {
 													...apiConfiguration,
+													allowInsecureTls: false, // kilocode_change: new profiles never inherit a certificate exception
 													profileType: profileType || "chat",
 												},
 											})

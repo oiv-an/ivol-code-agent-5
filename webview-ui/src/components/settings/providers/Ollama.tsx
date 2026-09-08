@@ -1,12 +1,10 @@
-import { useState, useCallback, useMemo, useEffect } from "react"
-import { useEvent } from "react-use"
+import { useCallback, useMemo } from "react"
 import { VSCodeTextField, VSCodeRadioGroup, VSCodeRadio } from "@vscode/webview-ui-toolkit/react"
 
-import type { ProviderSettings, ExtensionMessage, ModelRecord } from "@roo-code/types"
+import type { ProviderSettings } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-// kilocode_change: local catalogs use dedicated extension events instead of the aggregate router hook
-import { vscode } from "@src/utils/vscode"
+import { useRouterModels } from "@src/components/ui/hooks/useRouterModels" // kilocode_change
 
 import { inputEventTransform } from "../transforms"
 
@@ -18,8 +16,17 @@ type OllamaProps = {
 export const Ollama = ({ apiConfiguration, setApiConfigurationField }: OllamaProps) => {
 	const { t } = useAppTranslation()
 
-	const [ollamaModels, setOllamaModels] = useState<ModelRecord>({})
-	// kilocode_change: no duplicate aggregate-router query for Ollama
+	// kilocode_change: fetch the exact draft profile with request/TLS isolation.
+	const { data: routerModels } = useRouterModels(
+		{
+			ollamaBaseUrl: apiConfiguration.ollamaBaseUrl,
+			ollamaApiKey: apiConfiguration.ollamaApiKey,
+			ollamaNumCtx: apiConfiguration.ollamaNumCtx,
+			allowInsecureTls: apiConfiguration.allowInsecureTls === true,
+		},
+		{ provider: "ollama", debounceMs: 250 },
+	)
+	const ollamaModels = useMemo(() => routerModels?.ollama ?? {}, [routerModels])
 
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
@@ -31,27 +38,6 @@ export const Ollama = ({ apiConfiguration, setApiConfigurationField }: OllamaPro
 			},
 		[setApiConfigurationField],
 	)
-
-	const onMessage = useCallback((event: MessageEvent) => {
-		const message: ExtensionMessage = event.data
-
-		switch (message.type) {
-			case "ollamaModels":
-				{
-					const newModels = message.ollamaModels ?? {}
-					setOllamaModels(newModels)
-				}
-				break
-		}
-	}, [])
-
-	useEvent("message", onMessage)
-
-	// Refresh models on mount
-	useEffect(() => {
-		// Request fresh models - the handler now flushes cache automatically
-		vscode.postMessage({ type: "requestOllamaModels" })
-	}, [])
 
 	// Check if the selected model exists in the fetched models
 	// kilocode_change start: validate only after the local catalog has loaded

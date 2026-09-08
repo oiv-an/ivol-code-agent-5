@@ -46,6 +46,39 @@ const createWrapper = () => {
 }
 
 describe("useSelectedModel", () => {
+	// kilocode_change start: metadata requests must honor the same profile TLS policy as the selector.
+	it.each(["ollama", "lmstudio", "openai-codex"] as const)(
+		"uses a TLS-aware scoped metadata catalog for %s",
+		(apiProvider) => {
+			mockUseRouterModels.mockReturnValue({
+				data: { [apiProvider]: {} },
+				isLoading: false,
+				isError: false,
+			} as any)
+			mockUseOpenRouterModelProviders.mockReturnValue({ data: {}, isLoading: false, isError: false } as any)
+			renderHook(
+				() =>
+					useSelectedModel({
+						apiProvider,
+						allowInsecureTls: true,
+						ollamaBaseUrl: "https://ollama.example",
+						ollamaApiKey: "draft-key",
+						lmStudioBaseUrl: "https://lmstudio.example",
+					}),
+				{ wrapper: createWrapper() },
+			)
+			expect(mockUseRouterModels).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					allowInsecureTls: true,
+					ollamaBaseUrl: "https://ollama.example",
+					ollamaApiKey: "draft-key",
+					lmStudioBaseUrl: "https://lmstudio.example",
+				}),
+				{ provider: apiProvider, enabled: true, debounceMs: 250 },
+			)
+		},
+	)
+	// kilocode_change end
 	describe("OpenRouter provider merging", () => {
 		it("should merge base model info with specific provider info when both exist", () => {
 			const baseModelInfo: ModelInfo = {
@@ -544,6 +577,7 @@ describe("useSelectedModel", () => {
 			expect(mockUseRouterModels).toHaveBeenLastCalledWith(expect.any(Object), {
 				provider: undefined,
 				enabled: false,
+				debounceMs: 250,
 			})
 			expect(mockUseOpenRouterModelProviders).toHaveBeenLastCalledWith(
 				undefined,

@@ -419,6 +419,10 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 
 	const routerModels = useRouterModels(
 		{
+			profileId: currentApiConfigId,
+			allowInsecureTls: apiConfiguration?.allowInsecureTls === true,
+			ollamaApiKey: apiConfiguration?.ollamaApiKey,
+			ollamaNumCtx: apiConfiguration?.ollamaNumCtx,
 			openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
 			openRouterApiKey: apiConfiguration?.apiKey,
 			lmStudioBaseUrl: apiConfiguration?.lmStudioBaseUrl,
@@ -444,6 +448,7 @@ export const useProviderModels = (apiConfiguration?: ProviderSettings) => {
 		baseUrl: apiConfiguration?.openAiBaseUrl,
 		apiKey: apiConfiguration?.openAiApiKey,
 		openAiHeaders: apiConfiguration?.openAiHeaders,
+		allowInsecureTls: apiConfiguration?.allowInsecureTls === true,
 		enabled: isOpenAiCompatible,
 	})
 

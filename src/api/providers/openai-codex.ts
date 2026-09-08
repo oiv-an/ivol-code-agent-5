@@ -30,6 +30,7 @@ import { t } from "../../i18n"
 import { DEFAULT_HEADERS } from "./constants" // kilocode-change
 import { getModelsFromCache } from "./fetchers/modelCache" // kilocode_change
 import { normalizeResponsesInput } from "./utils/responses-input"
+import { createProviderFetch } from "./utils/provider-tls" // kilocode_change
 
 // Get extension version for User-Agent header
 const extensionVersion: string = require("../../package.json").version ?? "unknown"
@@ -56,6 +57,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	protected options: ApiHandlerOptions
 	private readonly providerName = "OpenAI Codex"
 	private client?: OpenAI
+	private readonly insecureFetch?: typeof globalThis.fetch // kilocode_change
 	// Complete response output array
 	private lastResponseOutput: any[] | undefined
 	// Last top-level response id
@@ -94,6 +96,11 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	constructor(options: ApiHandlerOptions) {
 		super()
 		this.options = options
+		// kilocode_change start: API only; OAuth login and token refresh remain strictly verified.
+		if (options.allowInsecureTls === true) {
+			this.insecureFetch = createProviderFetch({ baseUrl: CODEX_API_BASE_URL, allowInsecureTls: true })
+		}
+		// kilocode_change end
 		// Generate a new session ID for standalone handler usage (fallback)
 		this.sessionId = uuidv7()
 	}
@@ -380,6 +387,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 						apiKey: accessToken,
 						baseURL: CODEX_API_BASE_URL,
 						defaultHeaders: codexHeaders,
+						...(this.insecureFetch ? { fetch: this.insecureFetch } : {}), // kilocode_change
 					})
 
 				const stream = (await (client as any).responses.create(normalizedRequestBody, {
@@ -528,7 +536,8 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		}
 
 		try {
-			const response = await fetch(url, {
+			const response = await (this.insecureFetch ?? fetch)(url, {
+				// kilocode_change
 				method: "POST",
 				headers,
 				body: JSON.stringify(requestBody),
@@ -1016,7 +1025,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 
 	override getModel() {
 		const modelId = this.options.apiModelId
-		const accountModels = getModelsFromCache("openai-codex")
+		const accountModels = getModelsFromCache("openai-codex", { allowInsecureTls: this.options.allowInsecureTls }) // kilocode_change
 		const selectedInfo =
 			modelId && accountModels?.[modelId]
 				? accountModels[modelId]
@@ -1123,7 +1132,8 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 				headers["ChatGPT-Account-Id"] = accountId
 			}
 
-			const response = await fetch(url, {
+			const response = await (this.insecureFetch ?? fetch)(url, {
+				// kilocode_change
 				method: "POST",
 				headers,
 				body: JSON.stringify({ ...requestBody, input: normalizeResponsesInput(requestBody.input) }),

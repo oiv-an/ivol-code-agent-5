@@ -1,6 +1,7 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import type { ClaudeCodeRateLimitInfo } from "@roo-code/types"
 import { Package } from "../../shared/package"
+import { createProviderFetch } from "../../api/providers/utils/provider-tls" // kilocode_change
 
 /**
  * Set of content block types that are valid for Anthropic API.
@@ -201,6 +202,7 @@ export type ThinkingConfig =
  */
 export interface StreamMessageOptions {
 	accessToken: string
+	allowInsecureTls?: boolean // kilocode_change: API transport only, never OAuth login/refresh
 	model: string
 	systemPrompt: string
 	messages: Anthropic.Messages.MessageParam[]
@@ -430,7 +432,13 @@ export async function* createStreamingMessage(options: StreamMessageOptions): As
 	}
 
 	// Make the request
-	const response = await fetch(`${CLAUDE_CODE_API_CONFIG.endpoint}?beta=true`, {
+	// kilocode_change start
+	const request =
+		options.allowInsecureTls === true
+			? createProviderFetch({ baseUrl: CLAUDE_CODE_API_CONFIG.endpoint, allowInsecureTls: true })
+			: fetch
+	const response = await request(`${CLAUDE_CODE_API_CONFIG.endpoint}?beta=true`, {
+		// kilocode_change end
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),

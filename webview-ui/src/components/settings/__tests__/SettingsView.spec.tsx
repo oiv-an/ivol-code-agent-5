@@ -1,6 +1,6 @@
 // pnpm --filter @roo-code/vscode-webview test src/components/settings/__tests__/SettingsView.spec.tsx
 
-import { render, screen, fireEvent, within } from "@/utils/test-utils"
+import { render, screen, fireEvent, within, waitFor } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { vscode } from "@/utils/vscode"
@@ -23,9 +23,12 @@ vi.mock("@src/utils/validate", () => ({
 // Mock ApiConfigManager component
 vi.mock("../ApiConfigManager", () => ({
 	__esModule: true,
-	default: ({ currentApiConfigName }: any) => (
+	default: ({ currentApiConfigName, onUpsertConfig }: any) => (
 		<div data-testid="api-config-management">
 			<span>Current config: {currentApiConfigName}</span>
+			<button data-testid="create-test-profile" onClick={() => onUpsertConfig("new-profile", "chat")}>
+				Create profile
+			</button>
 		</div>
 	),
 }))
@@ -495,6 +498,35 @@ describe("SettingsView - Sound Settings", () => {
 		)
 	})
 })
+
+// kilocode_change start: creating a fresh profile does not silently copy a TLS exception.
+describe("SettingsView - new profile TLS defaults", () => {
+	it("resets only the TLS exception when adding a profile from an insecure current profile", async () => {
+		vi.clearAllMocks()
+		renderSettingsView({
+			currentApiConfigName: "existing-profile",
+			listApiConfigMeta: [{ id: "existing-profile-id", name: "existing-profile", apiProvider: "openai" }],
+			apiConfiguration: {
+				apiProvider: "openai",
+				openAiBaseUrl: "https://custom.example/v1",
+				allowInsecureTls: true,
+			},
+		})
+		await waitFor(() => expect(screen.getByTestId("provider-allow-insecure-tls-checkbox")).toBeChecked())
+		fireEvent.click(screen.getByTestId("create-test-profile"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "upsertApiConfiguration",
+			text: "new-profile",
+			apiConfiguration: expect.objectContaining({
+				apiProvider: "openai",
+				openAiBaseUrl: "https://custom.example/v1",
+				allowInsecureTls: false,
+				profileType: "chat",
+			}),
+		})
+	})
+})
+// kilocode_change end
 
 describe("SettingsView - API Configuration", () => {
 	beforeEach(() => {

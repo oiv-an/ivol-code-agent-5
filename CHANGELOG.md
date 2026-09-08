@@ -1,5 +1,14 @@
 # IVOL Code Agent 5
 
+## 5.16.232
+
+### Patch Changes
+
+- Add an optional certificate exception per provider profile, disabled by default, for API connections and model discovery without changing global certificate verification.
+- Add a separate PyCharm 2025.1.1.1 package targeting its Java 21 platform while retaining the current PhpStorm and IntelliJ IDEA targets.
+- Add a separate Java 21 package for IntelliJ IDEA 2025.3.6.1 (IU-253.33813.55), without replacing the IDEA 2026.2 package.
+- Open edited JetBrains files asynchronously in a write-safe context, avoiding nested editor event loops and cancelling pending work when the project closes.
+
 ## 5.16.231
 
 ### Patch Changes

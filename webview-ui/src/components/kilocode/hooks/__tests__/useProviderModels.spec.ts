@@ -62,6 +62,7 @@ describe("useProviderModels", () => {
 			apiKey: "test-key",
 			openAiHeaders: { "X-Test": "value" },
 			enabled: true,
+			allowInsecureTls: false,
 		})
 		expect(mockUseRouterModels).toHaveBeenCalledWith(expect.any(Object), {
 			provider: undefined,
@@ -98,6 +99,20 @@ describe("useProviderModels", () => {
 		})
 		expect(mockUseOpenAiModels).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }))
 	})
+
+	it.each(["openai-codex", "ollama", "lmstudio"] as const)(
+		"passes the current profile TLS policy to %s quick models",
+		(apiProvider) => {
+			renderHook(() => useProviderModels({ apiProvider, allowInsecureTls: true }))
+			expect(mockUseRouterModels).toHaveBeenCalledWith(
+				expect.objectContaining({
+					profileId: "profile-id",
+					allowInsecureTls: true,
+				}),
+				{ provider: apiProvider, enabled: true },
+			)
+		},
+	)
 
 	it("keeps the bundled Codex catalog available while the account catalog loads", () => {
 		mockUseRouterModels.mockReturnValue({

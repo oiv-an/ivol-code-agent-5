@@ -29,6 +29,7 @@ import { getApiRequestTimeout } from "./utils/timeout-config"
 import { handleOpenAIError } from "./utils/openai-error-handler"
 // kilocode_change start: task-scoped cancellation and transport diagnostics
 import { createOpenAiFetch } from "./utils/openai-fetch"
+import { createProviderFetch } from "./utils/provider-tls" // kilocode_change
 import { isOpenAiAbortError, normalizeOpenAiTransportError } from "./utils/openai-transport-error"
 // kilocode_change end
 
@@ -156,7 +157,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 
 		const timeout = getApiRequestTimeout()
-		const fetch = createOpenAiFetch(timeout) // kilocode_change: preserve the configured dispatcher/proxy
+		// kilocode_change start: TLS opt-out applies only to this profile's API origin.
+		const fetch =
+			this.options.allowInsecureTls === true
+				? createProviderFetch({ baseUrl: baseURL, allowInsecureTls: true, timeoutMs: timeout })
+				: createOpenAiFetch(timeout)
+		// kilocode_change end
 
 		if (isAzureAiInference) {
 			// Azure AI Inference Service (e.g., for DeepSeek) uses a different path structure
@@ -778,7 +784,12 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	}
 }
 
-export async function getOpenAiModels(baseUrl?: string, apiKey?: string, openAiHeaders?: Record<string, string>) {
+export async function getOpenAiModels(
+	baseUrl?: string,
+	apiKey?: string,
+	openAiHeaders?: Record<string, string>,
+	allowInsecureTls?: boolean, // kilocode_change
+) {
 	try {
 		if (!baseUrl) {
 			return []
@@ -806,7 +817,27 @@ export async function getOpenAiModels(baseUrl?: string, apiKey?: string, openAiH
 			config["headers"] = headers
 		}
 
-		const response = await axios.get(`${trimmedBaseUrl}/models`, config)
+		// kilocode_change start: retain the existing strict axios/proxy path unless explicitly opted in.
+		const response =
+			allowInsecureTls === true
+				? await (async () => {
+						const request = createProviderFetch({
+							baseUrl: trimmedBaseUrl,
+							allowInsecureTls: true,
+							timeoutMs: 8_000,
+						})
+						const result = await request(`${trimmedBaseUrl}/models`, {
+							headers,
+							signal: AbortSignal.timeout(8_000),
+						})
+						if (!result.ok) {
+							await result.body?.cancel()
+							throw new Error(`Model catalog request failed (${result.status})`)
+						}
+						return { data: await result.json() }
+					})()
+				: await axios.get(`${trimmedBaseUrl}/models`, config)
+		// kilocode_change end
 		const modelsArray = response.data?.data?.map((model: any) => model.id) || []
 		return [...new Set<string>(modelsArray)]
 	} catch (error) {

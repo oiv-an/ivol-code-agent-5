@@ -1,6 +1,19 @@
 # AGENTS.md
 
-IVOL Code is an open source AI coding agent for VS Code that generates code from natural language, automates tasks, and supports 500+ AI models.
+IVOL Code is an open source AI coding agent for VS Code, PhpStorm, and IntelliJ IDEA that generates code from natural language, automates tasks, and supports 500+ AI models.
+
+## IVOL Fork: Supported Editions and Change Parity
+
+User instruction recorded on **2026-09-08**:
+
+- Maintain **VS Code, PhpStorm, and IntelliJ IDEA** together. Unless the user explicitly narrows the current task, every requested feature, behavior change, and bug fix must be assessed and implemented across all three supported editions, even if it was reported in only one IDE.
+- Prefer the shared core, providers, types, and webview implementation so the same behavior reaches every edition. Do not consider a shared change complete while another supported edition still lacks it. Report any blocked implementation or unavailable verification explicitly.
+- For an IDE-specific bug, fix the appropriate adapter and check the other editions for the same underlying issue and regressions; do not duplicate irrelevant platform-specific code.
+- When a build or release is requested, prepare the VS Code VSIX, PhpStorm ZIP, and IntelliJ IDEA ZIP from the same source revision with the same product version, unless the user explicitly requests a narrower delivery. Validate each target and distinguish automated checks from an actual IDE launch.
+- VS Code and PhpStorm are the long-term targets. IntelliJ IDEA support is provisionally needed for about one month, with a review around **2026-10-08**. This is **not an automatic end date**: stop supporting IDEA only after the user confirms the return to two editions.
+- This parity rule does not authorize closing or restarting IDEs, installing builds, modifying task history or credentials, or publishing to GitHub/Marketplace without a corresponding user request. Preserve existing plugin identities and data storage paths during ordinary updates.
+- Additional requested target: **PyCharm 2025.1.1.1 (PY-251.25410.159)**. Keep its shared core and applicable adapter fixes aligned with the other editions, but build its separate Java 21 / platform 251 package. Do not label a current platform 262 package as compatible with this older PyCharm or silently broaden its supported range.
+- The developer's exact IDEA target is **IntelliJ IDEA 2025.3.6.1 (IU-253.33813.55)**. Keep its Java 21 / platform 253 package separate from the existing IDEA 2026.2 / Java 25 package. Include applicable shared fixes in both; for a specifically requested 2025.3 adaptation, build and verify that target without replacing the other ready artifacts.
 
 ## Project Structure
 

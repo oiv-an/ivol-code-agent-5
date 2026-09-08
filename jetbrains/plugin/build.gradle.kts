@@ -5,8 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.tasks.PatchPluginXmlTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import java.util.Locale
+import java.util.Properties
 
 // Convenient for reading variables from gradle.properties
 fun properties(key: String) = providers.gradleProperty(key)
@@ -25,11 +27,71 @@ plugins {
 }
 
 // Keep PhpStorm as the default. The current IntelliJ IDEA distribution is the
-// unified IU product, not the discontinued separate Community target.
+// unified IU product, not the discontinued separate Community target. Older
+// IDEA/PyCharm SDKs get their own bytecode targets, never a wider 262 range.
 fun resolvePlatformType(code: String): IntelliJPlatformType = when (code) {
     "PS" -> IntelliJPlatformType.PhpStorm
     "IU" -> IntelliJPlatformType.IntellijIdea
-    else -> throw GradleException("Unsupported platformType '$code': use PS (PhpStorm) or IU (IntelliJ IDEA).")
+    "PY" -> IntelliJPlatformType.PyCharmProfessional
+    else -> throw GradleException("Unsupported platformType '$code': use PS (PhpStorm), IU (IntelliJ IDEA), or PY (PyCharm).")
+}
+
+fun resolveIdeaTarget(platformCode: String, requestedTarget: String?): String? {
+    if (platformCode != "IU") {
+        require(requestedTarget == null) { "ideaTarget applies only to platformType=IU." }
+        return null
+    }
+    val target = requestedTarget ?: "2026.2"
+    require(target in setOf("2026.2", "2025.3")) {
+        "Unsupported ideaTarget '$target': use 2026.2 (default) or 2025.3."
+    }
+    return target
+}
+
+fun compareBuildNumbers(left: List<Int>, right: List<Int>): Int {
+    for (index in 0 until maxOf(left.size, right.size)) {
+        val comparison = (left.getOrElse(index) { 0 }).compareTo(right.getOrElse(index) { 0 })
+        if (comparison != 0) return comparison
+    }
+    return 0
+}
+
+fun parseBuildNumber(value: String): List<Int> = value.substringAfterLast('-').split('.').map {
+    it.toIntOrNull() ?: throw GradleException("Invalid IDE build number '$value'.")
+}
+
+fun descriptorForPlatform(source: String, platformCode: String): String {
+    if (platformCode != "PY") return source
+    val modularJcefDependency = "<depends>com.intellij.modules.jcef</depends>"
+    require(source.split(modularJcefDependency).size == 2) {
+        "Expected exactly one modular JCEF dependency in the shared plugin descriptor."
+    }
+    // JCEF is part of the base 251 platform, not a separately declared plugin.
+    // Leave all other dependencies, plugin identity, and registrations intact.
+    return source.replace(modularJcefDependency, "")
+}
+
+fun validateLocalRuntimeMetadata(info: Map<String, String>, expectedJava: Int, hostOs: String, hostArch: String) {
+    val runtimeJava = info["JAVA_VERSION"]?.substringBefore('.')?.toIntOrNull()
+    require(runtimeJava == expectedJava) {
+        "localRuntimePath contains Java $runtimeJava, but this IDE target requires Java $expectedJava."
+    }
+    fun normalizedOs(value: String): String = when (value.lowercase(Locale.ROOT)) {
+        "mac os x", "macos", "darwin" -> "darwin"
+        "linux" -> "linux"
+        else -> if (value.startsWith("Windows", ignoreCase = true)) "windows" else value.lowercase(Locale.ROOT)
+    }
+    fun normalizedArch(value: String): String = when (value.lowercase(Locale.ROOT)) {
+        "aarch64", "arm64" -> "arm64"
+        "x86_64", "amd64", "x64" -> "amd64"
+        else -> value.lowercase(Locale.ROOT)
+    }
+    require(info["OS_NAME"]?.let(::normalizedOs) == normalizedOs(hostOs)) {
+        "localRuntimePath OS '${info["OS_NAME"]}' does not match this build host '$hostOs'."
+    }
+    require(info["OS_ARCH"]?.let(::normalizedArch) == normalizedArch(hostArch)) {
+        "localRuntimePath architecture '${info["OS_ARCH"]}' does not match this build host '$hostArch'."
+    }
 }
 
 fun validateLocalIdeTarget(
@@ -45,27 +107,95 @@ fun validateLocalIdeTarget(
         "localIdePath product '$productCode' does not match platformType '$expectedProductCode'."
     }
     val build = info.get("buildNumber")?.asString.orEmpty()
-    val branch = build.substringAfterLast('-').substringBefore('.').toIntOrNull()
-    val firstBranch = sinceBuild.substringBefore('.').toInt()
-    val lastBranch = untilBuild.substringBefore('.').toInt()
-    require(branch != null && branch in firstBranch..lastBranch) {
+    val buildParts = parseBuildNumber(build)
+    val minimumBuildParts = parseBuildNumber(sinceBuild)
+    val maximumBuildParts = parseBuildNumber(untilBuild.removeSuffix(".*"))
+    val withinMaximum = if (untilBuild.endsWith(".*")) {
+        compareBuildNumbers(buildParts.take(maximumBuildParts.size), maximumBuildParts) <= 0
+    } else {
+        compareBuildNumbers(buildParts, maximumBuildParts) <= 0
+    }
+    require(compareBuildNumbers(buildParts, minimumBuildParts) >= 0 && withinMaximum) {
         "localIdePath build '$build' is outside the supported $sinceBuild–$untilBuild platform range."
     }
-    val minimumJava = info.get("minRequiredJavaVersion")?.asInt
-    require(minimumJava != null && compilerJavaVersion >= minimumJava && runtimeJavaVersion >= minimumJava) {
+    // Older product-info files omit this field. Accept only the explicitly
+    // supported legacy SDK, not a guessed Java version for any older product.
+    val knownLegacyMinimumJava = when {
+        productCode == "PY" && buildParts == listOf(251, 25410, 159) && info.get("version")?.asString == "2025.1.1.1" -> 21
+        productCode == "IU" && buildParts == listOf(253, 33813, 55) && info.get("version")?.asString == "2025.3.6.1" -> 21
+        else -> null
+    }
+    val minimumJava = info.get("minRequiredJavaVersion")?.takeUnless { it.isJsonNull }?.asInt
+        ?: knownLegacyMinimumJava
+        ?: throw GradleException("localIdePath does not declare minRequiredJavaVersion and is not an explicitly supported legacy SDK.")
+    // Bytecode newer than the IDE's required runtime would install but fail to
+    // load. Running Gradle on a newer JDK is fine; compiling newer bytecode is not.
+    require(compilerJavaVersion == minimumJava && runtimeJavaVersion >= minimumJava) {
         "localIdePath requires Java $minimumJava; configured compiler is $compilerJavaVersion and Gradle runs on $runtimeJavaVersion."
     }
 }
 
 val platformCode = properties("platformType").orElse("PS").get().uppercase(Locale.ROOT)
 val selectedPlatformType = resolvePlatformType(platformCode)
+val selectedIdeaTarget = resolveIdeaTarget(platformCode, properties("ideaTarget").orNull)
+val isIdea253 = selectedIdeaTarget == "2025.3"
+// IU 253 already modularizes JCEF, but its callback API is still the old one.
+// Descriptor/module selection and callback source selection are independent.
+val usesLegacyCefCallbacks = platformCode == "PY" || isIdea253
+// Global gradle.properties intentionally continues to describe PS/IU 2026.2.
+// Legacy targets cannot inherit its Java 25 bytecode or compatibility range.
+// IDEA 2025.3 is deliberately pinned to the user's exact supported SDK.
+val selectedPlatformVersion = when {
+    isIdea253 -> providers.provider { "2025.3.6.1" }
+    platformCode == "PY" -> properties("pycharmPlatformVersion").orElse("2025.1.1.1")
+    else -> properties("platformVersion")
+}
+val selectedSinceBuild = when {
+    isIdea253 -> providers.provider { "253.33813.55" }
+    platformCode == "PY" -> properties("pycharmSinceBuild").orElse("251.25410.159")
+    else -> properties("pluginSinceBuild")
+}
+val selectedUntilBuild = when {
+    isIdea253 -> providers.provider { "253.*" }
+    platformCode == "PY" -> properties("pycharmUntilBuild").orElse("251.*")
+    else -> properties("pluginUntilBuild")
+}
+val selectedJavaVersion = when {
+    isIdea253 -> providers.provider { "21" }
+    platformCode == "PY" -> properties("pycharmJavaVersion").orElse("21")
+    else -> properties("javaVersion")
+}
+val selectedBuildDirectory = when {
+    isIdea253 -> "build/idea253"
+    platformCode == "IU" -> "build/idea"
+    platformCode == "PY" -> "build/pycharm"
+    else -> "build"
+}
+val selectedArchiveClassifier = when {
+    isIdea253 -> "idea-2025.3"
+    platformCode == "IU" -> "idea"
+    platformCode == "PY" -> "pycharm"
+    else -> null
+}
 val localIdePath = providers.gradleProperty("localIdePath").orNull
 val localIdeDirectory = localIdePath?.let { file(it).canonicalFile }
+val localRuntimeDirectory = providers.gradleProperty("localRuntimePath").orNull?.let { file(it).canonicalFile }
 
-if (platformCode == "IU") {
+if (localRuntimeDirectory != null) {
+    val releaseFile = localRuntimeDirectory.resolve("release")
+    val javaExecutable = localRuntimeDirectory.resolve(if (System.getProperty("os.name").startsWith("Windows")) "bin/java.exe" else "bin/java")
+    require(releaseFile.isFile && javaExecutable.isFile && javaExecutable.canExecute()) {
+        "localRuntimePath must be a runtime home containing release metadata and an executable bin/java: $localRuntimeDirectory"
+    }
+    val releaseProperties = Properties().apply { releaseFile.inputStream().use { load(it) } }
+    val runtimeInfo = releaseProperties.stringPropertyNames().associateWith { releaseProperties.getProperty(it).trim('"') }
+    validateLocalRuntimeMetadata(runtimeInfo, selectedJavaVersion.get().toInt(), System.getProperty("os.name"), System.getProperty("os.arch"))
+}
+
+if (selectedBuildDirectory != "build") {
     // Separate all outputs/sandbox/verifier reports, not just the final ZIP.
     // This must be set before genPlatform.gradle captures its build paths.
-    layout.buildDirectory.set(layout.projectDirectory.dir("build/idea"))
+    layout.buildDirectory.set(layout.projectDirectory.dir(selectedBuildDirectory))
 }
 
 if (localIdeDirectory != null) {
@@ -79,9 +209,9 @@ if (localIdeDirectory != null) {
     validateLocalIdeTarget(
         info,
         platformCode,
-        properties("pluginSinceBuild").get(),
-        properties("pluginUntilBuild").get(),
-        properties("javaVersion").get().toInt(),
+        selectedSinceBuild.get(),
+        selectedUntilBuild.get(),
+        selectedJavaVersion.get().toInt(),
         JavaVersion.current().majorVersion.toInt(),
     )
 }
@@ -165,11 +295,22 @@ dependencies {
         if (localIdeDirectory != null) {
             local(localIdeDirectory)
         } else {
-            create(selectedPlatformType, properties("platformVersion").get())
+            create(selectedPlatformType, selectedPlatformVersion.get())
+        }
+        if (localRuntimeDirectory != null) {
+            // Cross-OS SDKs are useful for compilation/verifying remote users'
+            // builds, but their bundled JVM cannot run on this host. An explicit
+            // native JBR override leaves the downloaded SDK itself untouched.
+            jetbrainsRuntimeLocal(localRuntimeDirectory.absolutePath)
         }
 
         bundledPlugin("org.jetbrains.plugins.terminal")
-        bundledModule("com.intellij.modules.jcef")
+        if (platformCode != "PY") {
+            bundledModule("com.intellij.modules.jcef")
+        }
+        // In 251 JBCefBrowser and CefClient already belong to app-client.jar
+        // and lib-client.jar. The separate com.intellij.modules.jcef plugin
+        // dependency exists in both the 253 and 262 SDKs.
 
         // Plugin verifier
         pluginVerifier()
@@ -177,12 +318,20 @@ dependencies {
     }
 }
 
-// Both supported 2026.2 IDE targets run on Java 25.
+// The 2026.2 IDEs need Java 25; the separate 2025.x targets need Java 21.
 java {
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.toVersion(selectedJavaVersion.get())
+    targetCompatibility = JavaVersion.toVersion(selectedJavaVersion.get())
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(properties("javaVersion").get().toInt()))
+        languageVersion.set(JavaLanguageVersion.of(selectedJavaVersion.get().toInt()))
+    }
+}
+
+kotlin {
+    sourceSets.named("main") {
+        // New CEF callback classes do not exist in 251 or 253. Compile exactly one
+        // thin adapter instead of shipping references that cannot load there.
+        kotlin.srcDir(if (usesLegacyCefCallbacks) "src/pycharm/kotlin" else "src/modern/kotlin")
     }
 }
 
@@ -193,8 +342,8 @@ intellijPlatform {
         version = properties("pluginVersion")
 
         ideaVersion {
-            sinceBuild = properties("pluginSinceBuild")
-            untilBuild = properties("pluginUntilBuild")
+            sinceBuild = selectedSinceBuild
+            untilBuild = selectedUntilBuild
         }
     }
 
@@ -213,26 +362,63 @@ intellijPlatform {
             if (localIdeDirectory != null) {
                 local(localIdeDirectory)
             } else {
-                create(selectedPlatformType, properties("platformVersion").get())
+                create(selectedPlatformType, selectedPlatformVersion.get())
             }
         }
     }
 }
 
 tasks {
+    val pycharmDescriptor = layout.buildDirectory.file("generated/plugin-descriptor/META-INF/plugin.xml")
+    val generatePyCharmDescriptor = if (platformCode == "PY") {
+        register("generatePyCharmPluginDescriptor") {
+            group = "build"
+            description = "Adapt the shared descriptor for PyCharm 251 without modifying the source descriptor."
+            val sourceDescriptor = layout.projectDirectory.file("src/main/resources/META-INF/plugin.xml")
+            inputs.file(sourceDescriptor)
+            outputs.file(pycharmDescriptor)
+            doLast {
+                val destination = pycharmDescriptor.get().asFile
+                destination.parentFile.mkdirs()
+                destination.writeText(descriptorForPlatform(sourceDescriptor.asFile.readText(), platformCode))
+            }
+        }
+    } else {
+        null
+    }
+    if (generatePyCharmDescriptor != null) {
+        named<PatchPluginXmlTask>("patchPluginXml") {
+            dependsOn(generatePyCharmDescriptor)
+            inputFile.set(pycharmDescriptor)
+        }
+    }
+
     buildPlugin {
-        if (platformCode == "IU") {
-            archiveClassifier.set("idea")
+        if (selectedArchiveClassifier != null) {
+            archiveClassifier.set(selectedArchiveClassifier)
         }
     }
 
     register("verifyBuildTargetConfiguration") {
         group = "verification"
         description = "Check the supported IDE targets and local SDK validation without launching an IDE."
+        if (generatePyCharmDescriptor != null) dependsOn(generatePyCharmDescriptor)
         doLast {
             check(resolvePlatformType("PS") == IntelliJPlatformType.PhpStorm)
             check(resolvePlatformType("IU") == IntelliJPlatformType.IntellijIdea)
+            check(resolvePlatformType("PY") == IntelliJPlatformType.PyCharmProfessional)
             check(runCatching { resolvePlatformType("IC") }.isFailure)
+            check(resolveIdeaTarget("PS", null) == null)
+            check(resolveIdeaTarget("PY", null) == null)
+            check(resolveIdeaTarget("IU", null) == "2026.2")
+            check(resolveIdeaTarget("IU", "2026.2") == "2026.2")
+            check(resolveIdeaTarget("IU", "2025.3") == "2025.3")
+            check(runCatching { resolveIdeaTarget("IU", "2025.1") }.isFailure)
+            check(runCatching { resolveIdeaTarget("IU", "") }.isFailure)
+            check(runCatching { resolveIdeaTarget("PS", "2025.3") }.isFailure)
+            check(runCatching { resolveIdeaTarget("PY", "2025.3") }.isFailure)
+            check(runCatching { resolveIdeaTarget("PS", "2026.2") }.isFailure)
+            check(runCatching { resolveIdeaTarget("PY", "2026.2") }.isFailure)
             val info = com.google.gson.JsonParser.parseString(
                 """{"productCode":"IU","buildNumber":"262.10315.125","minRequiredJavaVersion":25}""",
             ).asJsonObject
@@ -241,10 +427,99 @@ tasks {
             check(runCatching { validateLocalIdeTarget(info, "IU", "261", "261.*", 25, 25) }.isFailure)
             check(runCatching { validateLocalIdeTarget(info, "IU", "262", "262.*", 21, 25) }.isFailure)
             check(runCatching { validateLocalIdeTarget(info, "IU", "262", "262.*", 25, 21) }.isFailure)
-            val expectedOutput = if (platformCode == "IU") "build/idea" else "build"
+            val idea253Info = com.google.gson.JsonParser.parseString(
+                """{"productCode":"IU","version":"2025.3.6.1","buildNumber":"253.33813.55"}""",
+            ).asJsonObject
+            validateLocalIdeTarget(idea253Info, "IU", "253.33813.55", "253.*", 21, 21)
+            validateLocalIdeTarget(idea253Info, "IU", "253.33813.55", "253.*", 21, 25)
+            check(runCatching { validateLocalIdeTarget(idea253Info, "PS", "253.33813.55", "253.*", 21, 21) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(idea253Info, "IU", "262", "262.*", 21, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(info, "IU", "253.33813.55", "253.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(idea253Info, "IU", "253.33813.55", "253.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(idea253Info, "IU", "253.33813.55", "253.*", 21, 17) }.isFailure)
+            val earlierIdea253Info = idea253Info.deepCopy().apply { addProperty("buildNumber", "253.33813.54") }
+            check(runCatching { validateLocalIdeTarget(earlierIdea253Info, "IU", "253.33813.55", "253.*", 21, 21) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(earlierIdea253Info, "IU", "253", "253.*", 21, 21) }.isFailure)
+            val unknownIdea253Info = idea253Info.deepCopy().apply { addProperty("version", "2025.3.6") }
+            check(runCatching { validateLocalIdeTarget(unknownIdea253Info, "IU", "253.33813.55", "253.*", 21, 21) }.isFailure)
+            val legacyInfo = com.google.gson.JsonParser.parseString(
+                """{"productCode":"PY","version":"2025.1.1.1","buildNumber":"PY-251.25410.159"}""",
+            ).asJsonObject
+            validateLocalIdeTarget(legacyInfo, "PY", "251.25410.159", "251.*", 21, 21)
+            validateLocalIdeTarget(legacyInfo, "PY", "251.25410.159", "251.*", 21, 25)
+            check(runCatching { validateLocalIdeTarget(legacyInfo, "PY", "262", "262.*", 21, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(legacyInfo, "PY", "251.25410.159", "251.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(legacyInfo, "PY", "251.25410.159", "251.*", 21, 17) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(legacyInfo, "PS", "251", "251.*", 21, 21) }.isFailure)
+            val earlierLegacyInfo = legacyInfo.deepCopy().apply { addProperty("buildNumber", "251.25410.100") }
+            check(runCatching { validateLocalIdeTarget(earlierLegacyInfo, "PY", "251.25410.159", "251.*", 21, 21) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(earlierLegacyInfo, "PY", "251", "251.*", 21, 21) }.isFailure)
+            val unknownLegacyInfo = legacyInfo.deepCopy().apply { addProperty("version", "2025.1") }
+            check(runCatching { validateLocalIdeTarget(unknownLegacyInfo, "PY", "251", "251.*", 21, 21) }.isFailure)
+            val undeclaredModernInfo = info.deepCopy().apply { remove("minRequiredJavaVersion") }
+            check(runCatching { validateLocalIdeTarget(undeclaredModernInfo, "IU", "262", "262.*", 25, 25) }.isFailure)
+            val nativeRuntime = mapOf("JAVA_VERSION" to "21.0.8", "OS_NAME" to "Darwin", "OS_ARCH" to "aarch64")
+            validateLocalRuntimeMetadata(nativeRuntime, 21, "Mac OS X", "arm64")
+            check(runCatching { validateLocalRuntimeMetadata(nativeRuntime, 25, "Mac OS X", "arm64") }.isFailure)
+            check(runCatching { validateLocalRuntimeMetadata(nativeRuntime, 21, "Linux", "arm64") }.isFailure)
+            check(runCatching { validateLocalRuntimeMetadata(nativeRuntime, 21, "Mac OS X", "amd64") }.isFailure)
+            check(runCatching { validateLocalRuntimeMetadata(nativeRuntime - "JAVA_VERSION", 21, "Mac OS X", "arm64") }.isFailure)
+            validateLocalRuntimeMetadata(mapOf("JAVA_VERSION" to "25", "OS_NAME" to "Linux", "OS_ARCH" to "x86_64"), 25, "Linux", "amd64")
+            val expectedOutput = when {
+                isIdea253 -> "build/idea253"
+                platformCode == "IU" -> "build/idea"
+                platformCode == "PY" -> "build/pycharm"
+                else -> "build"
+            }
             check(layout.buildDirectory.get().asFile == layout.projectDirectory.dir(expectedOutput).asFile)
             val archiveName = (project.tasks.getByName("buildPlugin") as Zip).archiveFileName.get()
-            check(archiveName.endsWith(if (platformCode == "IU") "-idea.zip" else "-${project.version}.zip"))
+            val expectedSuffix = when {
+                isIdea253 -> "-idea-2025.3.zip"
+                platformCode == "IU" -> "-idea.zip"
+                platformCode == "PY" -> "-pycharm.zip"
+                else -> "-${project.version}.zip"
+            }
+            check(archiveName.endsWith(expectedSuffix))
+            check(java.sourceCompatibility == JavaVersion.toVersion(selectedJavaVersion.get()))
+            check(java.targetCompatibility == JavaVersion.toVersion(selectedJavaVersion.get()))
+            val kotlinCompilerOptions = (project.tasks.getByName("compileKotlin") as org.jetbrains.kotlin.gradle.tasks.KotlinCompile).compilerOptions
+            check(kotlinCompilerOptions.jvmTarget.get().target == selectedJavaVersion.get())
+            if (platformCode == "PY") {
+                check(selectedSinceBuild.get().substringBefore('.') == "251")
+                check(selectedUntilBuild.get().substringBefore('.') == "251")
+                check(selectedJavaVersion.get() == "21")
+                check(kotlinCompilerOptions.languageVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+                check(kotlinCompilerOptions.apiVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+            }
+            if (isIdea253) {
+                check(selectedPlatformVersion.get() == "2025.3.6.1")
+                check(selectedSinceBuild.get() == "253.33813.55")
+                check(selectedUntilBuild.get() == "253.*")
+                check(selectedJavaVersion.get() == "21")
+                check(kotlinCompilerOptions.languageVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
+                check(kotlinCompilerOptions.apiVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
+            }
+            val sourceDescriptor = layout.projectDirectory.file("src/main/resources/META-INF/plugin.xml").asFile.readText()
+            val legacyDescriptor = descriptorForPlatform(sourceDescriptor, "PY")
+            check(descriptorForPlatform(sourceDescriptor, "PS") == sourceDescriptor)
+            check(descriptorForPlatform(sourceDescriptor, "IU") == sourceDescriptor)
+            check(!legacyDescriptor.contains("<depends>com.intellij.modules.jcef</depends>"))
+            val pluginId = Regex("<id>([^<]+)</id>")
+            check(pluginId.find(sourceDescriptor)?.groupValues?.get(1) == "pro.ivol.kilocode5.jetbrains")
+            check(pluginId.find(legacyDescriptor)?.value == pluginId.find(sourceDescriptor)?.value)
+            check(legacyDescriptor.contains("<depends>com.intellij.modules.platform</depends>"))
+            check(legacyDescriptor.contains("<depends>org.jetbrains.plugins.terminal</depends>"))
+            check(runCatching { descriptorForPlatform(legacyDescriptor, "PY") }.isFailure)
+            check(runCatching { descriptorForPlatform(sourceDescriptor + "<depends>com.intellij.modules.jcef</depends>", "PY") }.isFailure)
+            if (platformCode == "PY") {
+                check(pycharmDescriptor.get().asFile.readText() == legacyDescriptor)
+                check((project.tasks.getByName("patchPluginXml") as PatchPluginXmlTask).inputFile.get().asFile == pycharmDescriptor.get().asFile)
+            }
+            val kotlinSources = kotlin.sourceSets.getByName("main").kotlin.srcDirs
+            val expectedAdapter = file(if (usesLegacyCefCallbacks) "src/pycharm/kotlin" else "src/modern/kotlin")
+            val excludedAdapter = file(if (usesLegacyCefCallbacks) "src/modern/kotlin" else "src/pycharm/kotlin")
+            check(expectedAdapter in kotlinSources)
+            check(excludedAdapter !in kotlinSources)
             println("Build target checks passed: $platformCode, $expectedOutput/distributions/$archiveName")
         }
     }
@@ -289,11 +564,18 @@ tasks {
                 File(vscodePluginDir, ".env").createNewFile()
             }
         } else if (ext.get("debugMode") != "none") {
+            // A target can bundle a freshly unpacked VSIX without changing the
+            // shared staging directory used by another IDE build.
+            val bundledExtensionDir = providers.gradleProperty("bundledExtensionPath").orNull
+                ?.let { file(it).canonicalFile }
+                ?: File("./plugins/${ext.get("vscodePlugin")}/extension")
             doFirst {
                 // Validate required files exist
-                val vscodePluginDir = File("./plugins/${ext.get("vscodePlugin")}")
-                if (!vscodePluginDir.exists()) {
-                    throw IllegalStateException("missing plugin dir: ${vscodePluginDir.absolutePath}")
+                if (!bundledExtensionDir.isDirectory) {
+                    throw IllegalStateException("missing bundled extension dir: ${bundledExtensionDir.absolutePath}")
+                }
+                if (ext.get("debugMode") == "release" && !bundledExtensionDir.resolve("package.json").isFile) {
+                    throw IllegalStateException("missing bundled extension package.json: ${bundledExtensionDir.absolutePath}")
                 }
                 val depfile = File("prodDep.txt")
                 if (!depfile.exists()) {
@@ -320,7 +602,6 @@ tasks {
                 }
             }
 
-            val vscodePluginDir = File("./plugins/${ext.get("vscodePlugin")}")
             val depfile = File("prodDep.txt")
             val list = mutableListOf<String>()
 
@@ -351,7 +632,7 @@ tasks {
             }
 
             // Copy VSCode plugin extension
-            from("${vscodePluginDir.path}/extension") { into("$pluginSandboxDirName/${ext.get("vscodePlugin")}") }
+            from(bundledExtensionDir) { into("$pluginSandboxDirName/${ext.get("vscodePlugin")}") }
 
             // Copy themes
             from("src/main/resources/themes/") {
@@ -384,13 +665,23 @@ tasks {
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         dependsOn("generateConfigProperties")
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(selectedJavaVersion.get()))
+            if (platformCode == "PY") {
+                // The 251 SDK supplies Kotlin 2.1; do not emit calls to newer
+                // stdlib APIs merely because the build compiler is newer.
+                languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+                apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+            } else if (isIdea253) {
+                // The 253 platform supplies Kotlin 2.2, not the 262 stdlib.
+                languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
+                apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
+            }
         }
     }
 
     withType<JavaCompile> {
-        sourceCompatibility = properties("javaVersion").get()
-        targetCompatibility = properties("javaVersion").get()
+        sourceCompatibility = selectedJavaVersion.get()
+        targetCompatibility = selectedJavaVersion.get()
     }
 
     signPlugin {

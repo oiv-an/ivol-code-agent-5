@@ -62,7 +62,7 @@ vi.mock("../../../core/config/ContextProxy", () => ({
 import type { Mock } from "vitest"
 import * as fsSync from "fs"
 import NodeCache from "node-cache"
-import { getModels, getModelsFromCache } from "../modelCache"
+import { getModels, getModelsFromCache, getModelCatalogCacheKey } from "../modelCache"
 import { getLiteLLMModels } from "../litellm"
 import { getOpenRouterModels } from "../openrouter"
 import { getRequestyModels } from "../requesty"
@@ -71,6 +71,32 @@ import { getUnboundModels } from "../unbound"
 import { getIOIntelligenceModels } from "../io-intelligence"
 import { getOvhCloudAiEndpointsModels } from "../ovhcloud" // kilocode_change
 import { getOpenAiCodexModels } from "../openai-codex" // kilocode_change
+import { ContextProxy } from "../../../../core/config/ContextProxy" // kilocode_change
+
+// kilocode_change start
+describe("model catalog transport isolation", () => {
+	it.each(["openai-codex", "ollama", "lmstudio"] as const)("isolates insecure %s catalogs", (provider) => {
+		expect(getModelCatalogCacheKey(provider, { allowInsecureTls: true })).not.toBe(
+			getModelCatalogCacheKey(provider),
+		)
+		expect(getModelCatalogCacheKey(provider, { allowInsecureTls: false })).toBe(getModelCatalogCacheKey(provider))
+	})
+	it("separates endpoint, Ollama credentials and configured context without exposing them", () => {
+		const options = { baseUrl: "https://local.example", apiKey: "test-key", numCtx: 8192, allowInsecureTls: true }
+		const key = getModelCatalogCacheKey("ollama", options)
+		expect(key).toMatch(/^ollama_[a-f0-9]{64}$/)
+		expect(key).not.toContain("test-key")
+		for (const override of [
+			{ baseUrl: "https://other.example" },
+			{ apiKey: "other-key" },
+			{ numCtx: 16384 },
+			{ allowInsecureTls: false },
+		]) {
+			expect(getModelCatalogCacheKey("ollama", { ...options, ...override })).not.toBe(key)
+		}
+	})
+})
+// kilocode_change end
 
 const mockGetLiteLLMModels = getLiteLLMModels as Mock<typeof getLiteLLMModels>
 const mockGetOpenRouterModels = getOpenRouterModels as Mock<typeof getOpenRouterModels>
@@ -89,6 +115,52 @@ describe("getModels with new GetModelsOptions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
+
+	// kilocode_change start
+	it("does not merge concurrent Codex refreshes with different TLS policies", async () => {
+		const { refreshModels } = await import("../modelCache")
+		let finishStrict!: (models: Awaited<ReturnType<typeof getOpenAiCodexModels>>) => void
+		let finishInsecure!: (models: Awaited<ReturnType<typeof getOpenAiCodexModels>>) => void
+		mockGetOpenAiCodexModels
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishStrict = resolve
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishInsecure = resolve
+					}),
+			)
+		const strictRequest = refreshModels({ provider: "openai-codex", allowInsecureTls: false })
+		const insecureRequest = refreshModels({ provider: "openai-codex", allowInsecureTls: true })
+		expect(mockGetOpenAiCodexModels).toHaveBeenNthCalledWith(1, false)
+		expect(mockGetOpenAiCodexModels).toHaveBeenNthCalledWith(2, true)
+		finishStrict({})
+		finishInsecure({})
+		await Promise.all([strictRequest, insecureRequest])
+	})
+
+	it("looks up insecure disk catalogs only under their scoped filename", () => {
+		const mockGet = new NodeCache().get as Mock
+		mockGet.mockReturnValue(undefined)
+		vi.mocked(fsSync.existsSync).mockReturnValue(false)
+		const options = { baseUrl: "https://local.example", allowInsecureTls: true }
+		const contextGetter = vi.spyOn(ContextProxy, "instance", "get").mockReturnValue({
+			globalStorageUri: { fsPath: "/mock/storage/path" },
+		} as ContextProxy)
+		try {
+			getModelsFromCache("lmstudio", options)
+			const cacheKey = getModelCatalogCacheKey("lmstudio", options)
+			expect(fsSync.existsSync).toHaveBeenCalledWith(`/mock/storage/path/cache/${cacheKey}_models.json`)
+			expect(fsSync.existsSync).not.toHaveBeenCalledWith("/mock/storage/path/cache/lmstudio_models.json")
+		} finally {
+			contextGetter.mockRestore()
+		}
+	})
+	// kilocode_change end
 
 	it("calls getLiteLLMModels with correct parameters", async () => {
 		const mockModels = {

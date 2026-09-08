@@ -1,14 +1,12 @@
-import { useCallback, useState, useMemo, useEffect } from "react"
-import { useEvent } from "react-use"
+import { useCallback, useMemo } from "react"
 import { Trans } from "react-i18next"
 import { Checkbox } from "vscrui"
 import { VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
-import type { ProviderSettings, ExtensionMessage, ModelRecord } from "@roo-code/types"
+import type { ProviderSettings } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-// kilocode_change: local catalogs use dedicated extension events instead of the aggregate router hook
-import { vscode } from "@src/utils/vscode"
+import { useRouterModels } from "@src/components/ui/hooks/useRouterModels" // kilocode_change
 
 import { inputEventTransform } from "../transforms"
 
@@ -21,8 +19,15 @@ type LMStudioProps = {
 export const LMStudio = ({ apiConfiguration, setApiConfigurationField }: LMStudioProps) => {
 	const { t } = useAppTranslation()
 
-	const [lmStudioModels, setLmStudioModels] = useState<ModelRecord>({})
-	// kilocode_change: no duplicate aggregate-router query for LM Studio
+	// kilocode_change: fetch the exact draft profile with request/TLS isolation.
+	const { data: routerModels } = useRouterModels(
+		{
+			lmStudioBaseUrl: apiConfiguration.lmStudioBaseUrl,
+			allowInsecureTls: apiConfiguration.allowInsecureTls === true,
+		},
+		{ provider: "lmstudio", debounceMs: 250 },
+	)
+	const lmStudioModels = useMemo(() => routerModels?.lmstudio ?? {}, [routerModels])
 
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
@@ -34,27 +39,6 @@ export const LMStudio = ({ apiConfiguration, setApiConfigurationField }: LMStudi
 			},
 		[setApiConfigurationField],
 	)
-
-	const onMessage = useCallback((event: MessageEvent) => {
-		const message: ExtensionMessage = event.data
-
-		switch (message.type) {
-			case "lmStudioModels":
-				{
-					const newModels = message.lmStudioModels ?? {}
-					setLmStudioModels(newModels)
-				}
-				break
-		}
-	}, [])
-
-	useEvent("message", onMessage)
-
-	// Refresh models on mount
-	useEffect(() => {
-		// Request fresh models - the handler now flushes cache automatically
-		vscode.postMessage({ type: "requestLmStudioModels" })
-	}, [])
 
 	// Check if the selected model exists in the fetched models
 	// kilocode_change start: validate only after the local catalog has loaded

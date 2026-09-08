@@ -1,6 +1,7 @@
 import * as path from "path"
 import fs from "fs/promises"
 import * as fsSync from "fs"
+import { createHash } from "node:crypto" // kilocode_change
 
 import NodeCache from "node-cache"
 import { z } from "zod"
@@ -53,16 +54,52 @@ const modelRecordSchema = z.record(z.string(), modelInfoSchema)
 
 // Track in-flight refresh requests to prevent concurrent API calls for the same provider
 // This prevents race conditions where multiple calls might overwrite each other's results
-const inFlightRefresh = new Map<RouterName, Promise<ModelRecord>>()
+const inFlightRefresh = new Map<string, Promise<ModelRecord>>() // kilocode_change: transport-scoped refreshes
 
-export /*kilocode_change*/ async function writeModels(router: RouterName, data: ModelRecord) {
-	const filename = `${router}_models.json`
+// kilocode_change start: do not reuse an unverified catalog in a verified profile.
+type CatalogTransportOptions = { baseUrl?: string; allowInsecureTls?: boolean; apiKey?: string; numCtx?: number }
+
+export function getModelCatalogCacheKey(provider: ProviderName, options?: CatalogTransportOptions): string {
+	if (!["openai-codex", "ollama", "lmstudio"].includes(provider)) return provider
+	const defaultUrl =
+		provider === "ollama" ? "http://localhost:11434" : provider === "lmstudio" ? "http://localhost:1234" : ""
+	const baseUrl = (options?.baseUrl?.trim() || defaultUrl).replace(/\/+$/, "")
+	if (
+		options?.allowInsecureTls !== true &&
+		baseUrl === defaultUrl &&
+		!options?.apiKey &&
+		options?.numCtx === undefined
+	)
+		return provider
+	const fingerprint = createHash("sha256")
+		.update(
+			JSON.stringify([
+				baseUrl,
+				options?.allowInsecureTls === true,
+				options?.apiKey ?? "",
+				options?.numCtx ?? null,
+			]),
+		)
+		.digest("hex")
+	return `${provider}_${fingerprint}`
+}
+// kilocode_change end
+
+export /*kilocode_change*/ async function writeModels(
+	router: RouterName,
+	data: ModelRecord,
+	options?: CatalogTransportOptions,
+) {
+	const filename = `${getModelCatalogCacheKey(router, options)}_models.json`
 	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
 	await safeWriteJson(path.join(cacheDir, filename), data)
 }
 
-export /*kilocode_change*/ async function readModels(router: RouterName): Promise<ModelRecord | undefined> {
-	const filename = `${router}_models.json`
+export /*kilocode_change*/ async function readModels(
+	router: RouterName,
+	options?: CatalogTransportOptions,
+): Promise<ModelRecord | undefined> {
+	const filename = `${getModelCatalogCacheKey(router, options)}_models.json`
 	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
 	const filePath = path.join(cacheDir, filename)
 	const exists = await fileExistsAtPath(filePath)
@@ -83,7 +120,7 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 	switch (provider) {
 		// kilocode_change start: signed-in ChatGPT Plus/Pro catalog
 		case "openai-codex":
-			models = await getOpenAiCodexModels()
+			models = await getOpenAiCodexModels(options.allowInsecureTls)
 			break
 		// kilocode_change end
 		case "openrouter":
@@ -133,10 +170,15 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 			break
 		// kilocode_change end
 		case "ollama":
-			models = await getOllamaModels(options.baseUrl, options.apiKey, options.numCtx /*kilocode_change*/)
+			models = await getOllamaModels(
+				options.baseUrl,
+				options.apiKey,
+				options.numCtx,
+				options.allowInsecureTls /*kilocode_change*/,
+			)
 			break
 		case "lmstudio":
-			models = await getLMStudioModels(options.baseUrl)
+			models = await getLMStudioModels(options.baseUrl, options.allowInsecureTls)
 			break
 		case "deepinfra":
 			models = await getDeepInfraModels(options.apiKey, options.baseUrl)
@@ -226,8 +268,9 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 export function getModels<P extends RouterName>(options: GetModelsOptionsFor<P>): Promise<ModelRecord> // kilocode_change: retain provider-specific requirements for typed callers
 export async function getModels(options: GetModelsOptions): Promise<ModelRecord> {
 	const { provider } = options
+	const cacheKey = getModelCatalogCacheKey(provider, options) // kilocode_change
 
-	let models = getModelsFromCache(provider)
+	let models = getModelsFromCache(provider, options)
 
 	if (models) {
 		return models
@@ -240,11 +283,11 @@ export async function getModels(options: GetModelsOptions): Promise<ModelRecord>
 		// Only cache non-empty results to prevent persisting failed API responses
 		// Empty results could indicate API failure rather than "no models exist"
 		if (modelCount > 0) {
-			memoryCache.set(provider, models)
+			memoryCache.set(cacheKey, models)
 
 			// kilocode_change start: prevent eternal caching of kilocode models
 			if (provider !== "kilocode") {
-				await writeModels(provider, models).catch((err) =>
+				await writeModels(provider, models, options).catch((err) =>
 					console.error(`[MODEL_CACHE] Error writing ${provider} models to file cache:`, err),
 				)
 			}
@@ -277,11 +320,12 @@ export async function getModels(options: GetModelsOptions): Promise<ModelRecord>
  */
 export const refreshModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
 	const { provider } = options
+	const cacheKey = getModelCatalogCacheKey(provider, options) // kilocode_change
 
 	// Check if there's already an in-flight refresh for this provider
 	// This prevents race conditions where multiple concurrent refreshes might
 	// overwrite each other's results
-	const existingRequest = inFlightRefresh.get(provider)
+	const existingRequest = inFlightRefresh.get(cacheKey)
 	if (existingRequest) {
 		return existingRequest
 	}
@@ -294,7 +338,7 @@ export const refreshModels = async (options: GetModelsOptions): Promise<ModelRec
 			const modelCount = Object.keys(models).length
 
 			// Get existing cached data for comparison
-			const existingCache = getModelsFromCache(provider)
+			const existingCache = getModelsFromCache(provider, options)
 			const existingCount = existingCache ? Object.keys(existingCache).length : 0
 
 			if (modelCount === 0) {
@@ -312,10 +356,10 @@ export const refreshModels = async (options: GetModelsOptions): Promise<ModelRec
 			}
 
 			// Update memory cache first
-			memoryCache.set(provider, models)
+			memoryCache.set(cacheKey, models)
 
 			// Atomically write to disk (safeWriteJson handles atomic writes)
-			await writeModels(provider, models).catch((err) =>
+			await writeModels(provider, models, options).catch((err) =>
 				console.error(`[refreshModels] Error writing ${provider} models to disk:`, err),
 			)
 
@@ -323,15 +367,15 @@ export const refreshModels = async (options: GetModelsOptions): Promise<ModelRec
 		} catch (error) {
 			// Log the error for debugging, then return existing cache if available (graceful degradation)
 			console.error(`[refreshModels] Failed to refresh ${provider} models:`, error)
-			return getModelsFromCache(provider) || {}
+			return getModelsFromCache(provider, options) || {}
 		} finally {
 			// Always clean up the in-flight tracking
-			inFlightRefresh.delete(provider)
+			inFlightRefresh.delete(cacheKey)
 		}
 	})()
 
 	// Track the in-flight request
-	inFlightRefresh.set(provider, refreshPromise)
+	inFlightRefresh.set(cacheKey, refreshPromise)
 
 	return refreshPromise
 }
@@ -395,7 +439,7 @@ export const flushModels = async (options: GetModelsOptions, refresh: boolean = 
 		await refreshModels(options)
 	} else {
 		// Only delete memory cache when not refreshing
-		memoryCache.del(provider)
+		memoryCache.del(getModelCatalogCacheKey(provider, options))
 	}
 }
 
@@ -407,9 +451,10 @@ export const flushModels = async (options: GetModelsOptions, refresh: boolean = 
  * @param provider - The provider to get models for.
  * @returns Models from memory cache, disk cache, or undefined if not cached.
  */
-export function getModelsFromCache(provider: ProviderName): ModelRecord | undefined {
+export function getModelsFromCache(provider: ProviderName, options?: CatalogTransportOptions): ModelRecord | undefined {
+	const cacheKey = getModelCatalogCacheKey(provider, options) // kilocode_change
 	// Check memory cache first (fast)
-	const memoryModels = memoryCache.get<ModelRecord>(provider)
+	const memoryModels = memoryCache.get<ModelRecord>(cacheKey)
 	if (memoryModels) {
 		// kilocode_change start
 		if (provider === "zenmux" && hasInvalidZenmuxContextWindow(memoryModels)) {
@@ -429,7 +474,7 @@ export function getModelsFromCache(provider: ProviderName): ModelRecord | undefi
 	// Memory cache miss - try to load from disk synchronously
 	// This is acceptable because it only happens on cold start or after cache expiry
 	try {
-		const filename = `${provider}_models.json`
+		const filename = `${cacheKey}_models.json`
 		const cacheDir = getCacheDirectoryPathSync()
 		if (!cacheDir) {
 			return undefined
@@ -461,7 +506,7 @@ export function getModelsFromCache(provider: ProviderName): ModelRecord | undefi
 			// kilocode_change end
 
 			// Populate memory cache for future fast access
-			memoryCache.set(provider, validation.data)
+			memoryCache.set(cacheKey, validation.data)
 
 			return validation.data
 		}

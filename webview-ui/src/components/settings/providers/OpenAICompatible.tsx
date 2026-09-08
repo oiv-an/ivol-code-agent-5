@@ -1,14 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from "react" // kilocode_change: web-search model catalog
-import { useEvent } from "react-use"
 import { Checkbox } from "vscrui"
 import { VSCodeButton, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react" // kilocode_change
 
 import {
 	type ProviderSettings,
-	type ModelInfo,
 	type ReasoningEffort,
 	type OrganizationAllowList,
-	type ExtensionMessage,
 	azureOpenAiDefaultApiVersion,
 	DEFAULT_OPENAI_WEB_SEARCH_ENABLED,
 	DEFAULT_OPENAI_WEB_SEARCH_MODEL_ID,
@@ -17,6 +14,7 @@ import {
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Button, StandardTooltip } from "@src/components/ui"
+import { useOpenAiModels } from "@src/components/kilocode/hooks/useOpenAiModels" // kilocode_change
 
 import { convertHeadersToObject } from "../utils/headers"
 import { inputEventTransform, noTransform } from "../transforms"
@@ -43,7 +41,14 @@ export const OpenAICompatible = ({
 
 	const [azureApiVersionSelected, setAzureApiVersionSelected] = useState(!!apiConfiguration?.azureApiVersion)
 
-	const [openAiModels, setOpenAiModels] = useState<Record<string, ModelInfo> | null>(null)
+	// kilocode_change: settings and quick selection share a request-correlated, TLS-scoped catalog.
+	const { data: openAiModels } = useOpenAiModels({
+		baseUrl: apiConfiguration.openAiBaseUrl,
+		apiKey: apiConfiguration.openAiApiKey,
+		openAiHeaders: apiConfiguration.openAiHeaders,
+		allowInsecureTls: apiConfiguration.allowInsecureTls === true,
+		debounceMs: 250,
+	})
 
 	const [customHeaders, setCustomHeaders] = useState<[string, string][]>(() => {
 		const headers = apiConfiguration?.openAiHeaders || {}
@@ -107,20 +112,6 @@ export const OpenAICompatible = ({
 		[setApiConfigurationField],
 	)
 
-	const onMessage = useCallback((event: MessageEvent) => {
-		const message: ExtensionMessage = event.data
-
-		switch (message.type) {
-			case "openAiModels": {
-				const updatedModels = message.openAiModels ?? []
-				setOpenAiModels(Object.fromEntries(updatedModels.map((item) => [item, openAiModelInfoSaneDefaults])))
-				break
-			}
-		}
-	}, [])
-
-	useEvent("message", onMessage)
-
 	// kilocode_change start: a native web-search request can use a dedicated model
 	// while retaining the current profile's URL, API key, and custom headers. The
 	// primary model remains responsible for normal chat and its reasoning settings.
@@ -163,7 +154,7 @@ export const OpenAICompatible = ({
 				apiConfiguration={apiConfiguration}
 				setApiConfigurationField={setApiConfigurationField}
 				defaultModelId="gpt-4o"
-				models={openAiModels}
+				models={openAiModels ?? null}
 				modelIdKey="openAiModelId"
 				serviceName="OpenAI"
 				serviceUrl="https://platform.openai.com"

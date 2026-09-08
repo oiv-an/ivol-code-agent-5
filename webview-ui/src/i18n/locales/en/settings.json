@@ -316,6 +316,8 @@
 		"makeActiveProfile": "Make Active Profile",
 		"makeActiveTooltip": "Activate this profile to use it for API requests",
 		"apiProvider": "API Provider",
+		"allowInsecureTls": "Ignore TLS certificate errors",
+		"allowInsecureTlsDescription": "Off by default. Disables certificate verification only for this profile's API requests and model catalog. This can expose API keys and conversations to interception. Use only with a trusted server. Subscription sign-in still verifies certificates separately.",
 		"apiProviderDocs": "Provider Docs",
 		"model": "Model",
 		"nameEmpty": "Name cannot be empty",

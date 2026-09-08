@@ -320,6 +320,35 @@ const renderApiOptions = (props: Partial<ApiOptionsProps> = {}) => {
 }
 
 describe("ApiOptions", () => {
+	// kilocode_change start: TLS bypass is explicit and applies only to a selected supported profile.
+	it.each(["openai", "openai-codex", "claude-code", "ollama", "lmstudio"] as const)(
+		"verifies certificates by default and allows opting out for %s",
+		(apiProvider) => {
+			const setApiConfigurationField = vi.fn()
+			renderApiOptions({ apiConfiguration: { apiProvider }, setApiConfigurationField })
+			const checkbox = screen.getByRole("checkbox", { name: /TLS/i })
+			expect(checkbox).not.toBeChecked()
+			expect(setApiConfigurationField).not.toHaveBeenCalledWith("allowInsecureTls", true)
+			fireEvent.click(checkbox)
+			expect(setApiConfigurationField).toHaveBeenCalledWith("allowInsecureTls", true)
+		},
+	)
+	it("lets an opted-in profile restore certificate verification", () => {
+		const setApiConfigurationField = vi.fn()
+		renderApiOptions({
+			apiConfiguration: { apiProvider: "openai", allowInsecureTls: true },
+			setApiConfigurationField,
+		})
+		const checkbox = screen.getByRole("checkbox", { name: /TLS/i })
+		expect(checkbox).toBeChecked()
+		fireEvent.click(checkbox)
+		expect(setApiConfigurationField).toHaveBeenCalledWith("allowInsecureTls", false)
+	})
+	it("does not offer a misleading transport override for an external CLI provider", () => {
+		renderApiOptions({ apiConfiguration: { apiProvider: "qwen-code" } })
+		expect(screen.queryByRole("checkbox", { name: /TLS/i })).not.toBeInTheDocument()
+	})
+	// kilocode_change end
 	// kilocode_change start
 	it("shows intelligent reset enabled by default in the main provider settings", () => {
 		const setApiConfigurationField = vi.fn()

@@ -13,6 +13,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import { getOllamaModels } from "./fetchers/ollama"
 import { XmlMatcher } from "../../utils/xml-matcher"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
+import { createProviderFetch } from "./utils/provider-tls" // kilocode_change
 
 // kilocode_change start
 const TOKEN_ESTIMATION_FACTOR = 4 //Industry standard technique for estimating token counts without actually implementing a parser/tokenizer
@@ -195,6 +196,16 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 				const clientOptions: OllamaOptions = {
 					host: this.options.ollamaBaseUrl || "http://localhost:11434",
 					// Note: The ollama npm package handles timeouts internally
+					// kilocode_change start
+					...(this.options.allowInsecureTls === true
+						? {
+								fetch: createProviderFetch({
+									baseUrl: this.options.ollamaBaseUrl || "http://localhost:11434",
+									allowInsecureTls: true,
+								}),
+							}
+						: {}),
+					// kilocode_change end
 				}
 
 				// Add API key if provided (for Ollama cloud or authenticated instances)
@@ -394,6 +405,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 				this.options.ollamaBaseUrl,
 				this.options.ollamaApiKey,
 				this.options.ollamaNumCtx,
+				this.options.allowInsecureTls, // kilocode_change
 			)
 			if (Object.keys(this.models).length === 0) {
 				this.modelFetchError = "noModelsReturned"

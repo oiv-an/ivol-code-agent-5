@@ -245,6 +245,7 @@ const ApiOptions = ({
 
 	const { data: routerModels, refetch: refetchRouterModels } = useRouterModels(
 		{
+			allowInsecureTls: apiConfiguration?.allowInsecureTls === true,
 			openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
 			openRouterApiKey: apiConfiguration?.openRouterApiKey,
 			kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId ?? "personal",
@@ -289,27 +290,8 @@ const ApiOptions = ({
 	// stops typing.
 	useDebounce(
 		() => {
-			if (
-				selectedProvider === "openai" ||
-				selectedProvider === "openai-responses" // kilocode_change
-			) {
-				// Use our custom headers state to build the headers object.
-				const headerObject = convertHeadersToObject(customHeaders)
-
-				vscode.postMessage({
-					type: "requestOpenAiModels",
-					values: {
-						baseUrl: apiConfiguration?.openAiBaseUrl,
-						apiKey: apiConfiguration?.openAiApiKey,
-						customHeaders: {}, // Reserved for any additional headers.
-						openAiHeaders: headerObject,
-					},
-				})
-			} else if (selectedProvider === "ollama") {
-				vscode.postMessage({ type: "requestOllamaModels" })
-			} else if (selectedProvider === "lmstudio") {
-				vscode.postMessage({ type: "requestLmStudioModels" })
-			} else if (selectedProvider === "vscode-lm") {
+			// kilocode_change: personal providers own correlated, TLS-aware model queries.
+			if (selectedProvider === "vscode-lm") {
 				vscode.postMessage({ type: "requestVsCodeLmModels" })
 			} else if (
 				selectedProvider === "litellm" ||
@@ -610,6 +592,24 @@ const ApiOptions = ({
 					data-testid="provider-select"
 				/>
 			</div>
+
+			{/* kilocode_change start: certificate verification stays enabled unless this profile explicitly opts out. */}
+			{isPersonalProvider(selectedProvider) && (
+				<div className="flex flex-col gap-1">
+					<VSCodeCheckbox
+						data-testid="provider-allow-insecure-tls-checkbox"
+						checked={apiConfiguration.allowInsecureTls === true}
+						onChange={(event) =>
+							setApiConfigurationField("allowInsecureTls", (event.target as HTMLInputElement).checked)
+						}>
+						{t("settings:providers.allowInsecureTls")}
+					</VSCodeCheckbox>
+					<div className="text-vscode-descriptionForeground text-sm">
+						{t("settings:providers.allowInsecureTlsDescription")}
+					</div>
+				</div>
+			)}
+			{/* kilocode_change end */}
 
 			{/* kilocode_change start: per-profile context reset is a primary provider setting. */}
 			{!fromWelcomeView && (

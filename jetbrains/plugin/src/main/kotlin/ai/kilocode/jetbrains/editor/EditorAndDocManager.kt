@@ -16,6 +16,7 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diff.DiffBundle
@@ -24,11 +25,14 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
+import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
+import com.intellij.psi.PsiDocumentManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,7 +43,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
@@ -73,31 +76,22 @@ class EditorAndDocManager(val project: Project) : Disposable {
     private val disposed = AtomicBoolean(false)
     private val scopeName = "EditorAndDocManager.fileEventScope-${java.util.UUID.randomUUID()}"
 
-    private suspend fun <T> runOnNonModalEdt(block: () -> T): T {
-        val application = ApplicationManager.getApplication()
-        if (application.isDispatchThread) {
-            return block()
-        }
-
-        return suspendCancellableCoroutine { continuation ->
-            application.invokeLater(
-                {
-                    if (continuation.isActive) {
-                        continuation.resumeWith(runCatching(block))
-                    }
-                },
-                ModalityState.nonModal(),
-            )
-        }
+    private val editorOpeningExecutor by lazy {
+        EditorOpeningExecutor(
+            ownerJob = fileEventScope.coroutineContext[Job]!!,
+            isDisposed = { disposed.get() || project.isDisposed },
+            enqueueNonModal = { ApplicationManager.getApplication().invokeLater(it, ModalityState.nonModal()) },
+            modalityContext = ModalityState.nonModal().asContextElement(),
+        )
     }
 
+    private suspend fun <T> runOnNonModalEdt(block: () -> T): T = editorOpeningExecutor.onEdt(block)
+
     private fun runLaterOnNonModalEdt(block: () -> Unit) {
-        val application = ApplicationManager.getApplication()
-        if (application.isDispatchThread) {
-            block()
-        } else {
-            application.invokeLater(block, ModalityState.nonModal())
-        }
+        ApplicationManager.getApplication().invokeLater(
+            { if (!disposed.get() && !project.isDisposed) block() },
+            ModalityState.nonModal(),
+        )
     }
 
     private var job: Job? = null
@@ -328,14 +322,31 @@ class EditorAndDocManager(val project: Project) : Disposable {
     }
 
     suspend fun openEditor(documentUri: URI, options: ResolvedTextEditorConfiguration = ResolvedTextEditorConfiguration()): EditorHolder {
-        val fileEditorManager = FileEditorManager.getInstance(project)
+        if (disposed.get() || project.isDisposed) throw CancellationException("Editor manager disposed")
+        val fileEditorManager = FileEditorManagerEx.getInstanceEx(project)
         val path = documentUri.path
-        var ideaEditor: Array<FileEditor?>? = null
+        var ideaEditor: Array<out FileEditor?>? = null
 
         val vfs = LocalFileSystem.getInstance()
         val file = vfs.findFileByPath(path)
         file?.let {
-            ideaEditor = runOnNonModalEdt { fileEditorManager.openFile(it, true) }
+            ideaEditor = editorOpeningExecutor.open(
+                prepareDocument = {
+                    if (!it.isValid) throw CancellationException("File is no longer valid")
+                    // An immediately reopened Markdown preview may restore folding
+                    // before the previous edit's PSI commit. Commit only this document
+                    // in a write-safe event, never from the editor's nested restore loop.
+                    FileDocumentManager.getInstance().getDocument(it)?.let { document ->
+                        val psiDocuments = PsiDocumentManager.getInstance(project)
+                        if (!psiDocuments.isCommitted(document)) psiDocuments.commitDocument(document)
+                    }
+                },
+                openEditor = {
+                    if (!it.isValid) throw CancellationException("File is no longer valid")
+                    val composite = fileEditorManager.openFile(it, FileEditorOpenOptions().withRequestFocus(true))
+                    composite.allEditors.toTypedArray()
+                },
+            )
         }
         val eh = getEditorHandleByUri(documentUri, false)
         if (eh != null) {

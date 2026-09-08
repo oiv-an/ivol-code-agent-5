@@ -12,6 +12,7 @@
 
 import * as vscode from "vscode"
 import { Package } from "../shared/package"
+import { registerProviderTlsDispatcher } from "../api/providers/utils/provider-tls" // kilocode_change
 
 /**
  * Proxy configuration state
@@ -276,7 +277,7 @@ async function configureUndiciProxy(config: ProxyConfig): Promise<void> {
 			fetch: undiciFetch,
 		} = (await import("undici")) as typeof import("undici")
 
-		const proxyAgent = new ProxyAgent({
+		const proxyOptions = {
 			uri: config.serverUrl,
 			// If the user enabled TLS insecure mode (debug only), apply it to undici.
 			requestTls: config.tlsInsecure
@@ -285,7 +286,18 @@ async function configureUndiciProxy(config: ProxyConfig): Promise<void> {
 			proxyTls: config.tlsInsecure
 				? ({ rejectUnauthorized: false } satisfies import("tls").ConnectionOptions) // lgtm[js/disabling-certificate-validation]
 				: undefined,
-		})
+		}
+		const proxyAgent = new ProxyAgent(proxyOptions)
+		// kilocode_change start: provider opt-out keeps the existing proxy route and proxy certificate policy.
+		registerProviderTlsDispatcher(
+			proxyAgent,
+			() =>
+				new ProxyAgent({
+					...proxyOptions,
+					requestTls: { ...proxyOptions.requestTls, rejectUnauthorized: false },
+				}),
+		)
+		// kilocode_change end
 		setGlobalDispatcher(proxyAgent)
 		undiciProxyInitialized = true
 		log(`undici global dispatcher configured for proxy: ${redactProxyUrl(config.serverUrl)}`)

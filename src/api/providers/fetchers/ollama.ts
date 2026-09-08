@@ -1,6 +1,7 @@
 import axios from "axios"
 import { ModelInfo, ollamaDefaultModelInfo } from "@roo-code/types"
 import { z } from "zod"
+import { createProviderFetch } from "../utils/provider-tls" // kilocode_change
 
 const OllamaModelDetailsSchema = z.object({
 	family: z.string(),
@@ -83,6 +84,7 @@ export async function getOllamaModels(
 	baseUrl = "http://localhost:11434",
 	apiKey?: string,
 	numCtx?: number, // kilocode_change
+	allowInsecureTls = false, // kilocode_change: profile-local HTTPS exception
 ): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
 
@@ -100,34 +102,55 @@ export async function getOllamaModels(
 			headers["Authorization"] = `Bearer ${apiKey}`
 		}
 
-		const response = await axios.get<OllamaModelsResponse>(`${baseUrl}/api/tags`, { headers })
+		// kilocode_change start: keep the normal transport unchanged unless explicitly opted in
+		const catalogFetch = allowInsecureTls
+			? createProviderFetch({ baseUrl, allowInsecureTls, timeoutMs: 30_000 })
+			: undefined
+		const fetchJson = async (url: string, body?: unknown) => {
+			const response = await catalogFetch!(url, {
+				method: body === undefined ? "GET" : "POST",
+				headers: { ...headers, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				signal: AbortSignal.timeout(30_000),
+			})
+			if (!response.ok) {
+				await response.body?.cancel()
+				throw new Error(`Ollama model catalog request failed (${response.status})`)
+			}
+			return { data: await response.json() }
+		}
+		const response = catalogFetch
+			? await fetchJson(`${baseUrl}/api/tags`)
+			: await axios.get<OllamaModelsResponse>(`${baseUrl}/api/tags`, { headers })
+		// kilocode_change end
 		const parsedResponse = OllamaModelsResponseSchema.safeParse(response.data)
 		let modelInfoPromises = []
 
 		if (parsedResponse.success) {
 			for (const ollamaModel of parsedResponse.data.models) {
 				modelInfoPromises.push(
-					axios
-						.post<OllamaModelInfoResponse>(
-							`${baseUrl}/api/show`,
-							{
-								model: ollamaModel.model,
-							},
-							{ headers },
-						)
-						.then((ollamaModelInfo) => {
-							const modelInfo = parseOllamaModel(
-								ollamaModelInfo.data,
-								// kilocode_change start
-								baseUrl,
-								numCtx,
-								// kilocode_change end
+					(catalogFetch
+						? fetchJson(`${baseUrl}/api/show`, { model: ollamaModel.model })
+						: axios.post<OllamaModelInfoResponse>(
+								`${baseUrl}/api/show`,
+								{
+									model: ollamaModel.model,
+								},
+								{ headers },
 							)
-							// Only include models that support native tools
-							if (modelInfo) {
-								models[ollamaModel.name] = modelInfo
-							}
-						}),
+					).then((ollamaModelInfo) => {
+						const modelInfo = parseOllamaModel(
+							ollamaModelInfo.data,
+							// kilocode_change start
+							baseUrl,
+							numCtx,
+							// kilocode_change end
+						)
+						// Only include models that support native tools
+						if (modelInfo) {
+							models[ollamaModel.name] = modelInfo
+						}
+					}),
 				)
 			}
 

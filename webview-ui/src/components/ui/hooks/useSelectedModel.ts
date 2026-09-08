@@ -45,6 +45,7 @@ import {
 	lMStudioDefaultModelInfo,
 	BEDROCK_1M_CONTEXT_MODEL_IDS,
 	isDynamicProvider,
+	isLocalProvider, // kilocode_change
 	isPersonalProvider, // kilocode_change
 	getProviderDefaultModelId,
 	NATIVE_TOOL_DEFAULTS,
@@ -52,7 +53,6 @@ import {
 
 import { useRouterModels } from "./useRouterModels"
 import { useOpenRouterModelProviders } from "./useOpenRouterModelProviders"
-import { useLmStudioModels } from "./useLmStudioModels"
 import { useExtensionState } from "@/context/ExtensionStateContext" // kilocode_change
 
 // kilocode_change start
@@ -67,7 +67,6 @@ export const useModelProviders = (_kilocodeDefaultModel: string, apiConfiguratio
 	)
 }
 // kilocode_change end
-import { useOllamaModels } from "./useOllamaModels"
 
 /**
  * Helper to get a validated model ID for dynamic providers.
@@ -89,11 +88,17 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 	const ollamaModelId = provider === "ollama" ? apiConfiguration?.ollamaModelId : undefined
 	// kilocode_change end
 
-	// Only fetch router models for dynamic providers
-	const shouldFetchRouterModels = isPersonalProvider(provider) && isDynamicProvider(provider) // kilocode_change
+	// kilocode_change: local and subscription metadata use the same scoped catalog as their selectors.
+	const shouldFetchRouterModels =
+		isPersonalProvider(provider) && (isDynamicProvider(provider) || isLocalProvider(provider))
 	const routerModels = useRouterModels(
 		//kilocode_change start
 		{
+			allowInsecureTls: apiConfiguration?.allowInsecureTls === true,
+			ollamaBaseUrl: apiConfiguration?.ollamaBaseUrl,
+			ollamaApiKey: apiConfiguration?.ollamaApiKey,
+			ollamaNumCtx: apiConfiguration?.ollamaNumCtx,
+			lmStudioBaseUrl: apiConfiguration?.lmStudioBaseUrl,
 			openRouterBaseUrl: apiConfiguration?.openRouterBaseUrl,
 			openRouterApiKey: apiConfiguration?.apiKey,
 			kilocodeOrganizationId: apiConfiguration?.kilocodeOrganizationId,
@@ -107,12 +112,23 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 		{
 			provider: shouldFetchRouterModels ? provider : undefined, // kilocode_change
 			enabled: shouldFetchRouterModels, // kilocode_change
+			debounceMs: 250, // kilocode_change: match provider settings draft refreshes
 		},
 	)
 
 	const openRouterModelProviders = useModelProviders(kilocodeDefaultModel, apiConfiguration) // kilocode_change
-	const lmStudioModels = useLmStudioModels(lmStudioModelId)
-	const ollamaModels = useOllamaModels(ollamaModelId)
+	// kilocode_change start: never issue uncorrelated, transport-agnostic local requests.
+	const lmStudioModels = {
+		data: routerModels.data?.lmstudio,
+		isLoading: routerModels.isLoading,
+		isError: routerModels.isError,
+	}
+	const ollamaModels = {
+		data: routerModels.data?.ollama,
+		isLoading: routerModels.isLoading,
+		isError: routerModels.isError,
+	}
+	// kilocode_change end
 
 	// Compute readiness only for the data actually needed for the selected provider
 	const needRouterModels = shouldFetchRouterModels

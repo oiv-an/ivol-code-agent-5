@@ -17,6 +17,7 @@ import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from ".
 import { getModelsFromCache } from "./fetchers/modelCache"
 import { getApiRequestTimeout } from "./utils/timeout-config"
 import { handleOpenAIError } from "./utils/openai-error-handler"
+import { createProviderFetch } from "./utils/provider-tls" // kilocode_change
 
 export class LmStudioHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
@@ -29,11 +30,20 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 		// LM Studio uses "noop" as a placeholder API key
 		const apiKey = "noop"
+		// kilocode_change start
+		const baseURL = (this.options.lmStudioBaseUrl || "http://localhost:1234") + "/v1"
+		const timeout = getApiRequestTimeout()
+		// kilocode_change end
 
 		this.client = new OpenAI({
-			baseURL: (this.options.lmStudioBaseUrl || "http://localhost:1234") + "/v1",
+			baseURL,
 			apiKey: apiKey,
-			timeout: getApiRequestTimeout(),
+			timeout,
+			// kilocode_change start
+			...(this.options.allowInsecureTls === true
+				? { fetch: createProviderFetch({ baseUrl: baseURL, allowInsecureTls: true, timeoutMs: timeout }) }
+				: {}),
+			// kilocode_change end
 		})
 	}
 
@@ -174,7 +184,12 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 	}
 
 	override getModel(): { id: string; info: ModelInfo } {
-		const models = getModelsFromCache("lmstudio")
+		// kilocode_change start: do not read another endpoint's or TLS policy's catalog.
+		const models = getModelsFromCache("lmstudio", {
+			baseUrl: this.options.lmStudioBaseUrl,
+			allowInsecureTls: this.options.allowInsecureTls,
+		})
+		// kilocode_change end
 		if (models && this.options.lmStudioModelId && models[this.options.lmStudioModelId]) {
 			return {
 				id: this.options.lmStudioModelId,
@@ -218,12 +233,25 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 	}
 }
 
-export async function getLmStudioModels(baseUrl = "http://localhost:1234") {
+export async function getLmStudioModels(baseUrl = "http://localhost:1234", allowInsecureTls?: boolean) {
+	// kilocode_change
 	try {
 		if (!URL.canParse(baseUrl)) {
 			return []
 		}
 
+		// kilocode_change start
+		if (allowInsecureTls === true) {
+			const request = createProviderFetch({ baseUrl, allowInsecureTls: true, timeoutMs: 8_000 })
+			const response = await request(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(8_000) })
+			if (!response.ok) {
+				await response.body?.cancel()
+				return []
+			}
+			const data = await response.json()
+			return [...new Set<string>(data?.data?.map((model: { id: string }) => model.id) ?? [])]
+		}
+		// kilocode_change end
 		const response = await axios.get(`${baseUrl}/v1/models`)
 		const modelsArray = response.data?.data?.map((model: any) => model.id) || []
 		return [...new Set<string>(modelsArray)]

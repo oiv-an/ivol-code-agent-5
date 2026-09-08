@@ -190,6 +190,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 			// Create streaming request using OAuth
 			const stream = createStreamingMessage({
 				accessToken,
+				...(this.options.allowInsecureTls === true ? { allowInsecureTls: true } : {}), // kilocode_change
 				model: modelId,
 				systemPrompt,
 				messages,
@@ -369,6 +370,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 		// createStreamingMessage will still prepend the Claude Code branding
 		const stream = createStreamingMessage({
 			accessToken,
+			...(this.options.allowInsecureTls === true ? { allowInsecureTls: true } : {}), // kilocode_change
 			model: modelId,
 			systemPrompt: "", // Empty system prompt - the prompt text contains all necessary context
 			messages: [{ role: "user", content: prompt }],

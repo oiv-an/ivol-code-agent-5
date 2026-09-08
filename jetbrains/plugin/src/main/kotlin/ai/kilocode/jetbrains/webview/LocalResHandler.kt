@@ -9,13 +9,9 @@ import io.ktor.http.decodeURLPart
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.callback.CefCallback
-import org.cef.callback.CefResourceReadCallback
-import org.cef.callback.CefResourceSkipCallback
 import org.cef.handler.CefResourceHandler
 import org.cef.handler.CefResourceRequestHandlerAdapter
-import org.cef.misc.BoolRef
 import org.cef.misc.IntRef
-import org.cef.misc.LongRef
 import org.cef.misc.StringRef
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
@@ -30,12 +26,11 @@ class LocalResHandler(val resourcePath: String, val request: CefRequest?) : CefR
     }
 }
 
-class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) : CefResourceHandler {
+abstract class BaseLocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) : CefResourceHandler {
     private val logger = Logger.getInstance(LocalCefResHandle::class.java)
 
     private var file: File? = null
-    private var fileContent: ByteArray? = null
-    private var offset = 0
+    private var fileContent: LocalResourceContentBuffer? = null
 
     init {
         val requestPath = request?.url?.let { url ->
@@ -70,7 +65,7 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
 
             if (currentFile.exists() && currentFile.isFile) {
                 try {
-                    fileContent = currentFile.readBytes()
+                    fileContent = LocalResourceContentBuffer(currentFile.readBytes())
                     file = currentFile
                     logger.info("Successfully read file content, size: ${fileContent?.size} bytes")
                 } catch (e: Exception) {
@@ -96,11 +91,6 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
 
     override fun processRequest(p0: CefRequest?, callback: CefCallback?): Boolean {
         callback?.Continue()
-        return true
-    }
-
-    override fun open(p0: CefRequest?, handleRequest: BoolRef?, callback: CefCallback?): Boolean {
-        handleRequest?.set(true)
         return true
     }
 
@@ -146,50 +136,49 @@ class LocalCefResHandle(val resourceBasePath: String, val request: CefRequest?) 
         return readContent(dataOut, bytesToRead, bytesRead)
     }
 
-    override fun read(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?, callback: CefResourceReadCallback?): Boolean {
-        return readContent(dataOut, bytesToRead, bytesRead)
-    }
-
-    private fun readContent(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?): Boolean {
-        if (fileContent == null || dataOut == null || bytesRead == null) {
-            return false
-        }
-
-        val remaining = fileContent!!.size - offset
-        if (remaining <= 0) {
-            return false
-        }
-
-        val readSize = minOf(bytesToRead, remaining)
-        System.arraycopy(fileContent, offset, dataOut, 0, readSize)
-        offset += readSize
-        bytesRead.set(readSize)
-
-        return offset <= fileContent!!.size
-    }
-
-    override fun skip(bytesToSkip: Long, bytesSkipped: LongRef?, callback: CefResourceSkipCallback?): Boolean {
+    protected fun readContent(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?): Boolean {
         val content = fileContent
-        if (content == null || bytesSkipped == null || bytesToSkip < 0) {
-            bytesSkipped?.set(-2)
+        if (content == null || dataOut == null || bytesRead == null) {
             return false
         }
 
-        val remaining = content.size - offset
-        if (remaining <= 0 && bytesToSkip > 0) {
-            bytesSkipped.set(-2)
-            return false
-        }
-
-        val skipped = minOf(bytesToSkip, remaining.toLong())
-        offset += skipped.toInt()
-        bytesSkipped.set(skipped)
+        val readSize = content.read(dataOut, bytesToRead) ?: return false
+        bytesRead.set(readSize)
         return true
     }
+
+    protected fun skipContent(bytesToSkip: Long): Long = fileContent?.skip(bytesToSkip) ?: -2L
 
     override fun cancel() {
         file = null
         fileContent = null
-        offset = 0
+    }
+}
+
+/** Byte cursor shared by both generations of CEF resource callbacks. */
+internal class LocalResourceContentBuffer(private val content: ByteArray) {
+    val size: Int get() = content.size
+    private var offset = 0
+
+    fun read(dataOut: ByteArray, bytesToRead: Int): Int? {
+        val remaining = content.size - offset
+        if (remaining <= 0) return null
+
+        val readSize = minOf(bytesToRead, remaining)
+        System.arraycopy(content, offset, dataOut, 0, readSize)
+        offset += readSize
+        return readSize
+    }
+
+    fun skip(bytesToSkip: Long): Long {
+        if (bytesToSkip < 0) return -2L
+        val remaining = content.size - offset
+        if (remaining <= 0 && bytesToSkip > 0) {
+            return -2L
+        }
+
+        val skipped = minOf(bytesToSkip, remaining.toLong())
+        offset += skipped.toInt()
+        return skipped
     }
 }

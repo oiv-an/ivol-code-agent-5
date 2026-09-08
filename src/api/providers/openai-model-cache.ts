@@ -8,6 +8,7 @@ export const DEFAULT_OPENAI_MODEL_CATALOG_MAX_MODELS = 1_000
 export interface OpenAiModelCatalogIdentity {
 	profileId: string
 	baseUrl?: string
+	allowInsecureTls?: boolean // kilocode_change: isolate unverified catalogs from verified profiles
 }
 
 export interface OpenAiModelCatalogCacheStorage {
@@ -43,8 +44,8 @@ const normalizeBaseUrl = (baseUrl?: string) => {
 	}
 }
 
-export const getOpenAiModelCatalogStorageKey = ({ profileId }: OpenAiModelCatalogIdentity) =>
-	`${OPENAI_MODEL_CATALOG_CACHE_STORAGE_PREFIX}.${sha256(profileId.trim())}`
+export const getOpenAiModelCatalogStorageKey = ({ profileId, allowInsecureTls }: OpenAiModelCatalogIdentity) =>
+	`${OPENAI_MODEL_CATALOG_CACHE_STORAGE_PREFIX}.${sha256(profileId.trim())}${allowInsecureTls === true ? ".insecure-tls" : ""}`
 
 export const getOpenAiModelCatalogEndpointFingerprint = ({ baseUrl }: OpenAiModelCatalogIdentity) =>
 	sha256(normalizeBaseUrl(baseUrl))

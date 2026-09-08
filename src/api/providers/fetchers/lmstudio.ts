@@ -4,13 +4,25 @@ import { LLM, LLMInfo, LLMInstanceInfo, LMStudioClient } from "@lmstudio/sdk"
 import { type ModelInfo, lMStudioDefaultModelInfo } from "@roo-code/types"
 
 import { flushModels, getModels } from "./modelCache"
+import { createProviderFetch } from "../utils/provider-tls" // kilocode_change
 
 const modelsWithLoadedDetails = new Set<string>()
 
 export const hasLoadedFullDetails = (modelId: string): boolean => modelsWithLoadedDetails.has(modelId)
 
-export const forceFullModelDetailsLoad = async (baseUrl: string, modelId: string): Promise<void> => {
+export const forceFullModelDetailsLoad = async (
+	baseUrl: string,
+	modelId: string,
+	allowInsecureTls = false,
+): Promise<void> => {
 	try {
+		// kilocode_change start: SDK WebSocket transport cannot scope a TLS exception.
+		// REST model discovery still works; model loading remains owned by chat requests.
+		if (allowInsecureTls && URL.canParse(baseUrl) && new URL(baseUrl).protocol === "https:") {
+			await flushModels({ provider: "lmstudio", baseUrl, allowInsecureTls }, true)
+			return
+		}
+		// kilocode_change end
 		// Test the connection to LM Studio first
 		// Crrors will be caught further down.
 		await axios.get(`${baseUrl}/v1/models`)
@@ -49,11 +61,14 @@ export const parseLMStudioModel = (rawModel: LLMInstanceInfo | LLMInfo): ModelIn
 	return modelInfo
 }
 
-export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Promise<Record<string, ModelInfo>> {
+export async function getLMStudioModels(
+	baseUrl = "http://localhost:1234",
+	allowInsecureTls = false,
+): Promise<Record<string, ModelInfo>> {
 	// clear the set of models that have full details loaded
 	modelsWithLoadedDetails.clear()
 	// clearing the input can leave an empty string; use the default in that case
-	baseUrl = baseUrl === "" ? "http://localhost:1234" : baseUrl
+	baseUrl = baseUrl.trim() || "http://localhost:1234"
 
 	const models: Record<string, ModelInfo> = {}
 	// ws is required to connect using the LMStudio library
@@ -63,6 +78,11 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 		if (!URL.canParse(lmsUrl)) {
 			return models
 		}
+		// kilocode_change start: never disable global TLS for the SDK's WebSocket connection.
+		if (allowInsecureTls && new URL(baseUrl).protocol === "https:") {
+			return await getLMStudioModelsOverRest(baseUrl)
+		}
+		// kilocode_change end
 
 		// test the connection to LM Studio first
 		// errors will be caught further down
@@ -127,3 +147,51 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 
 	return models
 }
+
+// kilocode_change start
+async function getLMStudioModelsOverRest(baseUrl: string): Promise<Record<string, ModelInfo>> {
+	const catalogFetch = createProviderFetch({ baseUrl, allowInsecureTls: true, timeoutMs: 30_000 })
+	let response = await catalogFetch(`${baseUrl.replace(/\/+$/, "")}/api/v0/models`, {
+		signal: AbortSignal.timeout(30_000),
+	})
+	if (response.status === 404 || response.status === 405) {
+		await response.body?.cancel()
+		response = await catalogFetch(`${baseUrl.replace(/\/+$/, "")}/v1/models`, {
+			signal: AbortSignal.timeout(30_000),
+		})
+	}
+	if (!response.ok) {
+		await response.body?.cancel()
+		throw new Error(`LM Studio model catalog request failed (${response.status})`)
+	}
+	const payload = (await response.json()) as { data?: unknown }
+	if (!Array.isArray(payload.data)) return {}
+	const models: Record<string, ModelInfo> = {}
+	for (const value of payload.data) {
+		if (!value || typeof value !== "object") continue
+		const model = value as Record<string, unknown>
+		if (typeof model.id !== "string" || !model.id.trim() || model.type === "embeddings") continue
+		const loadedContext = model.loaded_context_length ?? model.context_length
+		// max_context_length describes training capability, not the loaded runtime limit.
+		// Use a conservative fallback when REST omits the loaded limit (the generic
+		// LM Studio fallback is 200k and must not masquerade as measured runtime data).
+		const trainedContext = model.max_context_length
+		const fallbackContext =
+			typeof trainedContext === "number" && Number.isFinite(trainedContext) && trainedContext > 0
+				? Math.min(4096, trainedContext)
+				: 4096
+		const contextWindow =
+			typeof loadedContext === "number" && Number.isFinite(loadedContext) && loadedContext > 0
+				? loadedContext
+				: fallbackContext
+		models[model.id] = {
+			...lMStudioDefaultModelInfo,
+			description: typeof model.arch === "string" ? `${model.id} (${model.arch})` : model.id,
+			contextWindow,
+			maxTokens: Math.min(lMStudioDefaultModelInfo.maxTokens ?? 8192, contextWindow),
+			...(model.type === "vlm" ? { supportsImages: true } : {}),
+		}
+	}
+	return models
+}
+// kilocode_change end

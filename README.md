@@ -1,31 +1,32 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is a stable AI coding agent for VS Code, PhpStorm, and IntelliJ IDEA, based on the open-source upstream v5.16.2 codebase.
+IVOL Code Agent 5 is a stable AI coding agent for VS Code, PhpStorm, IntelliJ IDEA, and PyCharm, based on the open-source upstream v5.16.2 codebase.
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
 ## Download and install
 
-1. Open the [latest GitHub release](https://github.com/oiv-an/ivol-code-agent-5/releases/latest).
-2. Download the file named `ivol-code-agent-5-<version>.vsix`.
-3. In VS Code, open **Extensions**, choose **… → Install from VSIX…**, and select the downloaded file.
-4. Restart VS Code when prompted.
+**[Download version 5.16.232 — choose your IDE](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.16.232)** · **[Инструкция на русском](DOWNLOADS.md)**
+
+| IDE / verified version                     | Download                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code                                    | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.232/ivol-code-agent-5-5.16.232.vsix)                                |
+| PhpStorm 2026.2.2 — PS-262.10315.130       | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.232/ivol-code-agent-5-5.16.232-phpstorm.zip)                |
+| IntelliJ IDEA 2026.2.2 — IU-262.10315.125  | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.232/ivol-code-agent-5-5.16.232-intellij-idea.zip)        |
+| IntelliJ IDEA 2025.3.6.1 — IU-253.33813.55 | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.232/ivol-code-agent-5-5.16.232-intellij-idea-2025.3.zip) |
+| PyCharm 2025.1.1.1 — PY-251.25410.159      | [PyCharm 2025.1 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.16.232/ivol-code-agent-5-5.16.232-pycharm-2025.1.zip)    |
+
+For VS Code, open **Extensions → … → Install from VSIX…** and choose the VSIX. Restart when prompted and your work is finished.
 
 The extension uses the independent ID `ivol.ivol-code-agent-5`, so an official upstream update cannot replace it.
 
-### PhpStorm and IntelliJ IDEA
+### JetBrains installation
 
-The [latest GitHub release](https://github.com/oiv-an/ivol-code-agent-5/releases/latest) also includes separate JetBrains ZIP packages:
+Open **Settings → Plugins → Settings menu → Install Plugin from Disk**, select the ZIP without unpacking it, and restart when your work is finished. Choose the correct IDE version: the IDEA 2026.2 ZIP cannot be installed in IDEA 2025.3.
 
-| IDE                  | Download                                        |
-| -------------------- | ----------------------------------------------- |
-| PhpStorm 2026.2      | `ivol-code-agent-5-<version>-phpstorm.zip`      |
-| IntelliJ IDEA 2026.2 | `ivol-code-agent-5-<version>-intellij-idea.zip` |
+JetBrains packages require Node.js **20.6.0 or newer** available to the IDE, its standard runtime with JCEF, and the enabled Terminal plugin. The 2026.2 targets require Java 25; IDEA 2025.3 and PyCharm 2025.1 use Java 21.
 
-Open **Settings → Plugins → Settings menu → Install Plugin from Disk**, select the ZIP for your IDE, and restart when your work is finished.
-JetBrains packages require Node.js **20.6.0 or newer** available to the IDE, its standard Java 25 runtime with JCEF, and the enabled Terminal plugin.
-The IDEA 5.16.231 package was compiled and checked against IntelliJ IDEA **2026.2.2 (IU-262.10315.125)**; interactive validation is a separate step after installation.
-See [the IDEA guide](jetbrains/INTELLIJ_IDEA.md) for platform requirements, shared JetBrains storage, and validation details.
+All four JetBrains packages passed 152 tests each and Plugin Verifier against the exact builds listed above. This does not replace an interactive IDE check after installation. See the [IDEA 2026.2](jetbrains/INTELLIJ_IDEA.md), [IDEA 2025.3](jetbrains/INTELLIJ_IDEA_2025_3.md), and [PyCharm](jetbrains/PYCHARM.md) guides for details.
 
 ## Goals
 
@@ -46,6 +47,14 @@ See [the IDEA guide](jetbrains/INTELLIJ_IDEA.md) for platform requirements, shar
 
 Other provider choices and Kilo subscription services are hidden.
 
+### Optional certificate exception (5.16.232)
+
+Each enabled provider profile has an **Ignore TLS certificate errors** checkbox, off by default. Enable it only for an API server you trust when its certificate is invalid or self-signed: it removes server identity verification and can expose prompts and API credentials to interception.
+
+The exception is restricted to the profile's API origin, including chat, model discovery, context preparation, and native web-search requests. It does not disable certificate verification globally, on unrelated redirect destinations, or during subscription OAuth login/token refresh. Unknown custom network dispatchers fail closed rather than bypassing their proxy route. LM Studio over HTTPS with this exception uses its REST model catalog instead of an unverified WebSocket connection.
+
+The setting lives in the shared core and interface used by the VS Code, PhpStorm, IntelliJ IDEA, and separately targeted PyCharm editions. It is not included in the already-published 5.16.231 packages.
+
 ## Claude Code account access
 
 If `ANTHROPIC_API_KEY` is set in the environment, it can conflict with Claude Code account access and cause requests to use that API key instead. Unset the variable and restart VS Code when you want to use your Claude account subscription.
@@ -56,9 +65,9 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.231`
+- Version: `5.16.232`
 
-Version `5.16.231` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
+Version `5.16.232` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## Development
 

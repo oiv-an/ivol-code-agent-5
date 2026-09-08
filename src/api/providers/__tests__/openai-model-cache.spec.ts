@@ -28,6 +28,17 @@ const identity = {
 }
 
 describe("OpenAiModelCatalogCache", () => {
+	// kilocode_change: a TLS exception never seeds the default verified catalog.
+	it("isolates verified and insecure catalogs for the same profile", async () => {
+		const cache = new OpenAiModelCatalogCache(new MemoryStorage())
+		await cache.put({ ...identity, allowInsecureTls: true }, ["unverified-model"])
+		expect(cache.get(identity)).toEqual([])
+		expect(cache.get({ ...identity, allowInsecureTls: false })).toEqual([])
+		await cache.put(identity, ["verified-model"])
+		expect(cache.get({ ...identity, allowInsecureTls: true })).toEqual(["unverified-model"])
+		expect(cache.get(identity)).toEqual(["verified-model"])
+	})
+
 	it("uses a profile-specific key and a normalized endpoint fingerprint", () => {
 		const storageKey = getOpenAiModelCatalogStorageKey(identity)
 		const normalizedEndpoint = getOpenAiModelCatalogEndpointFingerprint({
@@ -37,9 +48,7 @@ describe("OpenAiModelCatalogCache", () => {
 
 		expect(storageKey).toMatch(/^ivol\.openAiModelCatalogCache\.v2\.[a-f0-9]{64}$/)
 		expect(storageKey).not.toContain(identity.profileId)
-		expect(getOpenAiModelCatalogStorageKey({ ...identity, baseUrl: "https://another.example/v1" })).toBe(
-			storageKey,
-		)
+		expect(getOpenAiModelCatalogStorageKey({ ...identity, baseUrl: "https://another.example/v1" })).toBe(storageKey)
 		expect(getOpenAiModelCatalogStorageKey({ ...identity, profileId: "another-profile" })).not.toBe(storageKey)
 		expect(normalizedEndpoint).toBe(getOpenAiModelCatalogEndpointFingerprint(identity))
 	})
@@ -95,10 +104,9 @@ describe("OpenAiModelCatalogCache", () => {
 		const storage = new MemoryStorage()
 		const cache = new OpenAiModelCatalogCache(storage, { maxModels: 2 })
 
-		await expect(cache.put(identity, [" model-one ", "model-one", "", "model-two", "model-three"])).resolves.toEqual([
-			"model-one",
-			"model-two",
-		])
+		await expect(
+			cache.put(identity, [" model-one ", "model-one", "", "model-two", "model-three"]),
+		).resolves.toEqual(["model-one", "model-two"])
 		expect(cache.get(identity)).toEqual(["model-one", "model-two"])
 	})
 

@@ -105,6 +105,20 @@ import { setPendingTodoList } from "../tools/UpdateTodoListTool"
 import { ManagedIndexer } from "../../services/code-index/managed/ManagedIndexer"
 
 // kilocode_change: personal build intentionally has no pre-release updater command
+// kilocode_change start: draft catalogs must never inherit credentials or TLS exceptions from another profile.
+function canUseStoredCatalogSettings(
+	message: WebviewMessage,
+	activeProvider: string | undefined,
+	requestedProvider: string,
+) {
+	return (
+		activeProvider === requestedProvider &&
+		!message.requestId &&
+		!["profileId", "baseUrl", "apiKey", "allowInsecureTls"].some((key) => Object.hasOwn(message.values ?? {}, key))
+	)
+}
+// kilocode_change end
+
 export const webviewMessageHandler = async (
 	provider: ClineProvider,
 	message: MaybeTypedWebviewMessage, // kilocode_change switch to MaybeTypedWebviewMessage for better type-safety
@@ -860,6 +874,7 @@ export const webviewMessageHandler = async (
 				provider.log("[Models] Ignored unfiltered router-model request in personal build")
 				provider.postMessageToWebview({
 					type: "routerModels",
+					...(message.requestId ? { requestId: message.requestId } : {}), // kilocode_change
 					routerModels: {} as Record<RouterName, ModelRecord>,
 				})
 				break
@@ -869,6 +884,7 @@ export const webviewMessageHandler = async (
 				provider.log(`[Models] Ignored non-personal router-model request for ${providerFilter}`)
 				provider.postMessageToWebview({
 					type: "routerModels",
+					...(message.requestId ? { requestId: message.requestId } : {}), // kilocode_change
 					routerModels: { [providerFilter]: {} } as Record<RouterName, ModelRecord>,
 					values: { provider: providerFilter },
 				})
@@ -876,15 +892,55 @@ export const webviewMessageHandler = async (
 			}
 
 			const { apiConfiguration } = await provider.getState()
+			// kilocode_change start: settings may request discovery before a profile is saved.
+			const useStoredCatalogSettings = canUseStoredCatalogSettings(
+				message,
+				apiConfiguration.apiProvider,
+				providerFilter,
+			)
+			const catalogTlsSetting =
+				typeof message.values?.allowInsecureTls === "boolean"
+					? message.values.allowInsecureTls
+					: useStoredCatalogSettings
+						? apiConfiguration.allowInsecureTls
+						: undefined
+			const catalogTlsOptions = catalogTlsSetting === undefined ? {} : { allowInsecureTls: catalogTlsSetting }
+			const draftBaseUrl = typeof message.values?.baseUrl === "string" ? message.values.baseUrl : undefined
+			const draftApiKey = typeof message.values?.apiKey === "string" ? message.values.apiKey : undefined
+			const draftNumCtx =
+				typeof message.values?.numCtx === "number" &&
+				Number.isSafeInteger(message.values.numCtx) &&
+				message.values.numCtx >= 128
+					? message.values.numCtx
+					: undefined
+			// kilocode_change end
 
 			// Only local discovery and the authenticated ChatGPT Codex catalog are
 			// available in the personal build. Everything else stays fail-closed.
 			const shouldRefresh = message?.values?.refresh === true
 			const routerModels = { [providerFilter]: {} } as Record<RouterName, ModelRecord>
 			const candidates: { key: RouterName; options: GetModelsOptions }[] = [
-				{ key: "openai-codex", options: { provider: "openai-codex" } },
-				{ key: "ollama", options: { provider: "ollama", baseUrl: apiConfiguration.ollamaBaseUrl } },
-				{ key: "lmstudio", options: { provider: "lmstudio", baseUrl: apiConfiguration.lmStudioBaseUrl } },
+				{ key: "openai-codex", options: { provider: "openai-codex", ...catalogTlsOptions } },
+				{
+					key: "ollama",
+					options: {
+						provider: "ollama",
+						baseUrl:
+							draftBaseUrl ?? (useStoredCatalogSettings ? apiConfiguration.ollamaBaseUrl : undefined),
+						apiKey: draftApiKey ?? (useStoredCatalogSettings ? apiConfiguration.ollamaApiKey : undefined),
+						numCtx: draftNumCtx ?? (useStoredCatalogSettings ? apiConfiguration.ollamaNumCtx : undefined),
+						...catalogTlsOptions,
+					},
+				},
+				{
+					key: "lmstudio",
+					options: {
+						provider: "lmstudio",
+						baseUrl:
+							draftBaseUrl ?? (useStoredCatalogSettings ? apiConfiguration.lmStudioBaseUrl : undefined),
+						...catalogTlsOptions,
+					},
+				},
 			]
 			const targetCandidate = candidates.find(({ key }) => key === providerFilter)
 
@@ -910,6 +966,7 @@ export const webviewMessageHandler = async (
 					console.error(`Error fetching models for ${providerFilter}:`, error)
 					provider.postMessageToWebview({
 						type: "singleRouterModelFetchResponse",
+						...(message.requestId ? { requestId: message.requestId } : {}), // kilocode_change
 						success: false,
 						error: errorMessage,
 						values: { provider: providerFilter },
@@ -919,6 +976,7 @@ export const webviewMessageHandler = async (
 
 			provider.postMessageToWebview({
 				type: "routerModels",
+				...(message.requestId ? { requestId: message.requestId } : {}), // kilocode_change
 				routerModels,
 				values: { provider: requestedProvider },
 			})
@@ -927,12 +985,29 @@ export const webviewMessageHandler = async (
 		case "requestOllamaModels": {
 			// Specific handler for Ollama models only.
 			const { apiConfiguration: ollamaApiConfig } = await provider.getState()
+			const useStoredOllamaSettings = canUseStoredCatalogSettings(message, ollamaApiConfig.apiProvider, "ollama") // kilocode_change
 			try {
 				const ollamaOptions = {
 					provider: "ollama" as const,
-					baseUrl: ollamaApiConfig.ollamaBaseUrl,
-					apiKey: ollamaApiConfig.ollamaApiKey,
-					numCtx: ollamaApiConfig.ollamaNumCtx, // kilocode_change
+					baseUrl:
+						typeof message.values?.baseUrl === "string"
+							? message.values.baseUrl
+							: useStoredOllamaSettings
+								? ollamaApiConfig.ollamaBaseUrl
+								: undefined,
+					apiKey:
+						typeof message.values?.apiKey === "string"
+							? message.values.apiKey
+							: useStoredOllamaSettings
+								? ollamaApiConfig.ollamaApiKey
+								: undefined,
+					numCtx: useStoredOllamaSettings ? ollamaApiConfig.ollamaNumCtx : undefined, // kilocode_change
+					allowInsecureTls:
+						typeof message.values?.allowInsecureTls === "boolean"
+							? message.values.allowInsecureTls
+							: useStoredOllamaSettings
+								? ollamaApiConfig.allowInsecureTls
+								: undefined, // kilocode_change
 				}
 				// Flush cache and refresh to ensure fresh models.
 				await flushModels(ollamaOptions, true)
@@ -940,7 +1015,11 @@ export const webviewMessageHandler = async (
 				const ollamaModels = await getModels(ollamaOptions)
 
 				if (Object.keys(ollamaModels).length > 0) {
-					provider.postMessageToWebview({ type: "ollamaModels", ollamaModels: ollamaModels })
+					provider.postMessageToWebview({
+						type: "ollamaModels",
+						ollamaModels: ollamaModels,
+						...(message.requestId ? { requestId: message.requestId } : {}),
+					})
 				}
 			} catch (error) {
 				// Silently fail - user hasn't configured Ollama yet
@@ -951,10 +1030,26 @@ export const webviewMessageHandler = async (
 		case "requestLmStudioModels": {
 			// Specific handler for LM Studio models only.
 			const { apiConfiguration: lmStudioApiConfig } = await provider.getState()
+			const useStoredLmStudioSettings = canUseStoredCatalogSettings(
+				message,
+				lmStudioApiConfig.apiProvider,
+				"lmstudio",
+			) // kilocode_change
 			try {
 				const lmStudioOptions = {
 					provider: "lmstudio" as const,
-					baseUrl: lmStudioApiConfig.lmStudioBaseUrl,
+					baseUrl:
+						typeof message.values?.baseUrl === "string"
+							? message.values.baseUrl
+							: useStoredLmStudioSettings
+								? lmStudioApiConfig.lmStudioBaseUrl
+								: undefined,
+					allowInsecureTls:
+						typeof message.values?.allowInsecureTls === "boolean"
+							? message.values.allowInsecureTls
+							: useStoredLmStudioSettings
+								? lmStudioApiConfig.allowInsecureTls
+								: undefined, // kilocode_change
 				}
 				// Flush cache and refresh to ensure fresh models.
 				await flushModels(lmStudioOptions, true)
@@ -964,6 +1059,7 @@ export const webviewMessageHandler = async (
 				if (Object.keys(lmStudioModels).length > 0) {
 					provider.postMessageToWebview({
 						type: "lmStudioModels",
+						...(message.requestId ? { requestId: message.requestId } : {}), // kilocode_change
 						lmStudioModels: lmStudioModels,
 					})
 				}
@@ -999,6 +1095,7 @@ export const webviewMessageHandler = async (
 			const baseUrl = typeof message?.values?.baseUrl === "string" ? message.values.baseUrl : undefined
 			const apiKey = typeof message?.values?.apiKey === "string" ? message.values.apiKey : undefined
 			const profileId = typeof message?.values?.profileId === "string" ? message.values.profileId.trim() : ""
+			const allowInsecureTls = message.values?.allowInsecureTls === true // kilocode_change: never inherit another profile's exception
 			const openAiHeaders = Object.entries(message?.values?.openAiHeaders ?? {}).reduce<Record<string, string>>(
 				(headers, [headerName, headerValue]) => {
 					if (typeof headerValue === "string") {
@@ -1012,7 +1109,7 @@ export const webviewMessageHandler = async (
 
 			if (baseUrl && apiKey) {
 				const loadModels = async () => {
-					const authenticatedModels = await getOpenAiModels(baseUrl, apiKey, openAiHeaders)
+					const authenticatedModels = await getOpenAiModels(baseUrl, apiKey, openAiHeaders, allowInsecureTls)
 
 					if (authenticatedModels.length > 0) {
 						return authenticatedModels
@@ -1032,11 +1129,11 @@ export const webviewMessageHandler = async (
 						{},
 					)
 
-					return getOpenAiModels(baseUrl, undefined, publicHeaders)
+					return getOpenAiModels(baseUrl, undefined, publicHeaders, allowInsecureTls)
 				}
 
 				if (profileId) {
-					const identity = { profileId, baseUrl }
+					const identity = { profileId, baseUrl, allowInsecureTls }
 					const catalogCache = new OpenAiModelCatalogCache(provider.context.globalState, {
 						log: (logMessage) => provider.log(logMessage),
 					})

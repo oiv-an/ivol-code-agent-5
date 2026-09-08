@@ -25,6 +25,7 @@ import { normalizeObjectAdditionalPropertiesFalse } from "./kilocode/openai-stri
 import { isMcpTool } from "../../utils/mcp-name"
 import { isNonRetryableApiError, NonRetryableApiError } from "./utils/non-retryable-api-error"
 import { normalizeResponsesInput } from "./utils/responses-input"
+import { createProviderFetch } from "./utils/provider-tls"
 
 export type OpenAiResponsesModel = ReturnType<OpenAiCompatibleResponsesHandler["getModel"]>
 
@@ -53,6 +54,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 	private emittedPrimaryOutputInCurrentResponse = false
 	private readonly isAzureAiInferenceEndpoint: boolean
 	private readonly isAzureOpenAiEndpoint: boolean
+	private readonly insecureFetch?: typeof globalThis.fetch
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -71,6 +73,9 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 		// Responses lives at /v1/responses. The SDK appends /responses to its
 		// baseURL, so a bare compatible host must be normalized before client use.
 		const baseURL = this.normalizeResponsesBaseUrl(this.options.openAiBaseUrl)
+		if (this.options.allowInsecureTls === true) {
+			this.insecureFetch = createProviderFetch({ baseUrl: baseURL, allowInsecureTls: true, timeoutMs: timeout })
+		}
 
 		if (this.isAzureOpenAiEndpoint) {
 			this.client = new AzureOpenAI({
@@ -79,6 +84,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 				apiVersion: this.options.azureApiVersion || azureOpenAiDefaultApiVersion,
 				defaultHeaders: this.options.openAiHeaders || {},
 				timeout,
+				...(this.insecureFetch ? { fetch: this.insecureFetch } : {}),
 			})
 		} else {
 			this.client = new OpenAI({
@@ -86,6 +92,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 				apiKey,
 				defaultHeaders: this.options.openAiHeaders || {},
 				timeout,
+				...(this.insecureFetch ? { fetch: this.insecureFetch } : {}),
 			})
 		}
 	}
@@ -459,7 +466,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 				: undefined
 
 		try {
-			const response = await fetch(url, {
+			const response = await (this.insecureFetch ?? fetch)(url, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
