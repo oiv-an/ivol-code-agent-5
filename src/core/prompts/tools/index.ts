@@ -1,4 +1,5 @@
 import type { ToolName, ModeConfig } from "@roo-code/types"
+import { isYoloModeActive } from "@roo-code/types" // kilocode_change
 
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, DiffStrategy } from "../../../shared/tools"
 import { Mode, getModeConfig, getGroupName } from "../../../shared/modes"
@@ -124,7 +125,8 @@ export function getToolDescriptionsForMode(
 	// kilocode_change start
 	// Conditionally exclude ask_followup_question in yolo mode
 	// This prevents the agent from asking itself questions and auto-answering them
-	if (clineProviderState?.yoloMode) {
+	if (isYoloModeActive(clineProviderState)) {
+		// kilocode_change: timed YOLO authorization
 		tools.delete("ask_followup_question")
 	}
 	// kilocode_change end

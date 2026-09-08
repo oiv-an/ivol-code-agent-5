@@ -219,6 +219,8 @@ export type ContextHandoffGenerationOptions = {
 	prompt?: string
 	/** Called only after validation, immediately before the real memory-task request. */
 	onBeforeRequest?: (prompt: string) => Promise<void> // kilocode_change
+	/** Cancels preparation without accepting a late provider response as a saved summary. */
+	signal?: AbortSignal // kilocode_change
 }
 
 const HANDOFF_MAX_STRING_CHARS = 24_000
@@ -567,6 +569,17 @@ export async function summarizeConversation(
 	)
 
 	const response: SummarizeResponse = { messages, cost: 0, summary: "" }
+	// kilocode_change start: never forward arbitrary cancellation reasons into the UI.
+	const cancellationError = "Context preparation was cancelled"
+	if (contextHandoff.signal?.aborted) {
+		return { ...response, error: cancellationError }
+	}
+	const assertPreparationActive = (): void => {
+		if (contextHandoff.signal?.aborted) {
+			throw new Error(cancellationError)
+		}
+	}
+	// kilocode_change end
 
 	// Always preserve the first message (which may contain slash command content)
 	const firstMessage = messages[0]
@@ -690,11 +703,18 @@ ${recentMessagesForHandoff}
 	// kilocode_change start: expose the actual preparation before the provider call;
 	// failures remain a failed preparation, never a successful compression.
 	try {
+		assertPreparationActive() // kilocode_change
 		if (contextHandoffEnabled) {
 			await contextHandoff.onBeforeRequest?.(handoffTask)
 		}
-		const stream = handlerToUse.createMessage(promptToUse, requestMessages)
+		// kilocode_change start: an IDE stop must abort the provider request too.
+		assertPreparationActive()
+		const stream = contextHandoff.signal
+			? handlerToUse.createMessage(promptToUse, requestMessages, { taskId, signal: contextHandoff.signal })
+			: handlerToUse.createMessage(promptToUse, requestMessages)
+		// kilocode_change end
 		for await (const chunk of stream) {
+			assertPreparationActive() // kilocode_change: some providers ignore AbortSignal.
 			if (chunk.type === "text") {
 				summary += chunk.text
 			} else if (chunk.type === "usage") {
@@ -720,11 +740,15 @@ ${recentMessagesForHandoff}
 			}
 			// kilocode_change end
 		}
+		assertPreparationActive() // kilocode_change: also reject cancellation at end-of-stream.
 	} catch (error) {
 		return {
 			...response,
 			cost,
-			error: `Context preparation failed: ${error instanceof Error ? error.message : String(error)}`,
+			// kilocode_change: an SDK may expose a custom abort reason; use a safe stable message.
+			error: contextHandoff.signal?.aborted
+				? cancellationError
+				: `Context preparation failed: ${error instanceof Error ? error.message : String(error)}`,
 		}
 	}
 	// kilocode_change end
@@ -893,6 +917,11 @@ ${recentMessagesForHandoff}
 	)
 
 	const newContextTokens = outputTokens + (await apiHandler.countTokens(contextBlocks))
+	// kilocode_change start: cancellation during asynchronous sizing is still a cancelled preparation.
+	if (contextHandoff.signal?.aborted) {
+		return { ...response, cost, error: cancellationError }
+	}
+	// kilocode_change end
 	if (newContextTokens >= prevContextTokens) {
 		// kilocode_change add numbers
 		const error = t("common:errors.condense_context_grew", { prevContextTokens, newContextTokens })

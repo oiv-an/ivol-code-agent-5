@@ -1,4 +1,5 @@
 import { Task } from "../task/Task"
+import { isYoloModeActive } from "@roo-code/types" // kilocode_change
 import { formatResponse } from "../prompts/responses"
 import { parseXml } from "../../utils/xml"
 import type { ToolUse } from "../../shared/tools"
@@ -72,7 +73,8 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// kilocode_change start
 			// Check if yolo mode is enabled - if so, don't ask questions
 			const state = await task.providerRef.deref()?.getState()
-			if (state?.yoloMode) {
+			if (isYoloModeActive(state)) {
+				// kilocode_change: timed YOLO authorization
 				pushToolResult(
 					formatResponse.toolResult(
 						"<error>This tool is not available in yolo mode. Do not ask questions - make your best judgment and proceed with the task.</error>",
@@ -109,7 +111,8 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 		// kilocode_change start
 		// Don't show the question in yolo mode - the tool will be rejected in execute()
 		const state = await task.providerRef.deref()?.getState()
-		if (state?.yoloMode) {
+		if (isYoloModeActive(state)) {
+			// kilocode_change: timed YOLO authorization
 			return
 		}
 		// kilocode_change end

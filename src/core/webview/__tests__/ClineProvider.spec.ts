@@ -557,6 +557,27 @@ describe("ClineProvider", () => {
 		expect(scriptSrcMatch![0]).toContain("'wasm-unsafe-eval'")
 	})
 
+	// kilocode_change start: only the owning Task operation may clear context progress.
+	test("does not publish a completion when a duplicate condensation request returns early", async () => {
+		let finishFirst!: () => void
+		const pending = new Promise<void>((resolve) => {
+			finishFirst = resolve
+		})
+		const condenseContext = vi.fn().mockReturnValueOnce(pending).mockResolvedValue(undefined)
+		;(provider as any).clineStack = [{ taskId: "condensing-task", condenseContext }]
+		const postSpy = vi.spyOn(provider, "postMessageToWebview").mockResolvedValue(undefined)
+
+		const firstRequest = provider.condenseTaskContext("condensing-task")
+		await provider.condenseTaskContext("condensing-task")
+		expect(condenseContext).toHaveBeenCalledTimes(2)
+		expect(postSpy).not.toHaveBeenCalledWith({ type: "condenseTaskContextResponse", text: "condensing-task" })
+
+		finishFirst()
+		await firstRequest
+		expect(postSpy).not.toHaveBeenCalledWith({ type: "condenseTaskContextResponse", text: "condensing-task" })
+	})
+	// kilocode_change end
+
 	test("postMessageToWebview sends message to webview", async () => {
 		await provider.resolveWebviewView(mockWebviewView)
 
@@ -933,6 +954,48 @@ describe("ClineProvider", () => {
 				stateSpy.mockRestore()
 				postSpy.mockRestore()
 			}
+		})
+	})
+	// kilocode_change end
+
+	// kilocode_change start: persisted deadline is interpreted, not renewed, when a view reloads
+	test("getState and postState preserve the timer while returning effective YOLO permission", async () => {
+		const now = 1_800_000_000_000
+		const clock = vi.spyOn(Date, "now").mockReturnValue(now)
+		const postSpy = vi.spyOn(provider, "postMessageToWebview").mockResolvedValue(undefined)
+		try {
+			await provider.contextProxy.setValue("yoloMode", true)
+			await provider.contextProxy.setValue("yoloModeExpiresAt", now + 60_000)
+			await provider.contextProxy.setValue("yoloModeTimerMinutes", 1)
+			expect(await provider.getState()).toMatchObject({
+				yoloMode: true,
+				yoloModeExpiresAt: now + 60_000,
+				yoloModeTimerMinutes: 1,
+			})
+			clock.mockReturnValue(now + 60_000)
+			await provider.postStateToWebview()
+			expect(postSpy).toHaveBeenCalledWith({
+				type: "state",
+				state: expect.objectContaining({
+					yoloMode: false,
+					yoloModeExpiresAt: now + 60_000,
+					yoloModeTimerMinutes: 1,
+				}),
+			})
+			expect(provider.contextProxy.getValue("yoloModeExpiresAt")).toBe(now + 60_000)
+		} finally {
+			clock.mockRestore()
+			postSpy.mockRestore()
+		}
+	})
+
+	test("keeps null deadline disabled and defaults an absent timer duration to one hour", async () => {
+		await provider.contextProxy.setValue("yoloMode", true)
+		await provider.contextProxy.setValue("yoloModeExpiresAt", null)
+		expect(await provider.getState()).toMatchObject({
+			yoloMode: false,
+			yoloModeExpiresAt: null,
+			yoloModeTimerMinutes: 60,
 		})
 	})
 	// kilocode_change end

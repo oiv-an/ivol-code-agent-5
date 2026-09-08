@@ -5,6 +5,7 @@ import * as path from "path"
 import { MessageManager } from "./index"
 import * as condenseModule from "../condense"
 import {
+	CONTEXT_HANDOFF_ARCHIVE_DIRECTORY, // kilocode_change
 	attachContextHandoffToSummary,
 	deleteContextHandoffFileIfOwned,
 	writeContextHandoffFile,
@@ -181,6 +182,88 @@ describe("MessageManager", () => {
 				await fs.rm(workspace, { recursive: true, force: true })
 			}
 		})
+
+		it.each(["edited root", "missing hash", "invalid hash", "newer task", "history save failure"])(
+			"preserves handoff data when rewind encounters %s",
+			async (scenario) => {
+				const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ivol-message-manager-handoff-"))
+				try {
+					mockTask.cwd = workspace
+					const condenseId = "summary-pending"
+					const record = await writeContextHandoffFile({
+						workspacePath: workspace,
+						taskId: "task-pending",
+						condenseId,
+						modelId: "gpt-test",
+						summary: "pending continuation",
+						trigger: "automatic",
+					})
+					const [summary] = attachContextHandoffToSummary(
+						[
+							{
+								role: "assistant",
+								content: [{ type: "text", text: "pending continuation" }],
+								isSummary: true,
+								condenseId,
+								ts: 299,
+							},
+						],
+						condenseId,
+						record,
+					)
+					const archivePath = path.join(
+						workspace,
+						CONTEXT_HANDOFF_ARCHIVE_DIRECTORY,
+						`${record.handoffId}.${record.sha256}.md`,
+					)
+					let expectedRoot = record.content
+					if (scenario === "edited root") {
+						expectedRoot += "\nAn important correction added by the user.\n"
+						await fs.writeFile(record.absolutePath, expectedRoot)
+					} else if (scenario === "missing hash") {
+						summary.contextHandoffSha256 = undefined
+					} else if (scenario === "invalid hash") {
+						summary.contextHandoffSha256 = "invalid-saved-hash"
+					} else if (scenario === "newer task") {
+						const next = await writeContextHandoffFile({
+							workspacePath: workspace,
+							taskId: "other-task",
+							condenseId: "other-summary",
+							modelId: "gpt-test",
+							summary: "Another window is still working.",
+							trigger: "automatic",
+						})
+						expectedRoot = next.content
+					} else {
+						mockTask.overwriteApiConversationHistory.mockRejectedValue(new Error("History save failed"))
+					}
+					mockTask.clineMessages = [
+						{ ts: 100, say: "user", text: "First" },
+						{ ts: 300, say: "user", text: "Before condense" },
+						{ ts: 400, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
+					]
+					mockTask.apiConversationHistory = [
+						{ ts: 100, role: "user", content: [{ type: "text", text: "First" }] },
+						summary,
+						{ ts: 300, role: "user", content: [{ type: "text", text: "Before condense" }] },
+					]
+
+					if (scenario === "history save failure") {
+						await expect(manager.rewindToTimestamp(300)).rejects.toThrow("History save failed")
+					} else {
+						await manager.rewindToTimestamp(300)
+					}
+					expect(await fs.readFile(record.absolutePath, "utf8")).toBe(expectedRoot)
+					if (scenario === "edited root" || scenario === "newer task") {
+						await expect(fs.stat(archivePath)).rejects.toMatchObject({ code: "ENOENT" })
+					} else {
+						expect(await fs.readFile(archivePath, "utf8")).toBe(record.content)
+					}
+				} finally {
+					await fs.rm(workspace, { recursive: true, force: true })
+				}
+			},
+		)
 
 		it("re-arms a consumed handoff when rewind removes its first assistant continuation", async () => {
 			const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ivol-message-manager-handoff-"))

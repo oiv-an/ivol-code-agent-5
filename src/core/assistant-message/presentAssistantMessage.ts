@@ -3,6 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 
 import type { ToolName, ClineAsk, ToolProgressStatus } from "@roo-code/types"
 import { ConsecutiveMistakeError } from "@roo-code/types"
+import { isYoloModeActive } from "@roo-code/types" // kilocode_change
 import { TelemetryService } from "@roo-code/telemetry"
 import { customToolRegistry } from "@roo-code/core"
 
@@ -699,9 +700,14 @@ export async function presentAssistantMessage(cline: Task) {
 			) => {
 				// kilocode_change start: YOLO mode with AI gatekeeper
 				const state = await cline.providerRef.deref()?.getState()
-				if (state?.yoloMode) {
+				if (isYoloModeActive(state)) {
 					// If gatekeeper is configured, use it to evaluate the approval
 					const approved = await evaluateGatekeeperApproval(cline, block.name, block.params)
+					// The gatekeeper may take longer than the remaining lease. Never use
+					// its delayed answer to revive a stopped task or expired permission.
+					if (cline.abort) {
+						return false
+					}
 					if (!approved) {
 						// Gatekeeper denied the action
 						pushToolResult(formatResponse.toolDenied())
@@ -709,8 +715,14 @@ export async function presentAssistantMessage(cline: Task) {
 						captureAskApproval(block.name, false)
 						return false
 					}
-					captureAskApproval(block.name, true)
-					return true
+					const currentState = await cline.providerRef.deref()?.getState()
+					if (cline.abort) {
+						return false
+					}
+					if (isYoloModeActive(currentState)) {
+						captureAskApproval(block.name, true)
+						return true
+					}
 				}
 				// kilocode_change end
 

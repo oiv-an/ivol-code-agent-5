@@ -75,6 +75,18 @@ export const globalSettingsSchema = z.object({
 
 	autoApprovalEnabled: z.boolean().optional(),
 	yoloMode: z.boolean().optional(), // kilocode_change
+	// kilocode_change start: absolute expiry survives restart; null is invalid/disabled, never unlimited
+	yoloModeExpiresAt: z.number().finite().nonnegative().nullable().optional(),
+	yoloModeTimerMinutes: z.number().int().min(1).max(1440).optional(),
+	yoloModeRevocationId: z.string().uuid().nullable().optional(),
+	yoloModeGrant: z
+		.object({
+			revocationId: z.string().uuid().nullable().optional(),
+			expiresAt: z.number().finite().nonnegative().nullable().optional(),
+		})
+		.nullable()
+		.optional(),
+	// kilocode_change end
 	yoloGatekeeperApiConfigId: z.string().optional(), // kilocode_change: AI gatekeeper for YOLO mode
 	alwaysAllowReadOnly: z.boolean().optional(),
 	alwaysAllowReadOnlyOutsideWorkspace: z.boolean().optional(),

@@ -2280,6 +2280,61 @@ describe("summarizeConversation with custom settings", () => {
 		expect(mockMainApiHandler.createMessage).toHaveBeenCalledOnce()
 	})
 
+	it.each(["before", "callback", "chunk", "end", "sizing"] as const)(
+		"does not accept a cancelled preparation at the %s boundary, even when the provider ignores its signal",
+		async (boundary) => {
+			const controller = new AbortController()
+			const abort = () => controller.abort(new Error("private cancellation reason"))
+			const onBeforeRequest = vi.fn(async () => {
+				if (boundary === "callback") abort()
+			})
+			vi.mocked(mockMainApiHandler.createMessage).mockImplementation((_prompt, _messages, metadata) => {
+				expect(metadata?.taskId).toBe(taskId)
+				expect(metadata?.signal).toBe(controller.signal)
+				return (async function* () {
+					yield { type: "text" as const, text: "Complete-looking continuation state" }
+					if (boundary === "chunk" || boundary === "end") abort()
+					if (boundary !== "end") {
+						yield { type: "text" as const, text: " Late response from an uncooperative provider" }
+					}
+				})()
+			})
+			if (boundary === "before") abort()
+			if (boundary === "sizing") {
+				vi.mocked(mockMainApiHandler.countTokens).mockImplementation(async () => {
+					abort()
+					return 50
+				})
+			}
+			const result = await summarizeConversation(
+				sampleMessages,
+				mockMainApiHandler,
+				defaultSystemPrompt,
+				taskId,
+				1000,
+				false,
+				undefined,
+				undefined,
+				false,
+				{ enabled: true, onBeforeRequest, signal: controller.signal },
+			)
+			expect(result).toMatchObject({
+				messages: sampleMessages,
+				summary: "",
+				error: "Context preparation was cancelled",
+			})
+			expect(result.messages).toBe(sampleMessages)
+			expect(result.condenseId).toBeUndefined()
+			expect(result.error).not.toContain("private cancellation reason")
+			if (boundary === "before" || boundary === "callback") {
+				expect(mockMainApiHandler.createMessage).not.toHaveBeenCalled()
+			} else {
+				expect(mockMainApiHandler.createMessage).toHaveBeenCalledOnce()
+			}
+			if (boundary === "before") expect(onBeforeRequest).not.toHaveBeenCalled()
+		},
+	)
+
 	it("returns the unchanged history when the preparation request fails", async () => {
 		const onBeforeRequest = vi.fn().mockResolvedValue(undefined)
 		vi.mocked(mockMainApiHandler.createMessage).mockImplementation(() => {

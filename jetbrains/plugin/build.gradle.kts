@@ -6,6 +6,7 @@
 
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import java.util.Locale
 
 // Convenient for reading variables from gradle.properties
 fun properties(key: String) = providers.gradleProperty(key)
@@ -21,6 +22,68 @@ plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.20"
     id("org.jetbrains.intellij.platform") version "2.18.1"
     id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
+}
+
+// Keep PhpStorm as the default. The current IntelliJ IDEA distribution is the
+// unified IU product, not the discontinued separate Community target.
+fun resolvePlatformType(code: String): IntelliJPlatformType = when (code) {
+    "PS" -> IntelliJPlatformType.PhpStorm
+    "IU" -> IntelliJPlatformType.IntellijIdea
+    else -> throw GradleException("Unsupported platformType '$code': use PS (PhpStorm) or IU (IntelliJ IDEA).")
+}
+
+fun validateLocalIdeTarget(
+    info: com.google.gson.JsonObject,
+    expectedProductCode: String,
+    sinceBuild: String,
+    untilBuild: String,
+    compilerJavaVersion: Int,
+    runtimeJavaVersion: Int,
+) {
+    val productCode = info.get("productCode")?.asString
+    require(productCode == expectedProductCode) {
+        "localIdePath product '$productCode' does not match platformType '$expectedProductCode'."
+    }
+    val build = info.get("buildNumber")?.asString.orEmpty()
+    val branch = build.substringAfterLast('-').substringBefore('.').toIntOrNull()
+    val firstBranch = sinceBuild.substringBefore('.').toInt()
+    val lastBranch = untilBuild.substringBefore('.').toInt()
+    require(branch != null && branch in firstBranch..lastBranch) {
+        "localIdePath build '$build' is outside the supported $sinceBuild–$untilBuild platform range."
+    }
+    val minimumJava = info.get("minRequiredJavaVersion")?.asInt
+    require(minimumJava != null && compilerJavaVersion >= minimumJava && runtimeJavaVersion >= minimumJava) {
+        "localIdePath requires Java $minimumJava; configured compiler is $compilerJavaVersion and Gradle runs on $runtimeJavaVersion."
+    }
+}
+
+val platformCode = properties("platformType").orElse("PS").get().uppercase(Locale.ROOT)
+val selectedPlatformType = resolvePlatformType(platformCode)
+val localIdePath = providers.gradleProperty("localIdePath").orNull
+val localIdeDirectory = localIdePath?.let { file(it).canonicalFile }
+
+if (platformCode == "IU") {
+    // Separate all outputs/sandbox/verifier reports, not just the final ZIP.
+    // This must be set before genPlatform.gradle captures its build paths.
+    layout.buildDirectory.set(layout.projectDirectory.dir("build/idea"))
+}
+
+if (localIdeDirectory != null) {
+    val productInfo = listOf(
+        localIdeDirectory.resolve("product-info.json"),
+        localIdeDirectory.resolve("Resources/product-info.json"),
+        localIdeDirectory.resolve("Contents/Resources/product-info.json"),
+    ).firstOrNull { it.isFile }
+        ?: throw GradleException("No product-info.json found under localIdePath: $localIdeDirectory")
+    val info = com.google.gson.JsonParser.parseString(productInfo.readText()).asJsonObject
+    validateLocalIdeTarget(
+        info,
+        platformCode,
+        properties("pluginSinceBuild").get(),
+        properties("pluginUntilBuild").get(),
+        properties("javaVersion").get().toInt(),
+        JavaVersion.current().majorVersion.toInt(),
+    )
 }
 
 apply("genPlatform.gradle")
@@ -66,8 +129,6 @@ project.afterEvaluate {
 group = properties("pluginGroup").get()
 version = properties("pluginVersion").get()
 
-val localIdePath = providers.gradleProperty("localIdePath").orNull
-
 repositories {
     mavenCentral()
     // Fallback mirrors for when Maven Central returns 403 (common in CI environments)
@@ -101,10 +162,10 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     testImplementation("junit:junit:4.13.2")
     intellijPlatform {
-        if (localIdePath != null) {
-            local(file(localIdePath))
+        if (localIdeDirectory != null) {
+            local(localIdeDirectory)
         } else {
-            phpstorm(properties("platformVersion").get())
+            create(selectedPlatformType, properties("platformVersion").get())
         }
 
         bundledPlugin("org.jetbrains.plugins.terminal")
@@ -116,7 +177,7 @@ dependencies {
     }
 }
 
-// PhpStorm 2026.2 runs on Java 25.
+// Both supported 2026.2 IDE targets run on Java 25.
 java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
@@ -149,12 +210,45 @@ intellijPlatform {
         )
 
         ides {
-            create(IntelliJPlatformType.PhpStorm, properties("platformVersion").get())
+            if (localIdeDirectory != null) {
+                local(localIdeDirectory)
+            } else {
+                create(selectedPlatformType, properties("platformVersion").get())
+            }
         }
     }
 }
 
 tasks {
+    buildPlugin {
+        if (platformCode == "IU") {
+            archiveClassifier.set("idea")
+        }
+    }
+
+    register("verifyBuildTargetConfiguration") {
+        group = "verification"
+        description = "Check the supported IDE targets and local SDK validation without launching an IDE."
+        doLast {
+            check(resolvePlatformType("PS") == IntelliJPlatformType.PhpStorm)
+            check(resolvePlatformType("IU") == IntelliJPlatformType.IntellijIdea)
+            check(runCatching { resolvePlatformType("IC") }.isFailure)
+            val info = com.google.gson.JsonParser.parseString(
+                """{"productCode":"IU","buildNumber":"262.10315.125","minRequiredJavaVersion":25}""",
+            ).asJsonObject
+            validateLocalIdeTarget(info, "IU", "262", "262.*", 25, 25)
+            check(runCatching { validateLocalIdeTarget(info, "PS", "262", "262.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(info, "IU", "261", "261.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(info, "IU", "262", "262.*", 21, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(info, "IU", "262", "262.*", 25, 21) }.isFailure)
+            val expectedOutput = if (platformCode == "IU") "build/idea" else "build"
+            check(layout.buildDirectory.get().asFile == layout.projectDirectory.dir(expectedOutput).asFile)
+            val archiveName = (project.tasks.getByName("buildPlugin") as Zip).archiveFileName.get()
+            check(archiveName.endsWith(if (platformCode == "IU") "-idea.zip" else "-${project.version}.zip"))
+            println("Build target checks passed: $platformCode, $expectedOutput/distributions/$archiveName")
+        }
+    }
+
     // Configure test task to disable CDS (Class Data Sharing) to avoid warning:
     // "Archived non-system classes are disabled because the java.system.class.loader
     // property is specified (value = "com.intellij.util.lang.PathClassLoader")"

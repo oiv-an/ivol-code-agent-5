@@ -1,6 +1,6 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is a stable VS Code AI coding agent based on the open-source upstream v5.16.2 codebase.
+IVOL Code Agent 5 is a stable AI coding agent for VS Code, PhpStorm, and IntelliJ IDEA, based on the open-source upstream v5.16.2 codebase.
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
@@ -12,6 +12,20 @@ This is an independent, unofficial fork. It is not affiliated with or endorsed b
 4. Restart VS Code when prompted.
 
 The extension uses the independent ID `ivol.ivol-code-agent-5`, so an official upstream update cannot replace it.
+
+### PhpStorm and IntelliJ IDEA
+
+The [latest GitHub release](https://github.com/oiv-an/ivol-code-agent-5/releases/latest) also includes separate JetBrains ZIP packages:
+
+| IDE                  | Download                                        |
+| -------------------- | ----------------------------------------------- |
+| PhpStorm 2026.2      | `ivol-code-agent-5-<version>-phpstorm.zip`      |
+| IntelliJ IDEA 2026.2 | `ivol-code-agent-5-<version>-intellij-idea.zip` |
+
+Open **Settings → Plugins → Settings menu → Install Plugin from Disk**, select the ZIP for your IDE, and restart when your work is finished.
+JetBrains packages require Node.js **20.6.0 or newer** available to the IDE, its standard Java 25 runtime with JCEF, and the enabled Terminal plugin.
+The IDEA 5.16.231 package was compiled and checked against IntelliJ IDEA **2026.2.2 (IU-262.10315.125)**; interactive validation is a separate step after installation.
+See [the IDEA guide](jetbrains/INTELLIJ_IDEA.md) for platform requirements, shared JetBrains storage, and validation details.
 
 ## Goals
 
@@ -42,9 +56,9 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 - Display name: `IVOL Code Agent 5`
 - Extension ID: `ivol.ivol-code-agent-5`
-- Version: `5.16.230`
+- Version: `5.16.231`
 
-Version `5.16.230` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
+Version `5.16.231` corresponds to the upstream `5.16.2` base plus the current IVOL stability revisions.
 
 ## Development
 

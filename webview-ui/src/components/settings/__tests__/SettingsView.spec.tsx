@@ -354,6 +354,11 @@ describe("SettingsView - Sound Settings", () => {
 		const saveButton = screen.getByTestId("save-button")
 		fireEvent.click(saveButton)
 
+		// kilocode_change start: unrelated Settings Save must never clear or renew the YOLO lease.
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "yoloMode" }))
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "startYoloModeTimer" }))
+		// kilocode_change end
+
 		expect(vscode.postMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "updateSettings",

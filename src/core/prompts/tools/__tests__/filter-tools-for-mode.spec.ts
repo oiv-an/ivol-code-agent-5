@@ -432,6 +432,20 @@ describe("filterNativeToolsForMode", () => {
 	})
 
 	// kilocode_change start
+	it.each([
+		{ label: "active", offset: 60_000, available: false },
+		{ label: "expired", offset: -1, available: true },
+		{ label: "invalid", offset: Number.NaN, available: true },
+	])("exposes the native follow-up tool correctly with an $label YOLO timer", ({ offset, available }) => {
+		const filtered = filterNativeToolsForMode(mockNativeTools, "code", undefined, {}, undefined, {}, {
+			yoloMode: true,
+			yoloModeExpiresAt: Date.now() + offset,
+		} as any)
+		const names = filtered.map((tool) => ("function" in tool ? tool.function.name : ""))
+		expect(names.includes("ask_followup_question")).toBe(available)
+		expect(names).toContain("attempt_completion")
+	})
+
 	it("should exclude ask_followup_question when yoloMode is enabled", () => {
 		const codeMode: ModeConfig = {
 			slug: "code",
@@ -926,6 +940,30 @@ describe("filterMcpToolsForMode", () => {
 
 // kilocode_change start
 describe("getToolDescriptionsForMode", () => {
+	it.each([
+		{ label: "active", offset: 60_000, available: false },
+		{ label: "expired", offset: -1, available: true },
+		{ label: "invalid", offset: Number.NaN, available: true },
+	])("exposes the XML follow-up tool correctly with an $label YOLO timer", ({ offset, available }) => {
+		const result = getToolDescriptionsForMode(
+			"code",
+			"/test",
+			false,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ yoloMode: true, yoloModeExpiresAt: Date.now() + offset } as any,
+		)
+		expect(result.includes("ask_followup_question")).toBe(available)
+	})
+
 	it("should exclude ask_followup_question when yoloMode is enabled", () => {
 		const result = getToolDescriptionsForMode(
 			"code",

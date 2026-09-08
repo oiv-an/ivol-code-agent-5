@@ -224,7 +224,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		remoteBrowserEnabled,
 		maxReadFileLine,
 		showAutoApproveMenu, // kilocode_change
-		yoloMode, // kilocode_change
 		showTaskTimeline, // kilocode_change
 		sendMessageOnEnter, // kilocode_change
 		showTimestamps, // kilocode_change
@@ -602,7 +601,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 			vscode.postMessage({ type: "ttsSpeed", value: ttsSpeed })
 			vscode.postMessage({ type: "terminalCommandApiConfigId", text: terminalCommandApiConfigId || "" }) // kilocode_change
 			vscode.postMessage({ type: "showAutoApproveMenu", bool: showAutoApproveMenu }) // kilocode_change
-			vscode.postMessage({ type: "yoloMode", bool: yoloMode }) // kilocode_change
+			// kilocode_change: YOLO permission changes use explicit live controls, never Settings Save.
 			vscode.postMessage({ type: "allowVeryLargeReads", bool: allowVeryLargeReads }) // kilocode_change
 			vscode.postMessage({ type: "currentApiConfigName", text: currentApiConfigName })
 			vscode.postMessage({ type: "showTaskTimeline", bool: showTaskTimeline }) // kilocode_change
@@ -1117,7 +1116,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						{activeTab === "autoApprove" && (
 							<AutoApproveSettings
 								showAutoApproveMenu={showAutoApproveMenu} // kilocode_change
-								yoloMode={yoloMode} // kilocode_change
 								yoloGatekeeperApiConfigId={yoloGatekeeperApiConfigId} // kilocode_change: AI gatekeeper for YOLO mode
 								alwaysAllowReadOnly={alwaysAllowReadOnly}
 								alwaysAllowReadOnlyOutsideWorkspace={alwaysAllowReadOnlyOutsideWorkspace}

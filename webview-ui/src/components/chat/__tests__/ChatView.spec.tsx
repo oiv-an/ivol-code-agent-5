@@ -1229,9 +1229,9 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		{ type: "say", say: "text", ts: 1000, text: "Initial task" },
 		{ type: "say", say: "text", ts: 2000, text: "Working on the task" },
 	]
-	const dispatchProgress = async (type: string) => {
+	const dispatchProgress = async (type: string, taskId = "test-task-id") => {
 		await act(async () => {
-			window.dispatchEvent(new MessageEvent("message", { data: { type, text: "test-task-id" } }))
+			window.dispatchEvent(new MessageEvent("message", { data: { type, text: taskId } }))
 		})
 	}
 	const partialRows = (container: HTMLElement) =>
@@ -1253,6 +1253,50 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		await dispatchProgress("condenseTaskContextResponse")
 		expect(partialRows(container)).toEqual([])
 	})
+
+	it.each(["contextHandoffStarted", "condenseTaskContextStarted", "condenseTaskContextResponse"])(
+		"ignores a late %s from the previous task without changing current manual progress",
+		async (eventType) => {
+			const { container } = renderChatView()
+			mockPostMessage({
+				clineMessages: taskMessages,
+				currentTaskItem: { id: "previous-task", ts: 1000, task: "Initial task" },
+			})
+			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+			await dispatchProgress("contextHandoffStarted", "previous-task")
+			expect(partialRows(container).map((row) => row.say)).toEqual(["context_handoff"])
+
+			mockPostMessage({
+				clineMessages: [
+					{ type: "say", say: "text", ts: 4000, text: "Different task" },
+					{ type: "say", say: "text", ts: 5000, text: "Different work" },
+				],
+				currentTaskItem: { id: "test-task-id", ts: 4000, task: "Different task" },
+			})
+			await waitFor(() => expect(container.textContent).toContain("Different work"))
+			expect(partialRows(container)).toEqual([])
+			await dispatchProgress(eventType, "previous-task")
+			expect(partialRows(container)).toEqual([])
+
+			const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+			expect(button).not.toBeNull()
+			await act(async () => fireEvent.click(button!))
+			expect(partialRows(container).map((row) => row.say)).toEqual(["context_handoff"])
+			await dispatchProgress(eventType, "previous-task")
+			expect(partialRows(container).map((row) => row.say)).toEqual(["context_handoff"])
+			expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute(
+				"data-sending-disabled",
+				"true",
+			)
+
+			await dispatchProgress("condenseTaskContextResponse")
+			expect(partialRows(container)).toEqual([])
+			expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute(
+				"data-sending-disabled",
+				"false",
+			)
+		},
+	)
 
 	it("clears preparation when the file operation fails before compression", async () => {
 		const { container } = renderChatView()

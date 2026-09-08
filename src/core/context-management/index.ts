@@ -238,6 +238,8 @@ export type ContextManagementOptions = {
 	contextHandoffPrompt?: string
 	/** Fired only when the active model is about to receive the memory task. */
 	onBeforeContextHandoff?: (prompt: string) => Promise<void> // kilocode_change
+	/** Cancels context preparation before it can reduce the conversation. */
+	contextHandoffSignal?: AbortSignal // kilocode_change
 }
 
 export type ContextManagementResult = SummarizeResponse & {
@@ -270,6 +272,7 @@ export async function manageContext({
 	requireContextHandoff = false,
 	contextHandoffPrompt,
 	onBeforeContextHandoff,
+	contextHandoffSignal, // kilocode_change
 }: ContextManagementOptions): Promise<ContextManagementResult> {
 	let error: string | undefined
 	let cost = 0
@@ -283,6 +286,18 @@ export async function manageContext({
 
 	// Calculate total effective tokens (totalTokens never includes the last message)
 	const prevContextTokens = totalTokens + lastMessageTokens
+	// kilocode_change start: cancellation must not fall through to sliding-window truncation.
+	const cancelledResult = (): ContextManagementResult => ({
+		messages,
+		summary: "",
+		cost,
+		prevContextTokens,
+		error: "Context preparation was cancelled",
+	})
+	if (contextHandoffSignal?.aborted) {
+		return cancelledResult()
+	}
+	// kilocode_change end
 
 	// Determine the effective threshold to use
 	let effectiveThreshold = normalizeCondenseUsageThreshold(autoCondenseContextPercent)
@@ -326,8 +341,15 @@ export async function manageContext({
 					enabled: requireContextHandoff,
 					prompt: contextHandoffPrompt,
 					...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
+					...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change
 				},
 			)
+			// kilocode_change start
+			if (contextHandoffSignal?.aborted) {
+				cost = result.cost
+				return cancelledResult()
+			}
+			// kilocode_change end
 			if (result.error) {
 				error = result.error
 				cost = result.cost
@@ -355,8 +377,15 @@ export async function manageContext({
 				enabled: true,
 				prompt: contextHandoffPrompt,
 				...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
+				...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change
 			},
 		)
+		// kilocode_change start
+		if (contextHandoffSignal?.aborted) {
+			cost = result.cost
+			return cancelledResult()
+		}
+		// kilocode_change end
 		if (!result.error) {
 			return { ...result, prevContextTokens }
 		}
@@ -404,6 +433,11 @@ export async function manageContext({
 				)
 			}
 		}
+		// kilocode_change start: stopping during asynchronous fallback sizing must preserve history too.
+		if (contextHandoffSignal?.aborted) {
+			return cancelledResult()
+		}
+		// kilocode_change end
 
 		return {
 			messages: truncationResult.messages,

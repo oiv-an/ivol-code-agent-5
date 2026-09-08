@@ -696,6 +696,104 @@ describe("Context Management", () => {
 			summarizeSpy.mockRestore()
 		})
 
+		// kilocode_change start: cancellation cannot become a successful reduction or destructive fallback.
+		it.each([
+			{ autoCondenseContext: true, requireContextHandoff: true },
+			{ autoCondenseContext: false, requireContextHandoff: true },
+			{ autoCondenseContext: true, requireContextHandoff: false },
+		])("forwards cancellation and preserves history for %o", async (settings) => {
+			const controller = new AbortController()
+			const summarizeSpy = vi
+				.spyOn(condenseModule, "summarizeConversation")
+				.mockImplementation(async (...args) => {
+					expect(args[9]?.signal).toBe(controller.signal)
+					controller.abort()
+					return { messages: [], summary: "Late summary", condenseId: "late", cost: 0.01 }
+				})
+			try {
+				const result = await manageContext({
+					messages,
+					totalTokens: 95_000,
+					contextWindow: 100_000,
+					apiHandler: mockApiHandler,
+					autoCondenseContextPercent: 90,
+					systemPrompt: "System prompt",
+					taskId,
+					profileThresholds: {},
+					currentProfileId: "default",
+					contextHandoffSignal: controller.signal,
+					...settings,
+				})
+				expect(summarizeSpy).toHaveBeenCalledOnce()
+				expect(result.messages).toBe(messages)
+				expect(result.summary).toBe("")
+				expect(result.condenseId).toBeUndefined()
+				expect(result.truncationId).toBeUndefined()
+				expect(result.error).toBe("Context preparation was cancelled")
+				expect(result.cost).toBe(0.01)
+			} finally {
+				summarizeSpy.mockRestore()
+			}
+		})
+
+		it("does not return truncated history when cancelled during fallback token sizing", async () => {
+			const controller = new AbortController()
+			let counts = 0
+			const countTokensSpy = vi.spyOn(mockApiHandler, "countTokens").mockImplementation(async () => {
+				if (++counts > 1) controller.abort()
+				return 1
+			})
+			try {
+				const result = await manageContext({
+					messages,
+					totalTokens: 95_000,
+					contextWindow: 100_000,
+					apiHandler: mockApiHandler,
+					autoCondenseContext: false,
+					autoCondenseContextPercent: 90,
+					systemPrompt: "System prompt",
+					taskId,
+					profileThresholds: {},
+					currentProfileId: "default",
+					contextHandoffSignal: controller.signal,
+				})
+				expect(counts).toBeGreaterThan(1)
+				expect(result.messages).toBe(messages)
+				expect(result.truncationId).toBeUndefined()
+				expect(result.error).toBe("Context preparation was cancelled")
+			} finally {
+				countTokensSpy.mockRestore()
+			}
+		})
+
+		it("does not start preparation or fallback when cancellation predates context management", async () => {
+			const controller = new AbortController()
+			controller.abort()
+			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation")
+			try {
+				const result = await manageContext({
+					messages,
+					totalTokens: 95_000,
+					contextWindow: 100_000,
+					apiHandler: mockApiHandler,
+					autoCondenseContext: true,
+					autoCondenseContextPercent: 90,
+					systemPrompt: "System prompt",
+					taskId,
+					profileThresholds: {},
+					currentProfileId: "default",
+					contextHandoffSignal: controller.signal,
+				})
+				expect(summarizeSpy).not.toHaveBeenCalled()
+				expect(result.messages).toBe(messages)
+				expect(result.truncationId).toBeUndefined()
+				expect(result.error).toBe("Context preparation was cancelled")
+			} finally {
+				summarizeSpy.mockRestore()
+			}
+		})
+		// kilocode_change end
+
 		it("keeps every message when a required restart handoff cannot be generated", async () => {
 			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation").mockResolvedValue({
 				messages,

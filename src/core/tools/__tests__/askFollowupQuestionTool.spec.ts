@@ -112,6 +112,39 @@ describe("askFollowupQuestionTool", () => {
 
 	// kilocode_change start
 	describe("yoloMode behavior", () => {
+		it.each([
+			{ label: "active", offset: 60_000, blocked: true },
+			{ label: "expired", offset: -1, blocked: false },
+			{ label: "invalid", offset: Number.NaN, blocked: false },
+		])("shows complete and partial follow-ups correctly for an $label timer", async ({ offset, blocked }) => {
+			mockCline.providerRef = {
+				deref: () => ({
+					getState: async () => ({ yoloMode: true, yoloModeExpiresAt: Date.now() + offset }),
+				}),
+			}
+			const block: ToolUse<"ask_followup_question"> = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Continue?", follow_up: "<suggest>Yes</suggest>" },
+				partial: true,
+			}
+			const callbacks = {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+				removeClosingTag: vi.fn((tag, content) => content),
+				toolProtocol: "xml" as const,
+			}
+
+			await askFollowupQuestionTool.handle(mockCline, block, callbacks)
+			expect(mockCline.ask).toHaveBeenCalledTimes(blocked ? 0 : 1)
+			mockCline.ask.mockClear()
+			await askFollowupQuestionTool.handle(mockCline, { ...block, partial: false }, callbacks)
+			expect(mockCline.ask).toHaveBeenCalledTimes(blocked ? 0 : 1)
+			expect(toolResult).toContain(blocked ? "not available in yolo mode" : "Test response")
+			expect(callbacks.handleError).not.toHaveBeenCalled()
+		})
+
 		it("should return error message when yoloMode is enabled", async () => {
 			const yoloMockCline = {
 				...mockCline,

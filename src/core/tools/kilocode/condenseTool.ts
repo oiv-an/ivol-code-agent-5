@@ -37,52 +37,56 @@ export const condenseTool = async (
 				)
 			} else {
 				// If no response, the user accepted the condensed version
-				pushToolResult(formatResponse.toolResult(formatResponse.condense()))
-
 				const { contextTokens: prevContextTokens } = cline.getTokenUsage()
 				const intelligentReset = await cline.getIntelligentContextResetConfig()
 
-				// Use summarizeConversation to create a condensed version of the conversation
-				const summarizedMessages = await summarizeConversation(
-					cline.apiConversationHistory,
-					cline.api,
-					await cline.getSystemPrompt(),
-					cline.taskId,
-					prevContextTokens,
-					false,
-					undefined,
-					undefined,
-					intelligentReset.useNativeTools,
-					{
-						enabled: intelligentReset.enabled,
-						prompt: intelligentReset.prompt,
-						...(intelligentReset.enabled ? { onBeforeRequest: cline.notifyContextHandoffPreparing } : {}),
-					},
-				)
-
-				// Persist and verify the restart handoff before changing history.
-				await cline.commitContextCondensation(
-					summarizedMessages,
-					"tool",
-					prevContextTokens,
-					intelligentReset.enabled,
-				)
-				await cline.say(
-					"condense_context",
-					undefined,
-					undefined,
-					false,
-					undefined,
-					undefined,
-					{ isNonInteractive: true },
-					{
-						summary: summarizedMessages.summary,
-						cost: summarizedMessages.cost,
-						newContextTokens: summarizedMessages.newContextTokens ?? 0,
+				await cline.runContextPreparation(async (signal) => {
+					// Use summarizeConversation to create a condensed version of the conversation
+					const summarizedMessages = await summarizeConversation(
+						cline.apiConversationHistory,
+						cline.api,
+						await cline.getSystemPrompt(),
+						cline.taskId,
 						prevContextTokens,
-						condenseId: summarizedMessages.condenseId,
-					},
-				)
+						false,
+						undefined,
+						undefined,
+						intelligentReset.useNativeTools,
+						{
+							enabled: intelligentReset.enabled,
+							signal,
+							prompt: intelligentReset.prompt,
+							...(intelligentReset.enabled
+								? { onBeforeRequest: cline.notifyContextHandoffPreparing }
+								: {}),
+						},
+					)
+					// Persist and verify the restart handoff before changing history.
+					await cline.commitContextCondensation(
+						summarizedMessages,
+						"tool",
+						prevContextTokens,
+						intelligentReset.enabled,
+					)
+					await cline.say(
+						"condense_context",
+						undefined,
+						undefined,
+						false,
+						undefined,
+						undefined,
+						{ isNonInteractive: true },
+						{
+							summary: summarizedMessages.summary,
+							cost: summarizedMessages.cost,
+							newContextTokens: summarizedMessages.newContextTokens ?? 0,
+							prevContextTokens,
+							condenseId: summarizedMessages.condenseId,
+						},
+					)
+				})
+				// A failed preparation must never report a successful tool result.
+				pushToolResult(formatResponse.toolResult(formatResponse.condense()))
 			}
 			return
 		}

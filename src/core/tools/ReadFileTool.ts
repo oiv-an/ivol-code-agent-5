@@ -49,6 +49,86 @@ interface FileResult {
 export class ReadFileTool extends BaseTool<"read_file"> {
 	readonly name = "read_file" as const
 
+	// kilocode_change start: read the task's immutable handoff, not another window's rotating root file.
+	private async formatContextHandoffRead(
+		task: Task,
+		relPath: string,
+		content: string,
+		lineRanges?: LineRange[],
+	): Promise<Pick<FileResult, "xmlContent" | "nativeContent">> {
+		// Check before splitting or tokenizing: malformed snapshots must not cause an unbounded allocation.
+		if (Buffer.byteLength(content, "utf8") > 2 * 1024 * 1024) {
+			throw new Error("The verified continuation snapshot exceeds the 2 MiB safety limit; it was not consumed.")
+		}
+
+		const lines = content.split("\n")
+		if (lines.at(-1) === "") lines.pop()
+		const ranges = lineRanges?.length ? lineRanges : [{ start: 1, end: lines.length }]
+		if (ranges.length > 100) {
+			throw new Error("Too many line ranges for the verified continuation snapshot; it was not consumed.")
+		}
+		const xmlParts: string[] = []
+		const nativeParts: string[] = []
+		let renderedBytes = 0
+		for (const range of ranges) {
+			if (
+				!Number.isInteger(range.start) ||
+				!Number.isInteger(range.end) ||
+				range.start < 1 ||
+				range.end < range.start ||
+				range.start > lines.length
+			) {
+				throw new Error("Invalid line range for the verified continuation snapshot; it was not consumed.")
+			}
+			const numbered = addLineNumbers(lines.slice(range.start - 1, range.end).join("\n"), range.start)
+			renderedBytes += Buffer.byteLength(numbered, "utf8")
+			if (renderedBytes > 2 * 1024 * 1024) {
+				throw new Error(
+					"The formatted continuation snapshot exceeds the 2 MiB safety limit; it was not consumed.",
+				)
+			}
+			xmlParts.push(`<content lines="${range.start}-${range.end}">\n${numbered}</content>`)
+			nativeParts.push(`Lines ${range.start}-${range.end}:\n${numbered}`)
+		}
+		const xmlContent = `<file><path>${relPath}</path>\n${xmlParts.join("\n")}\n</file>`
+		const nativeContent = `File: ${relPath}\n${nativeParts.join("\n\n")}`
+		const { id: modelId, info } = task.api.getModel()
+		const requestedOutput = getModelMaxOutputTokens({ modelId, model: info, settings: task.apiConfiguration })
+		const contextWindow =
+			Number.isFinite(info.contextWindow) && info.contextWindow > 0 ? info.contextWindow : 32_000
+		// Some compatible providers expose -1 or their entire context window as the output limit.
+		// Keep a finite response reserve without incorrectly treating the whole window as unavailable.
+		const outputReserve =
+			typeof requestedOutput === "number" &&
+			Number.isFinite(requestedOutput) &&
+			requestedOutput > 0 &&
+			requestedOutput < contextWindow
+				? requestedOutput
+				: Math.min(ANTHROPIC_DEFAULT_MAX_TOKENS, Math.floor(contextWindow / 4))
+		const { contextTokens } = task.getTokenUsage()
+		const usedTokens = Number.isFinite(contextTokens) && contextTokens > 0 ? contextTokens : 0
+		const safeReadBudget = Math.min(
+			64_000,
+			Math.floor((contextWindow - outputReserve - usedTokens) * FILE_READ_BUDGET_PERCENT),
+		)
+		const countedContent = xmlContent.length >= nativeContent.length ? xmlContent : nativeContent
+		// Byte length is a conservative fallback if a provider cannot count tokens locally.
+		let tokenCount = Buffer.byteLength(countedContent, "utf8")
+		try {
+			const countedTokens = await task.api.countTokens([{ type: "text", text: countedContent }])
+			if (Number.isFinite(countedTokens) && countedTokens > 0) tokenCount = countedTokens
+		} catch {
+			// Retain the bounded byte estimate. Never expose token-counter errors or snapshot contents.
+		}
+		if (safeReadBudget <= 0 || tokenCount > safeReadBudget) {
+			throw new Error(
+				"The verified continuation snapshot does not fit the available context budget; it was not truncated or consumed. Increase the available context before retrying the full read.",
+			)
+		}
+		return { xmlContent, nativeContent }
+	}
+	// kilocode_change end
+
 	parseLegacy(params: Partial<Record<string, string>>): { files: FileEntry[] } {
 		const argsXmlTag = params.args
 		const legacyPath = params.path
@@ -352,6 +432,17 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				const fullPath = path.resolve(task.cwd, relPath)
 
 				try {
+					// kilocode_change start: permission checks above also apply to task-local handoff snapshots.
+					const handoffContent = await task.getContextHandoffReadContent?.(relPath)
+					if (handoffContent !== undefined) {
+						updateFileResult(
+							relPath,
+							await this.formatContextHandoffRead(task, relPath, handoffContent, fileResult.lineRanges),
+						)
+						continue
+					}
+					// Errors do not fall back to the visible root file: another task may own it now.
+					// kilocode_change end
 					// Check if the path is a directory before attempting to read it
 					const stats = await fs.stat(fullPath)
 					if (stats.isDirectory()) {

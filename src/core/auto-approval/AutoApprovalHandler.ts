@@ -1,4 +1,5 @@
 import { GlobalState, ClineMessage, ClineAsk } from "@roo-code/types"
+import { isYoloModeActive } from "@roo-code/types" // kilocode_change
 
 import { getApiMetrics } from "../../shared/getApiMetrics"
 import { ClineAskResponse } from "../../shared/WebviewMessage"
@@ -27,7 +28,7 @@ export class AutoApprovalHandler {
 		) => Promise<{ response: ClineAskResponse; text?: string; images?: string[] }>,
 	): Promise<AutoApprovalResult> {
 		// kilocode_change start: yolo mode
-		if (state?.yoloMode) {
+		if (isYoloModeActive(state)) {
 			return {
 				shouldProceed: true,
 				requiresApproval: false,

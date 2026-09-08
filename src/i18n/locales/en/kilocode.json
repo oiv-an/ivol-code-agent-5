@@ -1,4 +1,7 @@
 {
+	"yoloTimer": {
+		"saveFailed": "Could not save the YOLO change. YOLO approval is disabled in this window; check any other open windows. {{error}}"
+	},
 	"info": {
 		"settings_imported": "Settings imported successfully."
 	},

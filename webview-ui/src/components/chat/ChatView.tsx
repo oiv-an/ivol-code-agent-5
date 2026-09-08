@@ -130,6 +130,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	} = useExtensionState()
 
 	const messagesRef = useRef(messages)
+	// kilocode_change start: progress may arrive after switching tasks or cancelling an old request.
+	const currentTaskIdRef = useRef(currentTaskItem?.id)
+	useEffect(() => {
+		currentTaskIdRef.current = currentTaskItem?.id
+	}, [currentTaskItem?.id])
+	// kilocode_change end
 
 	useEffect(() => {
 		messagesRef.current = messages
@@ -964,6 +970,18 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const handleMessage = useCallback(
 		(e: MessageEvent) => {
 			const message: ExtensionMessage = e.data
+			// kilocode_change start: a late old-task event must not change the current task's controls.
+			// New tasks can receive progress before their history item is populated; keep that path working.
+			if (
+				["contextHandoffStarted", "condenseTaskContextStarted", "condenseTaskContextResponse"].includes(
+					message.type,
+				) &&
+				currentTaskIdRef.current &&
+				message.text !== currentTaskIdRef.current
+			) {
+				return
+			}
+			// kilocode_change end
 
 			switch (message.type) {
 				case "action":
@@ -1015,11 +1033,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					break
 				// kilocode_change end
 				case "condenseTaskContextStarted":
-					// Handle both manual and automatic condensation start
-					// We don't check the task ID because:
-					// 1. There can only be one active task at a time
-					// 2. Task switching resets isCondensing to false (see useEffect with task?.ts dependency)
-					// 3. For new tasks, currentTaskItem may not be populated yet due to async state updates
+					// kilocode_change: task ownership is checked above for manual and automatic progress.
 					if (message.text) {
 						setIsPreparingContextHandoff(false) // kilocode_change: file has been saved and verified.
 						setIsCondensing(true)
@@ -1028,7 +1042,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					}
 					break
 				case "condenseTaskContextResponse":
-					// Same reasoning as above - we trust this is for the current task
+					// kilocode_change: only the current task may finish progress or release manual input.
 					if (message.text) {
 						if (isManualContextManagementRef.current) {
 							setSendingDisabled(false)

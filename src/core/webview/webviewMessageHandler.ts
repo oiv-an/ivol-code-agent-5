@@ -70,6 +70,7 @@ import { showSystemNotification } from "../../integrations/notifications" // kil
 import { singleCompletionHandler } from "../../utils/single-completion-handler" // kilocode_change
 import { searchCommits } from "../../utils/git"
 import { exportSettings, importSettingsWithFeedback } from "../config/importExport"
+import { updateYoloMode, YOLO_MODE_STATE_KEYS } from "../config/yoloMode" // kilocode_change
 import { getOpenAiModels } from "../../api/providers/openai"
 import { OpenAiModelCatalogCache } from "../../api/providers/openai-model-cache" // kilocode_change
 // kilocode_change: personal build omits hidden-provider catalog fetchers
@@ -622,6 +623,8 @@ export const webviewMessageHandler = async (
 		case "updateSettings":
 			if (message.updatedSettings) {
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
+					// kilocode_change: only the dedicated explicit action can change YOLO authorization
+					if (YOLO_MODE_STATE_KEYS.some((stateKey) => stateKey === key)) continue
 					let newValue = value
 
 					if (key === "language") {
@@ -1870,8 +1873,21 @@ export const webviewMessageHandler = async (
 			break
 		// kilocode_change start: yolo mode
 		case "yoloMode":
-			await updateGlobalState("yoloMode", message.bool ?? false)
-			await provider.postStateToWebview()
+		case "startYoloModeTimer":
+			try {
+				await updateYoloMode(
+					provider.contextProxy,
+					message.type === "startYoloModeTimer"
+						? { type: "timer", minutes: message.value }
+						: { type: "toggle", enabled: message.bool === true },
+				)
+			} catch (error) {
+				const detail = error instanceof Error ? error.message : String(error)
+				provider.log(`[YOLO] Settings change failed: ${detail}`)
+				void vscode.window.showErrorMessage(t("kilocode:yoloTimer.saveFailed", { error: detail }))
+			} finally {
+				await provider.postStateToWebview()
+			}
 			break
 		// kilocode_change end
 		case "enhancePrompt":
@@ -3461,6 +3477,11 @@ export const webviewMessageHandler = async (
 		// kilocode_change start: Type-safe global state handler
 		case "updateGlobalState": {
 			const { stateKey, stateValue } = message as UpdateGlobalStateMessage
+			// YOLO authorization must not be revived by a generic settings save or stale webview snapshot.
+			if (YOLO_MODE_STATE_KEYS.some((key) => key === stateKey)) {
+				await provider.postStateToWebview()
+				break
+			}
 			if (stateKey !== undefined && stateValue !== undefined && isGlobalStateKey(stateKey)) {
 				await updateGlobalState(stateKey, stateValue)
 				await provider.postStateToWebview()

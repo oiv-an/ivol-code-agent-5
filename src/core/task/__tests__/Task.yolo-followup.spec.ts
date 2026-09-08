@@ -158,6 +158,36 @@ describe("Task - YOLO Mode Follow-up Question Auto-Answer", () => {
 		expect(result.text).toBe("Option A")
 	})
 
+	it.each([
+		{ label: "active", offset: 60_000, expected: "Automatic suggestion" },
+		{ label: "expired", offset: -1, expected: "User answer after expiry" },
+		{ label: "invalid", offset: Number.NaN, expected: "User answer after expiry" },
+	])("uses automatic follow-up answers only while the timer is $label", async ({ offset, expected }) => {
+		;(mockProvider.getState as any).mockResolvedValue({
+			yoloMode: true,
+			yoloModeExpiresAt: Date.now() + offset,
+		})
+		const task = new Task({
+			context: mockContext,
+			provider: mockProvider as ClineProvider,
+			apiConfiguration: { apiProvider: "anthropic" } as any,
+			startTask: false,
+		})
+		const resultPromise = task.ask(
+			"followup",
+			JSON.stringify({ question: "Continue?", suggest: [{ answer: "Automatic suggestion" }] }),
+			false,
+		)
+		const userResponse = setTimeout(() => {
+			task.handleWebviewAskResponse("messageResponse", "User answer after expiry", undefined)
+		}, 10)
+		try {
+			expect(await resultPromise).toMatchObject({ response: "messageResponse", text: expected })
+		} finally {
+			clearTimeout(userResponse)
+		}
+	})
+
 	it("should wait for user input when YOLO mode is disabled", async () => {
 		;(mockProvider.getState as any).mockResolvedValue({
 			yoloMode: false,

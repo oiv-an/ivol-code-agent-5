@@ -82,6 +82,58 @@ describe("AutoApprovalHandler", () => {
 			expect(mockAskForApproval).not.toHaveBeenCalled()
 			expect(mockGetApiMetrics).not.toHaveBeenCalled()
 		})
+
+		it.each(["requests", "cost"] as const)(
+			"restores the %s limit when a running YOLO timer expires",
+			async (limit) => {
+				const deadline = Date.now() + 60_000
+				const now = vi.spyOn(Date, "now").mockReturnValue(deadline - 1)
+				mockState.yoloMode = true
+				mockState.yoloModeExpiresAt = deadline
+				mockState.allowedMaxRequests = limit === "requests" ? 1 : undefined
+				mockState.allowedMaxCost = limit === "cost" ? 0.01 : undefined
+				const messages: ClineMessage[] = [{ type: "say", say: "api_req_started", text: "{}", ts: 1000 }]
+				mockGetApiMetrics.mockReturnValue({ totalCost: 100 })
+				mockAskForApproval.mockResolvedValue({ response: "noButtonClicked" })
+
+				try {
+					expect(await handler.checkAutoApprovalLimits(mockState, messages, mockAskForApproval)).toEqual({
+						shouldProceed: true,
+						requiresApproval: false,
+					})
+					expect(mockAskForApproval).not.toHaveBeenCalled()
+					expect(mockGetApiMetrics).not.toHaveBeenCalled()
+
+					now.mockReturnValue(deadline)
+					const result = await handler.checkAutoApprovalLimits(mockState, messages, mockAskForApproval)
+					expect(result).toMatchObject({
+						shouldProceed: false,
+						requiresApproval: true,
+						approvalType: limit,
+					})
+					expect(mockAskForApproval).toHaveBeenCalledTimes(1)
+				} finally {
+					now.mockRestore()
+				}
+			},
+		)
+
+		it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+			"does not bypass configured limits with an invalid YOLO deadline %s",
+			async (deadline) => {
+				mockState.yoloMode = true
+				mockState.yoloModeExpiresAt = deadline
+				mockState.allowedMaxRequests = 1
+				mockAskForApproval.mockResolvedValue({ response: "noButtonClicked" })
+				const messages: ClineMessage[] = [{ type: "say", say: "api_req_started", text: "{}", ts: 1000 }]
+
+				expect(await handler.checkAutoApprovalLimits(mockState, messages, mockAskForApproval)).toMatchObject({
+					shouldProceed: false,
+					requiresApproval: true,
+					approvalType: "requests",
+				})
+			},
+		)
 		// kilocode_change end
 
 		it("should check request limit before cost limit", async () => {

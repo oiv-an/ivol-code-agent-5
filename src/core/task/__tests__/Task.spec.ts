@@ -24,6 +24,8 @@ import {
 	deleteContextHandoffFileIfOwned,
 	hydratePendingContextHandoff,
 	writeContextHandoffFile,
+	preflightContextHandoff,
+	readTaskContextHandoff,
 } from "../../context-management/context-handoff"
 import { summarizeConversation } from "../../condense"
 
@@ -212,6 +214,8 @@ vi.mock("../../context-management/context-handoff", async (importOriginal) => {
 			createdAt: 1,
 		}),
 		deleteContextHandoffFileIfOwned: vi.fn().mockResolvedValue(true),
+		preflightContextHandoff: vi.fn().mockResolvedValue(undefined),
+		readTaskContextHandoff: vi.fn().mockResolvedValue("verified snapshot"),
 		hydratePendingContextHandoff: vi.fn().mockImplementation(({ messages }) => Promise.resolve({ messages })),
 	}
 })
@@ -2729,6 +2733,7 @@ describe("Queued message processing after condense", () => {
 		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
 			workspacePath: task.cwd,
 			handoffId: "mock-handoff-id",
+			sha256: "mock-sha256",
 		})
 		expect(saySpy).toHaveBeenCalledWith(
 			"condense_context_error",
@@ -2780,6 +2785,7 @@ describe("Queued message processing after condense", () => {
 		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
 			workspacePath: task.cwd,
 			handoffId: "mock-handoff-id",
+			sha256: "mock-sha256",
 		})
 	})
 
@@ -2931,7 +2937,7 @@ describe("Queued message processing after condense", () => {
 			"Keep a compact summary",
 			undefined,
 			expect.any(Boolean),
-			{ enabled: false, prompt: undefined },
+			expect.objectContaining({ enabled: false, prompt: undefined, signal: expect.any(AbortSignal) }),
 		)
 		expect(writeContextHandoffFile).not.toHaveBeenCalled()
 		expect(saySpy.mock.calls.some(([type]) => type === "context_handoff")).toBe(false)
@@ -3002,6 +3008,252 @@ describe("Queued message processing after condense", () => {
 		disabledTask.updateApiConfiguration({ ...apiConfig, intelligentContextResetEnabled: true })
 		expect(await disabledTask.getIntelligentContextResetConfig()).toMatchObject({ enabled: true })
 		expect(await enabledTask.getIntelligentContextResetConfig()).toMatchObject({ enabled: true })
+	})
+	// kilocode_change end
+
+	// kilocode_change start: preparation isolation and recoverable failure regressions
+	describe("context preparation failure safety", () => {
+		function setup() {
+			const provider = createProvider()
+			provider.getState.mockResolvedValue({
+				apiConfiguration: apiConfig,
+				autoApprovalEnabled: true,
+				autoCondenseContext: true,
+				autoCondenseContextPercent: 90,
+			})
+			const task = new Task({
+				provider,
+				apiConfiguration: apiConfig,
+				task: "work",
+				startTask: false,
+				context: provider.context,
+			})
+			vi.spyOn(task as any, "getSystemPrompt").mockResolvedValue("system")
+			const save = vi.spyOn(task as any, "saveApiConversationHistory").mockResolvedValue(true)
+			const say = vi.spyOn(task, "say").mockResolvedValue(undefined)
+			return { task, provider, save, say }
+		}
+		function result(): any {
+			return {
+				messages: [{ role: "assistant", content: "summary", isSummary: true, condenseId: "ready" }],
+				summary: "summary",
+				cost: 0,
+				condenseId: "ready",
+			}
+		}
+
+		it("runs filesystem preflight before publishing preparation progress", async () => {
+			const { task, say } = setup()
+			vi.mocked(preflightContextHandoff).mockRejectedValueOnce(new Error("unmanaged root file"))
+			await expect(task.notifyContextHandoffPreparing("prepare")).rejects.toThrow("unmanaged root file")
+			expect(say).not.toHaveBeenCalled()
+			expect(writeContextHandoffFile).not.toHaveBeenCalled()
+		})
+
+		it("cancels preparation and rejects a late provider result before writing anything", async () => {
+			const { task, save } = setup()
+			await task.runContextPreparation(async (signal) => {
+				task.cancelCurrentRequest()
+				expect(signal.aborted).toBe(true)
+				await expect(task.commitContextCondensation(result(), "manual")).rejects.toThrow("cancelled")
+			})
+			expect(writeContextHandoffFile).not.toHaveBeenCalled()
+			expect(save).not.toHaveBeenCalled()
+		})
+
+		it.each(["append", "replace", "edit"])(
+			"does not overwrite history changed by %s during generation",
+			async (change) => {
+				const { task, save } = setup()
+				task.apiConversationHistory = [{ role: "user", content: "before" }]
+				await task.runContextPreparation(async () => {
+					if (change === "append")
+						task.apiConversationHistory.push({ role: "user", content: "new requirement" })
+					if (change === "replace") task.apiConversationHistory = [{ role: "user", content: "new task" }]
+					if (change === "edit") task.apiConversationHistory[0].content = "edited requirement"
+					const updated = JSON.stringify(task.apiConversationHistory)
+					await expect(task.commitContextCondensation(result(), "manual")).rejects.toThrow("history changed")
+					expect(JSON.stringify(task.apiConversationHistory)).toBe(updated)
+				})
+				expect(writeContextHandoffFile).not.toHaveBeenCalled()
+				expect(save).not.toHaveBeenCalled()
+			},
+		)
+
+		it("rejects a second concurrent preparation without cancelling the owner", async () => {
+			const { task } = setup()
+			await task.runContextPreparation(async (signal) => {
+				await expect(task.runContextPreparation(async () => undefined)).rejects.toThrow("already running")
+				expect(signal.aborted).toBe(false)
+			})
+			await expect(task.runContextPreparation(async () => "next")).resolves.toBe("next")
+		})
+
+		it.each(["invalid summary", "UI failure", "cancel after write"])(
+			"cleans only its newly written snapshot after %s",
+			async (failure) => {
+				const { task, save, say } = setup()
+				const original = task.apiConversationHistory
+				const prepared = result()
+				if (failure === "invalid summary") prepared.messages = []
+				if (failure === "UI failure") say.mockRejectedValueOnce(new Error("UI unavailable"))
+				if (failure === "cancel after write") {
+					const record = await vi.mocked(writeContextHandoffFile).getMockImplementation()!({} as any)
+					vi.mocked(writeContextHandoffFile).mockClear()
+					vi.mocked(writeContextHandoffFile).mockImplementationOnce(async () => {
+						task.cancelCurrentRequest()
+						return record
+					})
+				}
+				await expect(
+					task.runContextPreparation(() => task.commitContextCondensation(prepared, "manual")),
+				).rejects.toThrow()
+				expect(task.apiConversationHistory).toBe(original)
+				expect(save).not.toHaveBeenCalled()
+				expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+					workspacePath: task.cwd,
+					handoffId: "mock-handoff-id",
+					sha256: "mock-sha256",
+				})
+			},
+		)
+
+		it("does not send oversized context or auto-retry while a failed automatic preparation awaits the user", async () => {
+			const { task, provider } = setup()
+			task.apiConversationHistory = [{ role: "user", content: "large task" }]
+			vi.spyOn(task, "getTokenUsage").mockReturnValue({ contextTokens: 400_000 } as any)
+			vi.spyOn(task.api, "countTokens").mockResolvedValue(100)
+			vi.mocked(summarizeConversation).mockResolvedValueOnce({ ...result(), error: "disk full" })
+			const create = vi.spyOn(task.api, "createMessage")
+			const ask = vi.spyOn(task, "ask").mockResolvedValue({ response: "noButtonClicked" })
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("disk full")
+			expect(ask).toHaveBeenCalledOnce()
+			expect(ask).toHaveBeenCalledWith("api_req_failed", expect.stringContaining("disk full"))
+			expect(create).not.toHaveBeenCalled()
+			expect(summarizeConversation).toHaveBeenCalledOnce()
+			expect(provider.postMessageToWebview).toHaveBeenCalledWith({
+				type: "condenseTaskContextResponse",
+				text: task.taskId,
+			})
+		})
+
+		it("routes root reads using only this task's verified snapshot identity", async () => {
+			const { task } = setup()
+			task.apiConversationHistory = [
+				{
+					role: "assistant",
+					content: "summary",
+					isSummary: true,
+					condenseId: "c",
+					contextHandoffId: "own",
+					contextHandoffPath: "CONTEXT_RESTART.md",
+					contextHandoffSha256: "hash",
+					contextHandoffContent: "saved",
+				},
+			]
+			await expect(task.getContextHandoffReadContent("CONTEXT_RESTART.md")).resolves.toBe("verified snapshot")
+			expect(readTaskContextHandoff).toHaveBeenCalledWith({
+				workspacePath: task.cwd,
+				handoffId: "own",
+				sha256: "hash",
+				content: "saved",
+			})
+			await expect(task.getContextHandoffReadContent("README.md")).resolves.toBeUndefined()
+			expect(readTaskContextHandoff).toHaveBeenCalledOnce()
+		})
+
+		it("retries a failed automatic preparation only after an explicit click", async () => {
+			const { task } = setup()
+			task.apiConversationHistory = [{ role: "user", content: "large task" }]
+			vi.spyOn(task, "getTokenUsage").mockReturnValue({ contextTokens: 400_000 } as any)
+			vi.spyOn(task.api, "countTokens").mockResolvedValue(100)
+			vi.mocked(summarizeConversation)
+				.mockResolvedValueOnce({ ...result(), error: "disk full" })
+				.mockResolvedValueOnce({ ...result(), error: "disk still full" })
+			const create = vi.spyOn(task.api, "createMessage")
+			const ask = vi
+				.spyOn(task, "ask")
+				.mockResolvedValueOnce({ response: "yesButtonClicked" })
+				.mockResolvedValueOnce({ response: "noButtonClicked" })
+			await expect(task.attemptApiRequest().next()).rejects.toThrow("disk still full")
+			expect(ask).toHaveBeenCalledTimes(2)
+			expect(summarizeConversation).toHaveBeenCalledTimes(2)
+			expect(create).not.toHaveBeenCalled()
+		})
+
+		it("ignores duplicate manual clicks without ending the in-progress operation", async () => {
+			const { task, provider } = setup()
+			let complete!: (value: any) => void
+			vi.mocked(summarizeConversation).mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						complete = resolve
+					}),
+			)
+			const first = task.condenseContext()
+			await task.condenseContext()
+			await vi.waitFor(() => expect(summarizeConversation).toHaveBeenCalledOnce())
+			expect(provider.postMessageToWebview).not.toHaveBeenCalledWith({
+				type: "condenseTaskContextResponse",
+				text: task.taskId,
+			})
+			complete(result())
+			await first
+			expect(
+				provider.postMessageToWebview.mock.calls.filter(
+					([message]: any[]) => message.type === "condenseTaskContextResponse",
+				),
+			).toHaveLength(1)
+		})
+
+		it("commits the explicit non-intelligent safety fallback instead of resending unchanged history", async () => {
+			const { task, save, say } = setup()
+			task.apiConversationHistory = Array.from({ length: 8 }, (_, i) => ({
+				role: i % 2 ? "assistant" : "user",
+				content: `message ${i}`,
+				ts: i,
+			}))
+			vi.spyOn(task.api, "countTokens").mockResolvedValue(100)
+			await (task as any).prepareManagedContext(
+				{
+					messages: task.apiConversationHistory,
+					totalTokens: 400_000,
+					contextWindow: 400_000,
+					apiHandler: task.api,
+					autoCondenseContext: false,
+					autoCondenseContextPercent: 90,
+					systemPrompt: "system",
+					taskId: task.taskId,
+					profileThresholds: {},
+					currentProfileId: "default",
+					requireContextHandoff: false,
+				},
+				"automatic",
+			)
+			expect(save).toHaveBeenCalledOnce()
+			expect(task.apiConversationHistory.some((message) => message.truncationParent)).toBe(true)
+			expect(say.mock.calls.some(([type]) => type === "sliding_window_truncation")).toBe(true)
+			expect(writeContextHandoffFile).not.toHaveBeenCalled()
+		})
+
+		it("does not accept a read header from an unrelated tool result", () => {
+			const { task } = setup()
+			;(task as any).activeContextHandoffId = "own"
+			;(task as any).completedContextHandoffReadToolUseIds.add("call_own")
+			expect(
+				(task as any).messagePersistsSuccessfulContextHandoffRead({
+					role: "user",
+					content: [
+						{ type: "tool_result", tool_use_id: "call_own", content: "empty result" },
+						{
+							type: "tool_result",
+							tool_use_id: "call_other",
+							content: "<!-- IVOL_CODE_CONTEXT_RESTART_V1 handoff_id=own -->",
+						},
+					],
+				}),
+			).toBe(false)
+		})
 	})
 	// kilocode_change end
 
@@ -3087,7 +3339,11 @@ describe("Queued message processing after condense", () => {
 
 		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
 		expect((task as any).activeContextHandoffId).toBeUndefined()
-		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "handoff-1",
+			sha256: "hash",
+		})
 	})
 
 	it("keeps the handoff pending after an empty assistant response", async () => {
@@ -3188,7 +3444,11 @@ describe("Queued message processing after condense", () => {
 
 		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
 		expect((task as any).activeContextHandoffId).toBeUndefined()
-		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "handoff-1",
+			sha256: "hash",
+		})
 	})
 
 	it("does not consume a physical handoff when the model ignores the mandatory read", async () => {
@@ -3274,6 +3534,7 @@ describe("Queued message processing after condense", () => {
 		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
 			workspacePath: task.cwd,
 			handoffId: "handoff-xml",
+			sha256: "hash",
 		})
 		expect((task.apiConversationHistory.at(-1) as any).contextHandoffContinuationForId).toBe("handoff-xml")
 	})
@@ -3345,6 +3606,7 @@ describe("Queued message processing after condense", () => {
 		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
 			workspacePath: task.cwd,
 			handoffId: "handoff-native",
+			sha256: "hash",
 		})
 	})
 
@@ -3391,7 +3653,11 @@ describe("Queued message processing after condense", () => {
 		await (task as any).consumeEmbeddedHandoffAfterAcceptedCompletion([completion])
 
 		expect(summary.contextHandoffConsumedAt).toEqual(expect.any(Number))
-		expect(deleteContextHandoffFileIfOwned).not.toHaveBeenCalled()
+		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
+			workspacePath: task.cwd,
+			handoffId: "handoff-completion",
+			sha256: "hash",
+		})
 		expect((task.apiConversationHistory.at(-1) as any).contextHandoffContinuationForId).toBe("handoff-completion")
 	})
 
@@ -3448,6 +3714,7 @@ describe("Queued message processing after condense", () => {
 				isSummary: true,
 				condenseId: "old-condense",
 				contextHandoffId: "old-handoff",
+				contextHandoffSha256: "hash",
 			} as any,
 		]
 		;(task as any).activeContextHandoffId = "old-handoff"
@@ -3458,12 +3725,13 @@ describe("Queued message processing after condense", () => {
 		vi.spyOn(task.api, "createMessage").mockReturnValue(mockStream)
 
 		const iterator = task.attemptApiRequest(0, { skipProviderRateLimit: true })
-		await iterator.next()
-		await iterator.return(undefined)
+		await expect(iterator.next()).rejects.toThrow("skip recondense in lifecycle test")
+		expect(task.api.createMessage).not.toHaveBeenCalled()
 
 		expect(deleteContextHandoffFileIfOwned).toHaveBeenCalledWith({
 			workspacePath: task.cwd,
 			handoffId: "old-handoff",
+			sha256: "hash",
 		})
 		expect(saveSpy.mock.invocationCallOrder[0]).toBeLessThan(
 			vi.mocked(deleteContextHandoffFileIfOwned).mock.invocationCallOrder[0],

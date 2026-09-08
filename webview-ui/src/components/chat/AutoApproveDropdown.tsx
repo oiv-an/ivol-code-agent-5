@@ -11,6 +11,8 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 
 import { useAutoApprovalToggles } from "@/hooks/useAutoApprovalToggles"
 import { useAutoApprovalState } from "@/hooks/useAutoApprovalState"
+import { useYoloModeState } from "@/hooks/useYoloModeState" // kilocode_change
+import { YoloModeControls } from "../settings/YoloModeControls" // kilocode_change
 
 import { useRooPortal } from "@/components/ui/hooks/useRooPortal"
 
@@ -43,6 +45,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 	} = useExtensionState()
 
 	const toggles = useAutoApprovalToggles()
+	const { active: yoloActive } = useYoloModeState() // kilocode_change
 
 	const onAutoApproveToggle = React.useCallback(
 		(key: AutoApproveSetting, value: boolean) => {
@@ -126,10 +129,13 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 
 	// Handle the main auto-approval toggle
 	const handleAutoApprovalToggle = React.useCallback(() => {
-		const newValue = !(autoApprovalEnabled ?? false)
+		// kilocode_change start
+		if (yoloActive) vscode.postMessage({ type: "yoloMode", bool: false })
+		const newValue = !(yoloActive || (autoApprovalEnabled ?? false))
+		// kilocode_change end
 		setAutoApprovalEnabled(newValue)
 		vscode.postMessage({ type: "autoApprovalEnabled", bool: newValue })
-	}, [autoApprovalEnabled, setAutoApprovalEnabled])
+	}, [autoApprovalEnabled, setAutoApprovalEnabled, yoloActive]) // kilocode_change
 
 	// Calculate enabled and total counts as separate properties
 	const settingsArray = Object.values(autoApproveSettingsConfig)
@@ -142,10 +148,11 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		return Object.keys(toggles).length
 	}, [toggles])
 
-	const { effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled)
+	const { effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled, yoloActive) // kilocode_change
 
-	const tooltipText =
-		!effectiveAutoApprovalEnabled || enabledCount === 0
+	const tooltipText = yoloActive
+		? t("settings:yoloTimer.activeOverride") // kilocode_change
+		: !effectiveAutoApprovalEnabled || enabledCount === 0
 			? t("chat:autoApprove.tooltipManage")
 			: t("chat:autoApprove.tooltipStatus", {
 					toggles: settingsArray
@@ -177,18 +184,22 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 					)}
 
 					<span className="hidden min-[300px]:inline truncate min-w-0">
-						{!effectiveAutoApprovalEnabled
-							? t("chat:autoApprove.triggerLabelOff")
-							: enabledCount === totalCount
-								? t("chat:autoApprove.triggerLabelAll")
-								: t("chat:autoApprove.triggerLabel", { count: enabledCount })}
+						{yoloActive
+							? t("settings:yoloTimer.statusShort")
+							: !effectiveAutoApprovalEnabled // kilocode_change
+								? t("chat:autoApprove.triggerLabelOff")
+								: enabledCount === totalCount
+									? t("chat:autoApprove.triggerLabelAll")
+									: t("chat:autoApprove.triggerLabel", { count: enabledCount })}
 					</span>
 					<span className="inline min-[300px]:hidden min-w-0">
-						{!effectiveAutoApprovalEnabled
-							? t("chat:autoApprove.triggerLabelOffShort")
-							: enabledCount === totalCount
-								? t("chat:autoApprove.triggerLabelAll")
-								: enabledCount}
+						{yoloActive
+							? t("settings:yoloTimer.statusShort")
+							: !effectiveAutoApprovalEnabled // kilocode_change
+								? t("chat:autoApprove.triggerLabelOffShort")
+								: enabledCount === totalCount
+									? t("chat:autoApprove.triggerLabelAll")
+									: enabledCount}
 					</span>
 				</PopoverTrigger>
 			</StandardTooltip>
@@ -196,9 +207,16 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 				align="start"
 				sideOffset={4}
 				container={portalContainer}
-				className="p-0 overflow-hidden w-[min(440px,calc(100vw-2rem))]"
+				className="p-0 overflow-y-auto max-h-[min(720px,80vh)] w-[min(440px,calc(100vw-2rem))]" // kilocode_change
 				onOpenAutoFocus={(e) => e.preventDefault()}>
 				<div className="flex flex-col w-full">
+					{/* kilocode_change start: mount the countdown only while the popover is open. */}
+					{open && (
+						<div className="p-3">
+							<YoloModeControls />
+						</div>
+					)}
+					{/* kilocode_change end */}
 					{/* Header with description */}
 					<div className="p-3 border-b border-vscode-dropdown-border">
 						<div className="flex items-center justify-between gap-1 pr-1 pb-2">

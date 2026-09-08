@@ -1,5 +1,6 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo } from "@roo-code/types"
+import { isYoloModeActive } from "@roo-code/types" // kilocode_change
 import { getModeBySlug, getToolsForMode } from "../../../shared/modes"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shared/tools"
 import { defaultModeSlug } from "../../../shared/modes"
@@ -334,7 +335,8 @@ export function filterNativeToolsForMode(
 	// kilocode_change start
 	// Conditionally exclude ask_followup_question in yolo mode
 	// This prevents the agent from asking itself questions and auto-answering them
-	if (state?.yoloMode) {
+	if (isYoloModeActive(state)) {
+		// kilocode_change: timed YOLO authorization
 		allowedToolNames.delete("ask_followup_question")
 	}
 	// kilocode_change end

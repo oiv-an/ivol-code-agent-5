@@ -121,9 +121,13 @@ describe("importExport", () => {
 			listConfig: vi.fn(),
 		} as unknown as ReturnType<typeof vi.mocked<ProviderSettingsManager>>
 
+		const savedSettings = new Map<string, unknown>() // kilocode_change
 		mockContextProxy = {
+			getValue: vi.fn((key: string) => savedSettings.get(key)), // kilocode_change
 			setValues: vi.fn(),
-			setValue: vi.fn(),
+			setValue: vi.fn(async (key: string, value: unknown) => {
+				savedSettings.set(key, value)
+			}), // kilocode_change
 			export: vi.fn().mockImplementation(() => Promise.resolve({})),
 			setProviderSettings: vi.fn(),
 		} as unknown as ReturnType<typeof vi.mocked<ContextProxy>>
@@ -143,6 +147,42 @@ describe("importExport", () => {
 	})
 
 	describe("importSettings", () => {
+		// kilocode_change start: export/import is not authorization to restart a saved timer
+		it.each([1_800_000_000_000, null, undefined])(
+			"preserves imported deadline %s without enabling YOLO",
+			async (deadline) => {
+				;(vscode.window.showOpenDialog as Mock).mockResolvedValue([{ fsPath: "/mock/path/settings.json" }])
+				const providerProfiles = {
+					currentApiConfigName: "test",
+					apiConfigs: { test: { apiProvider: "openai" as ProviderName, id: "test-id" } },
+				}
+				;(fs.readFile as Mock).mockResolvedValue(
+					JSON.stringify({
+						providerProfiles,
+						globalSettings: {
+							yoloMode: true,
+							yoloModeExpiresAt: deadline,
+							yoloModeTimerMinutes: 60,
+							mode: "code",
+						},
+					}),
+				)
+				mockProviderSettingsManager.export.mockResolvedValue(providerProfiles)
+				mockProviderSettingsManager.listConfig.mockResolvedValue([])
+				const result = await importSettings({
+					providerSettingsManager: mockProviderSettingsManager,
+					contextProxy: mockContextProxy,
+					customModesManager: mockCustomModesManager,
+				})
+				expect(result.success).toBe(true)
+				expect(mockContextProxy.setValue).toHaveBeenCalledWith("yoloMode", false)
+				expect(mockContextProxy.setValue).not.toHaveBeenCalledWith("yoloMode", true)
+				expect(mockContextProxy.setValue).toHaveBeenCalledWith("yoloModeExpiresAt", deadline)
+				expect(mockContextProxy.setValue).toHaveBeenCalledWith("yoloModeTimerMinutes", 60)
+				expect(mockContextProxy.setValues).toHaveBeenCalledWith({ mode: "code" })
+			},
+		)
+		// kilocode_change end
 		it("should return success: false when user cancels file selection", async () => {
 			;(vscode.window.showOpenDialog as Mock).mockResolvedValue(undefined)
 

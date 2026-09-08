@@ -47,6 +47,7 @@ import {
 	isIdleAsk,
 	isInteractiveAsk,
 	isResumableAsk,
+	isYoloModeActive, // kilocode_change: enforce the deadline at each approval
 	isNativeProtocol,
 	getIntelligentContextResetPrompt,
 	isIntelligentContextResetEnabled,
@@ -116,7 +117,7 @@ import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
 import { AssistantMessageParser } from "../assistant-message/AssistantMessageParser"
 import { NativeToolCallParser } from "../assistant-message/NativeToolCallParser"
-import { manageContext, willManageContext } from "../context-management"
+import { manageContext, willManageContext, type ContextManagementOptions } from "../context-management" // kilocode_change
 import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
@@ -161,6 +162,9 @@ import {
 	attachContextHandoffToSummary,
 	deleteContextHandoffFileIfOwned,
 	hydratePendingContextHandoff,
+	findPendingContextHandoff,
+	preflightContextHandoff,
+	readTaskContextHandoff,
 	redactPotentialSecrets,
 	writeContextHandoffFile,
 } from "../context-management/context-handoff"
@@ -354,7 +358,7 @@ function appendContextHandoffContinuationInstruction(
 	}
 
 	const instruction = fileReady
-		? `MANDATORY CONTEXT RESTART: A verified continuation file for this task is ready at ${CONTEXT_HANDOFF_RELATIVE_PATH}. Your first project action MUST be a read_file tool call for that exact path, before reading or changing any other project file. Continue only after incorporating that file's complete state.`
+		? `MANDATORY CONTEXT RESTART: A verified continuation file for this task is ready at ${CONTEXT_HANDOFF_RELATIVE_PATH}. Your first project action MUST be a read_file tool call for that exact path, before reading or changing any other project file. Continue only after incorporating that file's complete state. IVOL routes this read to your task's verified snapshot even when another agent rotates the root file. Do not modify or delete the root file yourself; IVOL performs ownership-checked cleanup.`
 		: `MANDATORY CONTEXT RESTART: Do NOT read, modify, or delete ${CONTEXT_HANDOFF_RELATIVE_PATH} in this continuation. The fixed path is not verified as owned by this handoff and may belong to another task. A verified task-local continuation snapshot is already embedded in the conversation summary; use that embedded snapshot as the authoritative continuation state.`
 
 	return `${systemPrompt.trim()}\n\n${instruction}`
@@ -684,6 +688,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private activeContextHandoffFileReady?: boolean
 	private completedContextHandoffReadToolUseIds = new Set<string>()
 	private completedXmlContextHandoffRead = false
+	private contextPreparation?: { controller: AbortController; historyHash: string }
+	private manualContextCondensationInProgress = false
 	// kilocode_change end
 
 	constructor({
@@ -1279,10 +1285,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			return false
 		}
 
-		const resultText =
+		// Do not borrow a header from an unrelated tool result in the same user message.
+		const matchingContent =
 			typeof message.content === "string"
 				? message.content
-				: message.content
+				: message.content.filter((block) =>
+						this.completedXmlContextHandoffRead
+							? block.type === "text"
+							: block.type === "tool_result" &&
+								block.is_error !== true &&
+								this.completedContextHandoffReadToolUseIds.has(sanitizeToolUseId(block.tool_use_id)),
+					)
+		const resultText =
+			typeof matchingContent === "string"
+				? matchingContent
+				: matchingContent
 						.flatMap((block) => {
 							if (block.type === "text") {
 								return [block.text]
@@ -1298,7 +1315,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						.join("\n")
 		const expectedHeader = `IVOL_CODE_CONTEXT_RESTART_V1 handoff_id=${this.activeContextHandoffId}`
 		const readWasIncomplete =
-			/(?:<error>|<status>Denied|\bError:|\bStatus: Denied|Showing only \d+ of \d+ total lines|File truncated:|No available context budget)/i.test(
+			/(?:<error>|<status>Denied|(?:^|\n)Error:|(?:^|\n)Status: Denied|Showing only \d+ of \d+ total lines|File truncated:|No available context budget)/i.test(
 				resultText,
 			)
 		if (!resultText.includes(expectedHeader) || readWasIncomplete) {
@@ -1335,12 +1352,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const taggedCompletion = completionMessage as ContinuationMessage | undefined
 		const previousCompletionHandoffId = taggedCompletion?.contextHandoffContinuationForId
 		try {
-			if (this.activeContextHandoffFileReady !== false) {
-				await deleteContextHandoffFileIfOwned({
-					workspacePath: this.cwd,
-					handoffId: pendingHandoff.contextHandoffId!,
-				})
-			}
+			await deleteContextHandoffFileIfOwned({
+				workspacePath: this.cwd,
+				handoffId: pendingHandoff.contextHandoffId!,
+				sha256: pendingHandoff.contextHandoffSha256,
+			})
 
 			// Save the consumed marker only after the continuation is durable and an
 			// owned physical file has been cleared. Embedded-only continuations never
@@ -1919,7 +1935,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (type === "followup" && text && !partial) {
 			try {
 				const state = await this.providerRef.deref()?.getState()
-				if (state?.yoloMode) {
+				if (isYoloModeActive(state)) {
 					// Parse the follow-up JSON to extract suggestions
 					const followUpData = JSON.parse(text)
 					if (
@@ -2201,6 +2217,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// This is the actual task sent to the active model, not a fabricated tool call.
 	// Only the editable instruction is exposed, never the attached raw history.
 	public readonly notifyContextHandoffPreparing = async (prompt: string): Promise<void> => {
+		this.assertContextPreparationCurrent()
+		await preflightContextHandoff(this.cwd)
+		this.assertContextPreparationCurrent()
 		const progress: ContextHandoffProgress = {
 			phase: "preparing",
 			path: CONTEXT_HANDOFF_RELATIVE_PATH,
@@ -2214,6 +2233,88 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	public async finishContextCondensation(): Promise<void> {
 		await this.providerRef.deref()?.postMessageToWebview({ type: "condenseTaskContextResponse", text: this.taskId })
+	}
+
+	/** Each preparation owns its cancellation and the exact history it summarizes. */
+	public async runContextPreparation<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+		if (this.contextPreparation) {
+			throw new Error("Context preparation is already running for this task")
+		}
+		const preparation = {
+			controller: new AbortController(),
+			historyHash: crypto.createHash("sha256").update(JSON.stringify(this.apiConversationHistory)).digest("hex"),
+		}
+		this.contextPreparation = preparation
+		try {
+			this.assertContextPreparationCurrent()
+			return await operation(preparation.controller.signal)
+		} finally {
+			preparation.controller.abort()
+			if (this.contextPreparation === preparation) this.contextPreparation = undefined
+		}
+	}
+
+	private assertContextPreparationCurrent(): void {
+		if (this.abort || this.contextPreparation?.controller.signal.aborted) {
+			throw new Error("Context preparation was cancelled")
+		}
+		if (
+			this.contextPreparation &&
+			this.contextPreparation.historyHash !==
+				crypto.createHash("sha256").update(JSON.stringify(this.apiConversationHistory)).digest("hex")
+		) {
+			throw new Error("Task history changed during context preparation; the newer history was preserved")
+		}
+	}
+
+	/** A rotating workspace file must never make one task read another task's memory. */
+	public async getContextHandoffReadContent(relativePath: string): Promise<string | undefined> {
+		if (path.resolve(this.cwd, relativePath) !== path.resolve(this.cwd, CONTEXT_HANDOFF_RELATIVE_PATH)) return
+		const pending = findPendingContextHandoff(getEffectiveApiHistory(this.apiConversationHistory))
+		if (!pending) return
+		return readTaskContextHandoff({
+			workspacePath: this.cwd,
+			handoffId: pending.contextHandoffId!,
+			sha256: pending.contextHandoffSha256!,
+			content: pending.contextHandoffContent!,
+		})
+	}
+
+	private async prepareManagedContext(options: ContextManagementOptions, trigger: ContextHandoffTrigger) {
+		return this.runContextPreparation(async (signal) => {
+			const result = await manageContext({ ...options, contextHandoffSignal: signal })
+			if (result.truncationId && !options.requireContextHandoff && (result.messagesRemoved ?? 0) > 0) {
+				this.assertContextPreparationCurrent()
+				await this.overwriteApiConversationHistory(result.messages)
+				await this.say(
+					"sliding_window_truncation",
+					undefined,
+					undefined,
+					false,
+					undefined,
+					undefined,
+					{ isNonInteractive: true },
+					undefined,
+					{
+						truncationId: result.truncationId,
+						messagesRemoved: result.messagesRemoved!,
+						prevContextTokens: result.prevContextTokens,
+						newContextTokens: result.newContextTokensAfterTruncation ?? 0,
+					},
+				)
+				return { ...result, error: undefined }
+			}
+			if (result.error) throw new Error(result.error)
+			if (result.summary) {
+				await this.commitContextCondensation(
+					result,
+					trigger,
+					result.prevContextTokens,
+					options.requireContextHandoff,
+				)
+			}
+			return result
+		})
 	}
 	// kilocode_change end
 
@@ -2269,26 +2370,31 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	public async condenseContext(): Promise<void> {
+		// Repeated clicks must not clear the first operation's spinner or start a second request.
+		if (this.contextPreparation || this.manualContextCondensationInProgress) return
+		this.manualContextCondensationInProgress = true
 		// kilocode_change start: always release preparation/compression progress,
 		// including unexpected provider failures and direct/manual entry points.
 		try {
-			await this.performContextCondensation()
+			await this.flushPendingToolResultsToHistory()
+			await this.runContextPreparation((signal) => this.performContextCondensation(signal))
 		} catch (error) {
-			await this.say(
-				"condense_context_error",
-				`Context compression was cancelled: ${error instanceof Error ? error.message : String(error)}`,
-			)
+			if (!this.abort)
+				await this.say(
+					"condense_context_error",
+					`Context compression was cancelled: ${error instanceof Error ? error.message : String(error)}`,
+				)
 		} finally {
+			this.manualContextCondensationInProgress = false
 			await this.finishContextCondensation()
-			this.processQueuedMessages()
+			if (!this.abort) this.processQueuedMessages()
 		}
 	}
 
-	private async performContextCondensation(): Promise<void> {
+	private async performContextCondensation(signal: AbortSignal): Promise<void> {
 		// kilocode_change end
 		// CRITICAL: Flush any pending tool results before condensing
 		// to ensure tool_use/tool_result pairs are complete in history
-		await this.flushPendingToolResultsToHistory()
 
 		const systemPrompt = await this.getSystemPrompt()
 
@@ -2321,6 +2427,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			useNativeTools, // Pass native tools flag for proper message handling
 			{
 				enabled: intelligentContextResetEnabled,
+				signal,
 				prompt: intelligentContextResetPrompt,
 				...(intelligentContextResetEnabled ? { onBeforeRequest: this.notifyContextHandoffPreparing } : {}),
 			},
@@ -2387,6 +2494,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		previousContextTokens?: number,
 		useContextHandoff = true,
 	): Promise<ContextHandoffRecord | undefined> {
+		this.assertContextPreparationCurrent()
 		if (result.error) {
 			throw new Error(result.error)
 		}
@@ -2411,68 +2519,77 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			trigger,
 			knownSecrets: collectConfiguredSecrets(this.apiConfiguration),
 		})
-		const updatedMessages = attachContextHandoffToSummary(result.messages, result.condenseId, record)
-		// Persist and display only the sanitized body returned by the writer. The
-		// raw model output must not leak back into UI history after redaction.
-		result.summary = record.body
+		try {
+			this.assertContextPreparationCurrent()
+			const updatedMessages = attachContextHandoffToSummary(result.messages, result.condenseId, record)
+			// Persist and display only the sanitized body returned by the writer. The
+			// raw model output must not leak back into UI history after redaction.
+			result.summary = record.body
 
-		// The file header becomes part of the first post-condense request. Keep
-		// accounting aligned and reject a handoff that would not actually shrink
-		// the context once its complete continuation state is included.
-		if (result.newContextTokens !== undefined) {
-			try {
-				const [rawSummaryTokens, handoffTokens] = await Promise.all([
-					this.api.countTokens([{ type: "text", text: rawSummary }]),
-					this.api.countTokens([{ type: "text", text: record.content }]),
-				])
-				result.newContextTokens += Math.max(0, handoffTokens - rawSummaryTokens)
-				if (previousContextTokens !== undefined && result.newContextTokens >= previousContextTokens) {
+			// The file header becomes part of the first post-condense request. Keep
+			// accounting aligned and reject a handoff that would not actually shrink
+			// the context once its complete continuation state is included.
+			if (result.newContextTokens !== undefined) {
+				try {
+					const [rawSummaryTokens, handoffTokens] = await Promise.all([
+						this.api.countTokens([{ type: "text", text: rawSummary }]),
+						this.api.countTokens([{ type: "text", text: record.content }]),
+					])
+					result.newContextTokens += Math.max(0, handoffTokens - rawSummaryTokens)
+					if (previousContextTokens !== undefined && result.newContextTokens >= previousContextTokens) {
+						throw new Error(
+							`The complete continuation state would grow context (${result.newContextTokens} >= ${previousContextTokens} tokens)`,
+						)
+					}
+				} catch (error) {
 					throw new Error(
-						`The complete continuation state would grow context (${result.newContextTokens} >= ${previousContextTokens} tokens)`,
+						`The complete continuation state could not be validated: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				}
+			}
+
+			// kilocode_change start: only a verified, size-checked physical file earns
+			// a saved receipt. Do not show compression before this boundary.
+			const progress: ContextHandoffProgress = {
+				phase: "saved",
+				path: record.relativePath,
+				content: record.content,
+			}
+			this.assertContextPreparationCurrent()
+			await this.say("context_handoff", JSON.stringify(progress), undefined, false, undefined, undefined, {
+				isNonInteractive: true,
+			})
+			await this.providerRef
+				.deref()
+				?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
+			// kilocode_change end
+
+			this.assertContextPreparationCurrent()
+			const previousHistory = this.apiConversationHistory
+			this.apiConversationHistory = updatedMessages
+			try {
+				if (!(await this.saveApiConversationHistory())) {
+					throw new Error(
+						"The continuation state was not committed because conversation history could not be saved",
 					)
 				}
 			} catch (error) {
-				await deleteContextHandoffFileIfOwned({
-					workspacePath: this.cwd,
-					handoffId: record.handoffId,
-				}).catch((cleanupError) => {
-					console.warn("Failed to clear an unusable CONTEXT_RESTART.md:", cleanupError)
-				})
-				throw new Error(
-					`The complete continuation state could not be validated: ${
-						error instanceof Error ? error.message : String(error)
-					}`,
-				)
+				this.apiConversationHistory = previousHistory
+				throw error
 			}
-		}
-
-		// kilocode_change start: only a verified, size-checked physical file earns
-		// a saved receipt. Do not show compression before this boundary.
-		const progress: ContextHandoffProgress = {
-			phase: "saved",
-			path: record.relativePath,
-			content: record.content,
-		}
-		await this.say("context_handoff", JSON.stringify(progress), undefined, false, undefined, undefined, {
-			isNonInteractive: true,
-		})
-		await this.providerRef.deref()?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
-		// kilocode_change end
-
-		const previousHistory = this.apiConversationHistory
-		this.apiConversationHistory = updatedMessages
-		const historyWasSaved = await this.saveApiConversationHistory()
-		if (!historyWasSaved) {
-			this.apiConversationHistory = previousHistory
+			return record
+		} catch (error) {
 			await deleteContextHandoffFileIfOwned({
 				workspacePath: this.cwd,
 				handoffId: record.handoffId,
-			}).catch((error) => {
-				console.warn("Failed to clear CONTEXT_RESTART.md after rolling back condensation:", error)
+				sha256: record.sha256,
+			}).catch((cleanupError) => {
+				console.warn("Failed to clear the uncommitted context restart snapshot:", cleanupError)
 			})
-			throw new Error("The continuation state was not committed because conversation history could not be saved")
+			throw error
 		}
-		return record
 	}
 
 	async say(
@@ -2989,6 +3106,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * This immediately aborts the underlying stream rather than waiting for the next chunk.
 	 */
 	public cancelCurrentRequest(): void {
+		this.contextPreparation?.controller.abort()
 		if (this.currentRequestAbortController) {
 			console.log(`[Task#${this.taskId}.${this.instanceId}] Aborting current HTTP request`)
 			this.currentRequestAbortController.abort()
@@ -4970,32 +5088,29 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		// Force aggressive truncation by keeping only 75% of the conversation history
-		const truncateResult = await manageContext({
-			messages: this.apiConversationHistory,
-			totalTokens: contextTokens || 0,
-			maxTokens,
-			contextWindow,
-			apiHandler: this.api,
-			autoCondenseContext: true,
-			autoCondenseContextPercent: FORCED_CONTEXT_REDUCTION_PERCENT,
-			systemPrompt: await this.getSystemPrompt(),
-			taskId: this.taskId,
-			profileThresholds,
-			currentProfileId,
-			useNativeTools,
-			requireContextHandoff: intelligentContextResetEnabled,
-			contextHandoffPrompt: intelligentContextResetPrompt,
-			onBeforeContextHandoff: this.notifyContextHandoffPreparing, // kilocode_change
-		})
+		try {
+			const truncateResult = await this.prepareManagedContext(
+				{
+					messages: this.apiConversationHistory,
+					totalTokens: contextTokens || 0,
+					maxTokens,
+					contextWindow,
+					apiHandler: this.api,
+					autoCondenseContext: true,
+					autoCondenseContextPercent: FORCED_CONTEXT_REDUCTION_PERCENT,
+					systemPrompt: await this.getSystemPrompt(),
+					taskId: this.taskId,
+					profileThresholds,
+					currentProfileId,
+					useNativeTools,
+					requireContextHandoff: intelligentContextResetEnabled,
+					contextHandoffPrompt: intelligentContextResetPrompt,
+					onBeforeContextHandoff: this.notifyContextHandoffPreparing, // kilocode_change
+				},
+				"forced",
+			)
 
-		if (truncateResult.summary) {
-			try {
-				await this.commitContextCondensation(
-					truncateResult,
-					"forced",
-					truncateResult.prevContextTokens,
-					intelligentContextResetEnabled,
-				)
+			if (truncateResult.summary) {
 				const { summary, cost, prevContextTokens, newContextTokens = 0, condenseId } = truncateResult
 				const contextCondense: ContextCondense = {
 					summary,
@@ -5014,18 +5129,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					{ isNonInteractive: true } /* options */,
 					contextCondense,
 				)
-			} catch (error) {
-				await this.say(
-					"condense_context_error",
-					`Context compression was cancelled: ${error instanceof Error ? error.message : String(error)}`,
-				)
 			}
-		} else if (truncateResult.error) {
-			await this.say("condense_context_error", truncateResult.error)
+		} finally {
+			await this.finishContextCondensation()
 		}
-
-		// Notify webview that context management is complete (removes in-progress spinner)
-		await this.providerRef.deref()?.postMessageToWebview({ type: "condenseTaskContextResponse", text: this.taskId })
 	}
 
 	/**
@@ -5291,71 +5398,67 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
 			}
 
-			const truncateResult = await manageContext({
-				messages: this.apiConversationHistory,
-				totalTokens: contextTokens,
-				maxTokens,
-				contextWindow,
-				apiHandler: this.api,
-				autoCondenseContext,
-				autoCondenseContextPercent,
-				systemPrompt,
-				taskId: this.taskId,
-				customCondensingPrompt,
-				condensingApiHandler: undefined, // The active task model must create its own continuation state.
-				profileThresholds,
-				currentProfileId,
-				useNativeTools,
-				requireContextHandoff: intelligentContextResetEnabled,
-				contextHandoffPrompt: intelligentContextResetPrompt,
-				onBeforeContextHandoff: this.notifyContextHandoffPreparing, // kilocode_change
-			})
-			let contextManagementError = truncateResult.error
-			let contextWasCondensed = false
-			if (truncateResult.summary && !contextManagementError) {
-				try {
-					await this.commitContextCondensation(
-						truncateResult,
-						"automatic",
-						truncateResult.prevContextTokens,
-						intelligentContextResetEnabled,
-					)
-					contextWasCondensed = true
-				} catch (error) {
-					contextManagementError = `Context compression was cancelled: ${
-						error instanceof Error ? error.message : String(error)
-					}`
-				}
-			}
-			if (contextManagementError) {
-				await this.say("condense_context_error", contextManagementError)
-			} else if (contextWasCondensed) {
-				const { summary, cost, prevContextTokens, newContextTokens = 0, condenseId } = truncateResult
-				const contextCondense: ContextCondense = {
-					summary,
-					cost,
-					newContextTokens,
-					prevContextTokens,
-					condenseId,
-				}
-				await this.say(
-					"condense_context",
-					undefined /* text */,
-					undefined /* images */,
-					false /* partial */,
-					undefined /* checkpoint */,
-					undefined /* progressStatus */,
-					{ isNonInteractive: true } /* options */,
-					contextCondense,
-				)
-			}
-
-			// Notify webview that context management is complete (sets isCondensing = false)
-			// This removes the in-progress spinner and allows the completed result to show
 			if (contextManagementWillRun) {
-				await this.providerRef
-					.deref()
-					?.postMessageToWebview({ type: "condenseTaskContextResponse", text: this.taskId })
+				let contextManagementError: unknown
+				try {
+					const truncateResult = await this.prepareManagedContext(
+						{
+							messages: this.apiConversationHistory,
+							totalTokens: contextTokens,
+							maxTokens,
+							contextWindow,
+							apiHandler: this.api,
+							autoCondenseContext,
+							autoCondenseContextPercent,
+							systemPrompt,
+							taskId: this.taskId,
+							customCondensingPrompt,
+							condensingApiHandler: undefined, // The active task model must create its own continuation state.
+							profileThresholds,
+							currentProfileId,
+							useNativeTools,
+							requireContextHandoff: intelligentContextResetEnabled,
+							contextHandoffPrompt: intelligentContextResetPrompt,
+							onBeforeContextHandoff: this.notifyContextHandoffPreparing, // kilocode_change
+						},
+						"automatic",
+					)
+					if (truncateResult.summary) {
+						const { summary, cost, prevContextTokens, newContextTokens = 0, condenseId } = truncateResult
+						const contextCondense: ContextCondense = {
+							summary,
+							cost,
+							newContextTokens,
+							prevContextTokens,
+							condenseId,
+						}
+						await this.say(
+							"condense_context",
+							undefined /* text */,
+							undefined /* images */,
+							false /* partial */,
+							undefined /* checkpoint */,
+							undefined /* progressStatus */,
+							{ isNonInteractive: true } /* options */,
+							contextCondense,
+						)
+					}
+				} catch (error) {
+					contextManagementError = error
+				} finally {
+					if (contextManagementWillRun) await this.finishContextCondensation()
+				}
+				if (contextManagementError) {
+					if (this.abort) throw contextManagementError
+					const message = `Context compression was cancelled: ${contextManagementError instanceof Error ? contextManagementError.message : String(contextManagementError)}`
+					await this.say("condense_context_error", message)
+					// Never send the oversized original context or start another paid preparation automatically.
+					if (await this.askToRetryApiRequest(new Error(message))) {
+						yield* this.attemptApiRequest(0, options)
+						return
+					}
+					throw new NonRetryableApiError(message)
+				}
 			}
 		}
 
@@ -5395,7 +5498,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.overwriteApiConversationHistory(uncondenseResult.messages)
 			try {
 				for (const handoffId of removedHandoffIds) {
-					await deleteContextHandoffFileIfOwned({ workspacePath: this.cwd, handoffId })
+					const sha256 = previousHistory.find(
+						(message) => message.contextHandoffId === handoffId,
+					)?.contextHandoffSha256
+					// Incomplete old metadata is not authority to remove a user-edited file.
+					if (sha256) await deleteContextHandoffFileIfOwned({ workspacePath: this.cwd, handoffId, sha256 })
 				}
 			} catch (error) {
 				// Restore the summary metadata so an undeleted owned file can still
@@ -5418,64 +5525,66 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			)
 			console.log(`[Task#${this.taskId}] Re-condensing after uncondense - context tokens: ${prevContextTokens}`)
 
-			const recondenseResult = await summarizeConversation(
-				this.apiConversationHistory,
-				this.api,
-				await this.getSystemPrompt(),
-				this.taskId,
-				prevContextTokens,
-				true, // isAutomaticTrigger
-				undefined, // customCondensingPrompt - use default
-				undefined, // condensingApiHandler - use main handler (current model with extended thinking)
-				isNativeProtocol(this._taskToolProtocol ?? "xml"),
-				{
-					enabled: intelligentContextResetEnabled,
-					prompt: intelligentContextResetPrompt,
-					...(intelligentContextResetEnabled ? { onBeforeRequest: this.notifyContextHandoffPreparing } : {}),
-				},
-			)
-
-			if (recondenseResult.error) {
-				console.error(`[Task#${this.taskId}] Re-condensation failed: ${recondenseResult.error}`)
-				await this.say("condense_context_error", recondenseResult.error) // kilocode_change
-				// Don't throw - let it continue and potentially fail with context overflow
-				// User will see the error and can manually handle it
-			} else {
-				try {
+			try {
+				const recondenseResult = await this.runContextPreparation(async (signal) => {
+					const result = await summarizeConversation(
+						this.apiConversationHistory,
+						this.api,
+						await this.getSystemPrompt(),
+						this.taskId,
+						prevContextTokens,
+						true, // isAutomaticTrigger
+						undefined, // customCondensingPrompt - use default
+						undefined, // condensingApiHandler - use main handler (current model with extended thinking)
+						isNativeProtocol(this._taskToolProtocol ?? "xml"),
+						{
+							enabled: intelligentContextResetEnabled,
+							signal,
+							prompt: intelligentContextResetPrompt,
+							...(intelligentContextResetEnabled
+								? { onBeforeRequest: this.notifyContextHandoffPreparing }
+								: {}),
+						},
+					)
+					if (result.error) throw new Error(result.error)
 					await this.commitContextCondensation(
-						recondenseResult,
+						result,
 						"extended-thinking",
 						prevContextTokens,
 						intelligentContextResetEnabled,
 					)
-					await this.say(
-						"condense_context",
-						undefined,
-						undefined,
-						false,
-						undefined,
-						undefined,
-						{ isNonInteractive: true },
-						{
-							summary: recondenseResult.summary,
-							cost: recondenseResult.cost,
-							newContextTokens: recondenseResult.newContextTokens ?? 0,
-							prevContextTokens,
-							condenseId: recondenseResult.condenseId,
-						},
-					)
-					console.log(
-						`[Task#${this.taskId}] Re-condensation successful - new context tokens: ${recondenseResult.newContextTokens}`,
-					)
-				} catch (error) {
-					const message = `Re-condensation was cancelled: ${
-						error instanceof Error ? error.message : String(error)
-					}`
-					console.error(`[Task#${this.taskId}] ${message}`)
-					await this.say("condense_context_error", message)
-				}
+					return result
+				})
+				await this.say(
+					"condense_context",
+					undefined,
+					undefined,
+					false,
+					undefined,
+					undefined,
+					{ isNonInteractive: true },
+					{
+						summary: recondenseResult.summary,
+						cost: recondenseResult.cost,
+						newContextTokens: recondenseResult.newContextTokens ?? 0,
+						prevContextTokens,
+						condenseId: recondenseResult.condenseId,
+					},
+				)
+				console.log(
+					`[Task#${this.taskId}] Re-condensation successful - new context tokens: ${recondenseResult.newContextTokens}`,
+				)
+			} catch (error) {
+				if (this.abort) throw error
+				const message = `Re-condensation was cancelled: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+				console.error(`[Task#${this.taskId}] ${message}`)
+				await this.say("condense_context_error", message)
+				throw new NonRetryableApiError(message)
+			} finally {
+				await this.finishContextCondensation()
 			}
-			await this.finishContextCondensation()
 		}
 		// kilocode_change end
 

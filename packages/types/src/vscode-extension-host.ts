@@ -502,6 +502,10 @@ export type ExtensionState = Pick<
 	| "dismissedUpsells"
 	| "autoApprovalEnabled"
 	| "yoloMode" // kilocode_change
+	| "yoloModeExpiresAt" // kilocode_change
+	| "yoloModeTimerMinutes" // kilocode_change
+	| "yoloModeRevocationId" // kilocode_change
+	| "yoloModeGrant" // kilocode_change
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowReadOnlyOutsideWorkspace"
 	| "alwaysAllowWrite"
@@ -827,6 +831,7 @@ export interface WebviewMessage {
 		| "snoozeAutocomplete" // kilocode_change
 		| "autoApprovalEnabled"
 		| "yoloMode" // kilocode_change
+		| "startYoloModeTimer" // kilocode_change: explicit timer start; value is minutes
 		| "updateCustomMode"
 		| "deleteCustomMode"
 		| "setopenAiCustomModelInfo"

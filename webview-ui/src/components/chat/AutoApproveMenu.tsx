@@ -11,6 +11,8 @@ import { MaxCostInput } from "../settings/MaxCostInput" // kilocode_change
 import { StandardTooltip } from "@src/components/ui"
 import { useAutoApprovalState } from "@src/hooks/useAutoApprovalState"
 import { useAutoApprovalToggles } from "@src/hooks/useAutoApprovalToggles"
+import { useYoloModeState } from "@src/hooks/useYoloModeState" // kilocode_change
+import { YoloModeControls } from "../settings/YoloModeControls" // kilocode_change
 
 interface AutoApproveMenuProps {
 	style?: React.CSSProperties
@@ -40,7 +42,12 @@ const AutoApproveMenu = ({ style }: AutoApproveMenuProps) => {
 	const { t } = useAppTranslation()
 
 	const toggles = useAutoApprovalToggles()
-	const { hasEnabledOptions, effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled)
+	const { active: yoloActive } = useYoloModeState() // kilocode_change
+	const { hasEnabledOptions, effectiveAutoApprovalEnabled } = useAutoApprovalState(
+		toggles,
+		autoApprovalEnabled,
+		yoloActive,
+	) // kilocode_change
 
 	const onAutoApproveToggle = useCallback(
 		(key: AutoApproveSetting, value: boolean) => {
@@ -126,11 +133,12 @@ const AutoApproveMenu = ({ style }: AutoApproveMenuProps) => {
 
 	// Update displayed text logic
 	const displayText = useMemo(() => {
+		if (yoloActive) return t("settings:yoloTimer.statusShort") // kilocode_change
 		if (!effectiveAutoApprovalEnabled || !hasEnabledOptions) {
 			return t("chat:autoApprove.none")
 		}
 		return enabledActionsList || t("chat:autoApprove.none")
-	}, [effectiveAutoApprovalEnabled, hasEnabledOptions, enabledActionsList, t])
+	}, [effectiveAutoApprovalEnabled, hasEnabledOptions, enabledActionsList, t, yoloActive]) // kilocode_change
 
 	const handleOpenSettings = useCallback(
 		() =>
@@ -151,6 +159,9 @@ const AutoApproveMenu = ({ style }: AutoApproveMenuProps) => {
 			}}>
 			{isExpanded && (
 				<div className="flex flex-col gap-2 py-4">
+					{/* kilocode_change start */}
+					<YoloModeControls />
+					{/* kilocode_change end */}
 					<div
 						style={{
 							color: "var(--vscode-descriptionForeground)",
@@ -191,17 +202,28 @@ const AutoApproveMenu = ({ style }: AutoApproveMenuProps) => {
 				}}
 				onClick={toggleExpanded}>
 				<div onClick={(e) => e.stopPropagation()}>
+					{/* kilocode_change: YOLO also enables the master switch when ordinary categories are off. */}
 					<StandardTooltip
-						content={!hasEnabledOptions ? t("chat:autoApprove.selectOptionsFirst") : undefined}>
+						content={
+							!hasEnabledOptions && !yoloActive ? t("chat:autoApprove.selectOptionsFirst") : undefined
+						}>
 						<VSCodeCheckbox
 							checked={effectiveAutoApprovalEnabled}
-							disabled={!hasEnabledOptions}
+							disabled={!hasEnabledOptions && !yoloActive} // kilocode_change
 							aria-label={
-								hasEnabledOptions
+								hasEnabledOptions || yoloActive // kilocode_change
 									? t("chat:autoApprove.toggleAriaLabel")
 									: t("chat:autoApprove.disabledAriaLabel")
 							}
 							onChange={() => {
+								// kilocode_change start
+								if (yoloActive) {
+									vscode.postMessage({ type: "yoloMode", bool: false })
+									setAutoApprovalEnabled(false)
+									vscode.postMessage({ type: "autoApprovalEnabled", bool: false })
+									return
+								}
+								// kilocode_change end
 								if (hasEnabledOptions) {
 									const newValue = !(autoApprovalEnabled ?? false)
 									setAutoApprovalEnabled(newValue)

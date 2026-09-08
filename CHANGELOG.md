@@ -1,5 +1,16 @@
 # IVOL Code Agent 5
 
+## 5.16.231
+
+### Patch Changes
+
+- Keep verified context restart snapshots separate for concurrent tasks while retaining `CONTEXT_RESTART.md` in the project root.
+- Check file access before preparing a snapshot, preserve older and user-edited handoffs, and read only the active task's continuation state.
+- Cancel context preparation safely, reject stale results, and wait for manual retry after an automatic compression failure instead of resending oversized context.
+- Fix duplicate and stale compression progress, successful-tool reporting on failed compression, and hash-checked cleanup during rewind.
+- Add a YOLO timer in chat and settings, with a remaining-time display and automatic return to ordinary approval rules after expiry.
+- Add a separate IntelliJ IDEA package compiled and checked against IDEA 2026.2.2, while retaining the existing PhpStorm build and shared extension identity.
+
 ## 5.16.230
 
 ### Patch Changes

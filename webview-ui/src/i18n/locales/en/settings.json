@@ -1,5 +1,24 @@
 {
 	"back": "Back to tasks view",
+	"yoloTimer": {
+		"title": "YOLO mode",
+		"minutes": "Duration (minutes)",
+		"invalidMinutes": "Enter a whole number from 1 to 1440.",
+		"start": "Start timer",
+		"restart": "Restart timer",
+		"stop": "Stop YOLO",
+		"unlimited": "Enable without a timer",
+		"active": "YOLO active — {{remaining}} remaining",
+		"activeUnlimited": "YOLO active — no time limit",
+		"inactive": "YOLO off — ordinary approval rules apply",
+		"expired": "Timer ended — ordinary approval rules apply",
+		"warning": "YOLO can approve file edits, commands, browser actions and MCP tools without your confirmation. Any configured safety gatekeeper still applies.",
+		"scope": "This is an extension-wide setting, not a per-task setting; other windows sharing these settings may also be affected. When the timer ends, ordinary approval rules return; operations already running are not stopped.",
+		"statusShort": "YOLO",
+		"activeOverride": "YOLO is active: ordinary approval settings below do not restrict it.",
+		"pending": "Waiting for confirmation…",
+		"timeout": "No confirmation received. Check the connection before trying again."
+	},
 	"common": {
 		"save": "Save",
 		"done": "Done",

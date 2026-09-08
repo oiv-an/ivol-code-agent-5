@@ -292,18 +292,23 @@ export class MessageManager {
 		const retainedHandoffIds = new Set(
 			apiHistory.flatMap((message) => (message.contextHandoffId ? [message.contextHandoffId] : [])),
 		)
-		const removedPendingHandoffIds = Array.from(
-			new Set(
-				originalHistory.flatMap((message) =>
-					message.isSummary &&
-					message.contextHandoffId &&
-					!message.contextHandoffConsumedAt &&
-					!retainedHandoffIds.has(message.contextHandoffId)
-						? [message.contextHandoffId]
-						: [],
-				),
-			),
-		)
+		const removedPendingHandoffs = new Map<string, { handoffId: string; sha256: string }>()
+		for (const message of originalHistory) {
+			const handoffId = message.contextHandoffId
+			const sha256 = message.contextHandoffSha256
+			if (
+				message.isSummary &&
+				handoffId &&
+				sha256 &&
+				/^[a-f0-9]{64}$/.test(sha256) &&
+				!message.contextHandoffConsumedAt &&
+				!retainedHandoffIds.has(handoffId)
+			) {
+				removedPendingHandoffs.set(`${handoffId}.${sha256}`, { handoffId, sha256 })
+			}
+		}
+		// Missing or malformed hashes cannot identify the saved revision safely.
+		// Preserve those files rather than deleting user edits by handoff ID alone.
 		const retainedMessages = new Set(apiHistory)
 		let rearmedHandoff = false
 		apiHistory = apiHistory.map((message) => {
@@ -342,9 +347,9 @@ export class MessageManager {
 		// kilocode_change start: perform file side effects only after the rewound
 		// history has been persisted. Ownership checks prevent one task from
 		// deleting another task's fixed workspace handoff.
-		for (const handoffId of removedPendingHandoffIds) {
+		for (const { handoffId, sha256 } of removedPendingHandoffs.values()) {
 			try {
-				await deleteContextHandoffFileIfOwned({ workspacePath: this.task.cwd, handoffId })
+				await deleteContextHandoffFileIfOwned({ workspacePath: this.task.cwd, handoffId, sha256 })
 			} catch (error) {
 				console.warn(`[MessageManager] Failed to remove rewound context handoff ${handoffId}:`, error)
 			}

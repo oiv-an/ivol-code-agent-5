@@ -51,6 +51,10 @@ import {
 	isIntelligentContextResetEnabled,
 	getModelId,
 	isPersonalProvider, // kilocode_change
+	isYoloModeActive, // kilocode_change
+	getYoloModeExpiresAt, // kilocode_change
+	isValidYoloModeTimerMinutes, // kilocode_change
+	DEFAULT_YOLO_MODE_TIMER_MINUTES, // kilocode_change
 } from "@roo-code/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "./aggregateTaskCosts"
 import { TelemetryService } from "@roo-code/telemetry"
@@ -2006,7 +2010,7 @@ export class ClineProvider
 			throw new Error(`Task with id ${taskId} not found in stack`)
 		}
 		await task.condenseContext()
-		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
+		// kilocode_change: Task owns completion; a duplicate request can return early while preparation is still running.
 	}
 
 	// this function deletes a task from task hidtory, and deletes it's checkpoints and delete the task folder
@@ -2332,6 +2336,10 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel,
 			featureRoomoteControlEnabled,
 			yoloMode, // kilocode_change
+			yoloModeExpiresAt, // kilocode_change
+			yoloModeTimerMinutes, // kilocode_change
+			yoloModeRevocationId, // kilocode_change
+			yoloModeGrant, // kilocode_change
 			yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			selectedMicrophoneDevice, // kilocode_change: Selected microphone device for STT
 			isBrowserSessionActive,
@@ -2415,6 +2423,10 @@ export class ClineProvider
 			alwaysAllowSubtasks: alwaysAllowSubtasks ?? false,
 			isBrowserSessionActive,
 			yoloMode: yoloMode ?? false, // kilocode_change
+			yoloModeExpiresAt, // kilocode_change
+			yoloModeTimerMinutes, // kilocode_change
+			yoloModeRevocationId, // kilocode_change
+			yoloModeGrant, // kilocode_change
 			allowedMaxRequests,
 			allowedMaxCost,
 			autoCondenseContext: autoCondenseContext ?? true,
@@ -2713,6 +2725,15 @@ export class ClineProvider
 
 		// Get actual browser session state
 		const isBrowserSessionActive = this.getCurrentTask()?.browserSession?.isSessionActive() ?? false
+		// kilocode_change start: re-read permission fields after asynchronous settings/cloud work
+		const currentYoloState = {
+			yoloMode: this.contextProxy.getValue("yoloMode"),
+			yoloModeExpiresAt: this.contextProxy.getValue("yoloModeExpiresAt"),
+			yoloModeTimerMinutes: this.contextProxy.getValue("yoloModeTimerMinutes"),
+			yoloModeRevocationId: this.contextProxy.getValue("yoloModeRevocationId"),
+			yoloModeGrant: this.contextProxy.getValue("yoloModeGrant"),
+		}
+		// kilocode_change end
 
 		// Return the same structure as before.
 		return {
@@ -2734,7 +2755,15 @@ export class ClineProvider
 			alwaysAllowSubtasks: stateValues.alwaysAllowSubtasks ?? true,
 			alwaysAllowFollowupQuestions: stateValues.alwaysAllowFollowupQuestions ?? false,
 			isBrowserSessionActive,
-			yoloMode: stateValues.yoloMode ?? false, // kilocode_change
+			// kilocode_change start: authorize by the persisted absolute deadline, never by a timer callback
+			yoloMode: isYoloModeActive(currentYoloState),
+			yoloModeExpiresAt: getYoloModeExpiresAt(currentYoloState),
+			yoloModeRevocationId: currentYoloState.yoloModeRevocationId,
+			yoloModeGrant: currentYoloState.yoloModeGrant,
+			yoloModeTimerMinutes: isValidYoloModeTimerMinutes(currentYoloState.yoloModeTimerMinutes)
+				? currentYoloState.yoloModeTimerMinutes
+				: DEFAULT_YOLO_MODE_TIMER_MINUTES,
+			// kilocode_change end
 			followupAutoApproveTimeoutMs: stateValues.followupAutoApproveTimeoutMs ?? 60000,
 			diagnosticsEnabled: stateValues.diagnosticsEnabled ?? true,
 			allowedMaxRequests: stateValues.allowedMaxRequests,

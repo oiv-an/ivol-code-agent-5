@@ -35,6 +35,15 @@ type SecretStateKey = keyof SecretState
 type RooCodeSettingsKey = keyof RooCodeSettings
 
 const PASS_THROUGH_STATE_KEYS = ["taskHistory"]
+// kilocode_change start
+const YOLO_STATE_KEYS = [
+	"yoloMode",
+	"yoloModeExpiresAt",
+	"yoloModeTimerMinutes",
+	"yoloModeRevocationId",
+	"yoloModeGrant",
+]
+// kilocode_change end
 
 export const isPassThroughStateKey = (key: string) => PASS_THROUGH_STATE_KEYS.includes(key)
 
@@ -50,6 +59,10 @@ export class ContextProxy {
 	private stateCache: GlobalState
 	private secretCache: SecretState
 	private _isInitialized = false
+	// kilocode_change start: permissions read through the host storage; failed writes stay locally disabled
+	private pendingYoloWrites = 0
+	private yoloWriteFailed = false
+	// kilocode_change end
 	// kilocode_change start: Event emitter for configuration changes
 	private readonly configEmitter = new EventEmitter()
 	// kilocode_change end
@@ -206,6 +219,16 @@ export class ContextProxy {
 	getGlobalState<K extends GlobalStateKey>(key: K): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue: GlobalState[K]): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue?: GlobalState[K]): GlobalState[K] {
+		// kilocode_change start: another window's timer/stop must not be hidden by the startup cache
+		if (YOLO_STATE_KEYS.includes(key)) {
+			if (key === "yoloMode" && (this.pendingYoloWrites > 0 || this.yoloWriteFailed)) {
+				return false as GlobalState[K]
+			}
+			const value = this.originalContext.globalState.get<GlobalState[K]>(key)
+			// Null expiry is deliberately preserved: it is invalid, not legacy unlimited mode.
+			return value === undefined ? defaultValue : value
+		}
+		// kilocode_change end
 		if (isPassThroughStateKey(key)) {
 			const value = this.originalContext.globalState.get<GlobalState[K]>(key)
 			return value === undefined || value === null ? defaultValue : value
@@ -216,6 +239,7 @@ export class ContextProxy {
 	}
 
 	updateGlobalState<K extends GlobalStateKey>(key: K, value: GlobalState[K]) {
+		if (YOLO_STATE_KEYS.includes(key)) return this.updateYoloGlobalState(key, value) // kilocode_change
 		if (isPassThroughStateKey(key)) {
 			return this.originalContext.globalState.update(key, value)
 		}
@@ -223,6 +247,23 @@ export class ContextProxy {
 		this.stateCache[key] = value
 		return this.originalContext.globalState.update(key, value)
 	}
+
+	// kilocode_change start
+	private async updateYoloGlobalState<K extends GlobalStateKey>(key: K, value: GlobalState[K]) {
+		this.stateCache[key] = value
+		this.pendingYoloWrites++
+		try {
+			await this.originalContext.globalState.update(key, value)
+			// Only a completely persisted explicit enable can lift a local persistence-error denial.
+			if (key === "yoloMode" && value === true) this.yoloWriteFailed = false
+		} catch (error) {
+			this.yoloWriteFailed = true
+			throw error
+		} finally {
+			this.pendingYoloWrites--
+		}
+	}
+	// kilocode_change end
 
 	private getAllGlobalState(): GlobalState {
 		return Object.fromEntries(GLOBAL_STATE_KEYS.map((key) => [key, this.getGlobalState(key)]))

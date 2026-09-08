@@ -11,6 +11,7 @@ import { TelemetryService } from "@roo-code/telemetry"
 
 import { ProviderSettingsManager, providerProfilesSchema } from "./ProviderSettingsManager"
 import { ContextProxy } from "./ContextProxy"
+import { updateYoloMode, YOLO_MODE_STATE_KEYS } from "./yoloMode" // kilocode_change
 import { CustomModesManager } from "./CustomModesManager"
 import { t } from "../../i18n"
 
@@ -73,7 +74,14 @@ export async function importSettingsFromPath(
 		// They will be imported automatically with the config - no special handling needed
 
 		await providerSettingsManager.import(providerProfiles)
-		await contextProxy.setValues(globalSettings)
+		// kilocode_change start: importing settings never starts, extends, or restores broad approvals
+		const importedSettings = { ...globalSettings }
+		if (YOLO_MODE_STATE_KEYS.some((key) => Object.hasOwn(globalSettings, key))) {
+			await updateYoloMode(contextProxy, { type: "import", settings: globalSettings })
+			for (const key of YOLO_MODE_STATE_KEYS) delete importedSettings[key]
+		}
+		await contextProxy.setValues(importedSettings)
+		// kilocode_change end
 
 		// Set the current provider.
 		const currentProviderName = providerProfiles.currentApiConfigName

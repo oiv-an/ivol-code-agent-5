@@ -1,5 +1,6 @@
 // kilocode_change - verified, visible project-root continuation file
 import crypto from "crypto"
+import { constants as fsConstants } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as lockfile from "proper-lockfile"
@@ -9,10 +10,19 @@ import type { Anthropic } from "@anthropic-ai/sdk"
 import type { ApiMessage } from "../task-persistence/apiMessages"
 
 export const CONTEXT_HANDOFF_RELATIVE_PATH = "CONTEXT_RESTART.md"
+export const CONTEXT_HANDOFF_ARCHIVE_DIRECTORY = ".ivol-context-restarts"
 const LEGACY_CONTEXT_HANDOFF_RELATIVE_PATH = ".ivol-code/CONTEXT_RESTART.md"
 
 const CONTEXT_HANDOFF_MAGIC = "IVOL_CODE_CONTEXT_RESTART_V1"
-const CONTEXT_HANDOFF_IGNORE_RULES = ["/CONTEXT_RESTART.md", "/CONTEXT_RESTART.md.*.tmp", "/CONTEXT_RESTART.md.lock"]
+const CONTEXT_HANDOFF_IGNORE_RULES = [
+	"/CONTEXT_RESTART.md",
+	"/CONTEXT_RESTART.md.*.tmp",
+	"/CONTEXT_RESTART.md.lock",
+	`/${CONTEXT_HANDOFF_ARCHIVE_DIRECTORY}/`,
+]
+const HANDOFF_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+const SHA256_PATTERN = /^[a-f0-9]{64}$/
+const MAX_CONTEXT_HANDOFF_BYTES = 2 * 1024 * 1024
 const REDACTED_SECRET = "[REDACTED_SECRET]"
 const writeQueues = new Map<string, Promise<unknown>>()
 
@@ -50,6 +60,94 @@ type ContextHandoffPaths = {
 	canonicalPath: string
 }
 
+type FileIdentity = { dev: number; ino: number }
+type DirectoryIdentity = FileIdentity & { directoryPath: string; canonicalPath: string }
+
+function matchesFileIdentity(actual: FileIdentity, expected: FileIdentity): boolean {
+	return actual.dev === expected.dev && actual.ino === expected.ino
+}
+
+async function assertUnchangedDirectory(identity: DirectoryIdentity): Promise<void> {
+	const stats = await fs.lstat(identity.directoryPath)
+	if (stats.isSymbolicLink() || !stats.isDirectory() || !matchesFileIdentity(stats, identity)) {
+		throw new Error("The context restart directory changed or became a symbolic link; it was left unchanged")
+	}
+	if ((await fs.realpath(identity.directoryPath)) !== identity.canonicalPath) {
+		throw new Error("The context restart directory changed its resolved path; it was left unchanged")
+	}
+	const current = await fs.lstat(identity.directoryPath)
+	if (current.isSymbolicLink() || !current.isDirectory() || !matchesFileIdentity(current, identity)) {
+		throw new Error("The context restart directory changed during verification; it was left unchanged")
+	}
+}
+
+async function captureDirectoryIdentity(workspacePath: string, directoryPath: string): Promise<DirectoryIdentity> {
+	const canonicalPath = await assertSafeHandoffDirectory(workspacePath, directoryPath)
+	const stats = await fs.lstat(directoryPath)
+	const identity = { directoryPath, canonicalPath, dev: stats.dev, ino: stats.ino }
+	await assertUnchangedDirectory(identity)
+	return identity
+}
+
+async function readFileInUnchangedDirectory(
+	filePath: string,
+	description: string,
+	directory: DirectoryIdentity,
+): Promise<string> {
+	await assertUnchangedDirectory(directory)
+	const content = await readRegularFile(filePath, description)
+	await assertUnchangedDirectory(directory)
+	return content
+}
+
+/** Never unlink a same-named foreign temporary file after a directory/file swap. */
+async function cleanupOwnedTemporaryFile(
+	filePath: string,
+	directory: DirectoryIdentity,
+	identity: FileIdentity | undefined,
+): Promise<void> {
+	if (!identity) return
+	try {
+		await assertUnchangedDirectory(directory)
+		const stats = await fs.lstat(filePath)
+		if (!stats.isSymbolicLink() && stats.isFile() && matchesFileIdentity(stats, identity)) {
+			await assertUnchangedDirectory(directory)
+			await fs.unlink(filePath)
+		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			console.warn("A temporary context restart file was left unchanged:", (error as Error).message)
+		}
+	}
+}
+
+/**
+ * Recheck content and inode after awaits before consuming a snapshot. The root
+ * lock serializes IVOL writers; these checks also detect ordinary external edits.
+ * Node has no conditional unlink/openat API, so hostile same-user races between
+ * the final check and the syscall are not claimed to be atomically preventable.
+ */
+async function unlinkMatchingSnapshot(
+	filePath: string,
+	directory: DirectoryIdentity,
+	expectedContent: string,
+): Promise<boolean> {
+	await assertUnchangedDirectory(directory)
+	const initial = await fs.lstat(filePath)
+	if (initial.isSymbolicLink() || !initial.isFile()) return false
+	if (
+		(await readFileInUnchangedDirectory(filePath, "the context restart cleanup snapshot", directory)) !==
+		expectedContent
+	) {
+		return false
+	}
+	const current = await fs.lstat(filePath)
+	if (current.isSymbolicLink() || !current.isFile() || !matchesFileIdentity(current, initial)) return false
+	await assertUnchangedDirectory(directory)
+	await fs.unlink(filePath)
+	return true
+}
+
 function singleLine(value: string): string {
 	return value.replace(/[\r\n]+/g, " ").trim()
 }
@@ -60,11 +158,17 @@ function hashContent(content: string): string {
 
 function getHandoffIdFromContent(content: string): string | undefined {
 	const match = content.match(/^<!-- IVOL_CODE_CONTEXT_RESTART_V1 handoff_id=([a-f0-9-]+) -->/)
-	return match?.[1]
+	return match && HANDOFF_ID_PATTERN.test(match[1]) ? match[1] : undefined
 }
 
 function isVerifiedHandoffContent(content: string, handoffId: string, sha256: string): boolean {
-	return getHandoffIdFromContent(content) === handoffId && hashContent(content) === sha256
+	return (
+		HANDOFF_ID_PATTERN.test(handoffId) &&
+		SHA256_PATTERN.test(sha256) &&
+		Buffer.byteLength(content, "utf8") <= MAX_CONTEXT_HANDOFF_BYTES &&
+		getHandoffIdFromContent(content) === handoffId &&
+		hashContent(content) === sha256
+	)
 }
 
 export function redactPotentialSecrets(content: string, knownSecrets: readonly string[] = []): string {
@@ -86,8 +190,10 @@ export function redactPotentialSecrets(content: string, knownSecrets: readonly s
 			// Authorization credentials contain a space, so redact them before the
 			// generic assignment matcher can consume only the auth-scheme prefix.
 			.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${REDACTED_SECRET}`)
+			// Start once per key instead of rescanning every suffix of an
+			// unbroken token; keep camelCase and underscore-prefixed keys covered.
 			.replace(
-				/((?:["'`])?(?:(?:[a-z0-9]+[_-])*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|auth(?:orization)?|password|passwd|secret(?:[_-]?access[_-]?key)?|client[_-]?secret|private[_-]?key|session[_-]?(?:id|token)|credential|cookie))(?:["'`])?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|`[^`\r\n]*`|[^\s,;}\]]+)/gi,
+				/(?<![a-z0-9_-])((?:["'`])?(?:[a-z0-9_-]*?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|auth(?:orization)?|password|passwd|secret(?:[_-]?access[_-]?key)?|client[_-]?secret|private[_-]?key|session[_-]?(?:id|token)|credential|cookie))(?:["'`])?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|`[^`\r\n]*`|[^\s,;}\]]+)/gi,
 				`$1${REDACTED_SECRET}`,
 			)
 			.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, REDACTED_SECRET)
@@ -99,7 +205,7 @@ export function redactPotentialSecrets(content: string, knownSecrets: readonly s
 			.replace(/\bxox[baprs]-[A-Za-z0-9-]{12,}\b/g, REDACTED_SECRET)
 			.replace(/\bAIza[A-Za-z0-9_-]{30,}\b/g, REDACTED_SECRET)
 			.replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, REDACTED_SECRET)
-			.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED_SECRET}@`)
+			.replace(/(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED_SECRET}@`)
 	)
 }
 
@@ -155,7 +261,7 @@ async function assertSafeHandoffDirectory(workspacePath: string, directoryPath: 
 		throw new Error("The context restart workspace path is not a directory")
 	}
 
-	await fs.mkdir(resolvedDirectory, { recursive: true })
+	await fs.mkdir(resolvedDirectory, { recursive: true, mode: 0o700 })
 	const directoryStats = await fs.lstat(resolvedDirectory)
 	if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
 		throw new Error("Refusing to use a symbolic link or non-directory for the context restart directory")
@@ -193,7 +299,32 @@ async function readRegularFile(filePath: string, description: string): Promise<s
 		error.code = "ENOENT"
 		throw error
 	}
-	return fs.readFile(filePath, "utf8")
+	// Do not follow a link substituted between lstat and open.
+	const handle = await fs.open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+	try {
+		const stats = await handle.stat()
+		if (!stats.isFile()) {
+			throw new Error(`Refusing to read a non-regular file for ${description}`)
+		}
+		if (stats.size > MAX_CONTEXT_HANDOFF_BYTES) {
+			throw new Error(`${description} exceeds the 2 MiB safety limit; it was left unchanged`)
+		}
+		// Bound allocation and reads even if an external process appends after
+		// fstat. A growing file is retried on the next explicit operation.
+		const buffer = Buffer.alloc(stats.size + 1)
+		let offset = 0
+		while (offset < buffer.length) {
+			const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
+			if (bytesRead === 0) break
+			offset += bytesRead
+		}
+		if (offset > stats.size) {
+			throw new Error(`${description} grew while it was being read; it was left unchanged`)
+		}
+		return buffer.subarray(0, offset).toString("utf8")
+	} finally {
+		await handle.close()
+	}
 }
 
 async function ensureContextHandoffGitIgnore(directoryPath: string): Promise<void> {
@@ -238,7 +369,7 @@ async function ensureContextHandoffGitIgnore(directoryPath: string): Promise<voi
 	}
 }
 
-async function assertExistingFileCanBeReplaced(filePath: string, handoffId: string): Promise<void> {
+async function readReplaceableRoot(filePath: string): Promise<string | undefined> {
 	try {
 		const existing = await readRegularFile(filePath, "the context restart file")
 		const existingHandoffId = getHandoffIdFromContent(existing)
@@ -247,15 +378,86 @@ async function assertExistingFileCanBeReplaced(filePath: string, handoffId: stri
 				`${CONTEXT_HANDOFF_RELATIVE_PATH} already exists but was not created by IVOL Code; it was left unchanged`,
 			)
 		}
-		if (existingHandoffId !== handoffId) {
-			throw new Error(
-				`${CONTEXT_HANDOFF_RELATIVE_PATH} already contains another pending IVOL Code handoff; it was left unchanged`,
-			)
-		}
+		return existing
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
 			throw error
 		}
+		return undefined
+	}
+}
+
+function archiveFilePath(directoryPath: string, handoffId: string, sha256: string): string {
+	if (!HANDOFF_ID_PATTERN.test(handoffId) || !SHA256_PATTERN.test(sha256)) {
+		throw new Error("The context restart snapshot has invalid identity metadata")
+	}
+	return path.join(directoryPath, `${handoffId}.${sha256}.md`)
+}
+
+async function prepareArchiveDirectory(paths: ContextHandoffPaths): Promise<DirectoryIdentity> {
+	const directoryPath = path.join(paths.directoryPath, CONTEXT_HANDOFF_ARCHIVE_DIRECTORY)
+	return captureDirectoryIdentity(paths.workspacePath, directoryPath)
+}
+
+/** Called only under the root lock. Link publication never replaces an existing snapshot. */
+async function archiveContextHandoff(paths: ContextHandoffPaths, content: string): Promise<void> {
+	const handoffId = getHandoffIdFromContent(content)
+	if (!handoffId) {
+		throw new Error("The context restart file has invalid ownership metadata")
+	}
+	const sha256 = hashContent(content)
+	const directory = await prepareArchiveDirectory(paths)
+	const { directoryPath } = directory
+	const archivePath = archiveFilePath(directoryPath, handoffId, sha256)
+	if (await assertRegularFileIfPresent(archivePath, "the archived context restart file")) {
+		const archived = await readFileInUnchangedDirectory(archivePath, "the archived context restart file", directory)
+		if (archived !== content || !isVerifiedHandoffContent(archived, handoffId, sha256)) {
+			throw new Error("The archived context restart file failed integrity verification; it was left unchanged")
+		}
+		return
+	}
+
+	const temporaryPath = path.join(directoryPath, `.${process.pid}.${crypto.randomUUID()}.tmp`)
+	let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+	let temporaryIdentity: FileIdentity | undefined
+	try {
+		await assertUnchangedDirectory(directory)
+		handle = await fs.open(
+			temporaryPath,
+			fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+			0o600,
+		)
+		temporaryIdentity = await handle.stat()
+		await assertUnchangedDirectory(directory)
+		await handle.writeFile(content, "utf8")
+		await handle.sync()
+		await handle.close()
+		handle = undefined
+		await assertUnchangedDirectory(directory)
+		const temporaryStats = await fs.lstat(temporaryPath)
+		if (
+			temporaryStats.isSymbolicLink() ||
+			!temporaryStats.isFile() ||
+			!matchesFileIdentity(temporaryStats, temporaryIdentity)
+		) {
+			throw new Error("The temporary context restart archive changed before publication")
+		}
+		try {
+			await fs.link(temporaryPath, archivePath)
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+				throw error
+			}
+		}
+		await assertUnchangedDirectory(directory)
+		await syncDirectoryBestEffort(directoryPath)
+		const archived = await readFileInUnchangedDirectory(archivePath, "the archived context restart file", directory)
+		if (archived !== content || !isVerifiedHandoffContent(archived, handoffId, sha256)) {
+			throw new Error("The archived context restart file failed read-back verification")
+		}
+	} finally {
+		await handle?.close().catch(() => undefined)
+		await cleanupOwnedTemporaryFile(temporaryPath, directory, temporaryIdentity)
 	}
 }
 
@@ -285,6 +487,16 @@ async function prepareContextHandoffPaths(workspacePath: string): Promise<Contex
 }
 
 async function withInterprocessLock<T>(absolutePath: string, operation: () => Promise<T>): Promise<T> {
+	try {
+		const lockStats = await fs.lstat(`${absolutePath}.lock`)
+		if (lockStats.isSymbolicLink() || !lockStats.isDirectory()) {
+			throw new Error("Refusing to use a symbolic link or non-directory for the context restart lock")
+		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			throw error
+		}
+	}
 	const release = await lockfile.lock(absolutePath, {
 		realpath: false,
 		stale: 31_000,
@@ -333,24 +545,52 @@ async function persistContextHandoffDocument({
 	if (getHandoffIdFromContent(content) !== handoffId) {
 		throw new Error("The embedded context restart file has invalid ownership metadata")
 	}
+	if (Buffer.byteLength(content, "utf8") > MAX_CONTEXT_HANDOFF_BYTES) {
+		throw new Error(
+			"The context restart snapshot exceeds the 2 MiB safety limit; the previous file was left unchanged",
+		)
+	}
 
 	const sha256 = hashContent(content)
 	const temporaryPath = `${paths.absolutePath}.${process.pid}.${crypto.randomUUID()}.tmp`
+	const rootDirectory = await captureDirectoryIdentity(paths.workspacePath, paths.directoryPath)
+	const archiveDirectory = await prepareArchiveDirectory(paths)
 	let temporaryHandle: Awaited<ReturnType<typeof fs.open>> | undefined
+	let temporaryIdentity: FileIdentity | undefined
 
-	await assertExistingFileCanBeReplaced(paths.absolutePath, handoffId)
+	const previousContent = await readReplaceableRoot(paths.absolutePath)
+	// Preserve the exact bytes of a previous task (including any user edits)
+	// before rotating the visible file. Never rely on another task's history.
+	if (previousContent !== undefined) {
+		await archiveContextHandoff(paths, previousContent)
+	}
+	await archiveContextHandoff(paths, content)
+	await assertUnchangedDirectory(archiveDirectory)
 
 	try {
-		temporaryHandle = await fs.open(temporaryPath, "wx", 0o600)
+		await assertUnchangedDirectory(rootDirectory)
+		temporaryHandle = await fs.open(
+			temporaryPath,
+			fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+			0o600,
+		)
+		temporaryIdentity = await temporaryHandle.stat()
+		await assertUnchangedDirectory(rootDirectory)
 		await temporaryHandle.writeFile(content, { encoding: "utf8" })
 		await temporaryHandle.sync()
 		await temporaryHandle.close()
 		temporaryHandle = undefined
 
 		// Re-check containment and ownership immediately before the atomic replace.
-		await assertSafeHandoffDirectory(paths.workspacePath, paths.directoryPath)
-		await assertExistingFileCanBeReplaced(paths.absolutePath, handoffId)
+		await assertUnchangedDirectory(rootDirectory)
+		await assertUnchangedDirectory(archiveDirectory)
+		if ((await readReplaceableRoot(paths.absolutePath)) !== previousContent) {
+			throw new Error(
+				"The context restart file changed while its replacement was prepared; it was left unchanged",
+			)
+		}
 		await fs.rename(temporaryPath, paths.absolutePath)
+		await assertUnchangedDirectory(rootDirectory)
 		await syncDirectoryBestEffort(paths.directoryPath)
 
 		const persistedContent = await readRegularFile(paths.absolutePath, "the context restart file")
@@ -359,11 +599,7 @@ async function persistContextHandoffDocument({
 		}
 	} finally {
 		await temporaryHandle?.close().catch(() => undefined)
-		await fs.unlink(temporaryPath).catch((error: NodeJS.ErrnoException) => {
-			if (error.code !== "ENOENT") {
-				console.warn("Failed to remove a temporary context restart file:", error.message)
-			}
-		})
+		await cleanupOwnedTemporaryFile(temporaryPath, rootDirectory, temporaryIdentity)
 	}
 
 	return { absolutePath: paths.absolutePath, sha256, content }
@@ -397,6 +633,12 @@ async function writeContextHandoffFileInternal(
 	options: ContextHandoffWriteOptions,
 	paths: ContextHandoffPaths,
 ): Promise<ContextHandoffRecord> {
+	// Reject unbounded input before trimming/redaction can allocate or scan it.
+	if (Buffer.byteLength(options.summary, "utf8") >= MAX_CONTEXT_HANDOFF_BYTES) {
+		throw new Error(
+			"The context restart snapshot exceeds the 2 MiB safety limit; the previous file was left unchanged",
+		)
+	}
 	const summary = options.summary.trim()
 	if (!summary) {
 		throw new Error("Cannot create the context restart file from an empty summary")
@@ -438,6 +680,134 @@ export async function writeContextHandoffFile(options: ContextHandoffWriteOption
 	return enqueueContextHandoffWrite(options.workspacePath, (paths) => writeContextHandoffFileInternal(options, paths))
 }
 
+/** Check cheap local prerequisites before asking a model to prepare a handoff. */
+export async function preflightContextHandoff(workspacePath: string): Promise<void> {
+	await enqueueContextHandoffWrite(workspacePath, async (paths) => {
+		await fs.access(paths.directoryPath, fsConstants.W_OK)
+		const existing = await readReplaceableRoot(paths.absolutePath)
+		const directory = await prepareArchiveDirectory(paths)
+		const { directoryPath } = directory
+		if (existing !== undefined) {
+			const archivePath = archiveFilePath(
+				directoryPath,
+				getHandoffIdFromContent(existing)!,
+				hashContent(existing),
+			)
+			if (await assertRegularFileIfPresent(archivePath, "the archived context restart file")) {
+				if (
+					(await readFileInUnchangedDirectory(
+						archivePath,
+						"the archived context restart file",
+						directory,
+					)) !== existing
+				) {
+					throw new Error(
+						"The archived context restart file failed integrity verification; it was left unchanged",
+					)
+				}
+			}
+		}
+
+		// Probe the same atomic publication primitive as a real write. This does
+		// not reserve ownership or alter any pending snapshot.
+		const probePath = path.join(directoryPath, `.${process.pid}.${crypto.randomUUID()}.tmp`)
+		const linkedProbePath = `${probePath}.link`
+		let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+		let probeIdentity: FileIdentity | undefined
+		try {
+			await assertUnchangedDirectory(directory)
+			handle = await fs.open(
+				probePath,
+				fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+				0o600,
+			)
+			probeIdentity = await handle.stat()
+			await assertUnchangedDirectory(directory)
+			await handle.writeFile("IVOL context restart archive probe", "utf8")
+			await handle.sync()
+			await handle.close()
+			handle = undefined
+			await assertUnchangedDirectory(directory)
+			await fs.link(probePath, linkedProbePath)
+			await assertUnchangedDirectory(directory)
+			if (
+				(await readFileInUnchangedDirectory(
+					linkedProbePath,
+					"the context restart archive probe",
+					directory,
+				)) !== "IVOL context restart archive probe"
+			) {
+				throw new Error("The context restart archive failed its write/read verification")
+			}
+		} finally {
+			await handle?.close().catch(() => undefined)
+			for (const temporaryPath of [linkedProbePath, probePath]) {
+				await cleanupOwnedTemporaryFile(temporaryPath, directory, probeIdentity)
+			}
+		}
+	})
+}
+
+export type TaskContextHandoffReadOptions = {
+	workspacePath: string
+	handoffId: string
+	sha256: string
+	content: string
+}
+
+async function readOwnedSnapshot(
+	paths: ContextHandoffPaths,
+	{ handoffId, sha256, content }: TaskContextHandoffReadOptions,
+): Promise<{ content: string; source: "root" | "archive" | "embedded" }> {
+	if (!HANDOFF_ID_PATTERN.test(handoffId) || !SHA256_PATTERN.test(sha256)) {
+		throw new Error("The context restart snapshot has invalid identity metadata")
+	}
+	try {
+		const rootContent = await readRegularFile(paths.absolutePath, "the context restart file")
+		if (isVerifiedHandoffContent(rootContent, handoffId, sha256)) {
+			return { content: rootContent, source: "root" }
+		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			console.warn("The visible context restart file was not used:", (error as Error).message)
+		}
+	}
+	try {
+		const directory = await prepareArchiveDirectory(paths)
+		const { directoryPath } = directory
+		const archivePath = archiveFilePath(directoryPath, handoffId, sha256)
+		const archived = await readFileInUnchangedDirectory(archivePath, "the archived context restart file", directory)
+		if (!isVerifiedHandoffContent(archived, handoffId, sha256)) {
+			throw new Error("The archived context restart snapshot failed integrity verification")
+		}
+		return { content: archived, source: "archive" }
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			console.warn("The archived context restart file was not used:", (error as Error).message)
+		}
+	}
+	if (!isVerifiedHandoffContent(content, handoffId, sha256)) {
+		throw new Error("The embedded context restart snapshot failed integrity verification")
+	}
+	return { content, source: "embedded" }
+}
+
+/** A root rotation can never redirect a task's read to another task's document. */
+export async function readTaskContextHandoff(options: TaskContextHandoffReadOptions): Promise<string> {
+	try {
+		return await enqueueContextHandoffWrite(
+			options.workspacePath,
+			async (paths) => (await readOwnedSnapshot(paths, options)).content,
+		)
+	} catch (error) {
+		if (!isVerifiedHandoffContent(options.content, options.handoffId, options.sha256)) {
+			throw error
+		}
+		console.warn("Using the verified task-local context restart snapshot:", (error as Error).message)
+		return options.content
+	}
+}
+
 /** Retire a pre-5.16.226 copy only after its identical root copy was consumed. */
 async function deleteMatchingLegacyContextHandoff(workspacePath: string, expectedContent: string): Promise<void> {
 	const legacyPath = path.resolve(workspacePath, LEGACY_CONTEXT_HANDOFF_RELATIVE_PATH)
@@ -445,11 +815,10 @@ async function deleteMatchingLegacyContextHandoff(workspacePath: string, expecte
 	try {
 		// Do not create the old directory, and never follow a legacy symlink.
 		await fs.lstat(legacyDirectory)
-		await assertSafeHandoffDirectory(workspacePath, legacyDirectory)
+		const directory = await captureDirectoryIdentity(workspacePath, legacyDirectory)
 		await withInterprocessLock(legacyPath, async () => {
-			const content = await readRegularFile(legacyPath, "the legacy context restart file")
-			if (content === expectedContent) {
-				await fs.unlink(legacyPath)
+			const content = await readFileInUnchangedDirectory(legacyPath, "the legacy context restart file", directory)
+			if (content === expectedContent && (await unlinkMatchingSnapshot(legacyPath, directory, expectedContent))) {
 				await syncDirectoryBestEffort(legacyDirectory)
 			}
 		})
@@ -464,26 +833,71 @@ async function deleteMatchingLegacyContextHandoff(workspacePath: string, expecte
 export async function deleteContextHandoffFileIfOwned({
 	workspacePath,
 	handoffId,
+	sha256,
 }: {
 	workspacePath: string
 	handoffId: string
+	sha256?: string
 }): Promise<boolean> {
+	if (!HANDOFF_ID_PATTERN.test(handoffId) || (sha256 !== undefined && !SHA256_PATTERN.test(sha256))) {
+		return false
+	}
 	return enqueueContextHandoffWrite(workspacePath, async (paths) => {
+		const rootDirectory = await captureDirectoryIdentity(workspacePath, paths.directoryPath)
+		let deletedRoot = false
+		let ownedContent: string | undefined
 		try {
-			const content = await readRegularFile(paths.absolutePath, "the context restart file")
-			if (getHandoffIdFromContent(content) !== handoffId) {
-				return false
+			const content = await readFileInUnchangedDirectory(
+				paths.absolutePath,
+				"the context restart file",
+				rootDirectory,
+			)
+			if (
+				getHandoffIdFromContent(content) === handoffId &&
+				(sha256 === undefined || hashContent(content) === sha256)
+			) {
+				if (await unlinkMatchingSnapshot(paths.absolutePath, rootDirectory, content)) {
+					ownedContent = content
+					await syncDirectoryBestEffort(paths.directoryPath)
+					deletedRoot = true
+				}
 			}
-			await fs.unlink(paths.absolutePath)
-			await syncDirectoryBestEffort(paths.directoryPath)
-			await deleteMatchingLegacyContextHandoff(workspacePath, content)
-			return true
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-				return false
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				throw error
 			}
-			throw error
 		}
+
+		// With no supplied hash retain historical root cleanup behavior, but do
+		// not guess which archived revision a caller intended to consume.
+		const expectedHash = sha256 ?? (ownedContent === undefined ? undefined : hashContent(ownedContent))
+		if (expectedHash !== undefined) {
+			try {
+				const directory = await prepareArchiveDirectory(paths)
+				const { directoryPath } = directory
+				const archivePath = archiveFilePath(directoryPath, handoffId, expectedHash)
+				const archived = await readFileInUnchangedDirectory(
+					archivePath,
+					"the archived context restart file",
+					directory,
+				)
+				if (
+					isVerifiedHandoffContent(archived, handoffId, expectedHash) &&
+					(await unlinkMatchingSnapshot(archivePath, directory, archived))
+				) {
+					await syncDirectoryBestEffort(directoryPath)
+					ownedContent ??= archived
+				}
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+					throw error
+				}
+			}
+		}
+		if (ownedContent !== undefined) {
+			await deleteMatchingLegacyContextHandoff(workspacePath, ownedContent)
+		}
+		return deletedRoot
 	})
 }
 
@@ -584,45 +998,27 @@ export async function hydratePendingContextHandoff({
 
 	try {
 		const hydration = await enqueueContextHandoffWrite(workspacePath, async (paths) => {
+			const snapshot = await readOwnedSnapshot(paths, {
+				workspacePath,
+				handoffId,
+				sha256,
+				content: embeddedContent,
+			})
 			try {
-				const diskContent = await readRegularFile(paths.absolutePath, "the context restart file")
-				if (isVerifiedHandoffContent(diskContent, handoffId, sha256)) {
-					return { content: diskContent, fileReady: true }
+				if (!(await assertRegularFileIfPresent(paths.absolutePath, "the context restart file"))) {
+					const restored = await persistContextHandoffDocument({
+						paths,
+						content: snapshot.content,
+						handoffId,
+					})
+					return { content: restored.content, fileReady: true }
 				}
-
-				if (!embeddedIsVerified) {
-					throw new Error("The embedded context restart snapshot failed integrity verification")
-				}
-
-				// Another task owns the single fixed workspace file. Do not replace
-				// it; use only this task's verified embedded snapshot for the request.
-				return { content: embeddedContent, fileReady: false }
 			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-					if (!embeddedIsVerified) {
-						throw error
-					}
-					console.warn(
-						"Failed to read the context restart file; using the verified embedded snapshot:",
-						error,
-					)
-					return { content: embeddedContent, fileReady: false }
-				}
+				console.warn("The visible context restart file was left unchanged:", (error as Error).message)
 			}
-
-			if (!embeddedIsVerified) {
-				throw new Error("The embedded context restart snapshot failed integrity verification")
-			}
-
-			try {
-				const restored = await persistContextHandoffDocument({ paths, content: embeddedContent, handoffId })
-				return { content: restored.content, fileReady: true }
-			} catch (error) {
-				// A racing writer or filesystem error must not block the task. Never
-				// replace its file; inject this verified task-local snapshot only.
-				console.warn("Failed to restore the context restart file; using the verified embedded snapshot:", error)
-				return { content: embeddedContent, fileReady: false }
-			}
+			// Foreign roots remain untouched. The read_file bridge reads this
+			// task's verified archive, even if another window rotates the root.
+			return { content: snapshot.content, fileReady: snapshot.source !== "embedded" }
 		})
 		content = hydration.content
 		fileReady = hydration.fileReady

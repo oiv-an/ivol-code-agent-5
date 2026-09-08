@@ -2,6 +2,10 @@
 
 This directory contains the JetBrains plugin implementation for IVOL Code Agent 5, including both the IntelliJ plugin (Kotlin) and the Extension Host (Node.js/TypeScript).
 
+> The frozen IVOL v5 branch currently targets JetBrains 2026.2 and Java 25.
+> For the separate IntelliJ IDEA build, use [the current IDEA build guide](INTELLIJ_IDEA.md).
+> The Java 21 examples below describe the older upstream setup, not this branch's current SDK.
+
 ## Prerequisites
 
 Before building the JetBrains plugin, ensure all dependencies are properly configured. Use the provided dependency check script to verify your setup.
