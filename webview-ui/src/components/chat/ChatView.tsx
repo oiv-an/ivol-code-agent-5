@@ -112,6 +112,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		taskHistoryFullLength, // kilocode_change
 		taskHistoryVersion, // kilocode_change
 		apiConfiguration,
+		taskDocumentSettings, // kilocode_change: only supported hosts may prepare the experimental persistent task file.
 		organizationAllowList,
 		mode,
 		setMode,
@@ -128,6 +129,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		sendMessageOnEnter, // kilocode_change
 		isBrowserSessionActive,
 	} = useExtensionState()
+	const intelligentTaskEnabled =
+		taskDocumentSettings?.supported === true && apiConfiguration?.intelligentTaskEnabled === true // kilocode_change
+	// kilocode_change start: manual requests use saved extension state, never an unsaved settings draft.
+	const contextMemoryMode = intelligentTaskEnabled
+		? "task"
+		: (apiConfiguration?.intelligentContextResetEnabled ?? true)
+			? "handoff"
+			: "standard"
+	// kilocode_change end
 
 	const messagesRef = useRef(messages)
 	// kilocode_change start: progress may arrive after switching tasks or cancelling an old request.
@@ -222,6 +232,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	>(undefined)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
 	const [isPreparingContextHandoff, setIsPreparingContextHandoff] = useState(false) // kilocode_change
+	const [preparingContextMemoryMode, setPreparingContextMemoryMode] =
+		useState<ExtensionMessage["contextMemoryMode"]>(undefined) // kilocode_change: progress belongs to the operation, not later profile edits.
 	const isManualContextManagementRef = useRef(false) // kilocode_change: release input even after a terminal row clears progress.
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
@@ -338,8 +350,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	useDeepCompareEffect(() => {
 		// if last message is an ask, show user ask UI
-		// if user finished a task, then start a new task with a new conversation history since in this moment that the extension is waiting for user response, the user could close the extension and the conversation history would be lost.
-		// basically as long as a task is active, the conversation history will be persisted
+		// kilocode_change: completed tasks stay open for review and feedback until explicit navigation.
 		if (lastMessage) {
 			switch (lastMessage.type) {
 				case "ask":
@@ -560,6 +571,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setCurrentFollowUpTs(null) // Clear follow-up answered state for new task
 		setIsCondensing(false) // Reset condensing state when switching tasks
 		setIsPreparingContextHandoff(false) // kilocode_change: never carry live preparation into another task.
+		setPreparingContextMemoryMode(undefined) // kilocode_change
 		isManualContextManagementRef.current = false // kilocode_change
 		// Note: sendingDisabled is not reset here as it's managed by message effects
 
@@ -587,6 +599,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					)))
 		) {
 			setIsPreparingContextHandoff(false)
+			setPreparingContextMemoryMode(undefined)
 			setIsCondensing(false)
 			if (isManualContextManagementRef.current) {
 				isManualContextManagementRef.current = false
@@ -826,13 +839,51 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// after which buttons are shown and we then send an askResponse to the
 	// extension.
 	const handlePrimaryButtonClick = useCallback(
-		(text?: string, images?: string[]) => {
+		(text?: string, images?: string[], explicitlyStartNewTask = false) => {
+			// kilocode_change start: approval shortcuts are not navigation commands. Also reject a
+			// stale callback when an incremental message has already changed the pending ask/task.
+			const currentAsk = clineAskRef.current
+			const pendingMessage = messagesRef.current.findLast(
+				(message) => message.type === "ask" || message.say === "api_req_started",
+			)
+			if (
+				!currentAsk ||
+				currentAsk !== clineAsk ||
+				currentTaskIdRef.current !== currentTaskItem?.id ||
+				pendingMessage?.type !== "ask" ||
+				pendingMessage.ask !== currentAsk ||
+				pendingMessage.partial === true
+			) {
+				return
+			}
+			const isCompletedTask =
+				currentAsk === "completion_result" ||
+				currentAsk === "resume_completed_task" ||
+				(currentAsk === "resume_task" &&
+					!!currentTaskItem?.parentTaskId &&
+					messagesRef.current.some(
+						(message) => message.ask === "completion_result" || message.say === "completion_result",
+					))
+			if (isCompletedTask) {
+				if (explicitlyStartNewTask) {
+					startNewTask()
+				} else if (text?.trim() || images?.length) {
+					handleSendMessage(text ?? "", images ?? [])
+				}
+				return
+			}
+			if (explicitlyStartNewTask) {
+				return
+			}
+			// kilocode_change end
 			// Mark that user has responded
 			userRespondedRef.current = true
 
 			const trimmedInput = text?.trim()
 
-			switch (clineAsk) {
+			switch (
+				currentAsk // kilocode_change: use the verified current ask, not an old approval closure.
+			) {
 				case "api_req_failed":
 				case "command":
 				case "tool":
@@ -856,36 +907,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					}
 					break
 				case "resume_task":
-					// For completed subtasks (tasks with a parentTaskId and a completion_result),
-					// start a new task instead of resuming since the subtask is done
-					const isCompletedSubtaskForClick =
-						currentTaskItem?.parentTaskId &&
-						messagesRef.current.some(
-							(msg) => msg.ask === "completion_result" || msg.say === "completion_result",
-						)
-					if (isCompletedSubtaskForClick) {
-						startNewTask()
+					// kilocode_change: completed subtasks were handled above without automatic navigation.
+					if (trimmedInput || (images && images.length > 0)) {
+						vscode.postMessage({
+							type: "askResponse",
+							askResponse: "yesButtonClicked",
+							text: trimmedInput,
+							images: images,
+						})
+						setInputValue("")
+						setSelectedImages([])
 					} else {
-						// Only send text/images if they exist
-						if (trimmedInput || (images && images.length > 0)) {
-							vscode.postMessage({
-								type: "askResponse",
-								askResponse: "yesButtonClicked",
-								text: trimmedInput,
-								images: images,
-							})
-							// Clear input state after sending
-							setInputValue("")
-							setSelectedImages([])
-						} else {
-							vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
-						}
+						vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
 					}
-					break
-				case "completion_result":
-				case "resume_completed_task":
-					// Waiting for feedback, but we can just present a new task button
-					startNewTask()
 					break
 				case "command_output":
 					vscode.postMessage({ type: "terminalOperation", terminalOperation: "continue" })
@@ -894,19 +928,22 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "condense":
 					vscode.postMessage({
 						type: "condense",
-						text: lastMessage?.text,
+						text: pendingMessage.text,
 					})
 					break
+				default:
+					return
 				// kilocode_change end
 			}
 
+			clineAskRef.current = undefined // kilocode_change: do not replay approval before the state effect runs.
 			setSendingDisabled(true)
 			setClineAsk(undefined)
 			setEnableButtons(false)
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
 		},
-		[clineAsk, startNewTask, currentTaskItem?.parentTaskId, lastMessage?.text], // kilocode_change: add lastMessage?.text
+		[clineAsk, startNewTask, handleSendMessage, currentTaskItem?.id, currentTaskItem?.parentTaskId], // kilocode_change
 	)
 
 	const handleSecondaryButtonClick = useCallback(
@@ -1027,6 +1064,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				// kilocode_change start: file generation is a separate operation, not condensation.
 				case "contextHandoffStarted":
 					if (message.text) {
+						setPreparingContextMemoryMode(
+							(previous) => message.contextMemoryMode ?? previous ?? contextMemoryMode,
+						)
 						setIsPreparingContextHandoff(true)
 						setIsCondensing(false)
 					}
@@ -1036,6 +1076,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// kilocode_change: task ownership is checked above for manual and automatic progress.
 					if (message.text) {
 						setIsPreparingContextHandoff(false) // kilocode_change: file has been saved and verified.
+						setPreparingContextMemoryMode(undefined) // kilocode_change
 						setIsCondensing(true)
 						// Note: sendingDisabled is only set for manual condensation via handleCondenseContext
 						// Automatic condensation doesn't disable sending since the task is already running
@@ -1050,6 +1091,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						isManualContextManagementRef.current = false // kilocode_change
 						setIsCondensing(false)
 						setIsPreparingContextHandoff(false) // kilocode_change
+						setPreparingContextMemoryMode(undefined) // kilocode_change
 					}
 					break
 				case "checkpointInitWarning":
@@ -1091,6 +1133,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleSecondaryButtonClick,
 			setCheckpointWarning,
 			playSound,
+			contextMemoryMode, // kilocode_change: only the fallback for older progress messages without explicit mode.
 		],
 	)
 
@@ -1297,6 +1340,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				say: "context_handoff",
 				ts: Date.now(),
 				partial: true,
+				text:
+					(preparingContextMemoryMode ?? contextMemoryMode) === "task"
+						? JSON.stringify({ phase: "preparing", path: "CURRENT_TASK.md" })
+						: undefined,
 			})
 		} else if (isCondensing) {
 			// kilocode_change end
@@ -1308,7 +1355,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			} as any)
 		}
 		return result
-	}, [isCondensing, isPreparingContextHandoff, visibleMessages, isBrowserSessionMessage]) // kilocode_change
+	}, [
+		isCondensing,
+		isPreparingContextHandoff,
+		visibleMessages,
+		isBrowserSessionMessage,
+		preparingContextMemoryMode,
+		contextMemoryMode,
+	]) // kilocode_change
 
 	// scrolling
 
@@ -1671,13 +1725,18 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			return
 		}
 		// kilocode_change start: do not show compression until the continuation file is verified.
-		const prepareHandoff = apiConfiguration?.intelligentContextResetEnabled ?? true
+		const prepareHandoff = contextMemoryMode !== "standard"
 		isManualContextManagementRef.current = true
+		setPreparingContextMemoryMode(contextMemoryMode)
 		setIsPreparingContextHandoff(prepareHandoff)
 		setIsCondensing(!prepareHandoff)
 		// kilocode_change end
 		setSendingDisabled(true)
-		vscode.postMessage({ type: "condenseTaskContextRequest", text: taskId })
+		vscode.postMessage({
+			type: "condenseTaskContextRequest",
+			text: taskId,
+			...(taskDocumentSettings?.supported === true ? { contextMemoryMode } : {}), // kilocode_change: preserve the legacy protocol on other editions.
+		})
 	}
 
 	const areButtonsVisible = showScrollToBottom || primaryButtonText || secondaryButtonText || isStreaming
@@ -1930,7 +1989,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 											<Button
 												disabled={!enableButtons}
 												className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
-												onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
+												onClick={() =>
+													handlePrimaryButtonClick(
+														inputValue,
+														selectedImages,
+														primaryButtonText === t("chat:startNewTask.title"), // kilocode_change: only explicit navigation leaves a completed task.
+													)
+												}>
 												{primaryButtonText}
 											</Button>
 										</StandardTooltip>

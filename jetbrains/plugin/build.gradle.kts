@@ -887,7 +887,7 @@ fun flattenJsonObject(jsonObject: com.google.gson.JsonObject, prefix: String, pr
 
 // Configure ktlint
 ktlint {
-    version.set("0.50.0")
+    version.set("1.5.0")
     debug.set(false)
     verbose.set(true)
     android.set(false)

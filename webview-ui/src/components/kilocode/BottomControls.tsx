@@ -4,6 +4,8 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 import KiloRulesToggleModal from "./rules/KiloRulesToggleModal"
 import BottomButton from "./BottomButton"
 import { BottomApiConfig } from "./BottomApiConfig" // kilocode_change
+import { StandaloneWebSearch } from "../chat/StandaloneWebSearch"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 
 interface BottomControlsProps {
 	showApiConfig?: boolean
@@ -11,6 +13,7 @@ interface BottomControlsProps {
 
 const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }) => {
 	const { t } = useAppTranslation()
+	const { apiConfiguration, currentApiConfigName } = useExtensionState()
 
 	const showFeedbackOptions = () => {
 		vscode.postMessage({ type: "showFeedbackOptions" })
@@ -23,6 +26,10 @@ const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }
 			</div>
 			<div className="flex shrink-0 flex-row justify-end w-auto">
 				<div className="flex items-center gap-1">
+					<StandaloneWebSearch
+						apiConfiguration={apiConfiguration}
+						currentApiConfigName={currentApiConfigName}
+					/>
 					<KiloRulesToggleModal />
 					<BottomButton
 						iconClass="codicon-feedback"

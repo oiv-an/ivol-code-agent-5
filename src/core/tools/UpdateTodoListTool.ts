@@ -9,9 +9,13 @@ import { getLatestTodo } from "../../shared/todo"
 
 interface UpdateTodoListParams {
 	todos: string
+	task_document?: string | null // kilocode_change
 }
 
-let approvedTodoList: TodoItem[] | undefined = undefined
+// kilocode_change start: approvals are isolated by live task instance, including reused task IDs after resume.
+type PendingTodoApproval = { todos: TodoItem[] }
+const pendingTodoApprovals = new WeakMap<Task, PendingTodoApproval>()
+// kilocode_change end
 
 export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 	readonly name = "update_todo_list" as const
@@ -19,11 +23,13 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 	parseLegacy(params: Partial<Record<string, string>>): UpdateTodoListParams {
 		return {
 			todos: params.todos || "",
+			...(params.task_document !== undefined ? { task_document: params.task_document } : {}), // kilocode_change
 		}
 	}
 
 	async execute(params: UpdateTodoListParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { pushToolResult, handleError, askApproval, toolProtocol } = callbacks
+		let pendingApproval: PendingTodoApproval | undefined // kilocode_change
 
 		try {
 			const todosRaw = params.todos
@@ -59,8 +65,16 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 				todos: normalizedTodos,
 			})
 
-			approvedTodoList = cloneDeep(normalizedTodos)
+			// kilocode_change start: do not replace a still-pending approval for this task.
+			if (pendingTodoApprovals.has(task)) throw new Error("A todo list approval is already pending for this task")
+			pendingApproval = { todos: cloneDeep(normalizedTodos) }
+			pendingTodoApprovals.set(task, pendingApproval)
+			// kilocode_change end
 			const didApprove = await askApproval("tool", approvalMsg)
+			// kilocode_change start: close the edit window before any asynchronous document save.
+			const approvedTodoList = pendingApproval.todos
+			pendingTodoApprovals.delete(task)
+			// kilocode_change end
 			if (!didApprove) {
 				pushToolResult("User declined to update the todoList.")
 				return
@@ -79,6 +93,8 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 				)
 			}
 
+			// kilocode_change: durable document first; a failed save must not claim an updated plan.
+			await task.updatePersistentTaskDocument?.(params.task_document)
 			await setTodoListForTask(task, normalizedTodos)
 
 			if (isTodoListChanged) {
@@ -89,6 +105,10 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 			}
 		} catch (error) {
 			await handleError("update todo list", error as Error)
+		} finally {
+			// kilocode_change start: rejection or cancellation cannot leave editable approval state behind.
+			if (pendingApproval && pendingTodoApprovals.get(task) === pendingApproval) pendingTodoApprovals.delete(task)
+			// kilocode_change end
 		}
 	}
 
@@ -207,9 +227,14 @@ export function parseMarkdownChecklist(md: string): TodoItem[] {
 	return todos
 }
 
-export function setPendingTodoList(todos: TodoItem[]) {
-	approvedTodoList = todos
+// kilocode_change start
+export function setPendingTodoList(task: Task | undefined, todos: TodoItem[]): boolean {
+	const pending = task && pendingTodoApprovals.get(task)
+	if (!pending || !validateTodos(todos).valid) return false
+	pending.todos = cloneDeep(todos)
+	return true
 }
+// kilocode_change end
 
 function validateTodos(todos: any[]): { valid: boolean; error?: string } {
 	if (!Array.isArray(todos)) return { valid: false, error: "todos must be an array" }

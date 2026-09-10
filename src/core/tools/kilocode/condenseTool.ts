@@ -38,9 +38,9 @@ export const condenseTool = async (
 			} else {
 				// If no response, the user accepted the condensed version
 				const { contextTokens: prevContextTokens } = cline.getTokenUsage()
-				const intelligentReset = await cline.getIntelligentContextResetConfig()
 
 				await cline.runContextPreparation(async (signal) => {
+					const intelligentReset = await cline.getIntelligentContextResetConfig()
 					// Use summarizeConversation to create a condensed version of the conversation
 					const summarizedMessages = await summarizeConversation(
 						cline.apiConversationHistory,
@@ -56,6 +56,9 @@ export const condenseTool = async (
 							enabled: intelligentReset.enabled,
 							signal,
 							prompt: intelligentReset.prompt,
+							...(intelligentReset.taskDocument
+								? { taskDocument: true, taskDocumentContext: cline.getTaskDocumentPreparationContext() }
+								: {}),
 							...(intelligentReset.enabled
 								? { onBeforeRequest: cline.notifyContextHandoffPreparing }
 								: {}),

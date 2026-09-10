@@ -14,7 +14,6 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.io.File
 import java.nio.file.Path
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -159,16 +158,11 @@ class MainThreadDiaglogs : MainThreadDiaglogsShape {
             }
         }
 
-        // Extract default path and filename from options
-        val path = options?.defaultUri?.get("path")
-        var fileName: String? = null
-
-        // Convert the path string to a Path object and extract filename
-        val virtualFile = path?.let { filePath ->
-            val file = File(filePath)
-            fileName = file.name
-            Path.of(file.parentFile.absolutePath)
-        }
+        // URI paths use /C:/ on Windows and store UNC servers in authority.
+        // Convert to a native file path before asking Java to parse it.
+        val defaultPath = resolveDialogDefaultPath(options?.defaultUri)?.let { Path.of(it) }
+        val fileName = defaultPath?.fileName?.toString()
+        val directory = defaultPath?.parent
 
         // Use coroutine to handle the asynchronous save dialog operation
         return suspendCancellableCoroutine { continuation ->
@@ -177,7 +171,7 @@ class MainThreadDiaglogs : MainThreadDiaglogsShape {
                     // Show the save file dialog and get the selected file
                     val file = FileChooserFactory.getInstance()
                         .createSaveFileDialog(descriptor, null)
-                        .save(virtualFile, fileName)
+                        .save(directory, fileName)
 
                     // Convert the result to URI format
                     val result = file?.let { URI.file(it.file.absolutePath) }

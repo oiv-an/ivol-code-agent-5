@@ -1272,6 +1272,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 								onIntelligentContextResetEnabledChange={(enabled) =>
 									setApiConfigurationField("intelligentContextResetEnabled", enabled)
 								}
+								// kilocode_change: both mutually-exclusive modes stay in the selected profile's unsaved draft.
+								intelligentTaskEnabled={apiConfiguration.intelligentTaskEnabled}
+								onIntelligentTaskEnabledChange={(enabled) =>
+									setApiConfigurationField("intelligentTaskEnabled", enabled)
+								}
 								focusIntelligentContextResetPrompt={focusIntelligentContextResetPrompt}
 							/>
 						)}

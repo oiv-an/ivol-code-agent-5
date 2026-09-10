@@ -36,6 +36,7 @@ export interface TextContent {
 }
 
 export const toolParamNames = [
+	"task_document", // kilocode_change: opt-in persistent task plan
 	"command",
 	"path",
 	"content",
@@ -124,7 +125,7 @@ export type NativeToolArgs = {
 	run_slash_command: { command: string; args?: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
-	update_todo_list: { todos: string }
+	update_todo_list: { todos: string; task_document?: string | null } // kilocode_change
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
 	// Add more tools as they are migrated to native protocol

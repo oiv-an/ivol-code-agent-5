@@ -52,6 +52,9 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
+		// kilocode_change: only diagnostic requests opt into request-local cancellation.
+		const signal = this.options.connectionTest ? metadata?.signal : undefined
+		signal?.throwIfAborted()
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
 			{ role: "system", content: systemPrompt },
 			...convertToOpenAiMessages(messages),
@@ -89,7 +92,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			inputTokens = await this.countTokens([{ type: "text", text: systemPrompt }, ...toContentBlocks(messages)])
 		} catch (err) {
-			console.error("[LmStudio] Failed to count input tokens:", err)
+			if (!this.options.connectionTest) console.error("[LmStudio] Failed to count input tokens:", err) // kilocode_change
 			inputTokens = 0
 		}
 
@@ -112,8 +115,14 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 			let results
 			try {
-				results = await this.client.chat.completions.create(params)
+				// kilocode_change start: diagnostics own the complete timeout/retry budget.
+				signal?.throwIfAborted()
+				results = this.options.connectionTest
+					? await this.client.chat.completions.create(params, { signal, maxRetries: 0 })
+					: await this.client.chat.completions.create(params)
+				// kilocode_change end
 			} catch (error) {
+				if (this.options.connectionTest) throw error // kilocode_change: preserve HTTP metadata without raw logging.
 				throw handleOpenAIError(error, this.providerName)
 			}
 
@@ -127,6 +136,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 			)
 
 			for await (const chunk of results) {
+				signal?.throwIfAborted() // kilocode_change
 				const delta = chunk.choices[0]?.delta
 				const finishReason = chunk.choices[0]?.finish_reason
 
@@ -151,13 +161,15 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 				}
 
 				// Process finish_reason to emit tool_call_end events
-				if (finishReason) {
+				if (finishReason && !this.options.connectionTest) {
+					// kilocode_change: do not read another Task's tool parser state.
 					const endEvents = NativeToolCallParser.processFinishReason(finishReason)
 					for (const event of endEvents) {
 						yield event
 					}
 				}
 			}
+			signal?.throwIfAborted() // kilocode_change: SDK cancellation can silently end an iterator.
 
 			for (const processedChunk of matcher.final()) {
 				yield processedChunk
@@ -167,7 +179,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				outputTokens = await this.countTokens([{ type: "text", text: assistantText }])
 			} catch (err) {
-				console.error("[LmStudio] Failed to count output tokens:", err)
+				if (!this.options.connectionTest) console.error("[LmStudio] Failed to count output tokens:", err) // kilocode_change
 				outputTokens = 0
 			}
 
@@ -177,6 +189,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 				outputTokens,
 			} as const
 		} catch (error) {
+			if (this.options.connectionTest) throw error // kilocode_change: retain the real diagnostic failure.
 			throw new Error(
 				"Please check the LM Studio developer logs to debug what went wrong. You may need to load the model with a larger context length to work with IVOL Code's prompts.",
 			)

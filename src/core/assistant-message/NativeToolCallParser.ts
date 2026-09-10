@@ -513,6 +513,9 @@ export class NativeToolCallParser {
 				if (partialArgs.todos !== undefined) {
 					nativeArgs = {
 						todos: partialArgs.todos,
+						...(partialArgs.task_document !== undefined
+							? { task_document: partialArgs.task_document }
+							: {}), // kilocode_change
 					}
 				}
 				break
@@ -820,6 +823,7 @@ export class NativeToolCallParser {
 					if (args.todos !== undefined) {
 						nativeArgs = {
 							todos: args.todos,
+							...(args.task_document !== undefined ? { task_document: args.task_document } : {}), // kilocode_change
 						} as NativeArgsFor<TName>
 					}
 					break

@@ -1,5 +1,35 @@
 # IVOL Code Agent 5
 
+## 5.16.242
+
+### Patch Changes
+
+- Rename the optional experimental task-memory mode to Current Task and use `CURRENT_TASK.md` in the project root. The former `CURRENT_WORK.md` is not migrated, modified or deleted. The mode remains off by default for each provider profile.
+- Keep task-maintenance instructions in every system prompt, including resumed conversations: record new user requests, global blocks, completed stages and the exact next action without user reminders. The internal TODO remains the current-stage checklist.
+- Update the existing global plan before manual or automatic compaction, verify its saved revision and reload it before continuation. Keep a short resume pointer in compacted history instead of a second complete copy of the plan.
+- Preserve the original conversation when saving or reloading the plan fails or the file changes concurrently. Distinguish a missing file from an unreadable one and retain the original intelligent context reset as an independent alternative.
+- Apply the same core and interface changes across VS Code and all maintained PhpStorm, IntelliJ IDEA and PyCharm packages.
+
+## 5.16.241
+
+### Patch Changes
+
+- Add a separate web search window from the globe button below the chat, using the active OpenAI-compatible profile's native search model without adding messages to the coding task or sending project files.
+- Display the search answer and clickable sources, support cancellation, and save results as Markdown only after choosing a file; existing files are never overwritten.
+- Keep standalone searches independent of the running task, discard stale results when closing the window or changing profiles, and prevent late search retries after cancellation.
+- Add Russian and English interface text, stop recording webview message contents in JetBrains logs, and correct Windows and UNC default paths in the JetBrains save dialog.
+
+## 5.16.240
+
+### Patch Changes
+
+- Add provider connection checks with a short generation request, cancellation and a copyable diagnostic report that omits credentials and conversation content.
+- Make the optional experimental Intelligent Task mode available in VS Code, PhpStorm, both maintained IntelliJ IDEA targets and PyCharm; it remains off by default for every provider profile.
+- Preserve the current task plan in `CURRENT_WORK.md` before manual or automatic compaction and use it to continue afterward, retaining the existing intelligent context reset as an alternative.
+- Support manual Intelligent Task compaction on short conversations, larger working-state records, and a bounded compact rewrite when preparation exceeds its size limit without discarding history on failure.
+- Keep completed root tasks visible and allow follow-up in the same task instead of returning to the home screen.
+- Carry forward Windows history-save, JetBrains lifecycle, native-library initialization, transport and context-preparation fixes from previous releases.
+
 ## 5.16.234
 
 ### Patch Changes

@@ -246,6 +246,7 @@ export type ProviderSettingsEntry = z.infer<typeof providerSettingsEntrySchema>
 const baseProviderSettingsSchema = z.object({
 	profileType: profileTypeSchema.optional(), // kilocode_change - autocomplete profile type system
 	intelligentContextResetEnabled: z.boolean().optional(), // kilocode_change: per-profile, enabled when unset
+	intelligentTaskEnabled: z.boolean().optional(), // kilocode_change: experimental per-profile opt-in, mutually exclusive with intelligent context reset
 	allowInsecureTls: z.boolean().optional(), // kilocode_change: opt-in per-profile only; verify certificates when unset
 	includeMaxTokens: z.boolean().optional(),
 	diffEnabled: z.boolean().optional(),

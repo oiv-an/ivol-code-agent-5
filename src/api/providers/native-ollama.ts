@@ -171,7 +171,8 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 	constructor(options: ApiHandlerOptions) {
 		super()
 		this.options = options
-		this.initializationPromise = this.initialize() // kilocode_change - store the promise
+		// kilocode_change: a minimal check sends only the configured model's generation request.
+		if (!options.connectionTest) this.initializationPromise = this.initialize()
 	}
 
 	// kilocode_change start
@@ -190,7 +191,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 	}
 	// kilocode_change end
 
-	private ensureClient(): Ollama {
+	private ensureClient(signal?: AbortSignal): Ollama {
 		if (!this.client) {
 			try {
 				const clientOptions: OllamaOptions = {
@@ -207,6 +208,17 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 						: {}),
 					// kilocode_change end
 				}
+				// kilocode_change start: also cancel while Ollama is awaiting response headers.
+				// client.abort() alone only covers iterators created after headers arrive.
+				if (this.options.connectionTest && signal) {
+					const request = clientOptions.fetch ?? globalThis.fetch
+					clientOptions.fetch = (input, init) =>
+						request(input, {
+							...init,
+							signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal,
+						})
+				}
+				// kilocode_change end
 
 				// Add API key if provided (for Ollama cloud or authenticated instances)
 				if (this.options.ollamaApiKey) {
@@ -251,10 +263,13 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		// kilocode_change start
+		const signal = this.options.connectionTest ? metadata?.signal : undefined
+		signal?.throwIfAborted()
 		await this.ensureInitialized()
+		signal?.throwIfAborted()
 		// kilocode_change end
 
-		const client = this.ensureClient()
+		const client = this.ensureClient(signal) // kilocode_change
 		const { id: modelId, info: modelInfo } = this.getModel() // kilocode_change: fetchModel => getModel
 		const useR1Format = modelId.toLowerCase().includes("deepseek-r1")
 
@@ -318,6 +333,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 
 			try {
 				for await (const chunk of stream) {
+					signal?.throwIfAborted() // kilocode_change
 					if (typeof chunk.message.content === "string" && chunk.message.content.length > 0) {
 						// Process content through matcher for reasoning detection
 						for (const matcherChunk of matcher.update(chunk.message.content)) {
@@ -352,6 +368,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 						}
 					}
 				}
+				signal?.throwIfAborted() // kilocode_change
 
 				// Yield any remaining content from the matcher
 				for (const chunk of matcher.final()) {
@@ -374,10 +391,14 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 					}
 				}
 			} catch (streamError: any) {
+				if (this.options.connectionTest) throw streamError // kilocode_change: no raw diagnostic logs.
 				console.error("Error processing Ollama stream:", streamError)
 				throw new Error(`Ollama stream processing error: ${streamError.message || "Unknown error"}`)
+			} finally {
+				if (this.options.connectionTest) stream.abort?.() // kilocode_change: close this check's iterator.
 			}
 		} catch (error: any) {
+			if (this.options.connectionTest) throw error // kilocode_change: retain status/request metadata.
 			// Enhance error reporting
 			const statusCode = error.status || error.statusCode
 			const errorMessage = error.message || "Unknown error"

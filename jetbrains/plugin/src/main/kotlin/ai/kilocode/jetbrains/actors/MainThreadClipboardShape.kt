@@ -5,8 +5,11 @@
 package ai.kilocode.jetbrains.actors
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.Logger
+import kotlinx.coroutines.CancellationException
 import java.awt.Toolkit
+import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 
@@ -32,7 +35,9 @@ interface MainThreadClipboardShape : Disposable {
  * Implementation of the MainThreadClipboardShape interface.
  * Provides functionality to read from and write to the system clipboard.
  */
-class MainThreadClipboard : MainThreadClipboardShape {
+class MainThreadClipboard(
+    private val clipboardProvider: () -> Clipboard = { Toolkit.getDefaultToolkit().systemClipboard },
+) : MainThreadClipboardShape {
     private val logger = Logger.getInstance(MainThreadClipboardShape::class.java)
 
     /**
@@ -43,7 +48,7 @@ class MainThreadClipboard : MainThreadClipboardShape {
     override fun readText(): String? {
         logger.info("Reading clipboard text")
         return try {
-            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+            val clipboard = clipboardProvider()
             val data = clipboard.getContents(null)
             if (data != null && data.isDataFlavorSupported(DataFlavor.stringFlavor)) {
                 data.getTransferData(DataFlavor.stringFlavor) as? String
@@ -63,13 +68,15 @@ class MainThreadClipboard : MainThreadClipboardShape {
      */
     override fun writeText(value: String?) {
         value?.let {
-            logger.info("Writing clipboard text: $value")
             try {
-                val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+                val clipboard = clipboardProvider()
                 val selection = StringSelection(value)
                 clipboard.setContents(selection, selection)
             } catch (e: Exception) {
-                logger.error("Failed to write to clipboard", e)
+                if (e is ControlFlowException || e is CancellationException) throw e
+                // Clipboard contents and platform error payloads can contain private data.
+                // Propagate a safe failure so the webview cannot announce a copy that failed.
+                throw IllegalStateException("Could not write to the clipboard")
             }
         }
     }

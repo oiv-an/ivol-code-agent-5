@@ -3,8 +3,10 @@
 import Anthropic from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
 import axios from "axios"
+import { EventEmitter } from "node:events" // kilocode_change
 
 import {
+	RooCodeEventName, // kilocode_change
 	type ProviderSettingsEntry,
 	type ClineMessage,
 	openRouterDefaultModelId, // kilocode_change: openRouterDefaultModelId
@@ -21,6 +23,8 @@ import { defaultModeSlug } from "../../../shared/modes"
 import { experimentDefault } from "../../../shared/experiments"
 import { setTtsEnabled } from "../../../utils/tts"
 import { ContextProxy } from "../../config/ContextProxy"
+import * as providerDiagnostics from "../providerConnectionTest" // kilocode_change
+import * as standaloneSearch from "../standaloneWebSearch" // kilocode_change
 import { Task, TaskOptions } from "../../task/Task"
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 
@@ -353,6 +357,7 @@ vi.mock("@roo-code/cloud", () => ({
 vi.mock("../../../shared/kilocode/cli-sessions/core/SessionManager", () => ({
 	SessionManager: {
 		init: vi.fn().mockReturnValue({
+			doSync: vi.fn(), // kilocode_change: task completion requests an existing session sync.
 			startTimer: vi.fn(),
 			setPath: vi.fn(),
 			setWorkspaceDirectory: vi.fn(),
@@ -524,6 +529,29 @@ describe("ClineProvider", () => {
 		expect(mockWebviewView.webview.html).toContain("<!DOCTYPE html>")
 	})
 
+	// kilocode_change: settings diagnostics follow the view lifetime, not the active Task lifetime.
+	test("sidebar disposal cancels its check and independent search without clearing the task", async () => {
+		let disposeView!: () => Promise<void>
+		vi.mocked(mockWebviewView.onDidDispose).mockImplementation((callback) => {
+			disposeView = callback as () => Promise<void>
+			return { dispose: vi.fn() }
+		})
+		const cancelCheck = vi.spyOn(providerDiagnostics, "disposeProviderConnectionTest")
+		const cancelSearch = vi.spyOn(standaloneSearch, "disposeStandaloneWebSearch")
+		const disposeProvider = vi.spyOn(provider, "dispose")
+		const clearTask = vi.spyOn(provider, "clearTask")
+		await provider.resolveWebviewView(mockWebviewView)
+		await disposeView()
+		expect(cancelCheck).toHaveBeenCalledWith(provider)
+		expect(cancelSearch).toHaveBeenCalledWith(provider)
+		expect(disposeProvider).not.toHaveBeenCalled()
+		expect(clearTask).not.toHaveBeenCalled()
+		cancelCheck.mockRestore()
+		cancelSearch.mockRestore()
+		disposeProvider.mockRestore()
+		clearTask.mockRestore()
+	})
+
 	test("resolveWebviewView sets up webview correctly in development mode even if local server is not running", async () => {
 		provider = new ClineProvider(
 			{ ...mockContext, extensionMode: vscode.ExtensionMode.Development },
@@ -575,6 +603,101 @@ describe("ClineProvider", () => {
 		finishFirst()
 		await firstRequest
 		expect(postSpy).not.toHaveBeenCalledWith({ type: "condenseTaskContextResponse", text: "condensing-task" })
+	})
+	// kilocode_change end
+
+	// kilocode_change start: route manual reset from the saved mode, not a stale task snapshot.
+	test("completion notification keeps the current root task and its result attached", () => {
+		const messages = [{ type: "say", say: "completion_result", ts: 1, text: "Finished result" }]
+		const completedTask = Object.assign(new EventEmitter(), {
+			taskId: "completed-root",
+			instanceId: "root-instance",
+			clineMessages: messages,
+		})
+		;(provider as any).clineStack = [completedTask]
+		;(provider as any).taskCreationCallback(completedTask)
+		const clear = vi.spyOn(provider, "clearTask")
+		const remove = vi.spyOn(provider, "removeClineFromStack")
+		const listener = vi.fn()
+		provider.on(RooCodeEventName.TaskCompleted, listener)
+		completedTask.emit(RooCodeEventName.TaskCompleted, completedTask.taskId, {}, {})
+		expect(listener).toHaveBeenCalledWith(completedTask.taskId, {}, {})
+		expect(provider.getCurrentTask()).toBe(completedTask)
+		expect(completedTask.clineMessages).toBe(messages)
+		expect(clear).not.toHaveBeenCalled()
+		expect(remove).not.toHaveBeenCalled()
+	})
+
+	test("manual task mode synchronizes only memory flags and keeps model and provider unchanged", async () => {
+		const task = {
+			taskId: "manual-task",
+			cwd: "/project",
+			apiConfiguration: {
+				apiProvider: "openai",
+				openAiModelId: "original-model",
+				intelligentTaskEnabled: false,
+				intelligentContextResetEnabled: true,
+			},
+			condenseContext: vi.fn().mockResolvedValue(undefined),
+			say: vi.fn(),
+		}
+		;(provider as any).clineStack = [task]
+		vi.spyOn(provider.contextProxy, "getProviderSettings").mockReturnValue({
+			apiProvider: "openai",
+			openAiModelId: "other-model",
+			intelligentTaskEnabled: true,
+			intelligentContextResetEnabled: false,
+		})
+		vi.spyOn(provider, "getTaskDocumentSettings").mockReturnValue({
+			enabled: true,
+			supported: true,
+			fileName: "CURRENT_TASK.md",
+		})
+		await provider.condenseTaskContext("manual-task", "task")
+		expect(task.condenseContext).toHaveBeenCalledWith("task")
+		expect(task.apiConfiguration).toEqual({
+			apiProvider: "openai",
+			openAiModelId: "original-model",
+			intelligentTaskEnabled: true,
+			intelligentContextResetEnabled: false,
+		})
+	})
+
+	test("rejects a stale manual mode instead of silently preparing CONTEXT_RESTART", async () => {
+		const task = {
+			taskId: "manual-task",
+			cwd: "/project",
+			apiConfiguration: {},
+			condenseContext: vi.fn(),
+			say: vi.fn(),
+		}
+		;(provider as any).clineStack = [task]
+		vi.spyOn(provider.contextProxy, "getProviderSettings").mockReturnValue({ intelligentTaskEnabled: false })
+		vi.spyOn(provider, "getTaskDocumentSettings").mockReturnValue({
+			enabled: false,
+			supported: true,
+			fileName: "CURRENT_TASK.md",
+		})
+		const post = vi.spyOn(provider, "postMessageToWebview").mockResolvedValue(undefined)
+		await provider.condenseTaskContext("manual-task", "task")
+		expect(task.condenseContext).not.toHaveBeenCalled()
+		expect(task.say).toHaveBeenCalledWith("condense_context_error", expect.stringContaining("mode changed"))
+		expect(post).toHaveBeenCalledWith({ type: "condenseTaskContextResponse", text: "manual-task" })
+		expect(task.apiConfiguration).toEqual({})
+	})
+
+	test("a repeated manual click never replaces the configuration owned by a running preparation", async () => {
+		const original = { intelligentTaskEnabled: true }
+		const task = {
+			taskId: "manual-task",
+			isContextCondensationInProgress: true,
+			apiConfiguration: original,
+			condenseContext: vi.fn(),
+		}
+		;(provider as any).clineStack = [task]
+		await provider.condenseTaskContext("manual-task", "task")
+		expect(task.apiConfiguration).toBe(original)
+		expect(task.condenseContext).not.toHaveBeenCalled()
 	})
 	// kilocode_change end
 

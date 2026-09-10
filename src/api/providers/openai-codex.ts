@@ -158,6 +158,8 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
+		const signal = this.options.connectionTest ? metadata?.signal : undefined // kilocode_change
+		signal?.throwIfAborted() // kilocode_change
 		// Reset state for this request
 		this.lastResponseOutput = undefined
 		this.lastResponseId = undefined
@@ -166,6 +168,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 
 		// Get access token from OAuth manager
 		let accessToken = await openAiCodexOAuthManager.getAccessToken()
+		signal?.throwIfAborted() // kilocode_change
 		if (!accessToken) {
 			throw new Error(
 				t("common:errors.openAiCodex.notAuthenticated", {
@@ -189,9 +192,11 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		// Make the request with retry on auth failure
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
-				yield* this.executeRequest(requestBody, model, accessToken, metadata?.taskId)
+				yield* this.executeRequest(requestBody, model, accessToken, metadata?.taskId, signal) // kilocode_change
 				return
 			} catch (error) {
+				// kilocode_change: a check reports the first real API error; never refresh/retry after cancellation.
+				if (this.options.connectionTest) throw error
 				const message = error instanceof Error ? error.message : String(error)
 				const isAuthFailure = /unauthorized|invalid token|not authenticated|authentication|401/i.test(message)
 
@@ -356,6 +361,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 		model: OpenAiCodexModel,
 		accessToken: string,
 		taskId?: string,
+		signal?: AbortSignal, // kilocode_change: request-local diagnostics cancellation.
 	): ApiStream {
 		const normalizedRequestBody = {
 			...requestBody,
@@ -364,13 +370,21 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 
 		// Create AbortController for cancellation
 		this.abortController = new AbortController()
+		// kilocode_change start
+		const controller = this.abortController
+		const cancel = () => controller.abort(signal?.reason)
+		signal?.addEventListener("abort", cancel, { once: true })
+		if (signal?.aborted) cancel()
+		// kilocode_change end
 
 		try {
+			signal?.throwIfAborted() // kilocode_change
 			// Prefer OpenAI SDK streaming (same approach as openai-native) so event handling
 			// is consistent across providers.
 			try {
 				// Get ChatGPT account ID for organization subscriptions
 				const accountId = await openAiCodexOAuthManager.getAccountId()
+				signal?.throwIfAborted() // kilocode_change
 
 				// Build Codex-specific headers. Authorization is provided by the SDK apiKey.
 				const codexHeaders: Record<string, string> = {
@@ -392,6 +406,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 
 				const stream = (await (client as any).responses.create(normalizedRequestBody, {
 					signal: this.abortController.signal,
+					...(this.options.connectionTest ? { maxRetries: 0 } : {}), // kilocode_change
 					// If the SDK supports per-request overrides, ensure headers are present.
 					headers: codexHeaders,
 				})) as AsyncIterable<any>
@@ -411,11 +426,15 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 						yield outChunk
 					}
 				}
+				signal?.throwIfAborted() // kilocode_change: aborted SDK iterators may end silently.
 			} catch (_sdkErr) {
+				// kilocode_change: preserve the diagnostic error and never start a fallback after cancellation.
+				if (this.options.connectionTest || signal?.aborted) throw _sdkErr
 				// Fallback to manual SSE via fetch (Codex backend).
 				yield* this.makeCodexRequest(normalizedRequestBody, model, accessToken, taskId)
 			}
 		} finally {
+			signal?.removeEventListener("abort", cancel) // kilocode_change
 			this.abortController = undefined
 		}
 	}
@@ -865,6 +884,16 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	}
 
 	private async *processEvent(event: any, model: OpenAiCodexModel): ApiStream {
+		// kilocode_change start: a partial response followed by failure is not a successful connection check.
+		if (
+			this.options.connectionTest &&
+			["error", "response.error", "response.failed", "response.incomplete"].includes(event?.type)
+		) {
+			throw Object.assign(new Error("Codex connection check response failed"), {
+				error: event?.response?.error ?? event?.error,
+			})
+		}
+		// kilocode_change end
 		if (event?.response?.output && Array.isArray(event.response.output)) {
 			this.lastResponseOutput = event.response.output
 		}

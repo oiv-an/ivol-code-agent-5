@@ -334,6 +334,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		customModePrompts: defaultPrompts,
 		customSupportPrompts: {},
 		experiments: experimentDefault,
+		// kilocode_change: opt-in stays unavailable until the backend confirms project/edition support
+		taskDocumentSettings: { enabled: false, fileName: "CURRENT_TASK.md", supported: false },
 		enhancementApiConfigId: "",
 		dismissedNotificationIds: [], // kilocode_change
 		commitMessageApiConfigId: "", // kilocode_change

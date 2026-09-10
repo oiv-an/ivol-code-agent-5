@@ -23,6 +23,53 @@ import type { ModelRecord, RouterModels, ModelInfo } from "./model.js"
 import type { CommitRange } from "./kilocode/kilocode.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 
+// kilocode_change: only sanitized, bounded diagnostics cross back to the settings form.
+export type ProviderConnectionTestResult = {
+	requestId: string
+	status: "success" | "error" | "cancelled"
+	category: string
+	report: string
+	elapsedMs: number
+}
+
+// kilocode_change start: independent search never becomes a task/chat message.
+export type StandaloneWebSearchErrorCode =
+	| "invalid_query"
+	| "query_too_long"
+	| "unsupported_provider"
+	| "invalid_configuration"
+	| "timeout"
+	| "connection"
+	| "authentication"
+	| "rate_limit"
+	| "provider"
+	| "empty_response"
+	| "internal"
+
+export type StandaloneWebSearchResult = {
+	requestId: string
+	query: string
+	answer: string
+	sources: { url: string; title: string }[]
+	model: string
+	createdAt: string
+	truncated: boolean
+}
+
+export type StandaloneWebSearchUpdate = {
+	requestId: string
+	status: "running" | "success" | "error" | "cancelled"
+	result?: StandaloneWebSearchResult
+	errorCode?: StandaloneWebSearchErrorCode
+}
+
+export type StandaloneWebSearchSaveResult = {
+	requestId: string
+	status: "saved" | "cancelled" | "error"
+	errorCode?: "missing_result" | "unsupported_location" | "file_exists" | "save_failed"
+}
+// kilocode_change end
+
 // kilocode_change start: Type definitions for IVOL Code-specific features
 // SAP AI Core deployment types
 export type DeploymentRecord = Record<
@@ -177,6 +224,10 @@ export interface ExtensionMessage {
 		| "humanRelayCancel"
 		| "browserToolEnabled"
 		| "browserConnectionResult"
+		| "providerConnectionTestResult" // kilocode_change
+		| "providerConnectionReportCopyResult" // kilocode_change
+		| "standaloneWebSearchUpdate" // kilocode_change
+		| "standaloneWebSearchSaveResult" // kilocode_change
 		| "remoteBrowserEnabled"
 		| "ttsStart"
 		| "ttsStop"
@@ -273,6 +324,7 @@ export interface ExtensionMessage {
 		| "askReviewScope" // kilocode_change: Review mode scope selection
 		| "openAiCodexRateLimits"
 	text?: string
+	contextMemoryMode?: "task" | "handoff" | "standard" // kilocode_change: actual mode of context preparation progress.
 	// kilocode_change start
 	completionRequestId?: string // Correlation ID from request
 	completionText?: string // The completed text
@@ -348,6 +400,10 @@ export interface ExtensionMessage {
 	commits?: GitCommit[]
 	listApiConfig?: ProviderSettingsEntry[]
 	apiConfiguration?: ProviderSettings // kilocode_change: For profileConfigurationForEditing response
+	providerConnectionTestResult?: ProviderConnectionTestResult // kilocode_change
+	providerConnectionReportCopyResult?: { requestId: string; success: boolean } // kilocode_change
+	standaloneWebSearchUpdate?: StandaloneWebSearchUpdate // kilocode_change
+	standaloneWebSearchSaveResult?: StandaloneWebSearchSaveResult // kilocode_change
 	sessionId?: string // kilocode_change: STT session ID
 	segments?: STTSegment[] // kilocode_change: STT transcript segments (complete state)
 	isFinal?: boolean // kilocode_change: STT transcript is final
@@ -629,6 +685,9 @@ export type ExtensionState = Pick<
 	maxTotalImageSize: number // Maximum total size for all images in a single read operation in MB
 
 	experiments: Experiments // Map of experiment IDs to their enabled state
+	// kilocode_change start - effective per-profile experimental task document capability
+	taskDocumentSettings?: TaskDocumentSettings
+	// kilocode_change end
 
 	mcpEnabled: boolean
 	enableMcpServerCreation: boolean
@@ -690,6 +749,14 @@ export type ExtensionState = Pick<
 	speechToTextStatus?: { available: boolean; reason?: "openaiKeyMissing" | "ffmpegNotInstalled" } // kilocode_change: Speech-to-text availability status with failure reason
 	appendSystemPrompt?: string // kilocode_change: Custom text to append to system prompt (CLI only)
 }
+
+// kilocode_change start
+export interface TaskDocumentSettings {
+	enabled: boolean
+	fileName: string
+	supported: boolean
+}
+// kilocode_change end
 
 export interface Command {
 	name: string
@@ -848,6 +915,12 @@ export interface WebviewMessage {
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"
 		| "testBrowserConnection"
+		| "testProviderConnection" // kilocode_change: explicit isolated test of settings draft
+		| "cancelProviderConnectionTest" // kilocode_change
+		| "copyProviderConnectionReport" // kilocode_change
+		| "startStandaloneWebSearch" // kilocode_change
+		| "cancelStandaloneWebSearch" // kilocode_change
+		| "saveStandaloneWebSearch" // kilocode_change
 		| "browserConnectionResult"
 		| "allowVeryLargeReads" // kilocode_change
 		| "showFeedbackOptions" // kilocode_change
@@ -1003,6 +1076,7 @@ export interface WebviewMessage {
 		| "refreshSkills"
 		| "reviewScopeSelected" // kilocode_change: Review mode scope selection
 	text?: string
+	contextMemoryMode?: "task" | "handoff" | "standard" // kilocode_change: supported hosts send the saved mode selected for manual compaction.
 	suggestionLength?: number // kilocode_change: Length of accepted suggestion for telemetry
 	completionRequestId?: string // kilocode_change
 	shareId?: string // kilocode_change - for sessionFork

@@ -1,4 +1,5 @@
 import type OpenAI from "openai"
+import { TASK_DOCUMENT_PARAMETER_DESCRIPTION } from "../../../task-document/prompts" // kilocode_change
 
 const UPDATE_TODO_LIST_DESCRIPTION = `Replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
 
@@ -33,7 +34,7 @@ When NOT to Use:
 
 const TODOS_PARAMETER_DESCRIPTION = `Full markdown checklist in execution order, using [ ] for pending, [x] for completed, and [-] for in progress`
 
-export default {
+const updateTodoList = {
 	type: "function",
 	function: {
 		name: "update_todo_list",
@@ -52,3 +53,27 @@ export default {
 		},
 	},
 } satisfies OpenAI.Chat.ChatCompletionTool
+
+export default updateTodoList
+
+// kilocode_change: unchanged schema unless the project experiment is enabled.
+export function createUpdateTodoListTool(taskDocumentEnabled = false): OpenAI.Chat.ChatCompletionTool {
+	if (!taskDocumentEnabled) return updateTodoList
+	return {
+		...updateTodoList,
+		function: {
+			...updateTodoList.function,
+			description:
+				UPDATE_TODO_LIST_DESCRIPTION +
+				"\nPersistent task document is enabled: maintain it also during substantive task discussion, using task_document alongside the same checklist. Recording a plan does not authorize executing it.",
+			parameters: {
+				...updateTodoList.function.parameters,
+				properties: {
+					...updateTodoList.function.parameters.properties,
+					task_document: { type: ["string", "null"], description: TASK_DOCUMENT_PARAMETER_DESCRIPTION },
+				},
+				required: ["todos", "task_document"],
+			},
+		},
+	}
+}

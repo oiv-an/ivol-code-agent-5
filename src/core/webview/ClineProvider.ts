@@ -61,6 +61,8 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService, BridgeOrchestrator, getRooCodeApiUrl } from "@roo-code/cloud"
 
 import { Package } from "../../shared/package"
+import { disposeProviderConnectionTest } from "./providerConnectionTest" // kilocode_change
+import { disposeStandaloneWebSearch } from "./standaloneWebSearch" // kilocode_change
 import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"
@@ -106,6 +108,14 @@ import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
 import { getSystemPromptFilePath } from "../prompts/sections/custom-system-prompt"
+// kilocode_change start
+import {
+	getTaskDocumentWorkspacePath,
+	resolveTaskDocumentSettings,
+	resolveContextMemoryMode,
+	type TaskDocumentSettingsEnvironment,
+} from "../task-document/settings"
+// kilocode_change end
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
 import type { ClineMessage, TodoItem } from "@roo-code/types"
@@ -657,6 +667,8 @@ export class ClineProvider
 	}
 
 	async dispose() {
+		disposeProviderConnectionTest(this) // kilocode_change: stop only this view's isolated settings check.
+		disposeStandaloneWebSearch(this) // kilocode_change: no independent search survives its owning view.
 		this.log("Disposing ClineProvider...")
 
 		// Clear all tasks from the stack.
@@ -929,6 +941,8 @@ export class ClineProvider
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
 			async () => {
+				disposeProviderConnectionTest(this) // kilocode_change: closing a sidebar must also stop its isolated check.
+				disposeStandaloneWebSearch(this) // kilocode_change
 				if (inTabMode) {
 					this.log("Disposing ClineProvider instance for tab view")
 					await this.dispose()
@@ -1999,7 +2013,7 @@ export class ClineProvider
 	}
 
 	/* Condenses a task's message history to use fewer tokens. */
-	async condenseTaskContext(taskId: string) {
+	async condenseTaskContext(taskId: string, expectedMemoryMode?: ReturnType<typeof resolveContextMemoryMode>) {
 		let task: Task | undefined
 		for (let i = this.clineStack.length - 1; i >= 0; i--) {
 			if (this.clineStack[i].taskId === taskId) {
@@ -2008,9 +2022,43 @@ export class ClineProvider
 			}
 		}
 		if (!task) {
+			await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId }) // kilocode_change
 			throw new Error(`Task with id ${taskId} not found in stack`)
 		}
-		await task.condenseContext()
+		// kilocode_change start: pin the manual action to the saved mode shown in this window.
+		// Existing tasks may hold an older API configuration snapshot. Only memory settings
+		// are synchronized here; do not switch models, providers, profiles, or other projects.
+		if (task.isContextCondensationInProgress) return
+		if (expectedMemoryMode !== undefined) {
+			try {
+				const saved = this.contextProxy.getProviderSettings()
+				const supported = this.getTaskDocumentSettings(saved, task.cwd).supported
+				if (!supported || resolveContextMemoryMode(saved, supported) !== expectedMemoryMode) {
+					throw new Error("The selected context mode changed. Save the profile settings and try again.")
+				}
+				if (
+					task.apiConfiguration.intelligentTaskEnabled !== saved.intelligentTaskEnabled ||
+					task.apiConfiguration.intelligentContextResetEnabled !== saved.intelligentContextResetEnabled
+				) {
+					task.apiConfiguration = {
+						...task.apiConfiguration,
+						intelligentTaskEnabled: saved.intelligentTaskEnabled,
+						intelligentContextResetEnabled: saved.intelligentContextResetEnabled,
+					}
+				}
+			} catch (error) {
+				await task.say(
+					"condense_context_error",
+					error instanceof Error ? error.message : "Could not validate context mode",
+				)
+				await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
+				return
+			}
+			await task.condenseContext(expectedMemoryMode)
+		} else {
+			await task.condenseContext()
+		}
+		// kilocode_change end
 		// kilocode_change: Task owns completion; a duplicate request can return early while preparation is still running.
 	}
 
@@ -2409,6 +2457,9 @@ export class ClineProvider
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
+			// kilocode_change start
+			taskDocumentSettings: this.getTaskDocumentSettings(apiConfiguration),
+			// kilocode_change end
 			apiConfiguration,
 			customInstructions,
 			alwaysAllowReadOnly: alwaysAllowReadOnly ?? true,
@@ -3845,6 +3896,35 @@ export class ClineProvider
 	public get cwd() {
 		return this.currentWorkspacePath || getWorkspacePath()
 	}
+
+	// kilocode_change start - experimental persistent project task document
+	public getTaskDocumentWorkspacePath(cwd = this.cwd): string | undefined {
+		return getTaskDocumentWorkspacePath(cwd, vscode.workspace.workspaceFolders)
+	}
+
+	private getTaskDocumentSettingsEnvironment(cwd = this.cwd): TaskDocumentSettingsEnvironment {
+		let wrapper: TaskDocumentSettingsEnvironment["wrapper"]
+		try {
+			wrapper = getKiloCodeWrapperProperties()
+		} catch {
+			// Malformed or incomplete wrapper metadata is unsupported, not an opt-in.
+			wrapper = undefined
+		}
+		return {
+			appName: vscode.env.appName,
+			wrapper,
+			workspacePath: this.getTaskDocumentWorkspacePath(cwd),
+			spawnedAgent: Boolean(process.env.AGENT_CONFIG),
+		}
+	}
+
+	public getTaskDocumentSettings(apiConfiguration?: { intelligentTaskEnabled?: boolean }, cwd = this.cwd) {
+		return resolveTaskDocumentSettings(
+			apiConfiguration ?? this.contextProxy.getProviderSettings(),
+			this.getTaskDocumentSettingsEnvironment(cwd),
+		)
+	}
+	// kilocode_change end
 
 	/**
 	 * Delegate parent task and open child task.

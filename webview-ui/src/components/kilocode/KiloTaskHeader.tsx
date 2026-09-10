@@ -64,7 +64,7 @@ const KiloTaskHeader = ({
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
 	const { showTaskTimeline, showDiffStats, clineMessages } = useExtensionState()
-	const { apiConfiguration, currentTaskItem, customModes } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, customModes, taskDocumentSettings } = useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 
@@ -78,10 +78,16 @@ const KiloTaskHeader = ({
 	const contextWindow = model?.contextWindow || 1
 
 	const { width: windowWidth } = useWindowSize()
+	const condenseContextLabel = t(
+		taskDocumentSettings?.supported === true && apiConfiguration?.intelligentTaskEnabled === true
+			? "chat:task.condenseCurrentWorkNow"
+			: "chat:task.condenseContext",
+	)
 
 	const condenseButton = (
-		<StandardTooltip content={t("chat:task.condenseContext")}>
+		<StandardTooltip content={condenseContextLabel}>
 			<button
+				aria-label={condenseContextLabel}
 				disabled={buttonsDisabled}
 				onClick={() => currentTaskItem && handleCondenseContext(currentTaskItem.id)}
 				className="shrink-0 min-h-[20px] min-w-[20px] p-[2px] cursor-pointer disabled:cursor-not-allowed opacity-85 hover:opacity-100 bg-transparent border-none rounded-md">

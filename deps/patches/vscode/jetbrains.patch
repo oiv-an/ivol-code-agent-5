@@ -4660,11 +4660,12 @@ diff --git a/src/vs/workbench/api/common/extHostWebview.ts b/src/vs/workbench/ap
 index 435df4b03fc..1b85d76d832 100644
 --- a/src/vs/workbench/api/common/extHostWebview.ts
 +++ b/src/vs/workbench/api/common/extHostWebview.ts
-@@ -222,6 +222,7 @@ export class ExtHostWebviews extends Disposable implements extHostProtocol.ExtHo
+@@ -222,6 +222,8 @@ export class ExtHostWebviews extends Disposable implements extHostProtocol.ExtHo
  		jsonMessage: string,
  		buffers: SerializableObjectWithBuffers<VSBuffer[]>
  	): void {
-+		console.log('onMessage', handle, jsonMessage, buffers);
++		// Webview messages may contain credentials or private standalone searches.
++		// Dispatch without persisting their payload to the extension-host log.
  		const webview = this.getWebview(handle);
  		if (webview) {
  			const { message } = deserializeWebviewMessage(jsonMessage, buffers.value);

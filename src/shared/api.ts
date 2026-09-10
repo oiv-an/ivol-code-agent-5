@@ -21,6 +21,8 @@ export type { RouterModels } // kilocode_change
 // ApiHandlerOptions
 // Extend ProviderSettings (minus apiProvider) with handler-specific toggles.
 export type ApiHandlerOptions = Omit<ProviderSettings, "apiProvider"> & {
+	// kilocode_change: request-only diagnostics mode; never part of saved ProviderSettings.
+	connectionTest?: boolean
 	/**
 	 * When true and using OpenAI Responses API models that support reasoning summaries,
 	 * include reasoning.summary: "auto" so the API returns summaries (we already parse

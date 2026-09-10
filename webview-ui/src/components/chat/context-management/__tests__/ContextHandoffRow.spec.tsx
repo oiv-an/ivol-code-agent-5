@@ -51,6 +51,31 @@ describe("ContextHandoffRow", () => {
 		expect(screen.queryByTestId("progress-indicator")).not.toBeInTheDocument()
 	})
 
+	it("shows the task document update in progress before compression, not continuation creation", () => {
+		render(
+			<ContextHandoffRow isInProgress text={JSON.stringify({ phase: "preparing", path: "CURRENT_TASK.md" })} />,
+		)
+		expect(screen.getByRole("status")).toHaveTextContent("chat:intelligentTaskProgress.inProgress")
+		expect(screen.queryByText("chat:contextHandoff.inProgress")).not.toBeInTheDocument()
+		expect(screen.queryByText("chat:contextManagement.condensation.inProgress")).not.toBeInTheDocument()
+	})
+
+	it.each(["preparing", "saved"])(
+		"uses task-specific %s details and never promises to delete CURRENT_TASK.md",
+		(phase) => {
+			render(
+				<ContextHandoffRow
+					text={JSON.stringify({ phase, path: "CURRENT_TASK.md", prompt: "Update", content: "Saved" })}
+				/>,
+			)
+			const key = phase === "preparing" ? "preparing" : "saved"
+			expect(screen.getByText(`chat:intelligentTaskProgress.${key}Title`)).toBeInTheDocument()
+			expect(screen.getByText(`chat:intelligentTaskProgress.${key}Description`)).toBeInTheDocument()
+			expect(screen.queryByText("chat:contextHandoff.savedDescription")).not.toBeInTheDocument()
+			expect(screen.getByText("CURRENT_TASK.md")).toBeInTheDocument()
+		},
+	)
+
 	it.each([undefined, "not JSON", '{"phase":"saved"}', '{"phase":"unexpected","path":"file"}'])(
 		"handles malformed persisted details without a crash: %s",
 		(text) => {

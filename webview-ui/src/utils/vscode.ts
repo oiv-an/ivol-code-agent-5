@@ -34,7 +34,12 @@ class VSCodeAPIWrapper {
 		if (this.vsCodeApi) {
 			this.vsCodeApi.postMessage(message)
 		} else {
-			console.log(message)
+			// kilocode_change: don't log credentials or private standalone search queries in browser previews.
+			console.log(
+				message.type === "testProviderConnection" || message.type === "startStandaloneWebSearch"
+					? { type: message.type }
+					: message,
+			)
 		}
 	}
 

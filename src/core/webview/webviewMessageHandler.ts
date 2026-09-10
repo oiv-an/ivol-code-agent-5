@@ -103,6 +103,12 @@ import { getTaskHistory } from "../../shared/kilocode/getTaskHistory" // kilocod
 import { AutoPurgeScheduler } from "../../services/auto-purge" // kilocode_change
 import { setPendingTodoList } from "../tools/UpdateTodoListTool"
 import { ManagedIndexer } from "../../services/code-index/managed/ManagedIndexer"
+import {
+	handleProviderConnectionTest,
+	cancelProviderConnectionTest,
+	copyProviderConnectionReport,
+} from "./providerConnectionTest" // kilocode_change
+import { handleStandaloneWebSearch, cancelStandaloneWebSearch, saveStandaloneWebSearch } from "./standaloneWebSearch" // kilocode_change
 
 // kilocode_change: personal build intentionally has no pre-release updater command
 // kilocode_change start: draft catalogs must never inherit credentials or TLS exceptions from another profile.
@@ -521,6 +527,25 @@ export const webviewMessageHandler = async (
 	}
 
 	switch (message.type) {
+		// kilocode_change: explicit draft-only checks never enter the task or profile mutation pipeline.
+		case "startStandaloneWebSearch": // kilocode_change: independent of Task and chat input.
+			await handleStandaloneWebSearch(provider, message)
+			break
+		case "cancelStandaloneWebSearch": // kilocode_change
+			cancelStandaloneWebSearch(provider, message.requestId)
+			break
+		case "saveStandaloneWebSearch": // kilocode_change: save only a backend-owned result by identity.
+			await saveStandaloneWebSearch(provider, message.requestId)
+			break
+		case "testProviderConnection":
+			await handleProviderConnectionTest(provider, message)
+			break
+		case "copyProviderConnectionReport":
+			await copyProviderConnectionReport(provider, message.requestId)
+			break
+		case "cancelProviderConnectionTest":
+			cancelProviderConnectionTest(provider, message.requestId)
+			break
 		case "webviewDidLaunch":
 			// Load custom modes first
 			const customModes = await provider.customModesManager.getCustomModes()
@@ -782,7 +807,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "condenseTaskContextRequest":
-			provider.condenseTaskContext(message.text!)
+			await provider.condenseTaskContext(message.text!, message.contextMemoryMode) // kilocode_change: preserve explicit manual route.
 			break
 		case "deleteTaskWithId":
 			provider.deleteTaskWithId(message.text!)
@@ -2164,7 +2189,7 @@ export const webviewMessageHandler = async (
 			const payload = message.payload as { todos?: any[] }
 			const todos = payload?.todos
 			if (Array.isArray(todos)) {
-				await setPendingTodoList(todos)
+				setPendingTodoList(provider.getCurrentTask(), todos) // kilocode_change: edit only this task's pending approval.
 			}
 			break
 		}

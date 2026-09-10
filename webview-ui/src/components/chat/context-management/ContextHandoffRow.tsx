@@ -14,17 +14,19 @@ interface ContextHandoffRowProps {
 /** Persist the actual service instruction and verified file, separately from live progress. */
 export function ContextHandoffRow({ text, isInProgress = false }: ContextHandoffRowProps) {
 	const { t } = useTranslation()
+	const parsed = contextHandoffProgressSchema.safeParse(safeJsonParse<unknown>(text))
+	const isTaskDocument = parsed.success && parsed.data.path === "CURRENT_TASK.md"
+	const translationPrefix = isTaskDocument ? "chat:intelligentTaskProgress" : "chat:contextHandoff"
 
 	if (isInProgress) {
 		return (
 			<div className="flex items-center gap-2" role="status">
 				<ProgressIndicator />
-				<span className="font-bold text-vscode-foreground">{t("chat:contextHandoff.inProgress")}</span>
+				<span className="font-bold text-vscode-foreground">{t(`${translationPrefix}.inProgress`)}</span>
 			</div>
 		)
 	}
 
-	const parsed = contextHandoffProgressSchema.safeParse(safeJsonParse<unknown>(text))
 	if (!parsed.success) {
 		return <div className="text-vscode-descriptionForeground">{t("chat:contextHandoff.invalidDetails")}</div>
 	}
@@ -38,10 +40,10 @@ export function ContextHandoffRow({ text, isInProgress = false }: ContextHandoff
 		<div className="mb-2 min-w-0">
 			<div className="flex items-center gap-2 font-bold text-vscode-foreground">
 				<Icon size={16} className="shrink-0" />
-				<span>{t(isPreparing ? "chat:contextHandoff.preparingTitle" : "chat:contextHandoff.savedTitle")}</span>
+				<span>{t(`${translationPrefix}.${isPreparing ? "preparingTitle" : "savedTitle"}`)}</span>
 			</div>
 			<p className="mt-2 mb-1 text-sm text-vscode-descriptionForeground">
-				{t(isPreparing ? "chat:contextHandoff.preparingDescription" : "chat:contextHandoff.savedDescription")}
+				{t(`${translationPrefix}.${isPreparing ? "preparingDescription" : "savedDescription"}`)}
 			</p>
 			<div className="font-mono text-sm break-all text-vscode-foreground">{data.path}</div>
 			{details && (

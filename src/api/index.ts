@@ -9,6 +9,7 @@ import {
 } from "@roo-code/types"
 
 import { ApiStream } from "./transform/stream"
+import type { ApiHandlerOptions } from "../shared/api" // kilocode_change
 
 import {
 	GlamaHandler, // kilocode_change
@@ -191,8 +192,16 @@ export interface ApiHandler {
 	contextWindow?: number // kilocode_change: Add contextWindow property for virtual quota fallback
 }
 
-export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
-	const { apiProvider, ...options } = configuration
+// kilocode_change start: only the trusted caller can enable request-local diagnostics.
+export function buildApiHandler(
+	configuration: ProviderSettings,
+	runtimeOptions?: { connectionTest?: boolean },
+): ApiHandler {
+	const { apiProvider, ...profileOptions } = configuration
+	const options: ApiHandlerOptions = { ...profileOptions }
+	delete options.connectionTest
+	if (runtimeOptions?.connectionTest === true) options.connectionTest = true
+	// kilocode_change end
 
 	switch (apiProvider) {
 		// kilocode_change start

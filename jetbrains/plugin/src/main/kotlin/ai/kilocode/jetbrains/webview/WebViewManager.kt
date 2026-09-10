@@ -29,7 +29,6 @@ import com.intellij.util.Alarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.cef.CefSettings
@@ -49,7 +48,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
-import java.util.concurrent.Executors
 import javax.swing.JButton
 import javax.swing.JFrame
 import javax.swing.JPanel
@@ -626,10 +624,7 @@ class WebViewInstance(
 
     // Body theme class (e.g., "vscode-dark" or "vscode-light")
     private var bodyThemeClass: String = "vscode-dark"
-    private val boundedIODispatcher = Executors.newFixedThreadPool(
-        Runtime.getRuntime().availableProcessors() * 2,
-        { r -> Thread(r, "KiloCode-WebView-IO").apply { isDaemon = true } }
-    ).asCoroutineDispatcher()
+    private val boundedIODispatcher = createWebViewMessageDispatcher()
 
     // Coroutine scope
     private val coroutineScope = CoroutineScope(SupervisorJob() + boundedIODispatcher)
@@ -660,6 +655,21 @@ class WebViewInstance(
             }
         },
     )
+
+    private val disposalBridge =
+        WebViewDisposalBridge(
+            isProjectDisposed = { project.isDisposed },
+            sendDispose = {
+                project
+                    .getService(PluginContext::class.java)
+                    .getRPCProtocol()
+                    ?.getProxy(ServiceProxyRegistry.ExtHostContext.ExtHostWebviewViews)
+                    ?.disposeWebviewView(viewId)
+            },
+            onUnavailable = {
+                logger.warn("Could not notify extension host that the WebView was disposed")
+            },
+        )
 
     // Synchronization for page load state
     private val pageLoadLock = Any()
@@ -1693,6 +1703,8 @@ class WebViewInstance(
             } catch (e: Exception) {
                 logger.error("Error shutting down bounded IO dispatcher", e)
             }
+
+            disposalBridge.dispose()
             
             logger.info("WebView instance released: $viewType/$viewId")
         }

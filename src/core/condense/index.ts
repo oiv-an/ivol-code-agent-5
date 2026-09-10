@@ -10,6 +10,16 @@ import { ApiMessage } from "../task-persistence/apiMessages"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "../../shared/array"
 import { buildContextHandoffPrompt } from "../context-management/context-handoff"
+import { INTELLIGENT_TASK_PREPARATION_PROMPT } from "../task-document/prompts" // kilocode_change
+// kilocode_change start: generation uses the same task-document capacity as storage.
+import {
+	MAX_TASK_DOCUMENT_BLOCK_BYTES,
+	TASK_DOCUMENT_TARGET_BYTES,
+	encodeTaskDocumentId,
+	isTaskDocumentBodyWithinLimit,
+	normalizeTaskDocumentBody,
+} from "../task-document/limits"
+// kilocode_change end
 
 /**
  * Checks if a message contains tool_result blocks.
@@ -213,6 +223,11 @@ export type SummarizeResponse = {
 }
 
 export type ContextHandoffGenerationOptions = {
+	taskDocument?: boolean // kilocode_change: persistent task replaces temporary restart file
+	/** Explicit manual task-memory reset can be exercised before the context fills up. */
+	manualTaskCompaction?: boolean // kilocode_change: never applies to automatic or legacy compression
+	/** Current persistent plan evidence; never persisted as a duplicate history message. */
+	taskDocumentContext?: string // kilocode_change
 	/** Defaults to true so existing callers use the lossless IVOL restart flow. */
 	enabled?: boolean
 	/** Editable task sent to the active model immediately before context compression. */
@@ -583,18 +598,29 @@ export async function summarizeConversation(
 
 	// Always preserve the first message (which may contain slash command content)
 	const firstMessage = messages[0]
+	// kilocode_change start: a manual CURRENT_TASK reset must be testable after one
+	// completed exchange. Keep as much of the normal tail as possible while still
+	// summarizing at least two messages; automatic and legacy retention is unchanged.
+	const manualTaskCompaction =
+		contextHandoff.manualTaskCompaction === true &&
+		contextHandoff.taskDocument === true &&
+		isAutomaticTrigger === false
+	const keepCount = manualTaskCompaction
+		? Math.min(N_MESSAGES_TO_KEEP, Math.max(0, messages.length - 2))
+		: N_MESSAGES_TO_KEEP
+	// kilocode_change end
 
 	// Get keepMessages and any tool_use/reasoning blocks that need to be preserved for tool_result pairing
 	// Only preserve these blocks when using native tools protocol (XML protocol doesn't need them)
 	const { keepMessages, toolUseBlocksToPreserve, reasoningBlocksToPreserve } = useNativeTools
-		? getKeepMessagesWithToolBlocks(messages, N_MESSAGES_TO_KEEP)
+		? getKeepMessagesWithToolBlocks(messages, keepCount) // kilocode_change
 		: {
-				keepMessages: messages.slice(-N_MESSAGES_TO_KEEP),
+				keepMessages: keepCount > 0 ? messages.slice(-keepCount) : [], // kilocode_change: slice(-0) retains everything
 				toolUseBlocksToPreserve: [],
 				reasoningBlocksToPreserve: [],
 			}
 
-	const keepStartIndex = Math.max(messages.length - N_MESSAGES_TO_KEEP, 0)
+	const keepStartIndex = Math.max(messages.length - keepCount, 0) // kilocode_change
 	const includeFirstKeptMessageInSummary = toolUseBlocksToPreserve.length > 0
 	const summarySliceEnd = includeFirstKeptMessageInSummary ? keepStartIndex + 1 : keepStartIndex
 	const messagesBeforeKeep = summarySliceEnd > 0 ? messages.slice(0, summarySliceEnd) : []
@@ -621,7 +647,7 @@ export async function summarizeConversation(
 				? t("common:errors.condense_not_enough_messages", {
 						prevContextTokens,
 						messageCount: messages.length,
-						minimumMessageCount: N_MESSAGES_TO_KEEP + 2,
+						minimumMessageCount: manualTaskCompaction ? 2 : N_MESSAGES_TO_KEEP + 2,
 					})
 				: t("common:errors.condensed_recently")
 		// kilocode_change end
@@ -653,8 +679,10 @@ export async function summarizeConversation(
 		}
 	}
 
-	const contextHandoffEnabled = contextHandoff.enabled ?? true
-	const handoffTask = getIntelligentContextResetPrompt(contextHandoff.prompt) // kilocode_change
+	const contextHandoffEnabled = contextHandoff.taskDocument || (contextHandoff.enabled ?? true)
+	const handoffTask = contextHandoff.taskDocument
+		? INTELLIGENT_TASK_PREPARATION_PROMPT
+		: getIntelligentContextResetPrompt(contextHandoff.prompt) // kilocode_change
 	let requestSourceMessages = messagesToSummarize
 	if (contextHandoffEnabled) {
 		const recentMessagesForHandoff = serializeRecentMessagesForHandoff(
@@ -683,7 +711,14 @@ ${recentMessagesForHandoff}
 	// kilocode_change start: preparation follows the handoff task, never the
 	// separate conversation-summary prompt (which imposes a conflicting structure).
 	const basePrompt = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
-	const promptToUse = contextHandoffEnabled ? buildContextHandoffPrompt(handoffTask) : basePrompt
+	const preparationPrompt = contextHandoff.taskDocument
+		? handoffTask
+		: contextHandoffEnabled
+			? buildContextHandoffPrompt(handoffTask)
+			: basePrompt
+	const promptToUse = contextHandoff.taskDocumentContext
+		? `${preparationPrompt}\n\n${contextHandoff.taskDocumentContext}`
+		: preparationPrompt
 	// kilocode_change end
 
 	let summary = ""
@@ -707,40 +742,97 @@ ${recentMessagesForHandoff}
 		if (contextHandoffEnabled) {
 			await contextHandoff.onBeforeRequest?.(handoffTask)
 		}
-		// kilocode_change start: an IDE stop must abort the provider request too.
-		assertPreparationActive()
-		const stream = contextHandoff.signal
-			? handlerToUse.createMessage(promptToUse, requestMessages, { taskId, signal: contextHandoff.signal })
-			: handlerToUse.createMessage(promptToUse, requestMessages)
-		// kilocode_change end
-		for await (const chunk of stream) {
-			assertPreparationActive() // kilocode_change: some providers ignore AbortSignal.
-			if (chunk.type === "text") {
-				summary += chunk.text
-			} else if (chunk.type === "usage") {
-				// Record final usage chunk only
-				cost = chunk.totalCost ?? 0
-				outputTokens = chunk.outputTokens ?? 0
-			}
-			// kilocode_change start: Capture Anthropic thinking blocks from condensing response
-			else if (chunk.type === "ant_thinking") {
-				// Multiple ant_thinking chunks may be emitted during streaming:
-				// 1. From content_block_start (may have partial data)
-				// 2. From signature_delta (has full accumulated thinking + signature)
-				// Keep the last one with a valid signature as it has the complete data
-				if (chunk.thinking && chunk.signature) {
-					lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
-				}
-			} else if (chunk.type === "ant_redacted_thinking") {
-				// Redacted thinking blocks should be preserved as-is
-				summaryThinkingBlocks.push({
-					type: "redacted_thinking",
-					data: chunk.data,
-				} as Anthropic.Messages.RedactedThinkingBlock)
-			}
-			// kilocode_change end
+		// kilocode_change start: a task document gets at most one size-recovery request.
+		// Keep the original request/evidence intact; never feed a rejected draft or its thinking back to the model.
+		if (contextHandoff.taskDocument) {
+			encodeTaskDocumentId(taskId)
 		}
-		assertPreparationActive() // kilocode_change: also reject cancellation at end-of-stream.
+		const attempts = contextHandoff.taskDocument ? 2 : 1
+		for (let attempt = 0; attempt < attempts; attempt++) {
+			assertPreparationActive()
+			summary = ""
+			outputTokens = 0
+			summaryThinkingBlocks.length = 0
+			lastAntThinking = null
+			let redactedThinkingBytes = 0
+			let signedThinkingBytes = 0
+			let oversized = false
+			const previousAttemptsCost = cost
+			const attemptPrompt =
+				attempt === 0
+					? promptToUse
+					: `${promptToUse}\n\n<task_document_size_retry>\nThe previous preparation exceeded the CURRENT_TASK Markdown size limit. Rebuild it from the SAME original conversation and saved task evidence supplied here. Target at most ${TASK_DOCUMENT_TARGET_BYTES / 1024} KiB (${TASK_DOCUMENT_TARGET_BYTES} UTF-8 bytes), including non-ASCII text. Preserve every user requirement, unfinished branch, constraint, decision, current status, and exact next action. Use concise Markdown; replace copied code, logs, repeated history, and duplicate explanations with precise file references and brief verified facts. Do not omit outstanding work to fit the target. Output only the complete replacement Markdown body.\n</task_document_size_retry>`
+			const stream = contextHandoff.signal
+				? handlerToUse.createMessage(attemptPrompt, requestMessages, { taskId, signal: contextHandoff.signal })
+				: handlerToUse.createMessage(attemptPrompt, requestMessages)
+			for await (const chunk of stream) {
+				assertPreparationActive() // Some providers ignore AbortSignal.
+				if (chunk.type === "text") {
+					// Bound retained text before concatenating an arbitrarily large provider chunk.
+					// The character check is only a cheap upper bound; UTF-8 bytes are authoritative.
+					if (
+						contextHandoff.taskDocument &&
+						(summary.length + chunk.text.length > MAX_TASK_DOCUMENT_BLOCK_BYTES ||
+							Buffer.byteLength(summary + chunk.text, "utf8") > MAX_TASK_DOCUMENT_BLOCK_BYTES)
+					) {
+						oversized = true
+						break // for-await closes the iterator before any retry request.
+					}
+					summary += chunk.text
+				} else if (chunk.type === "usage") {
+					// Keep the latest reported usage per attempt, with all attempts' known costs.
+					// An early-closed provider may not have emitted its final usage yet.
+					cost = previousAttemptsCost + (chunk.totalCost ?? 0)
+					outputTokens = chunk.outputTokens ?? 0
+				} else if (chunk.type === "ant_thinking") {
+					// Only the last complete signed block is valid for the accepted response.
+					if (chunk.thinking && chunk.signature) {
+						signedThinkingBytes =
+							Buffer.byteLength(chunk.thinking, "utf8") + Buffer.byteLength(chunk.signature, "utf8")
+						if (
+							contextHandoff.taskDocument &&
+							signedThinkingBytes + redactedThinkingBytes > MAX_TASK_DOCUMENT_BLOCK_BYTES
+						) {
+							throw new Error(
+								"Task preparation reasoning is too large; reduce the model's reasoning budget and retry",
+							)
+						}
+						lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
+					}
+				} else if (chunk.type === "ant_redacted_thinking") {
+					// Include per-block overhead so even a stream of empty blocks stays bounded.
+					redactedThinkingBytes += Buffer.byteLength(chunk.data, "utf8") + 64
+					if (
+						contextHandoff.taskDocument &&
+						signedThinkingBytes + redactedThinkingBytes > MAX_TASK_DOCUMENT_BLOCK_BYTES
+					) {
+						throw new Error(
+							"Task preparation reasoning is too large; reduce the model's reasoning budget and retry",
+						)
+					}
+					summaryThinkingBlocks.push({
+						type: "redacted_thinking",
+						data: chunk.data,
+					} as Anthropic.Messages.RedactedThinkingBlock)
+				}
+			}
+			// Cancellation during iterator cleanup must prevent starting the recovery request.
+			assertPreparationActive()
+			if (contextHandoff.taskDocument && !oversized && summary.trim()) {
+				// Validate malformed Markdown separately; only size failures warrant an automatic retry.
+				normalizeTaskDocumentBody(summary.trim())
+				oversized = !isTaskDocumentBodyWithinLimit(summary.trim(), taskId)
+			}
+			if (!oversized) {
+				break
+			}
+			if (attempt === attempts - 1) {
+				throw new Error(
+					`CURRENT_TASK is still too large after one automatic retry (maximum ${MAX_TASK_DOCUMENT_BLOCK_BYTES / 1024} KiB including ownership markers). Ask the model to reduce code, logs, and duplicated detail while retaining all requirements and unfinished branches, then retry. The original conversation has been preserved.`,
+				)
+			}
+		}
+		// kilocode_change end
 	} catch (error) {
 		return {
 			...response,
@@ -922,11 +1014,18 @@ ${recentMessagesForHandoff}
 		return { ...response, cost, error: cancellationError }
 	}
 	// kilocode_change end
-	if (newContextTokens >= prevContextTokens) {
+	// kilocode_change start: a requested small-context reset may cost more than it
+	// frees. Report real counts; the task commit still enforces the active model's
+	// capacity after reloading CURRENT_TASK. Never relax automatic compression.
+	if (manualTaskCompaction && (!Number.isFinite(newContextTokens) || newContextTokens <= 0)) {
+		return { ...response, cost, error: "Context preparation produced an invalid token estimate" }
+	}
+	if (!manualTaskCompaction && newContextTokens >= prevContextTokens) {
 		// kilocode_change add numbers
 		const error = t("common:errors.condense_context_grew", { prevContextTokens, newContextTokens })
 		return { ...response, cost, error }
 	}
+	// kilocode_change end
 	return { messages: newMessages, summary, cost, newContextTokens, condenseId }
 }
 

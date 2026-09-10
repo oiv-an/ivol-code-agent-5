@@ -91,15 +91,12 @@ export const OpenAICompatible = ({
 
 	// Helper to convert array of tuples to object
 
-	// Add effect to update the parent component's state when local headers change
+	// kilocode_change start: connection checks must see header edits immediately; the model catalog debounces itself.
 	useEffect(() => {
-		const timer = setTimeout(() => {
-			const headerObject = convertHeadersToObject(customHeaders)
-			setApiConfigurationField("openAiHeaders", headerObject)
-		}, 300)
-
-		return () => clearTimeout(timer)
+		const headerObject = convertHeadersToObject(customHeaders)
+		setApiConfigurationField("openAiHeaders", headerObject)
 	}, [customHeaders, setApiConfigurationField])
+	// kilocode_change end
 
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(

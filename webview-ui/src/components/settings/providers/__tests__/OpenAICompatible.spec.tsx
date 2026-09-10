@@ -2,6 +2,12 @@ import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { OpenAICompatible } from "../OpenAICompatible"
 import { ProviderSettings } from "@roo-code/types"
+// kilocode_change start
+import { ProviderConnectionTest } from "../../ProviderConnectionTest"
+import { vscode } from "@src/utils/vscode"
+
+vi.mock("@src/utils/vscode", () => ({ vscode: { postMessage: vi.fn() } }))
+// kilocode_change end
 
 // Mock the vscrui Checkbox component
 vi.mock("vscrui", () => ({
@@ -461,3 +467,59 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 		expect(mockSetApiConfigurationField).toHaveBeenCalledWith("openAiStreamingEnabled", false)
 	})
 })
+
+// kilocode_change start: exercise the real header form and test button together without a debounce wait.
+describe("OpenAICompatible immediate connection-test draft", () => {
+	it("tests freshly edited custom headers without saving the profile", () => {
+		vi.clearAllMocks()
+		const HeaderDraft = () => {
+			const [apiConfiguration, setApiConfiguration] = React.useState<ProviderSettings>({
+				apiProvider: "openai",
+				openAiApiKey: "test-credential",
+				openAiBaseUrl: "https://provider.example/v1",
+				openAiModelId: "test-model",
+				openAiHeaders: { "X-Route": "old-route" },
+			})
+			const setField = React.useCallback(
+				(field: keyof ProviderSettings, value: ProviderSettings[keyof ProviderSettings]) => {
+					setApiConfiguration((previous) =>
+						JSON.stringify(previous[field]) === JSON.stringify(value)
+							? previous
+							: { ...previous, [field]: value },
+					)
+				},
+				[],
+			)
+			return (
+				<>
+					<OpenAICompatible
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setField}
+						organizationAllowList={{ allowAll: true, providers: {} }}
+					/>
+					<ProviderConnectionTest apiConfiguration={apiConfiguration} />
+				</>
+			)
+		}
+		render(<HeaderDraft />)
+		fireEvent.change(screen.getByPlaceholderText("settings:providers.headerValue"), {
+			target: { value: "unsaved-route" },
+		})
+		fireEvent.click(screen.getByRole("button", { name: "settings:providers.connectionTest.button" }))
+		const requests = vi.mocked(vscode.postMessage).mock.calls.map(([message]) => message)
+		expect(requests).toEqual([
+			{
+				type: "testProviderConnection",
+				requestId: expect.any(String),
+				apiConfiguration: {
+					apiProvider: "openai",
+					openAiApiKey: "test-credential",
+					openAiBaseUrl: "https://provider.example/v1",
+					openAiModelId: "test-model",
+					openAiHeaders: { "X-Route": "unsaved-route" },
+				},
+			},
+		])
+	})
+})
+// kilocode_change end

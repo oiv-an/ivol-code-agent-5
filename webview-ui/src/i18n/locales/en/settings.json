@@ -316,6 +316,24 @@
 		"makeActiveProfile": "Make Active Profile",
 		"makeActiveTooltip": "Activate this profile to use it for API requests",
 		"apiProvider": "API Provider",
+		"connectionTest": {
+			"title": "Connection test",
+			"button": "Test",
+			"running": "Testing…",
+			"cancel": "Cancel",
+			"description": "Uses the values currently entered, including unsaved changes, to send one fixed, short generation request. The provider may charge for it. Conversation history and project files are not sent.",
+			"scope": "Success confirms this small request works. It does not verify tools or long tasks. The test does not save or activate the profile or create a task.",
+			"success": "Connection verified",
+			"error": "Connection test failed",
+			"cancelled": "Test cancelled",
+			"report": "Diagnostic report for support",
+			"copy": "Copy report",
+			"copied": "Copied",
+			"copyFailed": "Could not copy automatically. Select and copy the report above.",
+			"timeoutReport": "Provider connection test: no response from the extension within 65 seconds.\nCategory: host_timeout\nRequest ID: {{requestId}}\nCancellation requested. Try again; if this repeats, reload the extension and share this report with support.",
+			"unavailableReport": "Provider connection test: could not send the request to the extension.\nCategory: host_unavailable\nRequest ID: {{requestId}}\nReload the extension and try again. Share this report with support if the problem continues.",
+			"cancelledReport": "Provider connection test cancelled.\nRequest ID: {{requestId}}\nA cancellation request was sent. The provider may still charge for processing already started."
+		},
 		"allowInsecureTls": "Ignore TLS certificate errors",
 		"allowInsecureTlsDescription": "Off by default. Disables certificate verification only for this profile's API requests and model catalog. This can expose API keys and conversations to interception. Use only with a trusted server. Subscription sign-in still verifies certificates separately.",
 		"apiProviderDocs": "Provider Docs",
@@ -1013,6 +1031,12 @@
 			"label": "Enable todo list tool",
 			"description": "When enabled, IVOL Code can create and manage todo lists to track task progress. This helps organize complex tasks into manageable steps."
 		}
+	},
+	"intelligentTask": {
+		"label": "Current Task (experimental)",
+		"description": "From the first task message, maintain CURRENT_TASK.md in the project root: requirements, all major blocks, completed stages and the exact next action. The internal TODO list belongs to the current block and does not replace the global plan.",
+		"compaction": "Update the file before automatic or manual context compaction and read it again afterwards. The task file is not deleted after compaction. Its contents are sent to the selected model and use additional tokens.",
+		"scope": "Experimental in VS Code, PhpStorm, IntelliJ IDEA and PyCharm. Off by default for each provider profile. Mutually exclusive with intelligent context reset: enabling either option turns the other off. Save the profile to apply. Disabling does not delete the file or task history."
 	},
 	"experimental": {
 		"DIFF_STRATEGY_UNIFIED": {

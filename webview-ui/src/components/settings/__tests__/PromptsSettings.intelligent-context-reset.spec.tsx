@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@/utils/test-utils"
 import { DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT } from "@roo-code/types"
+import english from "@/i18n/locales/en/settings.json" // kilocode_change
+import russian from "@/i18n/locales/ru/settings.json" // kilocode_change
 
 import PromptsSettings from "../PromptsSettings"
 
@@ -56,9 +58,10 @@ vi.mock("@src/components/ui", async () => {
 })
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
-	VSCodeCheckbox: ({ children, checked, onChange, "data-testid": dataTestId }: any) => (
+	// kilocode_change: honor disabled draft-only controls.
+	VSCodeCheckbox: ({ children, checked, disabled, onChange, "data-testid": dataTestId }: any) => (
 		<label data-testid={dataTestId}>
-			<input type="checkbox" checked={checked} onChange={onChange} />
+			<input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
 			{children}
 		</label>
 	),
@@ -190,4 +193,170 @@ describe("PromptsSettings intelligent context reset", () => {
 		expect(mocks.postMessage).not.toHaveBeenCalled()
 		focusGetter.mockRestore()
 	})
+
+	// kilocode_change start: preserve profile drafts and mutually exclusive modes on the second settings surface.
+	it("hides intelligent task until the host explicitly supports it", () => {
+		renderCondenseSettings()
+		expect(screen.queryByTestId("intelligent-task-checkbox")).not.toBeInTheDocument()
+		expect(mocks.postMessage).not.toHaveBeenCalled()
+	})
+
+	it("preserves the legacy profile update shape when the host does not support intelligent task", () => {
+		mocks.extensionState.taskDocumentSettings = { supported: false }
+		mocks.extensionState.apiConfiguration = { apiProvider: "openai", intelligentContextResetEnabled: false }
+		renderCondenseSettings()
+		fireEvent.click(screen.getByTestId("intelligent-context-reset-checkbox").querySelector("input")!)
+		expect(setApiConfiguration).toHaveBeenCalledWith({
+			apiProvider: "openai",
+			intelligentContextResetEnabled: true,
+		})
+		expect(mocks.postMessage).toHaveBeenCalledWith({
+			type: "upsertApiConfiguration",
+			text: "My provider",
+			apiConfiguration: { apiProvider: "openai", intelligentContextResetEnabled: true },
+		})
+	})
+
+	it("enables task mode atomically on the active profile when used outside SettingsView", () => {
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		renderCondenseSettings()
+		expect(screen.getByTestId("intelligent-task-checkbox").querySelector("input")).not.toBeChecked()
+		fireEvent.click(screen.getByTestId("intelligent-task-checkbox").querySelector("input")!)
+		expect(setApiConfiguration).toHaveBeenCalledTimes(1)
+		expect(setApiConfiguration).toHaveBeenCalledWith({
+			apiProvider: "openai",
+			intelligentTaskEnabled: true,
+			intelligentContextResetEnabled: false,
+		})
+		expect(mocks.postMessage).toHaveBeenCalledTimes(1)
+		expect(mocks.postMessage).toHaveBeenCalledWith({
+			type: "upsertApiConfiguration",
+			text: "My provider",
+			apiConfiguration: {
+				apiProvider: "openai",
+				intelligentTaskEnabled: true,
+				intelligentContextResetEnabled: false,
+			},
+		})
+	})
+
+	it("shows task mode for conflicting imported flags and switches back to context reset atomically", () => {
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		mocks.extensionState.apiConfiguration = {
+			apiProvider: "openai",
+			intelligentContextResetEnabled: true,
+			intelligentTaskEnabled: true,
+		}
+		renderCondenseSettings()
+		expect(screen.getByTestId("intelligent-task-checkbox").querySelector("input")).toBeChecked()
+		expect(screen.getByTestId("intelligent-context-reset-checkbox").querySelector("input")).not.toBeChecked()
+		expect(screen.queryByTestId("intelligent-context-reset-prompt")).not.toBeInTheDocument()
+		fireEvent.click(screen.getByTestId("intelligent-context-reset-checkbox").querySelector("input")!)
+		expect(setApiConfiguration).toHaveBeenCalledTimes(1)
+		expect(setApiConfiguration).toHaveBeenCalledWith({
+			apiProvider: "openai",
+			intelligentContextResetEnabled: true,
+			intelligentTaskEnabled: false,
+		})
+		expect(mocks.postMessage).toHaveBeenCalledTimes(1)
+	})
+
+	it("takes both flags from the editing profile and stages changes without touching the active profile", () => {
+		const onContextChange = vi.fn()
+		const onTaskChange = vi.fn()
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		mocks.extensionState.apiConfiguration = { apiProvider: "openai", intelligentTaskEnabled: true }
+		render(
+			<PromptsSettings
+				customSupportPrompts={{}}
+				setCustomSupportPrompts={vi.fn()}
+				intelligentContextResetEnabled={true}
+				intelligentTaskEnabled={false}
+				onIntelligentContextResetEnabledChange={onContextChange}
+				onIntelligentTaskEnabledChange={onTaskChange}
+			/>,
+		)
+		fireEvent.click(screen.getByTestId("CONDENSE-option"))
+		expect(screen.getByTestId("intelligent-context-reset-checkbox").querySelector("input")).toBeChecked()
+		expect(screen.getByTestId("intelligent-task-checkbox").querySelector("input")).not.toBeChecked()
+		fireEvent.click(screen.getByTestId("intelligent-task-checkbox").querySelector("input")!)
+		expect(onContextChange).toHaveBeenCalledTimes(1)
+		expect(onContextChange).toHaveBeenCalledWith(false)
+		expect(onTaskChange).toHaveBeenCalledTimes(1)
+		expect(onTaskChange).toHaveBeenCalledWith(true)
+		expect(setApiConfiguration).not.toHaveBeenCalled()
+		expect(mocks.postMessage).not.toHaveBeenCalled()
+	})
+
+	it("turns off the editing profile task flag before staging context reset", () => {
+		const onContextChange = vi.fn()
+		const onTaskChange = vi.fn()
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		render(
+			<PromptsSettings
+				customSupportPrompts={{}}
+				setCustomSupportPrompts={vi.fn()}
+				intelligentContextResetEnabled={false}
+				intelligentTaskEnabled={true}
+				onIntelligentContextResetEnabledChange={onContextChange}
+				onIntelligentTaskEnabledChange={onTaskChange}
+			/>,
+		)
+		fireEvent.click(screen.getByTestId("CONDENSE-option"))
+		fireEvent.click(screen.getByTestId("intelligent-context-reset-checkbox").querySelector("input")!)
+		expect(onTaskChange).toHaveBeenCalledTimes(1)
+		expect(onTaskChange).toHaveBeenCalledWith(false)
+		expect(onContextChange).toHaveBeenCalledTimes(1)
+		expect(onContextChange).toHaveBeenCalledWith(true)
+		expect(mocks.postMessage).not.toHaveBeenCalled()
+	})
+
+	it("can disable task mode without enabling context reset", () => {
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		mocks.extensionState.apiConfiguration = {
+			apiProvider: "openai",
+			intelligentTaskEnabled: true,
+			intelligentContextResetEnabled: false,
+		}
+		renderCondenseSettings()
+		fireEvent.click(screen.getByTestId("intelligent-task-checkbox").querySelector("input")!)
+		expect(setApiConfiguration).toHaveBeenCalledTimes(1)
+		expect(setApiConfiguration).toHaveBeenCalledWith({
+			apiProvider: "openai",
+			intelligentTaskEnabled: false,
+			intelligentContextResetEnabled: false,
+		})
+	})
+
+	it("does not save an editing-profile toggle to the active profile if its draft callback is absent", () => {
+		mocks.extensionState.taskDocumentSettings = { supported: true }
+		render(
+			<PromptsSettings
+				customSupportPrompts={{}}
+				setCustomSupportPrompts={vi.fn()}
+				onIntelligentContextResetEnabledChange={vi.fn()}
+			/>,
+		)
+		fireEvent.click(screen.getByTestId("CONDENSE-option"))
+		expect(screen.getByTestId("intelligent-task-checkbox").querySelector("input")).toBeDisabled()
+		fireEvent.click(screen.getByTestId("intelligent-task-checkbox").querySelector("input")!)
+		expect(setApiConfiguration).not.toHaveBeenCalled()
+		expect(mocks.postMessage).not.toHaveBeenCalled()
+	})
+
+	it("keeps English and Russian experimental explanations aligned across supported editions", () => {
+		expect(Object.keys(russian.intelligentTask).sort()).toEqual(Object.keys(english.intelligentTask).sort())
+		for (const product of ["VS Code", "PhpStorm", "IntelliJ IDEA", "PyCharm"]) {
+			expect(english.intelligentTask.scope).toContain(product)
+			expect(russian.intelligentTask.scope).toContain(product)
+		}
+		expect(english.intelligentTask.scope).toContain("Off by default")
+		expect(russian.intelligentTask.scope).toContain("По умолчанию выключено")
+		for (const key of Object.keys(english.intelligentTask) as Array<keyof typeof english.intelligentTask>) {
+			expect(russian.intelligentTask[key].match(/{{\w+}}/g) ?? []).toEqual(
+				english.intelligentTask[key].match(/{{\w+}}/g) ?? [],
+			)
+		}
+	})
+	// kilocode_change end
 })

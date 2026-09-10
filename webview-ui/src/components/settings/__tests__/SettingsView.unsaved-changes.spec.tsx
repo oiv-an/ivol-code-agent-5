@@ -6,7 +6,8 @@ import React from "react"
 import SettingsView from "../SettingsView"
 
 // Mock vscode API
-const mockPostMessage = vi.fn()
+const { mockPostMessage } = vi.hoisted(() => ({ mockPostMessage: vi.fn() })) // kilocode_change: spy on the actual module used during static import.
+vi.mock("@src/utils/vscode", () => ({ vscode: { postMessage: mockPostMessage } })) // kilocode_change
 const mockVscode = {
 	postMessage: mockPostMessage,
 }
@@ -298,6 +299,100 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 		expect(screen.getByTestId("save-button")).toBeEnabled()
 		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "loadApiConfiguration" }))
 		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "upsertApiConfiguration" }))
+	})
+	// kilocode_change end
+
+	// kilocode_change start: the experimental mode follows the existing provider Save/Discard lifecycle.
+	it.each(["save", "discard"])("keeps intelligent task in the selected profile draft until %s", async (action) => {
+		const onDone = vi.fn()
+		vi.mocked(ApiOptions).mockImplementation(
+			({ apiConfiguration, setApiConfigurationField, onEditIntelligentContextResetPrompt }) => (
+				<div data-testid="api-options">
+					<span data-testid="draft-task-enabled">{String(apiConfiguration.intelligentTaskEnabled)}</span>
+					<span data-testid="draft-reset-enabled">
+						{String(apiConfiguration.intelligentContextResetEnabled)}
+					</span>
+					<button onClick={onEditIntelligentContextResetPrompt}>Go to prompt modes</button>
+					<button
+						onClick={() => {
+							setApiConfigurationField("intelligentContextResetEnabled", false)
+							setApiConfigurationField("intelligentTaskEnabled", true)
+						}}>
+						Enable task in provider
+					</button>
+				</div>
+			),
+		)
+		vi.mocked(PromptsSettings).mockImplementation(
+			({
+				intelligentTaskEnabled,
+				intelligentContextResetEnabled,
+				onIntelligentTaskEnabledChange,
+				onIntelligentContextResetEnabledChange,
+			}) => (
+				<div>
+					<span data-testid="prompt-draft-task">{String(intelligentTaskEnabled)}</span>
+					<span data-testid="prompt-draft-reset">{String(intelligentContextResetEnabled)}</span>
+					<button
+						onClick={() => {
+							onIntelligentContextResetEnabledChange?.(false)
+							onIntelligentTaskEnabledChange?.(true)
+						}}>
+						Enable task in prompts
+					</button>
+				</div>
+			),
+		)
+		render(
+			<QueryClientProvider client={queryClient}>
+				<SettingsView onDone={onDone} editingProfile="Second provider" />
+			</QueryClientProvider>,
+		)
+		fireEvent(
+			window,
+			new MessageEvent("message", {
+				data: {
+					type: "profileConfigurationForEditing",
+					text: "Second provider",
+					apiConfiguration: {
+						apiProvider: "openai",
+						openAiBaseUrl: "https://selected.example/v1",
+						intelligentContextResetEnabled: true,
+						intelligentTaskEnabled: false,
+					},
+				},
+			}),
+		)
+		await waitFor(() => expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("false"))
+		if (action === "save") fireEvent.click(screen.getByText("Enable task in provider"))
+		fireEvent.click(screen.getByText("Go to prompt modes"))
+		if (action === "discard") fireEvent.click(screen.getByText("Enable task in prompts"))
+		expect(screen.getByTestId("prompt-draft-task")).toHaveTextContent("true")
+		expect(screen.getByTestId("prompt-draft-reset")).toHaveTextContent("false")
+		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "upsertApiConfiguration" }))
+		fireEvent.click(screen.getByText("settings:sections.providers"))
+		expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("true")
+		expect(screen.getByTestId("draft-reset-enabled")).toHaveTextContent("false")
+		if (action === "save") {
+			fireEvent.click(screen.getByTestId("save-button"))
+			expect(mockPostMessage).toHaveBeenCalledWith({
+				type: "upsertApiConfiguration",
+				text: "Second provider",
+				apiConfiguration: {
+					apiProvider: "openai",
+					openAiBaseUrl: "https://selected.example/v1",
+					intelligentContextResetEnabled: false,
+					intelligentTaskEnabled: true,
+				},
+			})
+		} else {
+			fireEvent.click(screen.getByText("settings:common.done"))
+			fireEvent.click(screen.getByText("settings:unsavedChangesDialog.discardButton"))
+			expect(onDone).toHaveBeenCalledTimes(1)
+			expect(mockPostMessage).not.toHaveBeenCalledWith(
+				expect.objectContaining({ type: "upsertApiConfiguration" }),
+			)
+		}
 	})
 	// kilocode_change end
 

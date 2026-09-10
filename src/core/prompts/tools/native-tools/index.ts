@@ -18,7 +18,7 @@ import searchReplace from "./search_replace"
 import edit_file from "./edit_file"
 import searchFiles from "./search_files"
 import switchMode from "./switch_mode"
-import updateTodoList from "./update_todo_list"
+import { createUpdateTodoListTool } from "./update_todo_list" // kilocode_change
 import writeToFile from "./write_to_file"
 
 import deleteFile from "./kilocode/delete_file"
@@ -32,6 +32,7 @@ export type { ReadFileToolOptions } from "./read_file"
  * Options for customizing the native tools array.
  */
 export interface NativeToolsOptions {
+	taskDocumentEnabled?: boolean // kilocode_change
 	/** Whether to include line_ranges support in read_file tool (default: true) */
 	partialReadsEnabled?: boolean
 	/** Maximum number of files that can be read in a single read_file request (default: 5) */
@@ -83,7 +84,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		edit_file,
 		searchFiles,
 		switchMode,
-		updateTodoList,
+		createUpdateTodoListTool(options.taskDocumentEnabled), // kilocode_change
 		writeToFile,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }

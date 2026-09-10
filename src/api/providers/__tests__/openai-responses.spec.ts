@@ -410,6 +410,81 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		])
 	})
 
+	it("bounds standalone search accumulation without losing the result or changing legacy limits", async () => {
+		const handler = new OpenAiCompatibleResponsesHandler({ openAiApiKey: "test-key" })
+		vi.spyOn(handler, "createMessage").mockImplementation(async function* () {
+			yield { type: "text", text: "12345" }
+			yield { type: "text", text: "67890" }
+			yield {
+				type: "grounding",
+				sources: [
+					{ title: "One", url: "https://example.test/one" },
+					{ title: "Two", url: "https://example.test/two" },
+				],
+			}
+			yield { type: "usage", inputTokens: 3, outputTokens: 4 }
+		})
+		const bounded = await handler.searchWeb("query", "independent", undefined, { maxTextChars: 7, maxSources: 1 })
+		expect(bounded).toEqual({
+			text: "1234567",
+			sources: [{ title: "One", url: "https://example.test/one" }],
+			usage: { type: "usage", inputTokens: 3, outputTokens: 4 },
+			truncated: true,
+		})
+		const legacy = await handler.searchWeb("query", "coding-task")
+		expect(legacy.text).toBe("1234567890")
+		expect(legacy.sources).toHaveLength(2)
+		expect(legacy).not.toHaveProperty("truncated")
+	})
+
+	it("does not return a partial search answer after external cancellation", async () => {
+		const handler = new OpenAiCompatibleResponsesHandler({ openAiApiKey: "test-key" })
+		const controller = new AbortController()
+		vi.spyOn(handler, "createMessage").mockImplementation(async function* () {
+			yield { type: "text", text: "Partial answer" }
+			controller.abort()
+			yield { type: "text", text: "Late answer" }
+		})
+		await expect(handler.searchWeb("query", "independent", controller.signal)).rejects.toThrow("cancelled")
+	})
+
+	it("does not call a provider for a search cancelled before start", async () => {
+		const handler = new OpenAiCompatibleResponsesHandler({ openAiApiKey: "test-key" })
+		const create = vi.spyOn(handler, "createMessage")
+		const controller = new AbortController()
+		controller.abort()
+		await expect(handler.searchWeb("query", "independent", controller.signal)).rejects.toThrow("cancelled")
+		expect(create).not.toHaveBeenCalled()
+	})
+
+	it.each(["fetch", "json"])("does not retry a late output-limited response cancelled during %s", async (stage) => {
+		const controller = new AbortController()
+		const mockFetch = vi.fn().mockImplementation(async () => {
+			if (stage === "fetch") controller.abort()
+			return {
+				ok: true,
+				body: new ReadableStream(),
+				json: async () => {
+					if (stage === "json") controller.abort()
+					return {
+						status: "incomplete",
+						incomplete_details: { reason: "max_output_tokens" },
+						output: [{ type: "reasoning" }],
+					}
+				},
+			}
+		})
+		global.fetch = mockFetch as any
+		const handler = new OpenAiCompatibleResponsesHandler({
+			openAiApiKey: "test-key",
+			openAiBaseUrl: "https://example.test/v1",
+			openAiWebSearchEnabled: true,
+		})
+		await expect(handler.searchWeb("query", "independent", controller.signal)).rejects.toThrow("cancelled")
+		expect(mockFetch).toHaveBeenCalledTimes(1)
+		expect(mockFetch.mock.calls[0][1].signal.aborted).toBe(true)
+	})
+
 	it("uses the dedicated model only for web-search-enabled Responses turns", async () => {
 		mockResponsesCreate.mockResolvedValue({
 			[Symbol.asyncIterator]: async function* () {

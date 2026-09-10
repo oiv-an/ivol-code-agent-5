@@ -217,6 +217,8 @@ export function willManageContext({
  */
 
 export type ContextManagementOptions = {
+	taskDocument?: boolean // kilocode_change
+	taskDocumentContext?: string // kilocode_change: current persistent plan evidence
 	messages: ApiMessage[]
 	totalTokens: number
 	contextWindow: number
@@ -256,6 +258,8 @@ export type ContextManagementResult = SummarizeResponse & {
  * @returns {Promise<ApiMessage[]>} The original, condensed, or truncated conversation messages.
  */
 export async function manageContext({
+	taskDocument, // kilocode_change
+	taskDocumentContext, // kilocode_change
 	messages,
 	totalTokens,
 	contextWindow,
@@ -339,6 +343,8 @@ export async function manageContext({
 				useNativeTools,
 				{
 					enabled: requireContextHandoff,
+					...(taskDocument ? { taskDocument } : {}), // kilocode_change
+					...(taskDocumentContext ? { taskDocumentContext } : {}), // kilocode_change
 					prompt: contextHandoffPrompt,
 					...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
 					...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change
@@ -375,6 +381,8 @@ export async function manageContext({
 			useNativeTools,
 			{
 				enabled: true,
+				...(taskDocument ? { taskDocument } : {}), // kilocode_change
+				...(taskDocumentContext ? { taskDocumentContext } : {}), // kilocode_change
 				prompt: contextHandoffPrompt,
 				...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
 				...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change

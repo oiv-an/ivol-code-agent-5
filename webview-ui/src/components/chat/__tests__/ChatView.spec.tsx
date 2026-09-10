@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 
-import ChatView, { ChatViewProps } from "../ChatView"
+import ChatView, { ChatViewProps, ChatViewRef } from "../ChatView" // kilocode_change: exercise the same acceptance shortcut exposed to the host.
 
 // Define minimal types needed for testing
 interface ClineMessage {
@@ -305,15 +305,221 @@ const defaultProps: ChatViewProps = {
 
 const queryClient = new QueryClient()
 
-const renderChatView = (props: Partial<ChatViewProps> = {}) => {
+const renderChatView = (props: Partial<ChatViewProps> = {}, ref?: React.Ref<ChatViewRef>) => {
+	// kilocode_change
 	return render(
 		<ExtensionStateContextProvider>
 			<QueryClientProvider client={queryClient}>
-				<ChatView {...defaultProps} {...props} />
+				<ChatView {...defaultProps} {...props} ref={ref} />
 			</QueryClientProvider>
 		</ExtensionStateContextProvider>,
 	)
 }
+
+// kilocode_change start: completion acknowledgments must not navigate away from the result.
+describe("ChatView - keep completed task open", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	const taskMessage: ClineMessage = { type: "say", say: "text", ts: 1, text: "Original task" }
+	const completionMessage: ClineMessage = {
+		type: "ask",
+		ask: "completion_result",
+		ts: 3,
+		text: "Task completed successfully",
+		partial: false,
+	}
+	const invokePrimary = (text = "") => {
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: { type: "invoke", invoke: "primaryButtonClick", text },
+				}),
+			),
+		)
+	}
+	const openCompletedTask = async (ask = "completion_result", parentTaskId?: string) => {
+		const ref = React.createRef<ChatViewRef>()
+		const view = renderChatView({}, ref)
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: 1, task: "Original task", parentTaskId },
+			clineMessages: [
+				taskMessage,
+				completionMessage,
+				...(ask === "completion_result"
+					? []
+					: [{ type: "ask" as const, ask, ts: 4, text: "Resume finished task" }]),
+			],
+		})
+		await waitFor(() => expect(view.getByText("chat:startNewTask.title")).toBeInTheDocument())
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+		vi.mocked(vscode.postMessage).mockClear()
+		return { ...view, ref }
+	}
+
+	it.each(["completion_result", "resume_completed_task", "resume_task"])(
+		"keeps %s visible after generic approval and empty keyboard acceptance",
+		async (ask) => {
+			const view = await openCompletedTask(ask, ask === "resume_task" ? "parent-a" : undefined)
+			invokePrimary()
+			act(() => view.ref.current?.acceptInput())
+			expect(vscode.postMessage).not.toHaveBeenCalled()
+			expect(view.getByText("chat:startNewTask.title")).toBeInTheDocument()
+			expect(view.getByTestId("chat-textarea").querySelector("input")).toHaveAttribute(
+				"data-sending-disabled",
+				"false",
+			)
+			expect(view.container).toHaveTextContent("Task completed successfully")
+		},
+	)
+
+	it.each(["completion_result", "resume_completed_task", "resume_task"])(
+		"sends keyboard feedback to the same task for %s",
+		async (ask) => {
+			const view = await openCompletedTask(ask, ask === "resume_task" ? "parent-a" : undefined)
+			fireEvent.change(view.getByTestId("chat-textarea").querySelector("input")!, {
+				target: { value: "Please also verify the result" },
+			})
+			act(() => view.ref.current?.acceptInput())
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "askResponse",
+				askResponse: "messageResponse",
+				text: "Please also verify the result",
+				images: [],
+			})
+			expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "newTask" }))
+		},
+	)
+
+	it("sends text from a generic completion invocation as same-task feedback", async () => {
+		await openCompletedTask()
+		invokePrimary("Add one more check")
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "askResponse",
+			askResponse: "messageResponse",
+			text: "Add one more check",
+			images: [],
+		})
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+	})
+
+	it("still closes a completed task from its explicit header close button", async () => {
+		const view = await openCompletedTask()
+		const closeButton = view.container.querySelector(".codicon-close")?.closest("button")
+		expect(closeButton).toBeTruthy()
+		fireEvent.click(closeButton!)
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "clearTask" })
+	})
+
+	it.each(["completion_result", "resume_completed_task", "resume_task"])(
+		"still starts a new task from the explicit button for %s",
+		async (ask) => {
+			const view = await openCompletedTask(ask, ask === "resume_task" ? "parent-a" : undefined)
+			fireEvent.click(view.getByText("chat:startNewTask.title"))
+			expect(vscode.postMessage).toHaveBeenCalledWith({ type: "clearTask" })
+		},
+	)
+
+	it("ignores stale approval callbacks when an incremental completion arrives", async () => {
+		const ref = React.createRef<ChatViewRef>()
+		const view = renderChatView({}, ref)
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: 1, task: "Original task" },
+			clineMessages: [
+				taskMessage,
+				{ type: "ask", ask: "tool", ts: 2, text: JSON.stringify({ tool: "readFile", path: "a.ts" }) },
+			],
+		})
+		await waitFor(() => expect(view.getByText("chat:approve.title")).toBeInTheDocument())
+		const staleAcceptInput = ref.current!.acceptInput
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: { type: "messageCreated", taskId: "task-a", clineMessage: completionMessage },
+				}),
+			),
+		)
+		await waitFor(() => expect(view.getByText("chat:startNewTask.title")).toBeInTheDocument())
+		vi.mocked(vscode.postMessage).mockClear()
+		act(() => staleAcceptInput())
+		invokePrimary()
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		expect(view.container).toHaveTextContent("Task completed successfully")
+	})
+
+	it.each(["readFile", "finishTask"])("preserves generic approval for %s", async (tool) => {
+		const ref = React.createRef<ChatViewRef>()
+		const view = renderChatView({}, ref)
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskItem: {
+				id: "task-a",
+				ts: 1,
+				task: "Original task",
+				parentTaskId: tool === "finishTask" ? "parent-a" : undefined,
+			},
+			clineMessages: [
+				taskMessage,
+				{ type: "ask", ask: "tool", ts: 2, text: JSON.stringify({ tool, path: "a.ts" }) },
+			],
+		})
+		await waitFor(() =>
+			expect(
+				view.getByText(tool === "finishTask" ? "chat:completeSubtaskAndReturn" : "chat:approve.title"),
+			).toBeInTheDocument(),
+		)
+		vi.mocked(vscode.postMessage).mockClear()
+		act(() => ref.current?.acceptInput())
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "askResponse", askResponse: "yesButtonClicked" })
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+	})
+
+	it("preserves host-invoked tool approval", async () => {
+		const view = renderChatView()
+		mockPostMessage({
+			clineMessages: [
+				taskMessage,
+				{ type: "ask", ask: "tool", ts: 2, text: JSON.stringify({ tool: "readFile", path: "a.ts" }) },
+			],
+		})
+		await waitFor(() => expect(view.getByText("chat:approve.title")).toBeInTheDocument())
+		vi.mocked(vscode.postMessage).mockClear()
+		invokePrimary()
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "askResponse", askResponse: "yesButtonClicked" })
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+	})
+
+	it("continues a command after a trailing output message without losing the pending ask", async () => {
+		const view = renderChatView()
+		const commandAsk: ClineMessage = { type: "ask", ask: "command_output", ts: 2, text: "Process running" }
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: 1, task: "Original task" },
+			clineMessages: [taskMessage, commandAsk],
+		})
+		await waitFor(() => expect(view.getByText("chat:proceedWhileRunning.title")).toBeInTheDocument())
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "messageCreated",
+						taskId: "task-a",
+						clineMessage: { type: "say", say: "command_output", ts: 3, text: "Additional terminal output" },
+					},
+				}),
+			),
+		)
+		// Output-only rows are combined/hidden by the chat renderer; the pending controls must remain usable.
+		expect(view.getByText("chat:proceedWhileRunning.title")).toBeInTheDocument()
+		vi.mocked(vscode.postMessage).mockClear()
+		invokePrimary()
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "terminalOperation", terminalOperation: "continue" })
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: "clearTask" })
+	})
+})
+// kilocode_change end
 
 describe("ChatView - restored task controls", () => {
 	beforeEach(() => {
@@ -1229,9 +1435,13 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		{ type: "say", say: "text", ts: 1000, text: "Initial task" },
 		{ type: "say", say: "text", ts: 2000, text: "Working on the task" },
 	]
-	const dispatchProgress = async (type: string, taskId = "test-task-id") => {
+	const dispatchProgress = async (
+		type: string,
+		taskId = "test-task-id",
+		contextMemoryMode?: "task" | "handoff" | "standard",
+	) => {
 		await act(async () => {
-			window.dispatchEvent(new MessageEvent("message", { data: { type, text: taskId } }))
+			window.dispatchEvent(new MessageEvent("message", { data: { type, text: taskId, contextMemoryMode } }))
 		})
 	}
 	const partialRows = (container: HTMLElement) =>
@@ -1359,6 +1569,160 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 			)
 		},
 	)
+
+	// kilocode_change start: persistent task mode updates its file before showing compaction.
+	it.each([true, false])(
+		"prepares CURRENT_TASK.md on manual compression only on supported hosts (%s)",
+		async (supported) => {
+			const { container } = renderChatView()
+			mockPostMessage({
+				clineMessages: taskMessages,
+				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+				apiConfiguration: {
+					apiProvider: "anthropic",
+					intelligentContextResetEnabled: false,
+					intelligentTaskEnabled: true,
+				},
+				taskDocumentSettings: { enabled: supported, supported, fileName: "CURRENT_TASK.md" },
+			})
+			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+			const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+			expect(button).not.toBeNull()
+			expect(button).toHaveAttribute(
+				"aria-label",
+				supported ? "chat:task.condenseCurrentWorkNow" : "chat:task.condenseContext",
+			)
+			await act(async () => fireEvent.click(button!))
+			const rows = partialRows(container)
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "condenseTaskContextRequest",
+				text: "test-task-id",
+				...(supported ? { contextMemoryMode: "task" } : {}),
+			})
+			expect(rows.map((row) => row.say)).toEqual([supported ? "context_handoff" : "condense_context"])
+			if (supported) expect(JSON.parse(rows[0].text!)).toEqual({ phase: "preparing", path: "CURRENT_TASK.md" })
+			await dispatchProgress("condenseTaskContextStarted")
+			expect(partialRows(container).map((row) => row.say)).toEqual(["condense_context"])
+		},
+	)
+
+	it.each([
+		{
+			intelligentTaskEnabled: true,
+			intelligentContextResetEnabled: true,
+			cachedEnabled: false,
+			expectedMode: "task",
+		},
+		{
+			intelligentTaskEnabled: false,
+			intelligentContextResetEnabled: true,
+			cachedEnabled: true,
+			expectedMode: "handoff",
+		},
+		{
+			intelligentTaskEnabled: false,
+			intelligentContextResetEnabled: false,
+			cachedEnabled: true,
+			expectedMode: "standard",
+		},
+	])(
+		"uses saved profile flags for manual mode $expectedMode even when derived settings are stale",
+		async ({ intelligentTaskEnabled, intelligentContextResetEnabled, cachedEnabled, expectedMode }) => {
+			const { container } = renderChatView()
+			mockPostMessage({
+				clineMessages: taskMessages,
+				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled, intelligentContextResetEnabled },
+				taskDocumentSettings: { enabled: cachedEnabled, supported: true, fileName: "CURRENT_TASK.md" },
+			})
+			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+			const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+			expect(button).not.toBeDisabled()
+			await act(async () => fireEvent.click(button!))
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "condenseTaskContextRequest",
+				text: "test-task-id",
+				contextMemoryMode: expectedMode,
+			})
+			expect(partialRows(container).map((row) => row.say)).toEqual([
+				expectedMode === "standard" ? "condense_context" : "context_handoff",
+			])
+		},
+	)
+
+	it("keeps preparation attached to its explicit backend mode across profile updates", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({
+			clineMessages: taskMessages,
+			currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: false },
+			taskDocumentSettings: { enabled: false, supported: true, fileName: "CURRENT_TASK.md" },
+		})
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		await dispatchProgress("contextHandoffStarted", "test-task-id", "task")
+		expect(JSON.parse(partialRows(container)[0].text!)).toEqual({ phase: "preparing", path: "CURRENT_TASK.md" })
+		mockPostMessage({
+			clineMessages: taskMessages,
+			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
+		})
+		await dispatchProgress("contextHandoffStarted", "test-task-id", "handoff")
+		expect(partialRows(container)[0].text).toBeUndefined()
+		await dispatchProgress("contextHandoffStarted", "previous-task", "task")
+		expect(partialRows(container)[0].text).toBeUndefined()
+		await dispatchProgress("condenseTaskContextResponse")
+		await dispatchProgress("contextHandoffStarted")
+		expect(JSON.parse(partialRows(container)[0].text!)).toEqual({ phase: "preparing", path: "CURRENT_TASK.md" })
+	})
+
+	it("does not relabel a pending manual task-file operation when the saved profile changes", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({
+			clineMessages: taskMessages,
+			currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
+			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
+			taskDocumentSettings: { enabled: true, supported: true, fileName: "CURRENT_TASK.md" },
+		})
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
+		expect(button).not.toBeDisabled()
+		await act(async () => fireEvent.click(button!))
+		mockPostMessage({
+			clineMessages: taskMessages,
+			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: false },
+		})
+		await waitFor(() => expect(button).toHaveAttribute("aria-label", "chat:task.condenseContext"))
+		await dispatchProgress("contextHandoffStarted")
+		expect(JSON.parse(partialRows(container)[0].text!)).toEqual({ phase: "preparing", path: "CURRENT_TASK.md" })
+		await dispatchProgress("condenseTaskContextResponse")
+		await dispatchProgress("contextHandoffStarted")
+		expect(partialRows(container)[0].text).toBeUndefined()
+	})
+
+	it("identifies automatic persistent task preparation using the active profile without relabeling legacy mode", async () => {
+		const { container } = renderChatView()
+		mockPostMessage({
+			clineMessages: taskMessages,
+			apiConfiguration: {
+				apiProvider: "anthropic",
+				intelligentContextResetEnabled: false,
+				intelligentTaskEnabled: true,
+			},
+			taskDocumentSettings: { enabled: true, supported: true, fileName: "CURRENT_TASK.md" },
+		})
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		await dispatchProgress("contextHandoffStarted")
+		expect(JSON.parse(partialRows(container)[0].text!)).toEqual({ phase: "preparing", path: "CURRENT_TASK.md" })
+		await dispatchProgress("condenseTaskContextResponse")
+		mockPostMessage({
+			clineMessages: taskMessages,
+			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: false },
+		})
+		await waitFor(() => expect(container.textContent).toContain("Working on the task"))
+		await dispatchProgress("contextHandoffStarted")
+		expect(partialRows(container)[0].say).toBe("context_handoff")
+		expect(partialRows(container)[0].text).toBeUndefined()
+	})
+	// kilocode_change end
 
 	it("unlocks manual input on a terminal error row even if the response event is missing", async () => {
 		const { container } = renderChatView()

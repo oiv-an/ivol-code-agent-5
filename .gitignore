@@ -81,3 +81,6 @@ roo-cli-*.tar.gz*
 
 # Local JetBrains plugin installation backups
 plugin-builds/
+
+# Local Kotlin compiler session markers are build state, not release sources.
+jetbrains/plugin/.kotlin/

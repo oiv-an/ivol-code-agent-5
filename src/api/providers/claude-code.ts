@@ -127,6 +127,9 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
+		// kilocode_change: diagnostics never leave inference running after the caller cancels.
+		const signal = this.options.connectionTest ? metadata?.signal : undefined
+		signal?.throwIfAborted()
 		// Reset per-request state that we persist into apiConversationHistory
 		this.lastThinkingSignature = undefined
 
@@ -141,6 +144,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 		async function* streamOnce(this: ClaudeCodeHandler, accessToken: string): ApiStream {
 			// Get user email for generating user_id metadata
 			const email = await claudeCodeOAuthManager.getEmail()
+			signal?.throwIfAborted() // kilocode_change
 
 			const model = this.getModel()
 
@@ -190,6 +194,9 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 			// Create streaming request using OAuth
 			const stream = createStreamingMessage({
 				accessToken,
+				// kilocode_change start
+				...(this.options.connectionTest ? { connectionTest: true, signal } : {}),
+				// kilocode_change end
 				...(this.options.allowInsecureTls === true ? { allowInsecureTls: true } : {}), // kilocode_change
 				model: modelId,
 				systemPrompt,
@@ -210,6 +217,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 			let cacheWriteTokens = 0
 
 			for await (const chunk of stream) {
+				signal?.throwIfAborted() // kilocode_change
 				switch (chunk.type) {
 					case "text":
 						yield {
@@ -275,10 +283,12 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 						throw new Error(chunk.error)
 				}
 			}
+			signal?.throwIfAborted() // kilocode_change
 		}
 
 		// Get access token from OAuth manager
 		let accessToken = await claudeCodeOAuthManager.getAccessToken()
+		signal?.throwIfAborted() // kilocode_change
 		if (!accessToken) {
 			throw buildNotAuthenticatedError()
 		}
@@ -289,6 +299,7 @@ export class ClaudeCodeHandler implements ApiHandler, SingleCompletionHandler {
 				yield* streamOnce.call(this, accessToken)
 				return
 			} catch (error) {
+				if (this.options.connectionTest) throw error // kilocode_change: one request, original metadata, no retry.
 				const message = error instanceof Error ? error.message : String(error)
 				const isAuthFailure = /unauthorized|invalid token|not authenticated|authentication/i.test(message)
 

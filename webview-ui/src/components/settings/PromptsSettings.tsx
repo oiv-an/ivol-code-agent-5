@@ -35,6 +35,8 @@ interface PromptsSettingsProps {
 	// kilocode_change start: edit the selected provider profile, which may not be the active profile.
 	intelligentContextResetEnabled?: boolean
 	onIntelligentContextResetEnabledChange?: (enabled: boolean) => void
+	intelligentTaskEnabled?: boolean
+	onIntelligentTaskEnabledChange?: (enabled: boolean) => void
 	focusIntelligentContextResetPrompt?: boolean
 	// kilocode_change end
 }
@@ -47,6 +49,8 @@ const PromptsSettings = ({
 	// kilocode_change start
 	intelligentContextResetEnabled: profileIntelligentContextResetEnabled,
 	onIntelligentContextResetEnabledChange,
+	intelligentTaskEnabled: profileIntelligentTaskEnabled,
+	onIntelligentTaskEnabledChange,
 	focusIntelligentContextResetPrompt = false,
 	// kilocode_change end
 }: PromptsSettingsProps) => {
@@ -64,6 +68,7 @@ const PromptsSettings = ({
 		currentApiConfigName,
 		intelligentContextResetPrompt,
 		setIntelligentContextResetPrompt,
+		taskDocumentSettings, // kilocode_change: supported host only, no local capability inference.
 		includeTaskHistoryInEnhance: contextIncludeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance: contextSetIncludeTaskHistoryInEnhance,
 	} = useExtensionState()
@@ -78,9 +83,16 @@ const PromptsSettings = ({
 		focusIntelligentContextResetPrompt ? "CONDENSE" : "ENHANCE",
 	) // kilocode_change
 	// kilocode_change start
-	const intelligentContextResetEnabled = onIntelligentContextResetEnabledChange
+	const editingProfile = !!onIntelligentContextResetEnabledChange || !!onIntelligentTaskEnabledChange
+	const intelligentTaskSupported = taskDocumentSettings?.supported === true
+	const intelligentTaskEnabled =
+		intelligentTaskSupported &&
+		(editingProfile ? profileIntelligentTaskEnabled : apiConfiguration?.intelligentTaskEnabled) === true
+	const profileContextResetEnabled = editingProfile
 		? profileIntelligentContextResetEnabled
 		: apiConfiguration?.intelligentContextResetEnabled
+	const intelligentContextResetEnabled =
+		!intelligentTaskEnabled && isIntelligentContextResetEnabled(profileContextResetEnabled)
 	const intelligentContextResetSectionRef = useRef<HTMLDivElement>(null)
 	useEffect(() => {
 		if (focusIntelligentContextResetPrompt) {
@@ -196,11 +208,17 @@ const PromptsSettings = ({
 
 	const updateIntelligentContextResetEnabled = (enabled: boolean) => {
 		// kilocode_change start: never save a provider checkbox as a global setting.
+		if (editingProfile && !onIntelligentContextResetEnabledChange) return
 		if (onIntelligentContextResetEnabledChange) {
+			if (enabled && intelligentTaskSupported) onIntelligentTaskEnabledChange?.(false)
 			onIntelligentContextResetEnabledChange(enabled)
 			return
 		}
-		const updatedConfiguration = { ...apiConfiguration, intelligentContextResetEnabled: enabled }
+		const updatedConfiguration = {
+			...apiConfiguration,
+			intelligentContextResetEnabled: enabled,
+			...(enabled && intelligentTaskSupported ? { intelligentTaskEnabled: false } : {}),
+		}
 		setApiConfiguration(updatedConfiguration)
 		vscode.postMessage({
 			type: "upsertApiConfiguration",
@@ -209,6 +227,29 @@ const PromptsSettings = ({
 		})
 		// kilocode_change end
 	}
+
+	// kilocode_change start: switch modes within the same selected provider draft.
+	const updateIntelligentTaskEnabled = (enabled: boolean) => {
+		if (!intelligentTaskSupported) return
+		if (editingProfile && !onIntelligentTaskEnabledChange) return
+		if (onIntelligentTaskEnabledChange) {
+			if (enabled) onIntelligentContextResetEnabledChange?.(false)
+			onIntelligentTaskEnabledChange(enabled)
+			return
+		}
+		const updatedConfiguration = {
+			...apiConfiguration,
+			intelligentTaskEnabled: enabled,
+			...(enabled ? { intelligentContextResetEnabled: false } : {}),
+		}
+		setApiConfiguration(updatedConfiguration)
+		vscode.postMessage({
+			type: "upsertApiConfiguration",
+			text: currentApiConfigName || "default",
+			apiConfiguration: updatedConfiguration,
+		})
+	}
+	// kilocode_change end
 
 	const updateIntelligentContextResetPrompt = (prompt: string) => {
 		setIntelligentContextResetPrompt(prompt)
@@ -361,11 +402,13 @@ const PromptsSettings = ({
 								</div>
 							</div>
 
+							{/* kilocode_change start: keep mutually exclusive memory modes adjacent and profile-scoped. */}
 							{activeSupportOption === "CONDENSE" && (
 								<div ref={intelligentContextResetSectionRef}>
 									<VSCodeCheckbox
 										data-testid="intelligent-context-reset-checkbox"
-										checked={isIntelligentContextResetEnabled(intelligentContextResetEnabled)}
+										disabled={editingProfile && !onIntelligentContextResetEnabledChange}
+										checked={intelligentContextResetEnabled}
 										onChange={(e: Event | FormEvent<HTMLElement>) => {
 											const target = ("target" in e ? e.target : null) as HTMLInputElement | null
 											if (target) {
@@ -380,8 +423,34 @@ const PromptsSettings = ({
 										{t("prompts:supportPrompts.condense.intelligentContextReset.description")}
 									</div>
 
-									{(isIntelligentContextResetEnabled(intelligentContextResetEnabled) ||
-										focusIntelligentContextResetPrompt) && (
+									{intelligentTaskSupported && (
+										<div className="mt-3 space-y-1">
+											<VSCodeCheckbox
+												data-testid="intelligent-task-checkbox"
+												disabled={editingProfile && !onIntelligentTaskEnabledChange}
+												checked={intelligentTaskEnabled}
+												onChange={(event) =>
+													updateIntelligentTaskEnabled(
+														(event.target as HTMLInputElement).checked,
+													)
+												}>
+												<span className="font-medium">
+													{t("settings:intelligentTask.label")}
+												</span>
+											</VSCodeCheckbox>
+											<p className="m-0 text-sm text-vscode-descriptionForeground">
+												{t("settings:intelligentTask.description")}
+											</p>
+											<p className="m-0 text-sm text-vscode-descriptionForeground">
+												{t("settings:intelligentTask.compaction")}
+											</p>
+											<p className="m-0 text-xs text-vscode-descriptionForeground">
+												{t("settings:intelligentTask.scope")}
+											</p>
+										</div>
+									)}
+
+									{(intelligentContextResetEnabled || focusIntelligentContextResetPrompt) && (
 										<div className="mt-3">
 											<label className="block font-medium mb-1">
 												{t(
@@ -412,6 +481,7 @@ const PromptsSettings = ({
 								</div>
 							)}
 
+							{/* kilocode_change end */}
 							{activeSupportOption === "ENHANCE" && (
 								<>
 									<div>

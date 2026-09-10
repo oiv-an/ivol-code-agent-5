@@ -33,6 +33,13 @@ export interface OpenAiNativeWebSearchResult {
 	text: string
 	sources: GroundingSource[]
 	usage?: ApiStreamUsageChunk
+	truncated?: boolean
+}
+
+/** Optional bounds for the standalone search dialog; existing task searches keep their behavior. */
+export interface OpenAiNativeWebSearchLimits {
+	maxTextChars: number
+	maxSources: number
 }
 
 const WEB_SEARCH_INSTRUCTION =
@@ -114,10 +121,15 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 
 	/**
 	 * Execute one bounded, search-only Responses request. This method is called
-	 * only after the primary Chat Completions model explicitly selects the local
-	 * `web_search` function; normal provider turns never enter this handler.
+	 * after the primary model selects `web_search` or the user starts a separate
+	 * search dialog. Normal provider turns never enter this handler.
 	 */
-	async searchWeb(query: string, taskId: string, signal?: AbortSignal): Promise<OpenAiNativeWebSearchResult> {
+	async searchWeb(
+		query: string,
+		taskId: string,
+		signal?: AbortSignal,
+		limits?: OpenAiNativeWebSearchLimits,
+	): Promise<OpenAiNativeWebSearchResult> {
 		const normalizedQuery = query.trim()
 		if (!normalizedQuery) {
 			throw new Error("Web search query cannot be empty.")
@@ -132,6 +144,8 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 		const textParts: string[] = []
 		const sourcesByUrl = new Map<string, GroundingSource>()
 		let usage: ApiStreamUsageChunk | undefined
+		let textLength = 0
+		let truncated = false
 
 		try {
 			for await (const chunk of this.createMessage(
@@ -139,12 +153,21 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 				[{ role: "user", content: normalizedQuery }],
 				{ taskId, forceWebSearch: true, store: false },
 			)) {
+				if (signal?.aborted) throw new Error("Web search was cancelled.")
 				if (chunk.type === "text") {
-					textParts.push(chunk.text)
+					const remaining = limits ? Math.max(0, limits.maxTextChars - textLength) : chunk.text.length
+					const part = chunk.text.slice(0, remaining)
+					if (part) textParts.push(part)
+					textLength += part.length
+					truncated ||= part.length < chunk.text.length
 				} else if (chunk.type === "grounding") {
 					for (const source of chunk.sources) {
 						if (source.url && !sourcesByUrl.has(source.url)) {
-							sourcesByUrl.set(source.url, source)
+							if (!limits || sourcesByUrl.size < limits.maxSources) {
+								sourcesByUrl.set(source.url, source)
+							} else {
+								truncated = true
+							}
 						}
 					}
 				} else if (chunk.type === "usage") {
@@ -165,12 +188,13 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 			signal?.removeEventListener("abort", abortSearch)
 		}
 
+		if (signal?.aborted) throw new Error("Web search was cancelled.")
 		const text = textParts.join("").trim()
 		if (!text) {
 			throw new Error("Responses API web search returned no answer.")
 		}
 
-		return { text, sources: [...sourcesByUrl.values()], usage }
+		return { text, sources: [...sourcesByUrl.values()], usage, ...(limits ? { truncated } : {}) }
 	}
 
 	private async *handleResponsesApiMessage(
@@ -476,6 +500,7 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 				body: JSON.stringify(requestBody),
 				signal: activeController.signal,
 			})
+			if (activeController.signal.aborted) throw new Error("Web search was cancelled.")
 
 			if (!response.ok) {
 				const errorText = await response.text()
@@ -532,6 +557,9 @@ export class OpenAiCompatibleResponsesHandler extends BaseProvider implements Si
 						`Responses API returned an invalid JSON response.${details}`,
 					)
 				}
+				// Do not launch the optional output-limit retry after a dialog/task was
+				// closed while an uncooperative transport was parsing a late response.
+				if (activeController.signal.aborted) throw new Error("Web search was cancelled.")
 				if (allowOutputLimitRetry && this.shouldRetryOutputLimitedResponse(requestBody, responseJson)) {
 					// The first attempt returned no actionable assistant output, so a single
 					// retry cannot duplicate a local tool action. Preserve its billed usage.

@@ -139,6 +139,7 @@ import { inputEventTransform, noTransform } from "./transforms"
 // import { ModelPicker } from "./ModelPicker" // kilocode_change
 import { ModelInfoView } from "./ModelInfoView"
 import { ApiErrorMessage } from "./ApiErrorMessage"
+import { ProviderConnectionTest } from "./ProviderConnectionTest" // kilocode_change
 import { ThinkingBudget } from "./ThinkingBudget"
 import { Verbosity } from "./Verbosity"
 import { DiffSettingsControl } from "./DiffSettingsControl"
@@ -188,7 +189,14 @@ const ApiOptions = ({
 		cloudIsAuthenticated,
 		claudeCodeIsAuthenticated,
 		openAiCodexIsAuthenticated,
+		taskDocumentSettings, // kilocode_change: feature support is decided by the host, not by the selected profile.
 	} = useExtensionState()
+	// kilocode_change start: imported conflicting profiles prefer the explicitly opted-in task mode.
+	const intelligentTaskSupported = taskDocumentSettings?.supported === true
+	const intelligentTaskEnabled = intelligentTaskSupported && apiConfiguration.intelligentTaskEnabled === true
+	const intelligentContextResetEnabled =
+		!intelligentTaskEnabled && isIntelligentContextResetEnabled(apiConfiguration.intelligentContextResetEnabled)
+	// kilocode_change end
 
 	const [customHeaders, setCustomHeaders] = useState<[string, string][]>(() => {
 		const headers = apiConfiguration?.openAiHeaders || {}
@@ -593,6 +601,15 @@ const ApiOptions = ({
 				/>
 			</div>
 
+			{/* kilocode_change start: test the current draft without saving or activating its profile. */}
+			{isPersonalProvider(selectedProvider) && (
+				<ProviderConnectionTest
+					apiConfiguration={apiConfiguration}
+					currentApiConfigName={currentApiConfigName}
+				/>
+			)}
+			{/* kilocode_change end */}
+
 			{/* kilocode_change start: certificate verification stays enabled unless this profile explicitly opts out. */}
 			{isPersonalProvider(selectedProvider) && (
 				<div className="flex flex-col gap-1">
@@ -616,13 +633,13 @@ const ApiOptions = ({
 				<div className="flex flex-col gap-1">
 					<VSCodeCheckbox
 						data-testid="provider-intelligent-context-reset-checkbox"
-						checked={isIntelligentContextResetEnabled(apiConfiguration.intelligentContextResetEnabled)}
-						onChange={(event) =>
-							setApiConfigurationField(
-								"intelligentContextResetEnabled",
-								(event.target as HTMLInputElement).checked,
-							)
-						}>
+						checked={intelligentContextResetEnabled}
+						onChange={(event) => {
+							const enabled = (event.target as HTMLInputElement).checked
+							if (enabled && intelligentTaskSupported)
+								setApiConfigurationField("intelligentTaskEnabled", false)
+							setApiConfigurationField("intelligentContextResetEnabled", enabled)
+						}}>
 						{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
 					</VSCodeCheckbox>
 					<div className="text-vscode-descriptionForeground text-sm">
@@ -637,6 +654,29 @@ const ApiOptions = ({
 							onClick={onEditIntelligentContextResetPrompt}>
 							{t("prompts:supportPrompts.condense.intelligentContextReset.editPrompt")}
 						</Button>
+					)}
+					{intelligentTaskSupported && (
+						<div className="mt-2 space-y-1">
+							<VSCodeCheckbox
+								data-testid="provider-intelligent-task-checkbox"
+								checked={intelligentTaskEnabled}
+								onChange={(event) => {
+									const enabled = (event.target as HTMLInputElement).checked
+									if (enabled) setApiConfigurationField("intelligentContextResetEnabled", false)
+									setApiConfigurationField("intelligentTaskEnabled", enabled)
+								}}>
+								{t("settings:intelligentTask.label")}
+							</VSCodeCheckbox>
+							<p className="m-0 text-sm text-vscode-descriptionForeground">
+								{t("settings:intelligentTask.description")}
+							</p>
+							<p className="m-0 text-sm text-vscode-descriptionForeground">
+								{t("settings:intelligentTask.compaction")}
+							</p>
+							<p className="m-0 text-xs text-vscode-descriptionForeground">
+								{t("settings:intelligentTask.scope")}
+							</p>
+						</div>
 					)}
 				</div>
 			)}

@@ -213,6 +213,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				cancelled.name = "AbortError"
 				throw cancelled
 			}
+			if (this.options.connectionTest) throw error // kilocode_change: preserve metadata for the safe report.
 			throw normalizeOpenAiTransportError(error) ?? error
 		}
 		// kilocode_change end
@@ -228,7 +229,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 	}
 
-	private handleCompletionError(error: unknown): Error {
+	private handleCompletionError(error: unknown): unknown {
+		if (this.options.connectionTest) return error // kilocode_change: no raw SDK logging during diagnostics.
 		if (isOpenAiAbortError(error) && error instanceof Error) return error
 		return normalizeOpenAiTransportError(error) ?? handleOpenAIError(error, this.providerName)
 	}
@@ -418,6 +420,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		try {
 			return await this.client.chat.completions.create(requestOptions as any, requestConfig)
 		} catch (error) {
+			if (this.options.connectionTest) throw error // kilocode_change: one diagnostic request, with its original error.
 			if (!plainMessages || !isUnsupportedPromptCacheError(error)) {
 				throw this.handleCompletionError(error)
 			}

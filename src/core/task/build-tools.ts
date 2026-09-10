@@ -103,6 +103,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	} = options
 
 	const mcpHub = provider.getMcpHub()
+	const taskDocumentEnabled = provider.getTaskDocumentSettings?.(apiConfiguration, cwd).enabled === true // kilocode_change
 
 	// Get CodeIndexManager for feature checking.
 	const { CodeIndexManager } = await import("../../services/code-index/manager")
@@ -110,7 +111,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	// Build settings object for tool filtering.
 	const filterSettings = {
-		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
+		todoListEnabled: taskDocumentEnabled || (apiConfiguration?.todoListEnabled ?? true), // kilocode_change
 		browserToolEnabled: browserToolEnabled ?? true,
 		modelInfo,
 		diffEnabled,
@@ -124,6 +125,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	// Build native tools with dynamic read_file tool based on settings.
 	const nativeTools = getNativeTools({
+		taskDocumentEnabled, // kilocode_change
 		partialReadsEnabled,
 		maxConcurrentFileReads,
 		supportsImages,

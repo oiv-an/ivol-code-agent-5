@@ -201,6 +201,7 @@ export type ThinkingConfig =
  * Stream message request options
  */
 export interface StreamMessageOptions {
+	connectionTest?: boolean // kilocode_change: internal-only safe diagnostics behavior.
 	accessToken: string
 	allowInsecureTls?: boolean // kilocode_change: API transport only, never OAuth login/refresh
 	model: string
@@ -246,7 +247,11 @@ function createSSEParserState(): SSEParserState {
  * - currentEvent: event type if we've seen "event:" but not the complete event
  * - currentData: accumulated data lines for the current event
  */
-function parseSSEChunk(chunk: string, state: SSEParserState): { events: SSEEvent[]; state: SSEParserState } {
+function parseSSEChunk(
+	chunk: string,
+	state: SSEParserState,
+	connectionTest = false, // kilocode_change: never log raw model data during a check.
+): { events: SSEEvent[]; state: SSEParserState } {
 	const events: SSEEvent[] = []
 	const lines = (state.buffer + chunk).split("\n")
 
@@ -276,7 +281,10 @@ function parseSSEChunk(chunk: string, state: SSEParserState): { events: SSEEvent
 					})
 				} catch {
 					// Skip malformed events
+					// kilocode_change start
+					if (connectionTest) throw new Error("Invalid SSE response during provider connection check")
 					console.error("[claude-code-streaming] Failed to parse SSE data:", currentData.join("\n"))
+					// kilocode_change end
 				}
 			}
 			currentEvent = null
@@ -446,6 +454,15 @@ export async function* createStreamingMessage(options: StreamMessageOptions): As
 	})
 
 	if (!response.ok) {
+		// kilocode_change start: report typed metadata, without retaining or logging the raw response body.
+		if (options.connectionTest) {
+			await response.body?.cancel()
+			throw Object.assign(new Error("Claude Code API request failed"), {
+				status: response.status,
+				request_id: response.headers.get("request-id") ?? response.headers.get("x-request-id") ?? undefined,
+			})
+		}
+		// kilocode_change end
 		const errorText = await response.text()
 		let errorMessage = `API request failed: ${response.status} ${response.statusText}`
 		try {
@@ -499,7 +516,7 @@ export async function* createStreamingMessage(options: StreamMessageOptions): As
 			if (done) break
 
 			const chunk = decoder.decode(value, { stream: true })
-			const result = parseSSEChunk(chunk, sseState)
+			const result = parseSSEChunk(chunk, sseState, options.connectionTest) // kilocode_change
 			sseState = result.state
 			const events = result.events
 
@@ -677,6 +694,11 @@ export async function* createStreamingMessage(options: StreamMessageOptions): As
 			}
 		}
 	} finally {
+		// kilocode_change start: a discarded diagnostic iterator must close its own response.
+		if (options.connectionTest) {
+			await reader.cancel().catch(() => undefined) // Cancellation may have already errored the stream.
+		}
+		// kilocode_change end
 		reader.releaseLock()
 	}
 }
