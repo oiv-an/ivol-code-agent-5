@@ -62,12 +62,25 @@ class IpcMemoryLifecycleTest {
         assertEquals(1, socket.disposeCount)
     }
 
-    @Test fun countLimitAlsoBoundsTinyMessages() {
-        val protocol = protocol(FakeSocket(), messages = 2)
-        protocol.send(ByteArray(0))
-        protocol.send(ByteArray(0))
+    @Test fun burstOfTinyMessagesSurvivesWhileThePeerKeepsTalking() {
+        val socket = FakeSocket()
+        val protocol = protocol(socket, messages = 2)
+        try {
+            // Streaming an assistant reply queues far more messages than the soft limit between
+            // two batched acknowledgements. A responsive peer must not cost the user the task.
+            repeat(50) { protocol.send(ByteArray(0)) }
+            assertFalse(protocol.isDisposed())
+            assertEquals(50, protocol.unacknowledgedCount)
+            socket.receive(frame(ProtocolMessageType.ACK, 0, 50))
+            assertEquals(0, protocol.unacknowledgedCount)
+        } finally { protocol.dispose() }
+    }
+
+    @Test fun countLimitStillBoundsTinyMessagesAtTheHardCeiling() {
+        val protocol = protocol(FakeSocket(), messages = 1)
+        repeat(64) { protocol.send(ByteArray(0)) }
         val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(0)) }
-        assertQueueLimitDiagnostics(error, "count", 2, 2, 0, 1024, 0, 0, 2)
+        assertQueueLimitDiagnostics(error, "count", 64, 1, 0, 1024, 0, 0, 64)
         assertTrue(protocol.isDisposed())
     }
 
@@ -81,9 +94,9 @@ class IpcMemoryLifecycleTest {
 
     @Test fun diagnosticsIdentifySimultaneousByteAndCountLimits() {
         val protocol = protocol(FakeSocket(), bytes = 100, messages = 1)
-        protocol.send(ByteArray(100))
-        val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(1)) }
-        assertQueueLimitDiagnostics(error, "bytes_and_count", 1, 1, 100, 100, 1, 0, 1)
+        repeat(64) { protocol.send(ByteArray(1)) }
+        val error = assertThrows(IOException::class.java) { protocol.send(ByteArray(37)) }
+        assertQueueLimitDiagnostics(error, "bytes_and_count", 64, 1, 64, 100, 37, 0, 64)
         assertTrue(protocol.isDisposed())
     }
 

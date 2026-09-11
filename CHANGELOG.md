@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.245
+
+### Patch Changes
+
+- Fix the "IVOL Code connection lost" warning that interrupted running tasks in JetBrains IDEs. A fast streaming reply no longer looks like a dead connection, and chat updates are delivered in batches, which also makes long replies render more smoothly.
+
 ## 5.16.244
 
 ### Patch Changes

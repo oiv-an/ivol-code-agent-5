@@ -15,6 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PersistentProtocol(opts: PersistentProtocolOptions, msgListener: ((ByteArray) -> Unit)? = null) : IMessagePassingProtocol {
     companion object {
         private val LOG = Logger.getInstance(PersistentProtocol::class.java)
+
+        /** How far past the soft message limit a still-responsive peer may push the replay queue. */
+        private const val HARD_CEILING_FACTOR = 64L
     }
 
     class PersistentProtocolOptions(
@@ -30,6 +33,10 @@ class PersistentProtocol(opts: PersistentProtocolOptions, msgListener: ((ByteArr
 
     private val maxBytes = opts.maxUnacknowledgedBytes
     private val maxMessages = opts.maxUnacknowledgedMessages
+    // Beyond this depth the queue is refused even for a responsive peer: the per-message
+    // bookkeeping is no longer negligible next to the byte budget.
+    private val hardMessageCeiling = maxMessages.toLong().times(HARD_CEILING_FACTOR)
+        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     private val timeoutMillis = opts.timeoutMillis
     private val loadEstimator = opts.loadEstimator ?: LoadEstimator.getInstance()
     private val outgoing = ArrayDeque<ProtocolMessage>()
@@ -143,18 +150,23 @@ class PersistentProtocol(opts: PersistentProtocolOptions, msgListener: ((ByteArr
         try {
             synchronized(this) {
                 if (isDisposed()) throw IOException("Extension host IPC connection is closed")
-                if (outgoingBytes + buffer.size > maxBytes || outgoing.size >= maxMessages) {
-                    val byteLimitReached = outgoingBytes + buffer.size > maxBytes
-                    val countLimitReached = outgoing.size >= maxMessages
+                val now = System.currentTimeMillis()
+                val byteLimitReached = outgoingBytes + buffer.size > maxBytes
+                // A deep queue on its own does not prove a dead peer: streaming an assistant reply
+                // legitimately queues thousands of tiny messages between two batched acknowledgements.
+                // Only a peer that has also gone quiet may cost the user a running task. The hard
+                // ceiling still bounds per-message overhead, which the byte limit does not measure.
+                val countLimitReached = outgoing.size >= hardMessageCeiling ||
+                    (outgoing.size >= maxMessages && isPeerStalled(now))
+                if (byteLimitReached || countLimitReached) {
                     val reason = when {
                         byteLimitReached && countLimitReached -> "bytes_and_count"
                         byteLimitReached -> "bytes"
                         else -> "count"
                     }
-                    val now = System.currentTimeMillis()
                     val oldestMessageAgeMillis = outgoing.peekFirst()?.let { (now - it.writtenTime).coerceAtLeast(0) } ?: 0L
-                    // Queue pressure alone does not prove a stalled peer. Log only transport counters,
-                    // never message contents, so a healthy burst can be distinguished from an ACK stall.
+                    // Log only transport counters, never message contents, so a healthy burst can
+                    // still be told apart from an acknowledgement stall after the fact.
                     throw IOException(
                         "Extension host IPC safe queue limit reached: reason=$reason, " +
                             "count=${outgoing.size}, maxCount=$maxMessages, bytes=$outgoingBytes, maxBytes=$maxBytes, " +
@@ -296,6 +308,18 @@ class PersistentProtocol(opts: PersistentProtocolOptions, msgListener: ((ByteArr
                 }
             }
         }.also { timer.schedule(it, ProtocolConstants.ACKNOWLEDGE_TIME.toLong()) }
+    }
+
+    /**
+     * True when the queue depth is backed by real evidence that the peer stopped consuming:
+     * it neither acknowledged the oldest message nor sent anything at all for a full timeout.
+     * Callers must hold the protocol monitor.
+     */
+    private fun isPeerStalled(now: Long): Boolean {
+        val oldest = outgoing.peekFirst() ?: return false
+        val age = (now - oldest.writtenTime).coerceAtLeast(0)
+        val silence = (now - reader.getLastReadTime()).coerceAtLeast(0)
+        return age >= timeoutMillis && silence >= timeoutMillis
     }
 
     private fun scheduleAckCheck() {

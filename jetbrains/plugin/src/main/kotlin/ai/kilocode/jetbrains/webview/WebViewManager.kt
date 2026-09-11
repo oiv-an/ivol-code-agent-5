@@ -612,6 +612,10 @@ class WebViewInstance(
 
     // Alarm for scheduling JavaScript execution retries
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
+
+    // Messages waiting to be coalesced into a single JavaScript evaluation.
+    private val pendingMessages = ArrayDeque<String>()
+    private var flushScheduled = false
     
     @Volatile
     private var hasPendingThemeInjection: Boolean = false
@@ -1404,55 +1408,90 @@ class WebViewInstance(
     }
 
     /**
-     * Send message to WebView
+     * Queues a message for the WebView.
+     *
+     * Streaming a model reply produces thousands of tiny messages per second. Each one used to
+     * become its own JavaScript evaluation, which flooded the extension host IPC queue and the
+     * IDE log. Messages are coalesced into one evaluation per frame instead; ordering is kept.
+     *
      * @param message Message to send (JSON string)
      */
     fun postMessageToWebView(message: String) {
-        if (!isDisposed) {
-            // Send message to WebView via JavaScript function with retry mechanism
-            val script = """
-                (function() {
-                    function sendMessage() {
-                        if (window.receiveMessageFromPlugin) {
-                            window.receiveMessageFromPlugin($message);
-                            return true;
-                        }
+        if (isDisposed) return
+        val scheduleFlush = synchronized(pendingMessages) {
+            pendingMessages.addLast(message)
+            if (flushScheduled) false else { flushScheduled = true; true }
+        }
+        if (scheduleFlush) {
+            alarm.addRequest({ flushPendingMessages() }, MESSAGE_BATCH_DELAY_MS, ModalityState.defaultModalityState())
+        }
+    }
+
+    /** Drains the queue into as few JavaScript evaluations as the size budget allows. */
+    private fun flushPendingMessages() {
+        val batch = synchronized(pendingMessages) {
+            flushScheduled = false
+            if (pendingMessages.isEmpty()) return
+            val drained = ArrayList<String>(pendingMessages.size)
+            var budget = 0
+            while (pendingMessages.isNotEmpty() && budget < MAX_BATCH_CHARS) {
+                val next = pendingMessages.removeFirst()
+                budget += next.length
+                drained.add(next)
+            }
+            if (pendingMessages.isNotEmpty()) {
+                flushScheduled = true
+                alarm.addRequest({ flushPendingMessages() }, MESSAGE_BATCH_DELAY_MS, ModalityState.defaultModalityState())
+            }
+            drained
+        }
+        if (isDisposed) return
+        // Deliver via JavaScript with a retry mechanism: the bridge function may not exist yet
+        // while the page is still loading, and the whole batch must then be replayed in order.
+        val script = """
+            (function() {
+                var messages = [${batch.joinToString(",")}];
+
+                function sendMessages() {
+                    if (!window.receiveMessageFromPlugin) {
                         return false;
                     }
-                    
-                    // Try to send immediately
-                    if (sendMessage()) {
+                    for (var i = 0; i < messages.length; i++) {
+                        window.receiveMessageFromPlugin(messages[i]);
+                    }
+                    return true;
+                }
+
+                // Try to send immediately
+                if (sendMessages()) {
+                    return;
+                }
+
+                // If not available, retry with exponential backoff
+                var attempts = 0;
+                var maxAttempts = 10;
+                var baseDelay = 50; // Start with 50ms
+
+                function retryWithBackoff() {
+                    if (attempts >= maxAttempts) {
+                        console.warn("receiveMessageFromPlugin not available after " + maxAttempts + " attempts");
                         return;
                     }
-                    
-                    // If not available, retry with exponential backoff
-                    let attempts = 0;
-                    const maxAttempts = 10;
-                    const baseDelay = 50; // Start with 50ms
-                    
-                    function retryWithBackoff() {
-                        if (attempts >= maxAttempts) {
-                            console.warn("receiveMessageFromPlugin not available after " + maxAttempts + " attempts");
-                            return;
+
+                    attempts++;
+                    var delay = baseDelay * Math.pow(1.5, attempts - 1);
+
+                    setTimeout(function() {
+                        if (!sendMessages()) {
+                            retryWithBackoff();
                         }
-                        
-                        attempts++;
-                        const delay = baseDelay * Math.pow(1.5, attempts - 1);
-                        
-                        setTimeout(function() {
-                            if (sendMessage()) {
-                                console.log("Message sent successfully after " + attempts + " attempts");
-                            } else {
-                                retryWithBackoff();
-                            }
-                        }, delay);
-                    }
-                    
-                    retryWithBackoff();
-                })();
-            """.trimIndent()
-            executeJavaScript(script)
-        }
+                    }, delay);
+                }
+
+                retryWithBackoff();
+            })();
+        """.trimIndent()
+        executeJavaScript(script)
     }
 
     /**
@@ -1705,8 +1744,21 @@ class WebViewInstance(
             }
 
             disposalBridge.dispose()
-            
+
+            synchronized(pendingMessages) {
+                pendingMessages.clear()
+                flushScheduled = false
+            }
+
             logger.info("WebView instance released: $viewType/$viewId")
         }
+    }
+
+    companion object {
+        /** One frame at 60 Hz: long enough to coalesce a token burst, short enough to feel live. */
+        private const val MESSAGE_BATCH_DELAY_MS = 16
+
+        /** Upper bound on a single evaluation so one batch cannot block the browser thread. */
+        private const val MAX_BATCH_CHARS = 512 * 1024
     }
 }
