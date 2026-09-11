@@ -101,6 +101,30 @@ class WebViewMessageBridgeTest {
     }
 
     @Test
+    fun `a host that is still starting fails quietly`() {
+        var warnings = 0
+        val bridge = WebViewMessageBridge({ false }, { false }, { warnings++ }, isHostStopped = { false })
+
+        repeat(5) { bridge.forward("cancelTask") }
+
+        assertEquals(0, warnings)
+    }
+
+    @Test
+    fun `the warning appears once the host that was running has stopped`() {
+        var stopped = false
+        var warnings = 0
+        val bridge = WebViewMessageBridge({ false }, { false }, { warnings++ }, isHostStopped = { stopped })
+
+        bridge.forward("cancelTask")
+        assertEquals(0, warnings)
+
+        stopped = true
+        bridge.forward("cancelTask")
+        assertEquals(1, warnings)
+    }
+
+    @Test
     fun `concurrent disconnected commands produce one warning`() {
         val warnings = AtomicInteger()
         val ready = CountDownLatch(20)

@@ -9,6 +9,24 @@ import ai.kilocode.jetbrains.ipc.proxy.IRPCProtocol
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import java.util.concurrent.CopyOnWriteArrayList
+
+/**
+ * Lifecycle of the extension host process behind this project.
+ *
+ * The UI has to tell apart a host that is not ready yet from one that has gone
+ * away, because only the second case is worth interrupting the user for.
+ */
+enum class ExtensionHostState {
+    /** No host has ever been connected, or one is being started right now. */
+    STARTING,
+
+    /** A host is connected and its RPC protocol can be used. */
+    READY,
+
+    /** A host was connected and is now gone. */
+    STOPPED,
+}
 
 /**
  * Plugin global context
@@ -26,6 +44,16 @@ class PluginContext {
     @Volatile
     private var extensionHostManager: ExtensionHostManager? = null
 
+    @Volatile
+    private var hostState: ExtensionHostState = ExtensionHostState.STARTING
+
+    private val hostStoppedListeners = CopyOnWriteArrayList<() -> Unit>()
+
+    /**
+     * Current lifecycle state of the extension host.
+     */
+    fun getExtensionHostState(): ExtensionHostState = hostState
+
     /**
      * Set RPC protocol instance
      * @param protocol RPC protocol instance
@@ -33,6 +61,7 @@ class PluginContext {
     fun setRPCProtocol(protocol: IRPCProtocol) {
         logger.info("Setting RPC protocol instance")
         rpcProtocol = protocol
+        hostState = ExtensionHostState.READY
     }
 
     /**
@@ -61,12 +90,37 @@ class PluginContext {
     }
 
     /**
+     * Register a listener that runs once the extension host has stopped.
+     *
+     * Listeners let views release themselves instead of outliving the host and
+     * failing on every later command.
+     */
+    fun addHostStoppedListener(listener: () -> Unit) {
+        hostStoppedListeners.add(listener)
+    }
+
+    fun removeHostStoppedListener(listener: () -> Unit) {
+        hostStoppedListeners.remove(listener)
+    }
+
+    /**
      * Clear all resources
      */
     fun clear() {
         logger.info("Clearing resources in PluginContext")
+        val hadHost = rpcProtocol != null || extensionHostManager != null
         rpcProtocol = null
         extensionHostManager = null
+        if (!hadHost) return
+
+        hostState = ExtensionHostState.STOPPED
+        for (listener in hostStoppedListeners) {
+            try {
+                listener()
+            } catch (e: Exception) {
+                logger.warn("An extension host listener failed while the host was stopping", e)
+            }
+        }
     }
 
     companion object {

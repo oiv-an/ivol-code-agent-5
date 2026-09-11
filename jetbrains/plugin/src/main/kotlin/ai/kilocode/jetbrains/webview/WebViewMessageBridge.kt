@@ -9,11 +9,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * A WebView can outlive its extension host. Reject commands visibly, without
  * replaying them into a different task or logging their potentially secret body.
+ *
+ * Only a host that was running and then stopped is worth interrupting the user
+ * for. While a host is still starting, or when the project is being closed, a
+ * failed command is expected and is only written to the log.
  */
 internal class WebViewMessageBridge(
     private val isDisposed: () -> Boolean,
     private val sendMessage: (String) -> Boolean,
     private val onUnavailable: () -> Unit,
+    private val isHostStopped: () -> Boolean = { true },
 ) {
     private val unavailableReported = AtomicBoolean(false)
 
@@ -38,7 +43,8 @@ internal class WebViewMessageBridge(
             if (cause is ControlFlowException || cause is CancellationException) throw cause
             // No automatic retry: even a failed send may have reached the host.
         }
-        if (!isDisposed() && unavailableReported.compareAndSet(false, true)) {
+        if (isDisposed() || !isHostStopped()) return
+        if (unavailableReported.compareAndSet(false, true)) {
             onUnavailable()
         }
     }

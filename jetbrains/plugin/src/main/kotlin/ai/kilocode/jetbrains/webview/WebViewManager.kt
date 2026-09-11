@@ -2,6 +2,7 @@ package ai.kilocode.jetbrains.webview
 
 import ai.kilocode.jetbrains.monitoring.ScopeRegistry
 import ai.kilocode.jetbrains.monitoring.DisposableTracker
+import ai.kilocode.jetbrains.core.ExtensionHostState
 import ai.kilocode.jetbrains.core.InitializationState
 import ai.kilocode.jetbrains.core.InitializationStateMachine
 import ai.kilocode.jetbrains.core.PluginContext
@@ -658,6 +659,11 @@ class WebViewInstance(
                 }
             }
         },
+        isHostStopped = {
+            !project.isDisposed &&
+                project.getService(PluginContext::class.java).getExtensionHostState() ==
+                ExtensionHostState.STOPPED
+        },
     )
 
     private val disposalBridge =
@@ -674,6 +680,17 @@ class WebViewInstance(
                 logger.warn("Could not notify extension host that the WebView was disposed")
             },
         )
+
+    // Releases this view as soon as its extension host is gone. Disposal must
+    // not run on the host's own thread, so it is handed to the UI thread.
+    private val hostStoppedListener: () -> Unit = {
+        logger.info("Extension host stopped; releasing WebView $viewType/$viewId")
+        ApplicationManager.getApplication().invokeLater {
+            if (!isDisposed) {
+                dispose()
+            }
+        }
+    }
 
     // Synchronization for page load state
     private val pageLoadLock = Any()
@@ -698,7 +715,13 @@ class WebViewInstance(
 
     init {
         ScopeRegistry.register("WebViewInstance.coroutineScope-$viewId", coroutineScope)
-        
+
+        // A view bound to a stopped host can only fail. Release it with the host
+        // instead of letting it collect commands nobody will ever receive.
+        if (!project.isDisposed) {
+            project.getService(PluginContext::class.java).addHostStoppedListener(hostStoppedListener)
+        }
+
         // Set background color to match theme immediately
         try {
             val themeManager = ThemeManager.getInstance()
@@ -1730,6 +1753,16 @@ class WebViewInstance(
     override fun dispose() {
         if (!isDisposed) {
             isDisposed = true
+
+            if (!project.isDisposed) {
+                try {
+                    project.getService(PluginContext::class.java)
+                        .removeHostStoppedListener(hostStoppedListener)
+                } catch (e: Exception) {
+                    logger.warn("Could not unsubscribe the WebView from extension host events", e)
+                }
+            }
+
             coroutineScope.cancel()
             ScopeRegistry.unregister("WebViewInstance.coroutineScope-$viewId")
             jsQuery?.dispose()

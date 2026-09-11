@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.247
+
+### Patch Changes
+
+- Stop the false "connection lost" warning in JetBrains IDEs. Closing or reopening a project no longer looks like a broken connection, the chat panel is released together with the extension host, and the warning is kept for the case it was meant for.
+
 ## 5.16.246
 
 ### Patch Changes
