@@ -90,3 +90,6 @@ jetbrains/plugin/.kotlin/
 
 # Scratch state for the AI agent working on the current task
 CURRENT_TASK.md
+
+# Local working agreement for the AI agent, not part of the published project
+AI_INSTRUCTIONS.md
