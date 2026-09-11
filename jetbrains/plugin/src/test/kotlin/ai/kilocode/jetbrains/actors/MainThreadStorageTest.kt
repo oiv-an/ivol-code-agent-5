@@ -93,6 +93,63 @@ class MainThreadStorageTest {
     }
 
     @Test
+    fun `a client that never saw a task must not delete it while adding its own`() {
+        val storage = ExtensionStorageService()
+        storage.setValue(EXTENSION_ID, "{}")
+        val bridgeA = bridge(storage, "project-a")
+        val bridgeB = bridge(storage, "project-b")
+        bridgeA.initializeExtensionStorage(true, EXTENSION_ID)
+        bridgeB.initializeExtensionStorage(true, EXTENSION_ID)
+
+        // Project A records its task while project B still has an empty snapshot.
+        val taskA = task("a", "A")
+        bridgeA.setValue(
+            true,
+            EXTENSION_ID,
+            mapOf("taskHistory" to listOf(taskA)),
+            listOf(change("taskHistory", false)),
+        )
+
+        // Project B saves its own task from that stale, empty snapshot. Because B never
+        // observed task "a", its delta must be treated as an addition, not a deletion.
+        val taskB = task("b", "B")
+        bridgeB.setValue(
+            true,
+            EXTENSION_ID,
+            mapOf("taskHistory" to listOf(taskB)),
+            listOf(change("taskHistory", false)),
+        )
+
+        assertEquals(listOf("a", "b"), taskIds(storage))
+    }
+
+    @Test
+    fun `long running history keeps every task across many interleaved stale writes`() {
+        val storage = ExtensionStorageService()
+        storage.setValue(EXTENSION_ID, "{}")
+        val bridges = (1..4).map { index ->
+            bridge(storage, "project-$index").also { it.initializeExtensionStorage(true, EXTENSION_ID) }
+        }
+
+        val expected = mutableListOf<String>()
+        repeat(40) { round ->
+            val bridge = bridges[round % bridges.size]
+            val id = "task-$round"
+            expected.add(id)
+            // Every client writes only the task it just created, based on whatever
+            // snapshot it holds; nothing may be dropped from the canonical history.
+            bridge.setValue(
+                true,
+                EXTENSION_ID,
+                mapOf("taskHistory" to listOf(task(id, "Task $round"))),
+                listOf(change("taskHistory", false)),
+            )
+        }
+
+        assertEquals(expected, taskIds(storage))
+    }
+
+    @Test
     fun `global storage stays shared while workspace storage is isolated and seeded from legacy data`() {
         val storage = ExtensionStorageService()
         storage.setValue(EXTENSION_ID, """{"legacy":true}""")

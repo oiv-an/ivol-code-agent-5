@@ -28,6 +28,13 @@ import { ExtensionManager } from "./extensionManager.js"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// kilocode_change start: resolve a stable user-data directory outside the plugin
+// folder, so reinstalling or updating the plugin cannot delete stored tasks.
+const userDataHome =
+	process.env.KILOCODE_USER_DATA_HOME ??
+	path.join(process.env.HOME ?? process.env.USERPROFILE ?? __dirname, ".kilocode")
+// kilocode_change end
+
 // Create ExtensionManager instance and register extension
 const extensionManager = new ExtensionManager()
 const rooCodeIdentifier = extensionManager.registerExtension("kilocode").identifier
@@ -83,8 +90,11 @@ const server = net.createServer((socket) => {
 					appLanguage: "en",
 					appUriScheme: "vscode",
 					appRoot: URI.file(__dirname),
-					globalStorageHome: URI.file(path.join(__dirname, "globalStorage")),
-					workspaceStorageHome: URI.file(path.join(__dirname, "workspaceStorage")),
+					// kilocode_change start: storage must never live inside the plugin
+					// directory, otherwise a plugin update wipes the whole task history.
+					globalStorageHome: URI.file(path.join(userDataHome, "globalStorage")),
+					workspaceStorageHome: URI.file(path.join(userDataHome, "workspaceStorage")),
+					// kilocode_change end
 					extensionDevelopmentLocationURI: undefined,
 					extensionTestsLocationURI: undefined,
 					useHostProxy: false,

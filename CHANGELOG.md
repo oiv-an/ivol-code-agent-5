@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.248
+
+### Patch Changes
+
+- Protect the task history in JetBrains IDEs. Stored tasks are no longer kept inside the plugin folder, so updating the plugin cannot erase them, and history updates now carry their full change details.
+
 ## 5.16.247
 
 ### Patch Changes

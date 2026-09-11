@@ -950,10 +950,18 @@ export class RPCManager {
 				console.log("Initialize extension storage:", { shared, extensionId })
 				return Promise.resolve(undefined)
 			},
-			$setValue(shared: boolean, extensionId: string, value: object): Promise<void> {
-				console.log("Set value:", { shared, extensionId, value })
+			// kilocode_change start: keep the standalone stub aligned with the real
+			// MainThreadStorage contract so per-key change metadata is not dropped.
+			$setValue(
+				shared: boolean,
+				extensionId: string,
+				value: object,
+				changes?: readonly { key: string; previousValueExists: boolean; previousValue?: unknown }[],
+			): Promise<void> {
+				console.log("Set value:", { shared, extensionId, value, changes })
 				return Promise.resolve()
 			},
+			// kilocode_change end
 			$registerExtensionStorageKeysToSync(extension: any, keys: string[]): void {
 				console.log("Register extension storage keys to sync:", { extension, keys })
 			},
