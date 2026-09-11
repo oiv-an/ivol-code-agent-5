@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.244
+
+### Patch Changes
+
+- Bring back the context menu button next to the paperclip, so both ways of adding context are available: the paperclip opens a file picker for the whole disk, while the new "@" button lists files from the open project.
+
 ## 5.16.243
 
 ### Patch Changes
