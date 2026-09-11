@@ -268,6 +268,14 @@ publish_marketplace() {
 	(cd "$REPO_ROOT/src" && npx vsce publish --azure-credential --packagePath "$VSIX_PATH")
 }
 
+# "owner/name", which every gh command understands. A remote URL only works for
+# creating a release; gh release view rejects it with "release not found".
+github_repository() {
+	git -C "$REPO_ROOT" remote get-url origin |
+		sed -e 's#^git@github\.com:#https://github.com/#' \
+			-e 's#^https://github\.com/##' -e 's#\.git$##'
+}
+
 publish_github_release() {
 	log "Creating the GitHub release"
 
@@ -282,7 +290,7 @@ publish_github_release() {
 	notes+=$' with Settings, Plugins, Install Plugin from Disk.'
 
 	gh release create "v$VERSION" \
-		--repo "$(git -C "$REPO_ROOT" remote get-url origin)" \
+		--repo "$(github_repository)" \
 		--title "IVOL Code Agent 5 $VERSION" \
 		--notes "$notes" \
 		"$VSIX_PATH" "${BUILT_ARCHIVES[@]}"
@@ -310,7 +318,7 @@ main() {
 
 	log "Published $VERSION"
 	echo "Marketplace: https://marketplace.visualstudio.com/items?itemName=$PUBLISHER.ivol-code-agent-5"
-	echo "Release    : $(gh release view "v$VERSION" --json url --jq .url)"
+	echo "Release    : $(gh release view "v$VERSION" --repo "$(github_repository)" --json url --jq .url)"
 	echo
 	echo "Commit the version bump when you are ready:"
 	echo "  git add src/package.json CHANGELOG.md && git commit && git push origin stable-v5"
