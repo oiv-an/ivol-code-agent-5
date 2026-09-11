@@ -303,12 +303,47 @@ export class NativeToolCallParser {
 
 		// Parse the complete accumulated JSON
 		// Cast to any for the name since parseToolCall handles both ToolName and dynamic MCP tools
-		const finalToolUse = this.parseToolCall({
+		let finalToolUse = this.parseToolCall({
 			id: toolCall.id,
 			name: toolCall.name as ToolName,
 			arguments: toolCall.argumentsAccumulator,
 			extra_content: toolCall.extra_content, // kilocode_change
 		})
+
+		// kilocode_change start: Never execute a partially parsed native tool call.
+		// Some compatible gateways close a stream cleanly after forwarding only the
+		// beginning of function.arguments. partial-json can still expose values such
+		// as `path`, but treating that preview as a complete call produces misleading
+		// "missing parameter" loops and can be unsafe for mutating tools.
+		if (!finalToolUse) {
+			const resolvedName = resolveToolAlias(toolCall.name) as ToolName
+			if (toolNames.includes(resolvedName) || customToolRegistry.has(resolvedName)) {
+				let partialArgs: Record<string, unknown> = {}
+				try {
+					partialArgs =
+						(parseJSON(toolCall.argumentsAccumulator) as Record<string, unknown> | undefined) ?? {}
+				} catch (error) {
+					console.warn(
+						`[NativeToolCallParser] Could not recover a preview of interrupted ${resolvedName} arguments: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				}
+
+				const originalName = toolCall.name !== resolvedName ? toolCall.name : undefined
+				const interrupted = this.createPartialToolUse(
+					toolCall.id,
+					resolvedName,
+					partialArgs,
+					false,
+					originalName,
+				)
+				if (interrupted) {
+					interrupted.nativeArgumentsIncomplete = true
+					interrupted.extra_content = toolCall.extra_content
+					finalToolUse = interrupted
+				}
+			}
+		}
+		// kilocode_change end
 
 		// Clean up streaming state
 		this.streamingToolCalls.delete(id)

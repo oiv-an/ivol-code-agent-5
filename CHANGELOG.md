@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.246
+
+### Patch Changes
+
+- Recover safely when a provider interrupts a file-writing command before all content arrives. The command is no longer run with half of its data, so files are left untouched and the task continues with a smaller operation.
+
 ## 5.16.245
 
 ### Patch Changes

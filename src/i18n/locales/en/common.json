@@ -204,7 +204,8 @@
 	"interruption": {
 		"responseInterruptedByUser": "Response interrupted by user",
 		"responseInterruptedByApiError": "Response interrupted by API error",
-		"streamTerminatedByProvider": "Provider ended the request"
+		"streamTerminatedByProvider": "Provider ended the request",
+		"incompleteToolCall": "The provider interrupted {{toolName}} before all command data was received. The tool was not run and no file was changed. IVOL Code will continue using a smaller operation."
 	},
 	"storage": {
 		"prompt_custom_path": "Enter custom conversation history storage path, leave empty to use default location",

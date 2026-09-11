@@ -62,6 +62,28 @@ export const formatResponse = {
 		return `The tool execution failed with the following error:\n<error>\n${error}\n</error>`
 	},
 
+	// kilocode_change start: explain an interrupted native call without pretending
+	// that the tool itself ran or that a required parameter was intentionally omitted.
+	interruptedToolCall: (toolName: string, path?: string, protocol?: ToolProtocol) => {
+		const message = `The provider ended the response before the complete arguments for ${toolName} were received. The tool was not executed and no file was changed.`
+		const suggestion =
+			toolName === "write_to_file"
+				? "Do not repeat the same large write_to_file call. Continue with apply_patch or smaller edits so each tool call finishes within the provider response limit."
+				: "Retry the operation with a smaller tool call."
+
+		if (isNativeProtocol(protocol ?? TOOL_PROTOCOL.XML)) {
+			return JSON.stringify({
+				status: "error",
+				type: "incomplete_tool_call",
+				message,
+				...(path ? { path } : {}),
+				suggestion,
+			})
+		}
+		return `${message}\n${suggestion}`
+	},
+	// kilocode_change end
+
 	rooIgnoreError: (path: string, protocol?: ToolProtocol) => {
 		if (isNativeProtocol(protocol ?? TOOL_PROTOCOL.XML)) {
 			return JSON.stringify({

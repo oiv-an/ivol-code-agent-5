@@ -253,6 +253,27 @@ describe("NativeToolCallParser", () => {
 				}
 			})
 		})
+
+		// kilocode_change start
+		it("marks truncated write_to_file arguments as interrupted instead of executable", () => {
+			const id = "toolu_interrupted_write"
+			NativeToolCallParser.startStreamingToolCall(id, "write_to_file")
+			NativeToolCallParser.processStreamingChunk(id, '{"path":"CENTRAL_BACKUP_MASTER.md"')
+
+			const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+
+			expect(result).toMatchObject({
+				type: "tool_use",
+				name: "write_to_file",
+				params: { path: "CENTRAL_BACKUP_MASTER.md" },
+				partial: false,
+				nativeArgumentsIncomplete: true,
+			})
+			const nativeArgs =
+				result?.type === "tool_use" ? (result.nativeArgs as { content?: string } | undefined) : undefined
+			expect(nativeArgs?.content).toBeUndefined()
+		})
+		// kilocode_change end
 	})
 
 	// kilocode_change start

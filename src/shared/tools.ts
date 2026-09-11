@@ -152,6 +152,9 @@ export interface ToolUse<TName extends ToolName = ToolName> {
 	toolUseId?: string // kilocode_change
 	// nativeArgs is properly typed based on TName if it's in NativeToolArgs, otherwise never
 	nativeArgs?: TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
+	// kilocode_change: A streamed native call can end before its JSON arguments are complete.
+	// Such calls must be reported back to the model, never executed with partially parsed values.
+	nativeArgumentsIncomplete?: boolean
 	/**
 	 * Extra content from provider-specific extensions (e.g., Gemini 3 thought_signature).
 	 * Must be preserved and sent back in subsequent requests for multi-turn conversations.

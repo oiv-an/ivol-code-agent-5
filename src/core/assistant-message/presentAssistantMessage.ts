@@ -692,6 +692,19 @@ export async function presentAssistantMessage(cline: Task) {
 				// allow multiple tool calls in sequence (don't set didAlreadyUseTool)
 			}
 
+			// kilocode_change start: A malformed native argument stream is a provider
+			// interruption, not an executable tool call. Return one valid tool_result so
+			// conversation history stays valid, while leaving files and checkpoints untouched.
+			if (block.nativeArgumentsIncomplete) {
+				const interruptedPath = typeof block.params.path === "string" ? block.params.path : undefined
+				const errorMessage = t("common:interruption.incompleteToolCall", { toolName: block.name })
+				await cline.say("error", errorMessage)
+				cline.recordToolError(block.name as ToolName, "incomplete_native_arguments")
+				pushToolResult(formatResponse.interruptedToolCall(block.name, interruptedPath, toolProtocol))
+				break
+			}
+			// kilocode_change end
+
 			const askApproval = async (
 				type: ClineAsk,
 				partialMessage?: string,
