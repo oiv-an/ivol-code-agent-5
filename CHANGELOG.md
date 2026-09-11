@@ -1,5 +1,14 @@
 # IVOL Code Agent 5
 
+## 5.16.243
+
+### Patch Changes
+
+- Attach any file from the file system to the chat: drag and drop files straight into the input, or use the paperclip button to pick files anywhere on disk.
+- Accept every file type when dropping onto the chat input instead of ignoring everything that is not a PNG, JPEG or WebP image.
+- Resolve attachments that live outside the open project so their contents reach the model, including Windows drive paths.
+- Apply the same core and interface changes across the VS Code and PhpStorm packages.
+
 ## 5.16.242
 
 ### Patch Changes
