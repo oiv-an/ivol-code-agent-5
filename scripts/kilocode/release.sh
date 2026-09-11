@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Build and publish a release of IVOL Code Agent 5.
 #
-# One command produces every artifact of a version: the VS Code package goes to
-# the Visual Studio Marketplace, and all JetBrains builds are attached to a
-# GitHub release, which is where the maintainer points JetBrains users.
+# The VS Code package is the product: it always goes to the Visual Studio
+# Marketplace, to Open VSX and to a GitHub release. PhpStorm is built as well,
+# because the maintainer runs it locally.
+#
+# IntelliJ IDEA, IntelliJ IDEA 2025.3 and PyCharm are not built by default. They
+# cost roughly 2.2 GB and 40-50 minutes, so they are only produced on request,
+# with --full or by naming them in --only.
 #
 # The maintainer decides when a release happens. This script is never invoked by
 # a build, a hook or an agent on its own: it must be started by hand and it asks
@@ -13,9 +17,11 @@
 # Access Token. Global Azure DevOps PATs are retired on 2026-12-01.
 #
 # Usage:
-#   scripts/kilocode/release.sh 5.16.246                # build everything, then ask
+#   scripts/kilocode/release.sh 5.16.246                # VS Code and PhpStorm, then ask
+#   scripts/kilocode/release.sh 5.16.246 --full         # add IDEA, IDEA 2025.3 and PyCharm
 #   scripts/kilocode/release.sh 5.16.246 --dry-run      # build only, never publish
-#   scripts/kilocode/release.sh 5.16.246 --only phpstorm,idea
+#   scripts/kilocode/release.sh 5.16.246 --only idea    # build exactly the targets you name
+#   scripts/kilocode/release.sh 5.16.246 --only none    # VS Code alone
 #
 # Before the first run:
 #   brew install azure-cli openjdk@21
@@ -43,8 +49,13 @@ readonly JETBRAINS_TARGETS=(
 	"pycharm|-PplatformType=PY|$JDK21|-pycharm|PyCharm 2025.1"
 )
 
+# PhpStorm is the only JetBrains IDE the maintainer actually runs, so it is the
+# only one built unless a wider set is requested.
+readonly DEFAULT_JETBRAINS_TARGETS="phpstorm"
+
 VERSION=""
 DRY_RUN=false
+BUILD_EVERY_TARGET=false
 SELECTED_TARGETS=""
 BUILT_ARCHIVES=()
 
@@ -53,7 +64,7 @@ warn() { printf '\033[33mWARNING: %s\033[0m\n' "$*" >&2; }
 fail() { printf '\n\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 usage() {
-	sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+	sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 	exit 1
 }
 
@@ -61,6 +72,7 @@ parse_arguments() {
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--dry-run) DRY_RUN=true ;;
+			--full) BUILD_EVERY_TARGET=true ;;
 			--only)
 				shift
 				[ $# -gt 0 ] || fail "--only needs a comma separated list of targets"
@@ -80,11 +92,18 @@ parse_arguments() {
 	[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version must look like 5.16.246, got: $VERSION"
 
 	if [ -n "$SELECTED_TARGETS" ]; then
+		[ "$BUILD_EVERY_TARGET" = true ] && fail "--full and --only contradict each other. Use one of them."
+
 		local requested
 		for requested in ${SELECTED_TARGETS//,/ }; do
 			[ "$requested" = "none" ] && continue
 			is_known_target "$requested" || fail "Unknown target '$requested'. Known: $(known_target_names)"
 		done
+	elif [ "$BUILD_EVERY_TARGET" = true ]; then
+		SELECTED_TARGETS="$(known_target_names | tr -d ' ')"
+	else
+		# The expensive IDEs stay out of an ordinary release.
+		SELECTED_TARGETS="$DEFAULT_JETBRAINS_TARGETS"
 	fi
 }
 
@@ -103,7 +122,6 @@ is_known_target() {
 }
 
 target_is_selected() {
-	[ -z "$SELECTED_TARGETS" ] && return 0
 	local requested
 	for requested in ${SELECTED_TARGETS//,/ }; do
 		[ "$requested" = "$1" ] && return 0
@@ -135,7 +153,7 @@ check_environment() {
 		[ -d "$jdk" ] || fail "Target '$name' needs a JDK at $jdk. Install it with: brew install openjdk@21"
 	done
 
-	if [ -z "$SELECTED_TARGETS" ] || [ "$SELECTED_TARGETS" != "none" ]; then
+	if [ "$SELECTED_TARGETS" != "none" ]; then
 		[ -f "$PLATFORM_ZIP" ] ||
 			fail "Missing $PLATFORM_ZIP. Regenerate it with: cd jetbrains/plugin && ./gradlew genPlatform"
 	fi
@@ -233,6 +251,8 @@ build_jetbrains_target() {
 }
 
 build_jetbrains() {
+	report_skipped_targets
+
 	[ "$SELECTED_TARGETS" = "none" ] && return 0
 
 	local built_any=false entry name flags jdk suffix title
@@ -242,6 +262,21 @@ build_jetbrains() {
 		[ "$built_any" = false ] && refresh_jetbrains_resources && built_any=true
 		build_jetbrains_target "$flags" "$jdk" "$suffix" "$title"
 	done
+}
+
+# A skipped IDE means its archive is missing from the GitHub release, so say so
+# before anything is published rather than leaving it to be discovered later.
+report_skipped_targets() {
+	local entry name title skipped=()
+	for entry in "${JETBRAINS_TARGETS[@]}"; do
+		IFS='|' read -r name _ _ _ title <<<"$entry"
+		target_is_selected "$name" || skipped+=("$title")
+	done
+
+	[ ${#skipped[@]} -eq 0 ] && return 0
+	log "Skipping ${#skipped[@]} JetBrains target(s)"
+	printf '  %s\n' "${skipped[@]}"
+	echo "Add them with --full, or name them with --only."
 }
 
 confirm_publication() {
