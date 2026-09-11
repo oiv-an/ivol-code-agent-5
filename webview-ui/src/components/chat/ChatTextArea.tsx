@@ -1273,6 +1273,58 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			[updateCursorPosition],
 		)
 
+		// kilocode_change start: attach ANY file from the file system
+		/**
+		 * Inserts absolute/relative file system paths at the caret as `@` mentions so
+		 * the model receives (and can read) the attached files.
+		 */
+		const insertFileMentions = useCallback(
+			(paths: string[]) => {
+				const validPaths = paths.filter((p) => typeof p === "string" && p.trim() !== "")
+
+				if (validPaths.length === 0) {
+					return
+				}
+
+				let newValue = inputValue.slice(0, cursorPosition)
+				let totalLength = 0
+
+				if (newValue.length > 0 && !newValue.endsWith(" ") && !newValue.endsWith("\n")) {
+					newValue += " "
+					totalLength += 1
+				}
+
+				for (let i = 0; i < validPaths.length; i++) {
+					const mentionText = convertToMentionPath(validPaths[i], cwd, true)
+					newValue += mentionText
+					totalLength += mentionText.length
+
+					if (i < validPaths.length - 1) {
+						newValue += " "
+						totalLength += 1
+					}
+				}
+
+				newValue += " " + inputValue.slice(cursorPosition)
+				totalLength += 1
+
+				setInputValue(newValue)
+				const newCursorPosition = cursorPosition + totalLength
+				setCursorPosition(newCursorPosition)
+				setIntendedCursorPosition(newCursorPosition)
+			},
+			[cursorPosition, cwd, inputValue, setInputValue, setCursorPosition, setIntendedCursorPosition],
+		)
+
+		const fileAttachRequestIdRef = useRef<string | null>(null)
+
+		const handleSelectAnyFiles = useCallback(() => {
+			const requestId = `attach-${Date.now()}-${Math.random().toString(36).slice(2)}`
+			fileAttachRequestIdRef.current = requestId
+			vscode.postMessage({ type: "selectFiles", requestId })
+		}, [])
+		// kilocode_change end
+
 		const handleDrop = useCallback(
 			async (e: React.DragEvent<HTMLDivElement>) => {
 				e.preventDefault()
@@ -1295,7 +1347,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						for (let i = 0; i < lines.length; i++) {
 							const line = lines[i]
 							// Convert each path to a mention-friendly format
-							const mentionText = convertToMentionPath(line, cwd)
+							const mentionText = convertToMentionPath(line, cwd, true) // kilocode_change: allow paths outside the workspace
 							newValue += mentionText
 							totalLength += mentionText.length
 
@@ -1328,6 +1380,55 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						const [type, subtype] = file.type.split("/")
 						return type === "image" && acceptedTypes.includes(subtype)
 					})
+
+					// kilocode_change start: attach ANY dropped file, not only images
+					const otherFiles = files.filter((file) => !imageFiles.includes(file))
+
+					if (otherFiles.length > 0) {
+						// Some hosts expose the real path on the File object; prefer it so we
+						// reference the original file instead of a temporary copy.
+						const directPaths = otherFiles
+							.map((file) => (file as File & { path?: string }).path)
+							.filter((p): p is string => typeof p === "string" && p.length > 0)
+
+						if (directPaths.length === otherFiles.length) {
+							insertFileMentions(directPaths)
+						} else {
+							const payloads = await Promise.all(
+								otherFiles.map(
+									(file) =>
+										new Promise<{ name: string; data: string } | null>((resolve) => {
+											const reader = new FileReader()
+
+											reader.onloadend = () => {
+												if (reader.error || typeof reader.result !== "string") {
+													console.error(t("chat:errorReadingFile"), reader.error)
+													resolve(null)
+													return
+												}
+
+												// result is a data URL: "data:<mime>;base64,<payload>"
+												const base64 = reader.result.split(",")[1] ?? ""
+												resolve({ name: file.name, data: base64 })
+											}
+
+											reader.readAsDataURL(file)
+										}),
+								),
+							)
+
+							const droppedFiles = payloads.filter(
+								(payload): payload is { name: string; data: string } => payload !== null,
+							)
+
+							if (droppedFiles.length > 0 && typeof vscode !== "undefined") {
+								const requestId = `drop-${Date.now()}-${Math.random().toString(36).slice(2)}`
+								fileAttachRequestIdRef.current = requestId
+								vscode.postMessage({ type: "saveDroppedFiles", droppedFiles, requestId })
+							}
+						}
+					}
+					// kilocode_change end
 
 					// kilocode_change start: Image validation with warning messages for drag and drop
 					if (imageFiles.length > 0) {
@@ -1388,6 +1489,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				t,
 				selectedImages.length, // kilocode_change - added selectedImages.length
 				showImageWarning, // kilocode_change - added showImageWarning
+				insertFileMentions, // kilocode_change - attach any file
 			],
 		)
 
@@ -1400,6 +1502,16 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				setIsTtsPlaying(true)
 			} else if (message.type === "ttsStop") {
 				setIsTtsPlaying(false)
+				// kilocode_change start: attach any file from the file system
+			} else if (message.type === "selectedFiles") {
+				if (message.requestId && message.requestId !== fileAttachRequestIdRef.current) {
+					return
+				}
+
+				fileAttachRequestIdRef.current = null
+				insertFileMentions(message.filePaths ?? [])
+				textAreaRef.current?.focus()
+				// kilocode_change end
 			}
 		})
 
@@ -1730,21 +1842,17 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					{/* kilocode_change start */}
 					{!isEditMode && <IndexingStatusBadge className={cn({ hidden: containerWidth < 235 })} />}
 
-					<StandardTooltip content="Add Context (@)">
+					<StandardTooltip content="Attach any file from disk">
 						<button
-							aria-label="Add Context (@)"
+							aria-label="Attach any file from disk"
 							disabled={showContextMenu}
 							onClick={() => {
 								if (showContextMenu || !textAreaRef.current) return
 
 								textAreaRef.current.focus()
 
-								setInputValue(`${inputValue} @`)
-								setShowContextMenu(true)
-								// Empty search query explicitly to show all options
-								// and set to "File" option by default
-								setSearchQuery("")
-								setSelectedMenuIndex(4)
+								// kilocode_change: open a native picker for ANY file instead of the @ menu
+								handleSelectAnyFiles()
 							}}
 							className={cn(
 								"relative inline-flex items-center justify-center",

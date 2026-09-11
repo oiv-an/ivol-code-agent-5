@@ -187,6 +187,7 @@ export interface ExtensionMessage {
 		| "action"
 		| "state"
 		| "selectedImages"
+		| "selectedFiles" // kilocode_change: attach any file from the file system
 		| "theme"
 		| "workspaceUpdated"
 		| "invoke"
@@ -817,6 +818,10 @@ export interface WebviewMessage {
 		| "clearTask"
 		| "didShowAnnouncement"
 		| "selectImages"
+		// kilocode_change start: attach any file from the file system
+		| "selectFiles"
+		| "saveDroppedFiles"
+		// kilocode_change end
 		| "exportCurrentTask"
 		| "shareCurrentTask"
 		| "showTaskWithId"
@@ -1122,6 +1127,9 @@ export interface WebviewMessage {
 	promptMode?: string | "enhance"
 	customPrompt?: PromptComponent
 	dataUrls?: string[]
+	// kilocode_change start: payload for "saveDroppedFiles" (base64 contents of dropped files)
+	droppedFiles?: Array<{ name: string; data: string }>
+	// kilocode_change end
 	/** Generic payload for webview messages that use `values` */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	values?: Record<string, any>

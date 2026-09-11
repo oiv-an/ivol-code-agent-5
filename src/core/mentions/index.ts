@@ -49,6 +49,42 @@ function getUrlErrorMessage(error: unknown): string {
 	return t("common:errors.url_fetch_failed", { error: errorMessage })
 }
 
+// kilocode_change start: support mentions that point outside the workspace
+/**
+ * Mentions are written as `@/some/path`. Historically the path was always
+ * interpreted as relative to the workspace, which silently broke attachments
+ * coming from anywhere else on disk. We now prefer the workspace-relative
+ * resolution (backwards compatible) and fall back to treating the mention as an
+ * absolute file system path when that file actually exists.
+ */
+async function resolveMentionAbsolutePath(mentionPath: string, cwd: string): Promise<string> {
+	const unescapedPath = unescapeSpaces(mentionPath)
+	const workspacePath = path.resolve(cwd, unescapedPath)
+
+	try {
+		await fs.stat(workspacePath)
+		return workspacePath
+	} catch {
+		// Not inside the workspace - fall through to the absolute interpretation
+	}
+
+	// The mention lost its leading slash ("@/Users/x" -> "Users/x"); Windows
+	// drive paths arrive as "C:/foo" and are already absolute.
+	const candidate = path.isAbsolute(unescapedPath) ? unescapedPath : "/" + unescapedPath
+
+	if (path.isAbsolute(candidate)) {
+		try {
+			await fs.stat(candidate)
+			return candidate
+		} catch {
+			// Neither location exists - report the original workspace path
+		}
+	}
+
+	return workspacePath
+}
+// kilocode_change end
+
 export async function openMention(cwd: string, mention?: string): Promise<void> {
 	if (!mention) {
 		return
@@ -56,8 +92,7 @@ export async function openMention(cwd: string, mention?: string): Promise<void> 
 
 	if (mention.startsWith("/")) {
 		// Slice off the leading slash and unescape any spaces in the path
-		const relPath = unescapeSpaces(mention.slice(1))
-		const absPath = path.resolve(cwd, relPath)
+		const absPath = await resolveMentionAbsolutePath(mention.slice(1), cwd) // kilocode_change
 		if (mention.endsWith("/")) {
 			vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(absPath))
 		} else {
@@ -279,7 +314,7 @@ async function getFileOrFolderContent(
 	maxReadFileLine?: number,
 ): Promise<string> {
 	const unescapedPath = unescapeSpaces(mentionPath)
-	const absPath = path.resolve(cwd, unescapedPath)
+	const absPath = await resolveMentionAbsolutePath(mentionPath, cwd) // kilocode_change: support paths outside the workspace
 
 	try {
 		const stats = await fs.stat(absPath)

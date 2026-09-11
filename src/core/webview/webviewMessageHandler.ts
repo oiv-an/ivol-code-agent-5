@@ -61,6 +61,7 @@ import { Terminal } from "../../integrations/terminal/Terminal"
 import { openFile } from "../../integrations/misc/open-file"
 import { openImage, saveImage } from "../../integrations/misc/image-handler"
 import { selectImages } from "../../integrations/misc/process-images"
+import { selectAnyFiles, saveDroppedFiles } from "../../integrations/misc/process-files" // kilocode_change
 import { getTheme } from "../../integrations/theme/getTheme"
 import { discoverChromeHostUrl, tryChromeHostUrl } from "../../services/browser/browserDiscovery"
 import { searchWorkspaceFiles } from "../../services/search/file-search"
@@ -786,6 +787,35 @@ export const webviewMessageHandler = async (
 				messageTs: message.messageTs,
 			})
 			break
+		// kilocode_change start: attach any file from the file system
+		case "selectFiles": {
+			const filePaths = await selectAnyFiles()
+			await provider.postMessageToWebview({
+				type: "selectedFiles",
+				filePaths,
+				context: message.context,
+				messageTs: message.messageTs,
+				requestId: message.requestId,
+			})
+			break
+		}
+		case "saveDroppedFiles": {
+			let filePaths: string[] = []
+			try {
+				filePaths = await saveDroppedFiles(message.droppedFiles ?? [])
+			} catch (error) {
+				provider.log(`Failed to save dropped files: ${error instanceof Error ? error.message : String(error)}`)
+			}
+			await provider.postMessageToWebview({
+				type: "selectedFiles",
+				filePaths,
+				context: message.context,
+				messageTs: message.messageTs,
+				requestId: message.requestId,
+			})
+			break
+		}
+		// kilocode_change end
 		case "exportCurrentTask":
 			const currentTaskId = provider.getCurrentTask()?.taskId
 			if (currentTaskId) {

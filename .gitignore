@@ -84,3 +84,9 @@ plugin-builds/
 
 # Local Kotlin compiler session markers are build state, not release sources.
 jetbrains/plugin/.kotlin/
+
+# Local History extension data
+.lh/
+
+# Scratch state for the AI agent working on the current task
+CURRENT_TASK.md

@@ -20,9 +20,11 @@ export function escapeSpaces(path: string): string {
  *
  * @param path The path to convert
  * @param cwd The current working directory
+ * @param allowOutsideWorkspace kilocode_change: when true, absolute paths outside
+ *        the workspace are also turned into `@` mentions instead of plain text
  * @returns A mention-friendly path
  */
-export function convertToMentionPath(path: string, cwd?: string): string {
+export function convertToMentionPath(path: string, cwd?: string, allowOutsideWorkspace = false): string {
 	// Strip file:// or vscode-remote:// protocol if present
 	let pathWithoutProtocol = path
 
@@ -52,7 +54,22 @@ export function convertToMentionPath(path: string, cwd?: string): string {
 	const normalizedPath = pathWithoutProtocol.replace(/\\/g, "/")
 	let normalizedCwd = cwd ? cwd.replace(/\\/g, "/") : ""
 
+	// kilocode_change start: allow mentioning absolute paths outside the workspace
+	const isAbsolute = normalizedPath.startsWith("/") || /^[a-zA-Z]:\//.test(normalizedPath)
+
+	const toOutsideMention = (): string => {
+		// Windows drive paths (C:/foo) need a leading slash so the mention regex matches
+		const withLeadingSlash = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`
+		return "@" + escapeSpaces(withLeadingSlash)
+	}
+	// kilocode_change end
+
 	if (!normalizedCwd) {
+		// kilocode_change start
+		if (allowOutsideWorkspace && isAbsolute) {
+			return toOutsideMention()
+		}
+		// kilocode_change end
 		return pathWithoutProtocol
 	}
 
@@ -75,6 +92,12 @@ export function convertToMentionPath(path: string, cwd?: string): string {
 
 		return "@" + escapedRelativePath
 	}
+
+	// kilocode_change start: outside-workspace absolute paths become mentions too
+	if (allowOutsideWorkspace && isAbsolute) {
+		return toOutsideMention()
+	}
+	// kilocode_change end
 
 	return pathWithoutProtocol
 }
