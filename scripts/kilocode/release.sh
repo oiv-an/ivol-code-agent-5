@@ -49,6 +49,7 @@ SELECTED_TARGETS=""
 BUILT_ARCHIVES=()
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[33mWARNING: %s\033[0m\n' "$*" >&2; }
 fail() { printf '\n\033[31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 usage() {
@@ -268,6 +269,25 @@ publish_marketplace() {
 	(cd "$REPO_ROOT/src" && npx vsce publish --azure-credential --packagePath "$VSIX_PATH")
 }
 
+# Open VSX is a secondary registry: a failure here must never abandon a release
+# that already reached the Marketplace and GitHub, so it only warns.
+publish_open_vsx() {
+	local token="${OVSX_PAT:-${OVSX_TOKEN:-}}"
+
+	if [ -z "$token" ]; then
+		warn "Skipping Open VSX: neither OVSX_PAT nor OVSX_TOKEN is set."
+		return 0
+	fi
+
+	log "Publishing to Open VSX"
+	if (cd "$REPO_ROOT/src" && npx ovsx publish "$VSIX_PATH" -p "$token"); then
+		echo "Open VSX: published $VERSION"
+	else
+		warn "Open VSX publishing failed. The Marketplace and GitHub releases are unaffected."
+		warn "Retry later with: npx ovsx publish \"$VSIX_PATH\" -p \"\$OVSX_PAT\""
+	fi
+}
+
 # "owner/name", which every gh command understands. A remote URL only works for
 # creating a release; gh release view rejects it with "release not found".
 github_repository() {
@@ -315,6 +335,7 @@ main() {
 	confirm_publication
 	publish_marketplace
 	publish_github_release
+	publish_open_vsx
 
 	log "Published $VERSION"
 	echo "Marketplace: https://marketplace.visualstudio.com/items?itemName=$PUBLISHER.ivol-code-agent-5"
