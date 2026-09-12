@@ -171,7 +171,7 @@ describe("ordinary context preparation", () => {
 		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
 		preparation.settle(configuration)
 		expect(preparation.phase).toBe("ready")
-		preparation.settle({})
+		preparation.settle({ apiModelId: "different-model" })
 		expect(preparation.phase).toBe("waiting")
 		expect(preparation.continuedWithoutUpdate).toBe(false)
 	})
@@ -179,7 +179,51 @@ describe("ordinary context preparation", () => {
 	it("rejects a profile switch even when the old model wrote the file", () => {
 		const preparation = new OrdinaryContextPreparation("manual", {})
 		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
-		preparation.settle({})
+		preparation.settle({ apiModelId: "different-model" })
 		expect(preparation.phase).toBe("waiting")
+	})
+
+	it("accepts refreshed equivalent settings at real task boundaries", async () => {
+		const { task, boundary, write } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		Object.assign(task, { apiConfiguration: { intelligentTaskEnabled: true } })
+		await boundary(false)
+		write()
+		Object.assign(task, { apiConfiguration: { intelligentTaskEnabled: true } })
+		await boundary()
+		expect(task.ask).not.toHaveBeenCalled()
+		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+
+	it("detects in-place mutations of nested provider settings", () => {
+		const configuration = { headers: { tier: "standard" } }
+		const preparation = new OrdinaryContextPreparation("manual", configuration)
+		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
+		configuration.headers.tier = "priority"
+		preparation.settle(configuration)
+		expect(preparation.phase).toBe("waiting")
+	})
+
+	it.each(["Retry update", "Continue without updating"])("resolves %s after a real settings change", async (text) => {
+		const { task, boundary, write } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		await boundary(false)
+		Object.assign(task, {
+			apiConfiguration: { intelligentTaskEnabled: true, apiModelId: "changed" },
+			ask: vi.fn(async () => ({ text })),
+		})
+		await boundary()
+		expect(task.ask).toHaveBeenCalledOnce()
+		expect(task.ask).toHaveBeenCalledWith(
+			"followup",
+			expect.stringContaining('"contextPreparationDecision":true'),
+			false,
+		)
+		if (text === "Retry update") {
+			expect(summarizeConversation).not.toHaveBeenCalled()
+			write()
+			await boundary()
+		}
+		expect(summarizeConversation).toHaveBeenCalledOnce()
 	})
 })

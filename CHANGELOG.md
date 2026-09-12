@@ -1,5 +1,12 @@
 # IVOL Code Agent 5
 
+## 5.16.259
+
+### Patch Changes
+
+- Fix context preparation getting stuck after unchanged provider settings refresh, and make retry or continue choices respond immediately.
+- Fix freezing the last chat response and keep related visible message marks synchronized without selecting unrelated context.
+
 ## 5.16.258
 
 ### Patch Changes

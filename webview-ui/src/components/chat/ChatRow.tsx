@@ -473,7 +473,7 @@ export const ChatRowContent = ({
 
 	const followUpData = useMemo(() => {
 		if (message.type === "ask" && message.ask === "followup" && !message.partial) {
-			return safeJsonParse<FollowUpData>(message.text)
+			return safeJsonParse<FollowUpData & { contextPreparationDecision?: boolean }>(message.text) // kilocode_change
 		}
 		return null
 	}, [message.type, message.ask, message.partial, message.text])
@@ -1899,7 +1899,10 @@ export const ChatRowContent = ({
 									ts={message?.ts}
 									onCancelAutoApproval={onFollowUpUnmount}
 									isAnswered={isFollowUpAnswered}
-									isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
+									isFollowUpAutoApprovalPaused={
+										isFollowUpAutoApprovalPaused ||
+										followUpData?.contextPreparationDecision === true
+									} // kilocode_change: never auto-select a preparation decision
 								/>
 							</div>
 						</>

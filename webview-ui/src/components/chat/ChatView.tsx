@@ -15,6 +15,7 @@ import { appendImages } from "@src/utils/imageUtils"
 import type { ClineAsk, ClineSayTool, ClineMessage, ExtensionMessage, AudioType } from "@roo-code/types"
 
 import { findLast } from "@roo/array"
+import { safeJsonParse } from "@roo/core" // kilocode_change
 import { SuggestionItem } from "@roo-code/types"
 import { combineApiRequests } from "@roo/combineApiRequests"
 import { combineCommandSequences } from "@roo/combineCommandSequences"
@@ -663,6 +664,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// depend on the button-state effect having run yet, so a restored task can
 		// never briefly turn its Resume action into a false Cancel action.
 		const latestMessage = messages.at(-1)
+		// kilocode_change: preparation decisions wait inside an unfinished API request.
+		if (
+			latestMessage?.ask === "followup" &&
+			latestMessage.partial !== true &&
+			safeJsonParse<{ contextPreparationDecision?: boolean }>(latestMessage.text)?.contextPreparationDecision ===
+				true
+		)
+			return false
 		if (
 			latestMessage?.type === "ask" &&
 			(latestMessage.ask === "resume_task" ||
@@ -756,6 +765,22 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			text = text.trim()
 
 			if (text || images.length > 0) {
+				// kilocode_change start: an explicit preparation decision must bypass the queue,
+				// including previously queued messages, which cannot authorize compression.
+				const latest = messagesRef.current.at(-1)
+				if (
+					latest?.ask === "followup" &&
+					latest.partial !== true &&
+					!latest.isAnswered &&
+					safeJsonParse<{ contextPreparationDecision?: boolean }>(latest.text)?.contextPreparationDecision ===
+						true
+				) {
+					userRespondedRef.current = true
+					vscode.postMessage({ type: "askResponse", askResponse: "messageResponse", text, images })
+					handleChatReset()
+					return
+				}
+				// kilocode_change end
 				// Queue message if:
 				// - Task is busy (sendingDisabled)
 				// - API request in progress (isStreaming)

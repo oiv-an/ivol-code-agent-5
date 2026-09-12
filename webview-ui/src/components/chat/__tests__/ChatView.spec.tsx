@@ -1219,6 +1219,51 @@ describe.skip("ChatView - Message Queueing Tests", () => {
 		expect(input.getAttribute("data-sending-disabled")).toBe("false")
 	})
 
+	// kilocode_change start
+	it.each(["Retry update", "Continue without updating"])(
+		"sends preparation decision %s directly despite a busy request and queue",
+		async (answer) => {
+			const { getByTestId } = renderChatView()
+			mockPostMessage({
+				messageQueue: [{ id: "queued", text: "Unrelated queued work", images: [], timestamp: 1 }],
+				clineMessages: [
+					{ type: "say", say: "task", ts: 1, text: "Initial task" },
+					{ type: "say", say: "api_req_started", ts: 2, text: JSON.stringify({ apiProtocol: "anthropic" }) },
+					{
+						type: "ask",
+						ask: "followup",
+						ts: 3,
+						partial: false,
+						text: JSON.stringify({
+							contextPreparationDecision: true,
+							question: "Preparation failed",
+							suggest: [{ answer }],
+						}),
+					},
+				],
+			})
+			await waitFor(() =>
+				expect(getByTestId("chat-textarea").querySelector("input")!.getAttribute("data-sending-disabled")).toBe(
+					"false",
+				),
+			)
+			vi.mocked(vscode.postMessage).mockClear()
+			await act(async () => {
+				const input = getByTestId("chat-textarea").querySelector("input")!
+				fireEvent.change(input, { target: { value: answer } })
+				fireEvent.keyDown(input, { key: "Enter", code: "Enter" })
+			})
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "askResponse",
+				askResponse: "messageResponse",
+				text: answer,
+				images: [],
+			})
+			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "queueMessage" }))
+		},
+	)
+	// kilocode_change end
+
 	it("queues messages when API request is in progress (spinner visible)", async () => {
 		const { getByTestId } = renderChatView()
 

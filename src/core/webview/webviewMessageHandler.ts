@@ -2441,6 +2441,9 @@ export const webviewMessageHandler = async (
 				await currentTask.setMessagePinned(message.messageTs, message.pinned === true, "user")
 				await provider.postStateToWebview()
 			} catch (error) {
+				await vscode.window.showErrorMessage(
+					`Could not change message freezing: ${error instanceof Error ? error.message : String(error)}`,
+				)
 				provider.log(
 					`Failed to toggle the keep mark for message ${message.messageTs}: ${
 						error instanceof Error ? error.message : String(error)

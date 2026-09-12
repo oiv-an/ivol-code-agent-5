@@ -164,6 +164,7 @@ import {
 } from "../condense"
 // kilocode_change start: explicit keep marks that survive context compaction
 import { type PinChange, type PinnedBy, pinMessages, unpinMessages } from "../kilocode/context-pinning"
+import { findChatMessageTarget } from "../kilocode/context-pinning/chat-message-target" // kilocode_change
 // kilocode_change end
 import { MessageQueueService } from "../message-queue/MessageQueueService"
 
@@ -1402,33 +1403,43 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		by: PinnedBy,
 		note?: string,
 	): Promise<PinChange | undefined> {
-		// The chat row and its API message do not share a timestamp: the row is written when the
-		// turn starts, the API message when it is complete. So the row claims the earliest API
-		// message at or after it - the same rule the rewind code uses to line the two histories up.
-		const byExactTs = this.apiConversationHistory.find((message) => message.ts === messageTs)
-
-		const byNearestTs = byExactTs
-			? undefined
-			: this.apiConversationHistory
-					.filter((message) => typeof message.ts === "number" && message.ts >= messageTs)
-					.sort((a, b) => (a.ts as number) - (b.ts as number))[0]
-
-		const apiTs = byExactTs?.ts ?? byNearestTs?.ts ?? messageTs
+		const row = this.clineMessages.find((message) => message.ts === messageTs)
+		if (!row) throw new Error("The chat message is no longer available")
+		let target = findChatMessageTarget(row, this.clineMessages, this.apiConversationHistory)
+		// Presentation can finish just before the ordinary loop saves the assistant response.
+		// Wait for that save, but never manufacture an API message or attach to another turn.
+		if (!target && (this.isStreaming || this.isWaitingForFirstChunk)) {
+			await pWaitFor(
+				() => {
+					target = findChatMessageTarget(row, this.clineMessages, this.apiConversationHistory)
+					return !!target || this.abort
+				},
+				{ interval: 50, timeout: 5000 },
+			).catch((error) => {
+				console.warn("Waiting for the message to be saved before freezing:", error)
+			})
+		}
+		if (target?.ts === undefined) {
+			throw new Error(
+				"This message cannot be matched to saved context yet. Wait for the response to finish and retry freezing.",
+			)
+		}
+		const apiTs = target.ts
 
 		const apiResult = pinned
 			? pinMessages(this.apiConversationHistory, [{ ts: apiTs, ...(note ? { note } : {}) }], by)
 			: unpinMessages(this.apiConversationHistory, [apiTs])
 
-		const change = apiResult.changes[0]
-		if (!change) {
-			return undefined
-		}
+		// Several visible text rows can belong to one API response. Reflect the existing
+		// mark instead of silently ignoring an already-pinned target.
+		const change = apiResult.changes[0] ?? { ts: apiTs, restored: false, restoredPartners: [] }
 
 		await this.overwriteApiConversationHistory(apiResult.messages)
 
 		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === apiTs)
 		const updatedChatMessages = this.clineMessages.map((message) =>
-			message.ts === messageTs
+			message.ts === messageTs ||
+			findChatMessageTarget(message, this.clineMessages, this.apiConversationHistory)?.ts === apiTs
 				? pinned
 					? {
 							...message,
@@ -2150,7 +2161,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 		if (
 			!preparation.continuedWithoutUpdate &&
-			(preparation.configuration !== this.apiConfiguration || this.getContextMemoryMode() !== "task")
+			(!preparation.matchesConfiguration(this.apiConfiguration) || this.getContextMemoryMode() !== "task")
 		) {
 			preparation.fail("Provider settings changed during context preparation")
 		}
@@ -2165,6 +2176,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const { text } = await this.ask(
 						"followup",
 						JSON.stringify({
+							contextPreparationDecision: true,
 							question: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose Retry update or Continue without updating.`,
 							suggest: [{ answer: "Retry update" }, { answer: "Continue without updating" }],
 						}),
