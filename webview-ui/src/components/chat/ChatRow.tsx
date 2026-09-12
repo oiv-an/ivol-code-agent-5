@@ -81,6 +81,7 @@ import { LowCreditWarning } from "../kilocode/chat/LowCreditWarning"
 import { NewTaskPreview } from "../kilocode/chat/NewTaskPreview"
 import { KiloChatRowGutterBar } from "../kilocode/chat/KiloChatRowGutterBar"
 import { PinMessageButton } from "./kilocode/PinMessageButton" // kilocode_change
+import { canFreezeMessage } from "./kilocode/canFreezeMessage" // kilocode_change
 import { StandardTooltip } from "../ui"
 import { FastApplyChatDisplay } from "./kilocode/FastApplyChatDisplay"
 import { InvalidModelWarning } from "../kilocode/chat/InvalidModelWarning"
@@ -156,10 +157,9 @@ const ChatRow = memo(
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
 
-		// kilocode_change start: only a row that maps to a real API message can be frozen - it is the
-		// number that ties the two together. Rows without one (a streaming message, or a purely local
-		// row like the API request status) are not part of what the model receives.
-		const canFreeze = !message.partial && typeof message.ts === "number" && typeof message.seq === "number"
+		// kilocode_change start: freezing is offered on written answers only - what the model wrote
+		// and what the user typed - and only when they are long enough to be worth keeping.
+		const canFreeze = canFreezeMessage(message)
 		// kilocode_change end
 
 		const [chatrow, { height }] = useSize(

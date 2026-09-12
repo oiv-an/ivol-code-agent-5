@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.251
+
+### Patch Changes
+
+- Bring back the freeze button, now offered on written answers only: what the model wrote and what you typed, once they run past a few words.
+
 ## 5.16.250
 
 ### Patch Changes
