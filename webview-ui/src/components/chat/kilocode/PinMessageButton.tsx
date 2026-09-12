@@ -53,7 +53,8 @@ export const PinMessageButton = ({ message, number, className }: PinMessageButto
 				<StandardTooltip content={t("chat:contextPinning.messageNumber", { number: seq })}>
 					<span
 						data-testid="message-number"
-						className="text-xs text-vscode-descriptionForeground opacity-60 select-all">
+						// kilocode_change: readable at rest - this number is what gets quoted
+						className="text-xs text-vscode-descriptionForeground select-all">
 						#{seq}
 					</span>
 				</StandardTooltip>
@@ -67,7 +68,8 @@ export const PinMessageButton = ({ message, number, className }: PinMessageButto
 					className={cn(
 						"flex items-center justify-center bg-transparent border-none p-1 cursor-pointer rounded",
 						"hover:bg-vscode-toolbar-hoverBackground",
-						isPinned ? "text-vscode-textLink-foreground" : "text-vscode-descriptionForeground opacity-60",
+						// kilocode_change: visible at rest, standing out once the message is frozen
+						isPinned ? "text-vscode-textLink-foreground" : "text-vscode-descriptionForeground",
 					)}>
 					{isPinned ? <Pin size={13} /> : <PinOff size={13} />}
 				</button>

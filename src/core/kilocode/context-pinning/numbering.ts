@@ -60,6 +60,41 @@ export function getMessageNumber(message: ApiMessage): number | undefined {
 }
 
 /**
+ * Numbers the messages by their position in the history, counting from one.
+ *
+ * Stored numbers are preferred wherever they exist, but a conversation started before numbering
+ * existed has none at all, and writing them into an old history after the fact would renumber
+ * messages the user may already have quoted. Counting positions instead gives every message a
+ * number straight away, and it is the same count the chat performs, so both sides agree.
+ *
+ * Hidden messages are counted too: condensing and truncation are reversible, and a number that
+ * shifted whenever something was folded away could not be quoted.
+ */
+export function numberByPosition(messages: ApiMessage[]): Map<ApiMessage, number> {
+	const numbers = new Map<ApiMessage, number>()
+
+	messages.forEach((message, index) => {
+		numbers.set(message, typeof message.seq === "number" ? message.seq : index + 1)
+	})
+
+	return numbers
+}
+
+/**
+ * Finds the message a quoted number refers to, whether or not the history carries stored numbers.
+ *
+ * A stored number wins when one exists; otherwise the number is read as a position. Returns
+ * undefined when nothing matches, so the caller can tell the model rather than fail silently.
+ */
+export function findMessageByNumber(messages: ApiMessage[], number: number): ApiMessage | undefined {
+	const stored = messages.find((message) => message.seq === number)
+	if (stored) return stored
+
+	// Positions are one-based: "#1" is the opening message.
+	return number >= 1 && number <= messages.length ? messages[number - 1] : undefined
+}
+
+/**
  * Prepends `[#N]` to the text the model receives.
  *
  * Applied while building the outgoing request only - the stored history keeps clean text, so the
@@ -161,7 +196,9 @@ export function resolveSeqNumbers(
 	const missing: number[] = []
 
 	for (const seq of seqNumbers) {
-		const message = findMessageBySeq(messages, seq)
+		// kilocode_change: falls back to the position, so quoting a number works on conversations
+		// that were started before numbering existed and therefore carry no stored numbers.
+		const message = findMessageByNumber(messages, seq)
 		if (message && typeof message.ts === "number") {
 			found.push({ seq, ts: message.ts })
 		} else {

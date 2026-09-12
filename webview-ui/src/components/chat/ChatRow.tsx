@@ -184,12 +184,9 @@ const ChatRow = memo(
 					<PinMessageButton
 						message={message}
 						number={freezeNumber}
-						className={cn(
-							"absolute top-1 right-1 z-10",
-							message.pinned
-								? "opacity-100"
-								: "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
-						)}
+						// kilocode_change: always visible - the number has to be readable without
+						// hunting for it, so it can be quoted when asking for a message to be frozen
+						className="absolute top-1 right-1 z-10"
 					/>
 				)}
 				{/* kilocode_change end */}

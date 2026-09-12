@@ -159,6 +159,7 @@ import {
 // kilocode_change: stable numbers make a message addressable ("freeze #42").
 import {
 	applyNumberPrefixToContent,
+	numberByPosition,
 	assignNumbersToChatMessages,
 	ensureSequenceNumbers,
 	getMessageNumber,
@@ -6336,7 +6337,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		const cleanConversationHistory: (Anthropic.Messages.MessageParam | ReasoningItemForRequest)[] = []
-
+		// kilocode_change: one number per message for this request, worked out once
+		const messageNumbers = numberByPosition(messages)
 		for (const msg of messages) {
 			// Standalone reasoning: send encrypted, skip plain text
 			if (msg.type === "reasoning") {
@@ -6458,10 +6460,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				cleanConversationHistory.push({
 					role: msg.role,
 					// kilocode_change: the number travels with the request only - the stored history
-					// keeps clean text, so the prefix is never persisted or duplicated.
+					// keeps clean text, so the prefix is never persisted or duplicated. Messages
+					// without a stored number are numbered by position, so the model always has
+					// something to quote back when asked to freeze one.
 					content: applyNumberPrefixToContent(
 						msg.content as Anthropic.Messages.ContentBlockParam[] | string,
-						getMessageNumber(msg),
+						messageNumbers.get(msg),
 					) as Anthropic.Messages.ContentBlockParam[] | string,
 				})
 			}

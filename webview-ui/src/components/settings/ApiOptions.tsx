@@ -194,6 +194,8 @@ const ApiOptions = ({
 	// kilocode_change start: imported conflicting profiles prefer the explicitly opted-in task mode.
 	const intelligentTaskSupported = taskDocumentSettings?.supported === true
 	const intelligentTaskEnabled = intelligentTaskSupported && apiConfiguration.intelligentTaskEnabled === true
+	// kilocode_change: freezing is off until the profile asks for it
+	const freezeMessagesEnabled = apiConfiguration.freezeMessagesEnabled === true
 	const intelligentContextResetEnabled =
 		!intelligentTaskEnabled && isIntelligentContextResetEnabled(apiConfiguration.intelligentContextResetEnabled)
 	// kilocode_change end
@@ -636,8 +638,10 @@ const ApiOptions = ({
 						checked={intelligentContextResetEnabled}
 						onChange={(event) => {
 							const enabled = (event.target as HTMLInputElement).checked
-							if (enabled && intelligentTaskSupported)
-								setApiConfigurationField("intelligentTaskEnabled", false)
+							if (enabled) {
+								if (intelligentTaskSupported) setApiConfigurationField("intelligentTaskEnabled", false)
+								setApiConfigurationField("freezeMessagesEnabled", false) // kilocode_change
+							}
 							setApiConfigurationField("intelligentContextResetEnabled", enabled)
 						}}>
 						{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
@@ -662,7 +666,10 @@ const ApiOptions = ({
 								checked={intelligentTaskEnabled}
 								onChange={(event) => {
 									const enabled = (event.target as HTMLInputElement).checked
-									if (enabled) setApiConfigurationField("intelligentContextResetEnabled", false)
+									if (enabled) {
+										setApiConfigurationField("intelligentContextResetEnabled", false)
+										setApiConfigurationField("freezeMessagesEnabled", false)
+									}
 									setApiConfigurationField("intelligentTaskEnabled", enabled)
 								}}>
 								{t("settings:intelligentTask.label")}
@@ -678,6 +685,33 @@ const ApiOptions = ({
 							</p>
 						</div>
 					)}
+					{/* kilocode_change start: the third way of holding on to context, alongside the two above */}
+					<div className="mt-2 space-y-1">
+						<VSCodeCheckbox
+							data-testid="provider-freeze-messages-checkbox"
+							checked={freezeMessagesEnabled}
+							onChange={(event) => {
+								const enabled = (event.target as HTMLInputElement).checked
+								if (enabled) {
+									setApiConfigurationField("intelligentContextResetEnabled", false)
+									if (intelligentTaskSupported)
+										setApiConfigurationField("intelligentTaskEnabled", false)
+								}
+								setApiConfigurationField("freezeMessagesEnabled", enabled)
+							}}>
+							{t("settings:freezeMessages.label")}
+						</VSCodeCheckbox>
+						<p className="m-0 text-sm text-vscode-descriptionForeground">
+							{t("settings:freezeMessages.description")}
+						</p>
+						<p className="m-0 text-sm text-vscode-descriptionForeground">
+							{t("settings:freezeMessages.compaction")}
+						</p>
+						<p className="m-0 text-xs text-vscode-descriptionForeground">
+							{t("settings:freezeMessages.scope")}
+						</p>
+					</div>
+					{/* kilocode_change end */}
 				</div>
 			)}
 			{/* kilocode_change end */}

@@ -133,6 +133,14 @@ export function getToolDescriptionsForMode(
 	}
 	// kilocode_change end
 
+	// kilocode_change start: the model is only told about freezing when the profile asked for it.
+	// Describing a tool the user has not turned on would invite the model to reach for it and be
+	// refused, and it would cost tokens on every request.
+	if (clineProviderState?.apiConfiguration?.freezeMessagesEnabled !== true) {
+		tools.delete("freeze_messages")
+	}
+	// kilocode_change end
+
 	// Conditionally exclude codebase_search if feature is disabled or not configured
 	// kilocode_change start
 	const isCodebaseSearchAvailable =

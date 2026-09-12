@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.253
+
+### Patch Changes
+
+- Let the model freeze a message you name by its number, and put freezing under its own setting in the provider profile.
+
 ## 5.16.252
 
 ### Patch Changes
