@@ -2438,25 +2438,6 @@ export const webviewMessageHandler = async (
 				break
 			}
 			try {
-				// The control is offered on every written answer, whether or not the profile asked
-				// for freezing. Reaching for it is the clearest possible statement of intent, so it
-				// switches the feature on rather than refusing and sending the user to settings.
-				const { apiConfiguration } = await provider.getState()
-				if (apiConfiguration?.freezeMessagesEnabled !== true) {
-					const profileName = getGlobalState("currentApiConfigName") || "default"
-					await provider.upsertProviderProfile(
-						profileName,
-						{
-							...apiConfiguration,
-							freezeMessagesEnabled: true,
-							// The three ways of holding on to context exclude one another.
-							intelligentContextResetEnabled: false,
-							intelligentTaskEnabled: false,
-						},
-						true,
-					)
-				}
-
 				await currentTask.setMessagePinned(message.messageTs, message.pinned === true, "user")
 				await provider.postStateToWebview()
 			} catch (error) {

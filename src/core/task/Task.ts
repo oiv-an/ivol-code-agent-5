@@ -1744,6 +1744,34 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// kilocode_change start: explicit keep marks.
 	/**
+	 * Finds the chat row that shows a given API message.
+	 *
+	 * The chat button passes the row's own timestamp, so that is used as it is. The model passes the
+	 * timestamp of an API message, which no row carries - without this lookup the mark would be
+	 * written to the API history alone and the chat would show nothing, while the tool reported
+	 * success.
+	 *
+	 * The row is found by the shared number when there is one, otherwise by the last row at or
+	 * before the API message: a row is always created before the API message that carries it.
+	 */
+	private resolveChatRowTs(messageTs: number, apiTs: number, seq?: number): number {
+		if (this.clineMessages.some((message) => message.ts === messageTs)) {
+			return messageTs
+		}
+
+		if (typeof seq === "number") {
+			const bySeq = this.clineMessages.find((message) => message.seq === seq)
+			if (bySeq) return bySeq.ts
+		}
+
+		const preceding = this.clineMessages
+			.filter((message) => typeof message.ts === "number" && message.ts <= apiTs)
+			.sort((a, b) => b.ts - a.ts)[0]
+
+		return preceding?.ts ?? messageTs
+	}
+
+	/**
 	 * Marks or unmarks a message so context compaction leaves it alone.
 	 *
 	 * Pinning a message that condensing or truncation had already hidden brings it back, together
@@ -1765,6 +1793,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		//
 		// The third rule is what makes the button work on conversations that carry no numbers,
 		// which is every task started before numbering existed.
+		//
+		// The caller may address either history: the chat sends the row it drew, the model quotes a
+		// number that was resolved against the API history. Both are accepted, and the counterpart
+		// is looked up below, so a mark always lands on both sides.
 		const chatMessage = this.clineMessages.find((message) => message.ts === messageTs)
 
 		const bySeq =
@@ -1795,8 +1827,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		await this.overwriteApiConversationHistory(apiResult.messages)
 
 		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === apiTs)
+		const chatTs = this.resolveChatRowTs(messageTs, apiTs, pinnedApiMessage?.seq)
 		const updatedChatMessages = this.clineMessages.map((message) =>
-			message.ts === messageTs
+			message.ts === chatTs
 				? pinned
 					? {
 							...message,
@@ -1810,6 +1843,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				: message,
 		)
 		await this.overwriteClineMessages(updatedChatMessages)
+
+		// The chat has to redraw for the mark to become visible. The button already refreshes the
+		// webview itself, but the model freezes messages in the middle of a turn, and without this
+		// the mark would only surface on the next redraw - the tool reporting success over a chat
+		// that shows nothing.
+		await this.providerRef.deref()?.postStateToWebview()
 
 		return change
 	}

@@ -1,10 +1,16 @@
 # IVOL Code Agent 5
 
+## 5.16.254
+
+### Patch Changes
+
+- Show the mark in the chat when the model freezes a message, and drop the separate setting: freezing is simply always available.
+
 ## 5.16.253
 
 ### Patch Changes
 
-- Let the model freeze a message you name by its number, and put freezing under its own setting in the provider profile.
+- Let the model freeze a message you name by its number.
 
 ## 5.16.252
 
