@@ -1812,6 +1812,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	// kilocode_change start: send the rows that just gained a number to the webview.
+	/**
+	 * Re-sends the chat rows whose number changed during numbering.
+	 *
+	 * Rows are handed to the webview as they are created, well before the API message that gives
+	 * them their number exists. Without this the number would only appear after a reload, and the
+	 * user would have nothing to quote when asking for a message to be frozen.
+	 *
+	 * Only rows that actually changed are sent; an unchanged conversation costs nothing.
+	 */
+	private async postNewlyNumberedMessages(before: ClineMessage[], after: ClineMessage[]) {
+		const provider = this.providerRef.deref()
+		if (!provider) return
+
+		const previousSeqByTs = new Map<number, number | undefined>()
+		for (const message of before) {
+			previousSeqByTs.set(message.ts, message.seq)
+		}
+
+		for (const message of after) {
+			if (typeof message.seq !== "number") continue
+			if (previousSeqByTs.get(message.ts) === message.seq) continue
+
+			await provider.postMessageToWebview({
+				type: "messageUpdated",
+				taskId: this.taskId,
+				clineMessage: message,
+			})
+		}
+	}
+	// kilocode_change end
+
 	private async updateClineMessage(message: ClineMessage) {
 		const provider = this.providerRef.deref()
 		await provider?.postMessageToWebview({ type: "messageUpdated", taskId: this.taskId, clineMessage: message }) // kilocode_change
@@ -1835,10 +1867,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveClineMessages() {
 		try {
-			// kilocode_change: carry the API message numbers over to the chat rows, so the number
-			// the user reads is the number the model was given. Saying "unfreeze #20" has to mean
-			// the same message on both sides.
+			// kilocode_change start: carry the API message numbers over to the chat rows, so the
+			// number the user reads is the number the model was given. Saying "unfreeze #20" has to
+			// mean the same message on both sides.
+			//
+			// A row reaches the webview the moment it is created, which is before its API message
+			// exists and therefore before it has a number. Numbering it here would leave the chat
+			// showing nothing, so every row that just gained a number is sent again.
+			const beforeNumbering = this.clineMessages
 			this.clineMessages = assignNumbersToChatMessages(this.clineMessages, this.apiConversationHistory)
+
+			if (this.clineMessages !== beforeNumbering) {
+				await this.postNewlyNumberedMessages(beforeNumbering, this.clineMessages)
+			}
+			// kilocode_change end
 
 			await saveTaskMessages({
 				messages: this.clineMessages,

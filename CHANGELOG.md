@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Bring back the freeze button, now offered on written answers only: what the model wrote and what you typed, once they run past a few words.
+- Bring back the freeze button, now offered on written answers only: what the model wrote and what you typed, once they run past a few words. Each one shows its number, so you can ask for a message to be frozen by name.
 
 ## 5.16.250
 
