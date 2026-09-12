@@ -237,10 +237,14 @@ describe("message numbering", () => {
 			expect(assignNumbersToChatMessages(chat, api)).toBe(chat)
 		})
 
-		it("leaves the chat alone when no API message is numbered", () => {
-			const chat = [chatMessage(100)]
+		it("numbers by position when the history carries no stored numbers", () => {
+			// The model is sent positions in this case, so the chat has to show the same, or the
+			// two sides would mean different messages by the same number.
+			const chat = [chatMessage(100), chatMessage(200)]
 
-			expect(assignNumbersToChatMessages(chat, [message(105)])).toBe(chat)
+			const result = assignNumbersToChatMessages(chat, [message(105), message(205)])
+
+			expect(result.map((row) => row.seq)).toEqual([1, 2])
 		})
 	})
 })

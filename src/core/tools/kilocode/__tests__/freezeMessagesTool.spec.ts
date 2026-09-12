@@ -91,8 +91,20 @@ describe("freezeMessagesTool", () => {
 		expect(history[0].pinned).toBe(true)
 		expect(history[2].pinned).toBe(true)
 		expect(history[1].pinned).toBeUndefined()
-		expect(result).toContain("#1, #3")
+		expect(result).toContain("#1")
+		expect(result).toContain("#3")
 		expect(result).toContain("2 messages frozen in total")
+	})
+
+	it("quotes the message it froze, so a wrong number cannot pass unnoticed", async () => {
+		const history = [message(10, 1), message(20, 2)]
+		const task = buildTask(history)
+
+		const result = await run(task, { messages: "2" })
+
+		// The number alone would look right even if it pointed at the wrong message.
+		expect(result).toContain("message 2")
+		expect(result).not.toContain("message 1")
 	})
 
 	it("unfreezes on request", async () => {

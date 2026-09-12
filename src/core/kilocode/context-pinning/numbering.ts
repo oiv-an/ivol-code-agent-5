@@ -154,10 +154,18 @@ export function findMessageBySeq(messages: ApiMessage[], seq: number): ApiMessag
  *
  * One API message often covers several chat rows (a tool call and its result, say). Only the first
  * row gets the number, so a number is never shown twice and the freeze button has one home.
+ *
+ * Numbers are taken by position when the history carries none of its own, which is what the model
+ * is sent for those conversations. Both sides have to count the same way or the user's "#6" and the
+ * model's "#6" are different messages.
  */
 export function assignNumbersToChatMessages(clineMessages: ClineMessage[], apiMessages: ApiMessage[]): ClineMessage[] {
+	const byPosition = numberByPosition(apiMessages)
+
 	const numbered = apiMessages
-		.filter((message) => typeof message.seq === "number" && typeof message.ts === "number")
+		.filter((message) => typeof message.ts === "number")
+		.map((message) => ({ ...message, seq: message.seq ?? byPosition.get(message) }))
+		.filter((message) => typeof message.seq === "number")
 		.sort((a, b) => (a.ts as number) - (b.ts as number))
 
 	if (numbered.length === 0) return clineMessages

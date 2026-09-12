@@ -73,48 +73,60 @@ describe("canFreezeMessage", () => {
 })
 
 describe("numberFreezableMessages", () => {
-	it("numbers a conversation that carries no numbers of its own", () => {
-		const numbers = numberFreezableMessages([message({ ts: 1000 }), message({ ts: 2000 }), message({ ts: 3000 })])
+	it("shows the number the extension assigned, not a count of its own", () => {
+		const numbers = numberFreezableMessages([
+			message({ ts: 1000, seq: 4 }),
+			message({ ts: 2000, seq: 7 }),
+			message({ ts: 3000, seq: 12 }),
+		])
 
-		expect(numbers.get(1000)).toBe(1)
-		expect(numbers.get(2000)).toBe(2)
-		expect(numbers.get(3000)).toBe(3)
+		expect(numbers.get(1000)).toBe(4)
+		expect(numbers.get(2000)).toBe(7)
+		expect(numbers.get(3000)).toBe(12)
 	})
 
-	it("counts only the messages that can be frozen", () => {
+	it("keeps the gaps, because the model sees messages the chat does not show", () => {
+		// Counting rows here would renumber these to 1, 2, 3 and the user would be quoting numbers
+		// that mean something else to the model.
 		const numbers = numberFreezableMessages([
-			message({ ts: 1000 }),
-			message({ ts: 1500, say: "command_output" }),
-			message({ ts: 1800, text: "ok" }),
-			message({ ts: 2000 }),
+			message({ ts: 1000, seq: 2 }),
+			message({ ts: 1500, say: "command_output", seq: 3 }),
+			message({ ts: 2000, seq: 5 }),
+			message({ ts: 3000, seq: 9 }),
+		])
+
+		expect([...numbers.values()]).toEqual([2, 5, 9])
+	})
+
+	it("leaves a row unnumbered until its number arrives", () => {
+		const numbers = numberFreezableMessages([message({ ts: 1000, seq: 3 }), message({ ts: 2000, seq: undefined })])
+
+		expect(numbers.get(1000)).toBe(3)
+		expect(numbers.has(2000)).toBe(false)
+	})
+
+	it("numbers only the messages that can be frozen", () => {
+		const numbers = numberFreezableMessages([
+			message({ ts: 1000, seq: 1 }),
+			message({ ts: 1500, say: "command_output", seq: 2 }),
+			message({ ts: 1800, text: "ok", seq: 3 }),
+			message({ ts: 2000, seq: 4 }),
 		])
 
 		expect(numbers.get(1000)).toBe(1)
-		expect(numbers.get(2000)).toBe(2)
+		expect(numbers.get(2000)).toBe(4)
 		expect(numbers.has(1500)).toBe(false)
 		expect(numbers.has(1800)).toBe(false)
 	})
 
-	it("leaves no gaps in the numbers the user reads", () => {
-		const numbers = numberFreezableMessages([
-			message({ ts: 1000 }),
-			message({ ts: 1500, say: "command_output" }),
-			message({ ts: 2000 }),
-			message({ ts: 2500, say: "api_req_started" }),
-			message({ ts: 3000 }),
-		])
-
-		expect([...numbers.values()]).toEqual([1, 2, 3])
-	})
-
 	it("skips a message that is still being written", () => {
 		const numbers = numberFreezableMessages([
-			message({ ts: 1000 }),
-			message({ ts: 2000, partial: true }),
-			message({ ts: 3000 }),
+			message({ ts: 1000, seq: 1 }),
+			message({ ts: 2000, partial: true, seq: 2 }),
+			message({ ts: 3000, seq: 3 }),
 		])
 
-		expect(numbers.get(3000)).toBe(2)
+		expect(numbers.get(3000)).toBe(3)
 		expect(numbers.has(2000)).toBe(false)
 	})
 

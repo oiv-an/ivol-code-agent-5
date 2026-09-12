@@ -21,6 +21,39 @@ import {
 } from "../../kilocode/context-pinning"
 import { resolveSeqNumbers } from "../../kilocode/context-pinning/numbering"
 
+/**
+ * The opening words of a message, for confirming which one was acted on.
+ *
+ * A number alone is not proof: if the model and the chat ever disagree about what "#6" means, an
+ * answer of "Froze #6" hides the mistake, while a quoted line makes it obvious to both the model
+ * and the user reading along.
+ */
+export function messagePreview(content: unknown, limit = 90): string {
+	const text =
+		typeof content === "string"
+			? content
+			: Array.isArray(content)
+				? content
+						.filter(
+							(block): block is { type: "text"; text: string } =>
+								typeof block === "object" &&
+								block !== null &&
+								(block as { type?: string }).type === "text" &&
+								typeof (block as { text?: unknown }).text === "string",
+						)
+						.map((block) => block.text)
+						.join(" ")
+				: ""
+
+	// The number prefix is added when the request is built, so strip it: quoting it back would be
+	// circular and tells the reader nothing about the content.
+	const cleaned = text.replace(/^\[#\d+\]\s*/, "").trim()
+	if (!cleaned) return ""
+
+	const collapsed = cleaned.replace(/\s+/g, " ")
+	return collapsed.length <= limit ? collapsed : `${collapsed.slice(0, limit).trimEnd()}…`
+}
+
 /** Accepts "12", "#12", "12, 15" and "[#12]" - models quote numbers in all of these shapes. */
 export function parseMessageNumbers(raw: string | undefined): { numbers: number[]; invalid: string[] } {
 	const numbers: number[] = []
@@ -105,8 +138,15 @@ export const freezeMessagesTool = async (
 		const changed: number[] = []
 		const changedTs: number[] = []
 		const unchanged: number[] = []
+		// Quoting the message back is what lets the model - and the user reading the chat - confirm
+		// that the number landed on the message they meant.
+		const previews = new Map<number, string>()
 
 		for (const { seq, ts } of found) {
+			const target = cline.apiConversationHistory.find((message) => message.ts === ts)
+			const preview = target ? messagePreview(target.content) : ""
+			if (preview) previews.set(seq, preview)
+
 			const change = await cline.setMessagePinned(ts, freezing, "model")
 			if (change) {
 				changed.push(seq)
@@ -115,6 +155,11 @@ export const freezeMessagesTool = async (
 				// No change means it was already in the requested state.
 				unchanged.push(seq)
 			}
+		}
+
+		const describe = (seq: number): string => {
+			const preview = previews.get(seq)
+			return preview ? `#${seq} ("${preview}")` : `#${seq}`
 		}
 
 		// The token budget can only be measured once the marks are applied, so an overflow is undone
@@ -160,12 +205,12 @@ export const freezeMessagesTool = async (
 		if (changed.length > 0) {
 			lines.push(
 				freezing
-					? `${verb} ${changed.map((seq) => `#${seq}`).join(", ")}. These messages stay in context until unfrozen.`
-					: `${verb} ${changed.map((seq) => `#${seq}`).join(", ")}. They are no longer pinned to the context.`,
+					? `${verb} ${changed.map(describe).join(", ")}. These messages stay in context until unfrozen.`
+					: `${verb} ${changed.map(describe).join(", ")}. They are no longer pinned to the context.`,
 			)
 		}
 		if (unchanged.length > 0) {
-			lines.push(`Already ${state}: ${unchanged.map((seq) => `#${seq}`).join(", ")}.`)
+			lines.push(`Already ${state}: ${unchanged.map(describe).join(", ")}.`)
 		}
 		if (missing.length > 0) {
 			lines.push(`No message found for: ${missing.map((seq) => `#${seq}`).join(", ")}.`)

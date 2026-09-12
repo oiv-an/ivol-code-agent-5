@@ -52,25 +52,25 @@ export const canFreezeMessage = (message: ClineMessage): boolean => {
 }
 
 /**
- * Numbers the messages a user can freeze, counting from the start of the conversation.
+ * Collects the number to show on each chat row.
  *
- * The extension assigns its own numbers when it saves, but a conversation started before numbering
- * existed carries none, and a freshly written message has none yet either. Numbering here means the
- * chat always shows something to quote.
+ * The numbers come from the extension, which takes them from the history the model is actually
+ * sent. Counting rows here instead would produce a second, private numbering: the chat only offers
+ * freezing on written answers of a certain length, while the model sees every message, so the
+ * user's "#6" and the model's "#6" would be different messages. That mismatch is exactly what made
+ * freezing appear to target the wrong message.
  *
- * Only freezable messages are counted, so the numbers read 1, 2, 3 down the chat with no gaps for
- * tool activity. The count runs over the whole conversation rather than what is on screen, so
- * filtering the view does not renumber anything.
+ * A row without a number is simply not numbered yet - its API message is written at the end of the
+ * turn - and the number appears as soon as the extension sends it.
  */
 export const numberFreezableMessages = (messages: ClineMessage[]): Map<number, number> => {
 	const numbers = new Map<number, number>()
-	let next = 1
 
 	for (const message of messages) {
 		if (!canFreezeMessage(message)) continue
+		if (typeof message.seq !== "number") continue
 		if (numbers.has(message.ts)) continue
-		numbers.set(message.ts, next)
-		next += 1
+		numbers.set(message.ts, message.seq)
 	}
 
 	return numbers

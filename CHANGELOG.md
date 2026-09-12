@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.255
+
+### Patch Changes
+
+- Give the chat and the model one and the same message number, and have freezing quote the message it acted on.
+
 ## 5.16.254
 
 ### Patch Changes
