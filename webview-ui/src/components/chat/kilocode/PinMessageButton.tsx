@@ -11,6 +11,8 @@ import { StandardTooltip } from "@src/components/ui"
 
 interface PinMessageButtonProps {
 	message: ClineMessage
+	/** Position of this message among the ones that can be frozen, worked out by the chat. */
+	number?: number
 	className?: string
 }
 
@@ -24,10 +26,12 @@ interface PinMessageButtonProps {
  * The number next to the button is the same number the model receives, so the user can say
  * "unfreeze #20" and mean exactly what the model would.
  */
-export const PinMessageButton = ({ message, className }: PinMessageButtonProps) => {
+export const PinMessageButton = ({ message, number, className }: PinMessageButtonProps) => {
 	const { t } = useTranslation()
 	const isPinned = message.pinned === true
-	const seq = typeof message.seq === "number" ? message.seq : undefined
+	// The chat works out the number; the one stored on the message is used when it is there, which
+	// is the case for conversations the extension numbered itself.
+	const seq = number ?? (typeof message.seq === "number" ? message.seq : undefined)
 
 	const handleClick = useCallback(
 		(event: React.MouseEvent) => {

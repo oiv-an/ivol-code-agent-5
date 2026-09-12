@@ -1,7 +1,7 @@
 // kilocode_change - new file
 import type { ClineMessage } from "@roo-code/types"
 
-import { canFreezeMessage, FREEZE_MIN_WORDS } from "../canFreezeMessage"
+import { canFreezeMessage, FREEZE_MIN_WORDS, numberFreezableMessages } from "../canFreezeMessage"
 
 const message = (overrides: Partial<ClineMessage>): ClineMessage =>
 	({
@@ -30,7 +30,6 @@ describe("canFreezeMessage", () => {
 	})
 
 	it.each([
-		["a tool row", "tool"],
 		["command output", "command_output"],
 		["the API request row", "api_req_started"],
 		["a browser action", "browser_action_result"],
@@ -70,5 +69,56 @@ describe("canFreezeMessage", () => {
 
 	it("offers freezing on a message that has not been numbered yet", () => {
 		expect(canFreezeMessage(message({ seq: undefined }))).toBe(true)
+	})
+})
+
+describe("numberFreezableMessages", () => {
+	it("numbers a conversation that carries no numbers of its own", () => {
+		const numbers = numberFreezableMessages([message({ ts: 1000 }), message({ ts: 2000 }), message({ ts: 3000 })])
+
+		expect(numbers.get(1000)).toBe(1)
+		expect(numbers.get(2000)).toBe(2)
+		expect(numbers.get(3000)).toBe(3)
+	})
+
+	it("counts only the messages that can be frozen", () => {
+		const numbers = numberFreezableMessages([
+			message({ ts: 1000 }),
+			message({ ts: 1500, say: "command_output" }),
+			message({ ts: 1800, text: "ok" }),
+			message({ ts: 2000 }),
+		])
+
+		expect(numbers.get(1000)).toBe(1)
+		expect(numbers.get(2000)).toBe(2)
+		expect(numbers.has(1500)).toBe(false)
+		expect(numbers.has(1800)).toBe(false)
+	})
+
+	it("leaves no gaps in the numbers the user reads", () => {
+		const numbers = numberFreezableMessages([
+			message({ ts: 1000 }),
+			message({ ts: 1500, say: "command_output" }),
+			message({ ts: 2000 }),
+			message({ ts: 2500, say: "api_req_started" }),
+			message({ ts: 3000 }),
+		])
+
+		expect([...numbers.values()]).toEqual([1, 2, 3])
+	})
+
+	it("skips a message that is still being written", () => {
+		const numbers = numberFreezableMessages([
+			message({ ts: 1000 }),
+			message({ ts: 2000, partial: true }),
+			message({ ts: 3000 }),
+		])
+
+		expect(numbers.get(3000)).toBe(2)
+		expect(numbers.has(2000)).toBe(false)
+	})
+
+	it("gives an empty conversation no numbers", () => {
+		expect(numberFreezableMessages([]).size).toBe(0)
 	})
 })

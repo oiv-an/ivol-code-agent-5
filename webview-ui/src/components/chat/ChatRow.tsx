@@ -81,7 +81,7 @@ import { LowCreditWarning } from "../kilocode/chat/LowCreditWarning"
 import { NewTaskPreview } from "../kilocode/chat/NewTaskPreview"
 import { KiloChatRowGutterBar } from "../kilocode/chat/KiloChatRowGutterBar"
 import { PinMessageButton } from "./kilocode/PinMessageButton" // kilocode_change
-import { canFreezeMessage } from "./kilocode/canFreezeMessage" // kilocode_change
+import { canFreezeMessage, numberFreezableMessages } from "./kilocode/canFreezeMessage" // kilocode_change
 import { StandardTooltip } from "../ui"
 import { FastApplyChatDisplay } from "./kilocode/FastApplyChatDisplay"
 import { InvalidModelWarning } from "../kilocode/chat/InvalidModelWarning"
@@ -151,15 +151,23 @@ interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 const ChatRow = memo(
 	(props: ChatRowProps) => {
 		const { highlighted } = props // kilocode_change: Add highlighted prop
-		const { showTaskTimeline } = useExtensionState() // kilocode_change: Used by KiloChatRowGutterBar
+		// kilocode_change: clineMessages is used to number the messages that can be frozen
+		const { showTaskTimeline, clineMessages } = useExtensionState()
 		const { isLast, onHeightChange, message } = props
+
+		// kilocode_change: numbering the whole conversation, so filtering the view cannot renumber it
+		const freezeNumbers = useMemo(() => numberFreezableMessages(clineMessages), [clineMessages])
 		// Store the previous height to compare with the current height
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
 
 		// kilocode_change start: freezing is offered on written answers only - what the model wrote
 		// and what the user typed - and only when they are long enough to be worth keeping.
+		//
+		// The number is worked out here rather than taken from the message, because a conversation
+		// started before numbering existed carries none and a freshly written message has none yet.
 		const canFreeze = canFreezeMessage(message)
+		const freezeNumber = freezeNumbers.get(message.ts)
 		// kilocode_change end
 
 		const [chatrow, { height }] = useSize(
@@ -175,6 +183,7 @@ const ChatRow = memo(
 				{canFreeze && (
 					<PinMessageButton
 						message={message}
+						number={freezeNumber}
 						className={cn(
 							"absolute top-1 right-1 z-10",
 							message.pinned

@@ -50,3 +50,28 @@ export const canFreezeMessage = (message: ClineMessage): boolean => {
 
 	return countWords(text) >= FREEZE_MIN_WORDS
 }
+
+/**
+ * Numbers the messages a user can freeze, counting from the start of the conversation.
+ *
+ * The extension assigns its own numbers when it saves, but a conversation started before numbering
+ * existed carries none, and a freshly written message has none yet either. Numbering here means the
+ * chat always shows something to quote.
+ *
+ * Only freezable messages are counted, so the numbers read 1, 2, 3 down the chat with no gaps for
+ * tool activity. The count runs over the whole conversation rather than what is on screen, so
+ * filtering the view does not renumber anything.
+ */
+export const numberFreezableMessages = (messages: ClineMessage[]): Map<number, number> => {
+	const numbers = new Map<number, number>()
+	let next = 1
+
+	for (const message of messages) {
+		if (!canFreezeMessage(message)) continue
+		if (numbers.has(message.ts)) continue
+		numbers.set(message.ts, next)
+		next += 1
+	}
+
+	return numbers
+}

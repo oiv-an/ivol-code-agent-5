@@ -1756,14 +1756,31 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		note?: string,
 	): Promise<PinChange | undefined> {
 		// A chat row and its API message do not share a timestamp - the row is created first, while
-		// the API message is written once the turn is complete. The shared number is what ties them
-		// together, so the chat row is resolved to its API message through `seq`. Falling back to the
-		// timestamp keeps callers working that already address the API history directly.
+		// the API message is written once the turn is complete. Three rules are tried in turn:
+		//
+		// 1. the shared number, when both sides have one;
+		// 2. an exact timestamp, for callers that already address the API history directly;
+		// 3. the earliest API message at or after the row - the same rule the rewind code uses.
+		//
+		// The third rule is what makes the button work on conversations that carry no numbers,
+		// which is every task started before numbering existed.
 		const chatMessage = this.clineMessages.find((message) => message.ts === messageTs)
-		const apiTs =
+
+		const bySeq =
 			typeof chatMessage?.seq === "number"
-				? (this.apiConversationHistory.find((message) => message.seq === chatMessage.seq)?.ts ?? messageTs)
-				: messageTs
+				? this.apiConversationHistory.find((message) => message.seq === chatMessage.seq)
+				: undefined
+
+		const byExactTs = bySeq ? undefined : this.apiConversationHistory.find((message) => message.ts === messageTs)
+
+		const byNearestTs =
+			bySeq || byExactTs
+				? undefined
+				: this.apiConversationHistory
+						.filter((message) => typeof message.ts === "number" && message.ts >= messageTs)
+						.sort((a, b) => (a.ts as number) - (b.ts as number))[0]
+
+		const apiTs = bySeq?.ts ?? byExactTs?.ts ?? byNearestTs?.ts ?? messageTs
 
 		const apiResult = pinned
 			? pinMessages(this.apiConversationHistory, [{ ts: apiTs, ...(note ? { note } : {}) }], by)
