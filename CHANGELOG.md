@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.252
+
+### Patch Changes
+
+- Number the freeze button in the chat and make it clickable on conversations that were started before numbering existed.
+
 ## 5.16.251
 
 ### Patch Changes
