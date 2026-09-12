@@ -156,9 +156,10 @@ const ChatRow = memo(
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
 
-		// kilocode_change start: a message still being streamed has no final place in the history
-		// yet, so it cannot be frozen or numbered.
-		const canFreeze = !message.partial && typeof message.ts === "number"
+		// kilocode_change start: only a row that maps to a real API message can be frozen - it is the
+		// number that ties the two together. Rows without one (a streaming message, or a purely local
+		// row like the API request status) are not part of what the model receives.
+		const canFreeze = !message.partial && typeof message.ts === "number" && typeof message.seq === "number"
 		// kilocode_change end
 
 		const [chatrow, { height }] = useSize(

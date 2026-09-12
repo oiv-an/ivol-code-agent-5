@@ -1755,9 +1755,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		by: PinnedBy,
 		note?: string,
 	): Promise<PinChange | undefined> {
+		// A chat row and its API message do not share a timestamp - the row is created first, while
+		// the API message is written once the turn is complete. The shared number is what ties them
+		// together, so the chat row is resolved to its API message through `seq`. Falling back to the
+		// timestamp keeps callers working that already address the API history directly.
+		const chatMessage = this.clineMessages.find((message) => message.ts === messageTs)
+		const apiTs =
+			typeof chatMessage?.seq === "number"
+				? (this.apiConversationHistory.find((message) => message.seq === chatMessage.seq)?.ts ?? messageTs)
+				: messageTs
+
 		const apiResult = pinned
-			? pinMessages(this.apiConversationHistory, [{ ts: messageTs, ...(note ? { note } : {}) }], by)
-			: unpinMessages(this.apiConversationHistory, [messageTs])
+			? pinMessages(this.apiConversationHistory, [{ ts: apiTs, ...(note ? { note } : {}) }], by)
+			: unpinMessages(this.apiConversationHistory, [apiTs])
 
 		const change = apiResult.changes[0]
 		if (!change) {
@@ -1766,7 +1776,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		await this.overwriteApiConversationHistory(apiResult.messages)
 
-		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === messageTs)
+		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === apiTs)
 		const updatedChatMessages = this.clineMessages.map((message) =>
 			message.ts === messageTs
 				? pinned

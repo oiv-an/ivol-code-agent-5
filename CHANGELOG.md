@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.250
+
+### Patch Changes
+
+- Fix the freeze button doing nothing when clicked. The button is now only offered on messages that are actually sent to the model.
+
 ## 5.16.249
 
 ### Patch Changes
