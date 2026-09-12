@@ -52,7 +52,6 @@ import { deleteFileTool } from "../tools/kilocode/deleteFileTool"
 import { newRuleTool } from "../tools/kilocode/newRuleTool"
 import { reportBugTool } from "../tools/kilocode/reportBugTool"
 import { condenseTool } from "../tools/kilocode/condenseTool"
-import { freezeMessagesTool } from "../tools/kilocode/freezeMessagesTool" // kilocode_change
 import { captureAskApproval } from "./kilocode/captureAskApprovalEvent"
 
 /**
@@ -500,8 +499,6 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name}]`
 					case "condense":
 						return `[${block.name}]`
-					case "freeze_messages":
-						return `[${block.name} ${block.params.action ?? "freeze"} ${block.params.messages ?? ""}]`
 					// kilocode_change end
 					case "run_slash_command":
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
@@ -1231,9 +1228,6 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "condense":
 					await condenseTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
-					break
-				case "freeze_messages":
-					await freezeMessagesTool(cline, block, askApproval, handleError, pushToolResult, removeClosingTag)
 					break
 				// kilocode_change end
 

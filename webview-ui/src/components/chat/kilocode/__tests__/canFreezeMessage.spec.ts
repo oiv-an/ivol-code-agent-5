@@ -1,7 +1,7 @@
 // kilocode_change - new file
 import type { ClineMessage } from "@roo-code/types"
 
-import { canFreezeMessage, FREEZE_MIN_WORDS, numberFreezableMessages } from "../canFreezeMessage"
+import { canFreezeMessage, FREEZE_MIN_WORDS } from "../canFreezeMessage"
 
 const message = (overrides: Partial<ClineMessage>): ClineMessage =>
 	({
@@ -65,72 +65,5 @@ describe("canFreezeMessage", () => {
 
 	it("does not offer freezing without a timestamp to toggle", () => {
 		expect(canFreezeMessage(message({ ts: undefined as unknown as number }))).toBe(false)
-	})
-
-	it("offers freezing on a message that has not been numbered yet", () => {
-		expect(canFreezeMessage(message({ seq: undefined }))).toBe(true)
-	})
-})
-
-describe("numberFreezableMessages", () => {
-	it("shows the number the extension assigned, not a count of its own", () => {
-		const numbers = numberFreezableMessages([
-			message({ ts: 1000, seq: 4 }),
-			message({ ts: 2000, seq: 7 }),
-			message({ ts: 3000, seq: 12 }),
-		])
-
-		expect(numbers.get(1000)).toBe(4)
-		expect(numbers.get(2000)).toBe(7)
-		expect(numbers.get(3000)).toBe(12)
-	})
-
-	it("keeps the gaps, because the model sees messages the chat does not show", () => {
-		// Counting rows here would renumber these to 1, 2, 3 and the user would be quoting numbers
-		// that mean something else to the model.
-		const numbers = numberFreezableMessages([
-			message({ ts: 1000, seq: 2 }),
-			message({ ts: 1500, say: "command_output", seq: 3 }),
-			message({ ts: 2000, seq: 5 }),
-			message({ ts: 3000, seq: 9 }),
-		])
-
-		expect([...numbers.values()]).toEqual([2, 5, 9])
-	})
-
-	it("leaves a row unnumbered until its number arrives", () => {
-		const numbers = numberFreezableMessages([message({ ts: 1000, seq: 3 }), message({ ts: 2000, seq: undefined })])
-
-		expect(numbers.get(1000)).toBe(3)
-		expect(numbers.has(2000)).toBe(false)
-	})
-
-	it("numbers only the messages that can be frozen", () => {
-		const numbers = numberFreezableMessages([
-			message({ ts: 1000, seq: 1 }),
-			message({ ts: 1500, say: "command_output", seq: 2 }),
-			message({ ts: 1800, text: "ok", seq: 3 }),
-			message({ ts: 2000, seq: 4 }),
-		])
-
-		expect(numbers.get(1000)).toBe(1)
-		expect(numbers.get(2000)).toBe(4)
-		expect(numbers.has(1500)).toBe(false)
-		expect(numbers.has(1800)).toBe(false)
-	})
-
-	it("skips a message that is still being written", () => {
-		const numbers = numberFreezableMessages([
-			message({ ts: 1000, seq: 1 }),
-			message({ ts: 2000, partial: true, seq: 2 }),
-			message({ ts: 3000, seq: 3 }),
-		])
-
-		expect(numbers.get(3000)).toBe(3)
-		expect(numbers.has(2000)).toBe(false)
-	})
-
-	it("gives an empty conversation no numbers", () => {
-		expect(numberFreezableMessages([]).size).toBe(0)
 	})
 })

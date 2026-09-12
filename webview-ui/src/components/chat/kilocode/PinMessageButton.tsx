@@ -11,27 +11,20 @@ import { StandardTooltip } from "@src/components/ui"
 
 interface PinMessageButtonProps {
 	message: ClineMessage
-	/** Position of this message among the ones that can be frozen, worked out by the chat. */
-	number?: number
 	className?: string
 }
 
 /**
  * Freezes a message in the model's context.
  *
- * Condensing still runs over the whole conversation - the summary has to be written from the
- * complete picture - but a frozen message is delivered to the model again in every request that
- * follows, until the mark is removed.
- *
- * The number next to the button is the same number the model receives, so the user can say
- * "unfreeze #20" and mean exactly what the model would.
+ * Freezing is the user's own decision and is made here, with this button - the model can neither
+ * set nor clear a mark. Condensing still runs over the whole conversation, because the summary has
+ * to be written from the complete picture, but a frozen message is delivered to the model again in
+ * every request that follows, until the mark is removed.
  */
-export const PinMessageButton = ({ message, number, className }: PinMessageButtonProps) => {
+export const PinMessageButton = ({ message, className }: PinMessageButtonProps) => {
 	const { t } = useTranslation()
 	const isPinned = message.pinned === true
-	// The chat works out the number; the one stored on the message is used when it is there, which
-	// is the case for conversations the extension numbered itself.
-	const seq = number ?? (typeof message.seq === "number" ? message.seq : undefined)
 
 	const handleClick = useCallback(
 		(event: React.MouseEvent) => {
@@ -49,16 +42,6 @@ export const PinMessageButton = ({ message, number, className }: PinMessageButto
 
 	return (
 		<div className={cn("flex items-center gap-0.5", className)}>
-			{seq !== undefined && (
-				<StandardTooltip content={t("chat:contextPinning.messageNumber", { number: seq })}>
-					<span
-						data-testid="message-number"
-						// kilocode_change: readable at rest - this number is what gets quoted
-						className="text-xs text-vscode-descriptionForeground select-all">
-						#{seq}
-					</span>
-				</StandardTooltip>
-			)}
 			<StandardTooltip content={message.pinnedNote ? `${label} — ${message.pinnedNote}` : label}>
 				<button
 					aria-label={label}

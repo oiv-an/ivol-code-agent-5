@@ -23,7 +23,6 @@ import writeToFile from "./write_to_file"
 
 import deleteFile from "./kilocode/delete_file"
 import fastEditFile from "./kilocode/fast_edit_file"
-import freezeMessages from "./kilocode/freeze_messages"
 
 export { getMcpServerTools } from "./mcp_server"
 export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
@@ -61,7 +60,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		// kilocode_change start
 		deleteFile,
 		fastEditFile,
-		freezeMessages,
 		// todo:
 		// condenseTool,
 		// newRuleTool,

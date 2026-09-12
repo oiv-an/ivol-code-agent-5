@@ -25,9 +25,6 @@ const countWords = (text: string): number => text.trim().split(/\s+/).filter(Boo
  *
  * A message qualifies when it has finished streaming, carries a timestamp (the handle the extension
  * uses to toggle the mark), is one of the prose kinds above, and is long enough to be worth keeping.
- *
- * Deliberately does not require a sequence number: numbering is assigned when the conversation is
- * persisted, so requiring it here would hide the control on every freshly rendered message.
  */
 export const canFreezeMessage = (message: ClineMessage): boolean => {
 	if (message.partial) {
@@ -49,29 +46,4 @@ export const canFreezeMessage = (message: ClineMessage): boolean => {
 	}
 
 	return countWords(text) >= FREEZE_MIN_WORDS
-}
-
-/**
- * Collects the number to show on each chat row.
- *
- * The numbers come from the extension, which takes them from the history the model is actually
- * sent. Counting rows here instead would produce a second, private numbering: the chat only offers
- * freezing on written answers of a certain length, while the model sees every message, so the
- * user's "#6" and the model's "#6" would be different messages. That mismatch is exactly what made
- * freezing appear to target the wrong message.
- *
- * A row without a number is simply not numbered yet - its API message is written at the end of the
- * turn - and the number appears as soon as the extension sends it.
- */
-export const numberFreezableMessages = (messages: ClineMessage[]): Map<number, number> => {
-	const numbers = new Map<number, number>()
-
-	for (const message of messages) {
-		if (!canFreezeMessage(message)) continue
-		if (typeof message.seq !== "number") continue
-		if (numbers.has(message.ts)) continue
-		numbers.set(message.ts, message.seq)
-	}
-
-	return numbers
 }

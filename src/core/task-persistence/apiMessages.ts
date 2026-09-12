@@ -38,11 +38,6 @@ export type ApiMessage = Anthropic.MessageParam & {
 	// kilocode_change start: explicit keep marks survive condensing and sliding-window truncation.
 	// A pinned message is never hidden from the API, so important decisions and requirements stay
 	// available no matter how old they are.
-	//
-	// Stable message number, assigned once when the message enters the history and never
-	// recomputed. It is how the user and the model address a message ("unfreeze #20"); an array
-	// position could not do that job, because condensing and rewinds shift positions around.
-	seq?: number
 	pinned?: boolean
 	pinnedBy?: "model" | "user"
 	pinnedNote?: string

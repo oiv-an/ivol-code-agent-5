@@ -156,14 +156,6 @@ import {
 	getEffectiveApiHistory,
 	uncondenseForExtendedThinking,
 } from "../condense"
-// kilocode_change: stable numbers make a message addressable ("freeze #42").
-import {
-	applyNumberPrefixToContent,
-	numberByPosition,
-	assignNumbersToChatMessages,
-	ensureSequenceNumbers,
-	getMessageNumber,
-} from "../kilocode/context-pinning/numbering"
 // kilocode_change start: explicit keep marks that survive context compaction
 import { type PinChange, type PinnedBy, pinMessages, unpinMessages } from "../kilocode/context-pinning"
 // kilocode_change end
@@ -1254,12 +1246,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// API Messages
 
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
-		const messages = await readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
-		// kilocode_change: tasks saved before numbering existed get their numbers here, once, in
-		// order. Numbering on load also means a reopened task continues the sequence instead of
-		// restarting it and colliding with numbers the user already quoted.
-		ensureSequenceNumbers(messages)
-		return messages
+		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
 
 	// kilocode_change start: lifecycle helpers for the one-shot restart handoff.
@@ -1573,9 +1560,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.apiConversationHistory.push(messageWithTs)
 		}
 
-		// kilocode_change: give the new message its permanent number before the history is saved.
-		ensureSequenceNumbers(this.apiConversationHistory)
-
 		// kilocode_change start: consume only the durable continuation that owns this handoff
 		const requiresContextHandoffFileRead =
 			Boolean(this.activeContextHandoffId) && this.activeContextHandoffFileReady !== false
@@ -1744,39 +1728,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// kilocode_change start: explicit keep marks.
 	/**
-	 * Finds the chat row that shows a given API message.
-	 *
-	 * The chat button passes the row's own timestamp, so that is used as it is. The model passes the
-	 * timestamp of an API message, which no row carries - without this lookup the mark would be
-	 * written to the API history alone and the chat would show nothing, while the tool reported
-	 * success.
-	 *
-	 * The row is found by the shared number when there is one, otherwise by the last row at or
-	 * before the API message: a row is always created before the API message that carries it.
-	 */
-	private resolveChatRowTs(messageTs: number, apiTs: number, seq?: number): number {
-		if (this.clineMessages.some((message) => message.ts === messageTs)) {
-			return messageTs
-		}
-
-		if (typeof seq === "number") {
-			const bySeq = this.clineMessages.find((message) => message.seq === seq)
-			if (bySeq) return bySeq.ts
-		}
-
-		const preceding = this.clineMessages
-			.filter((message) => typeof message.ts === "number" && message.ts <= apiTs)
-			.sort((a, b) => b.ts - a.ts)[0]
-
-		return preceding?.ts ?? messageTs
-	}
-
-	/**
 	 * Marks or unmarks a message so context compaction leaves it alone.
 	 *
-	 * Pinning a message that condensing or truncation had already hidden brings it back, together
-	 * with the other half of its tool_use/tool_result pair. Both histories are updated so the chat
-	 * shows the state and the API request reflects it.
+	 * Freezing is the user's own decision, made with the button in the chat - the model cannot set
+	 * or clear a mark. Pinning a message that condensing or truncation had already hidden brings it
+	 * back, together with the other half of its tool_use/tool_result pair. Both histories are
+	 * updated so the chat shows the state and the API request reflects it.
 	 */
 	public async setMessagePinned(
 		messageTs: number,
@@ -1784,36 +1741,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		by: PinnedBy,
 		note?: string,
 	): Promise<PinChange | undefined> {
-		// A chat row and its API message do not share a timestamp - the row is created first, while
-		// the API message is written once the turn is complete. Three rules are tried in turn:
-		//
-		// 1. the shared number, when both sides have one;
-		// 2. an exact timestamp, for callers that already address the API history directly;
-		// 3. the earliest API message at or after the row - the same rule the rewind code uses.
-		//
-		// The third rule is what makes the button work on conversations that carry no numbers,
-		// which is every task started before numbering existed.
-		//
-		// The caller may address either history: the chat sends the row it drew, the model quotes a
-		// number that was resolved against the API history. Both are accepted, and the counterpart
-		// is looked up below, so a mark always lands on both sides.
-		const chatMessage = this.clineMessages.find((message) => message.ts === messageTs)
+		// The chat row and its API message do not share a timestamp: the row is written when the
+		// turn starts, the API message when it is complete. So the row claims the earliest API
+		// message at or after it - the same rule the rewind code uses to line the two histories up.
+		const byExactTs = this.apiConversationHistory.find((message) => message.ts === messageTs)
 
-		const bySeq =
-			typeof chatMessage?.seq === "number"
-				? this.apiConversationHistory.find((message) => message.seq === chatMessage.seq)
-				: undefined
+		const byNearestTs = byExactTs
+			? undefined
+			: this.apiConversationHistory
+					.filter((message) => typeof message.ts === "number" && message.ts >= messageTs)
+					.sort((a, b) => (a.ts as number) - (b.ts as number))[0]
 
-		const byExactTs = bySeq ? undefined : this.apiConversationHistory.find((message) => message.ts === messageTs)
-
-		const byNearestTs =
-			bySeq || byExactTs
-				? undefined
-				: this.apiConversationHistory
-						.filter((message) => typeof message.ts === "number" && message.ts >= messageTs)
-						.sort((a, b) => (a.ts as number) - (b.ts as number))[0]
-
-		const apiTs = bySeq?.ts ?? byExactTs?.ts ?? byNearestTs?.ts ?? messageTs
+		const apiTs = byExactTs?.ts ?? byNearestTs?.ts ?? messageTs
 
 		const apiResult = pinned
 			? pinMessages(this.apiConversationHistory, [{ ts: apiTs, ...(note ? { note } : {}) }], by)
@@ -1827,9 +1766,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		await this.overwriteApiConversationHistory(apiResult.messages)
 
 		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === apiTs)
-		const chatTs = this.resolveChatRowTs(messageTs, apiTs, pinnedApiMessage?.seq)
 		const updatedChatMessages = this.clineMessages.map((message) =>
-			message.ts === chatTs
+			message.ts === messageTs
 				? pinned
 					? {
 							...message,
@@ -1843,12 +1781,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				: message,
 		)
 		await this.overwriteClineMessages(updatedChatMessages)
-
-		// The chat has to redraw for the mark to become visible. The button already refreshes the
-		// webview itself, but the model freezes messages in the middle of a turn, and without this
-		// the mark would only surface on the next redraw - the tool reporting success over a chat
-		// that shows nothing.
-		await this.providerRef.deref()?.postStateToWebview()
 
 		return change
 	}
@@ -1868,38 +1800,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 	}
-
-	// kilocode_change start: send the rows that just gained a number to the webview.
-	/**
-	 * Re-sends the chat rows whose number changed during numbering.
-	 *
-	 * Rows are handed to the webview as they are created, well before the API message that gives
-	 * them their number exists. Without this the number would only appear after a reload, and the
-	 * user would have nothing to quote when asking for a message to be frozen.
-	 *
-	 * Only rows that actually changed are sent; an unchanged conversation costs nothing.
-	 */
-	private async postNewlyNumberedMessages(before: ClineMessage[], after: ClineMessage[]) {
-		const provider = this.providerRef.deref()
-		if (!provider) return
-
-		const previousSeqByTs = new Map<number, number | undefined>()
-		for (const message of before) {
-			previousSeqByTs.set(message.ts, message.seq)
-		}
-
-		for (const message of after) {
-			if (typeof message.seq !== "number") continue
-			if (previousSeqByTs.get(message.ts) === message.seq) continue
-
-			await provider.postMessageToWebview({
-				type: "messageUpdated",
-				taskId: this.taskId,
-				clineMessage: message,
-			})
-		}
-	}
-	// kilocode_change end
 
 	private async updateClineMessage(message: ClineMessage) {
 		const provider = this.providerRef.deref()
@@ -1924,21 +1824,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveClineMessages() {
 		try {
-			// kilocode_change start: carry the API message numbers over to the chat rows, so the
-			// number the user reads is the number the model was given. Saying "unfreeze #20" has to
-			// mean the same message on both sides.
-			//
-			// A row reaches the webview the moment it is created, which is before its API message
-			// exists and therefore before it has a number. Numbering it here would leave the chat
-			// showing nothing, so every row that just gained a number is sent again.
-			const beforeNumbering = this.clineMessages
-			this.clineMessages = assignNumbersToChatMessages(this.clineMessages, this.apiConversationHistory)
-
-			if (this.clineMessages !== beforeNumbering) {
-				await this.postNewlyNumberedMessages(beforeNumbering, this.clineMessages)
-			}
-			// kilocode_change end
-
 			await saveTaskMessages({
 				messages: this.clineMessages,
 				taskId: this.taskId,
@@ -6376,8 +6261,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		const cleanConversationHistory: (Anthropic.Messages.MessageParam | ReasoningItemForRequest)[] = []
-		// kilocode_change: one number per message for this request, worked out once
-		const messageNumbers = numberByPosition(messages)
 		for (const msg of messages) {
 			// Standalone reasoning: send encrypted, skip plain text
 			if (msg.type === "reasoning") {
@@ -6498,14 +6381,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (msg.role) {
 				cleanConversationHistory.push({
 					role: msg.role,
-					// kilocode_change: the number travels with the request only - the stored history
-					// keeps clean text, so the prefix is never persisted or duplicated. Messages
-					// without a stored number are numbered by position, so the model always has
-					// something to quote back when asked to freeze one.
-					content: applyNumberPrefixToContent(
-						msg.content as Anthropic.Messages.ContentBlockParam[] | string,
-						messageNumbers.get(msg),
-					) as Anthropic.Messages.ContentBlockParam[] | string,
+					content: msg.content as Anthropic.Messages.ContentBlockParam[] | string,
 				})
 			}
 		}

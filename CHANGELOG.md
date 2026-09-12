@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.256
+
+### Patch Changes
+
+- Freezing a message is now yours alone: the model can no longer freeze or unfreeze, and the message numbers are gone with it.
+
 ## 5.16.255
 
 ### Patch Changes

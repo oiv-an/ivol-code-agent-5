@@ -41,7 +41,6 @@ export const toolNames = [
 	"report_bug",
 	"condense",
 	"delete_file",
-	"freeze_messages",
 	// kilocode_change end
 	"update_todo_list",
 	"run_slash_command",

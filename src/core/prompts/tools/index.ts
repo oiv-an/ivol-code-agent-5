@@ -28,7 +28,6 @@ import { getUpdateTodoListDescription } from "./update-todo-list"
 import { getRunSlashCommandDescription } from "./run-slash-command"
 import { getGenerateImageDescription } from "./generate-image"
 import { getDeleteFileDescription } from "./delete-file" // kilocode_change
-import { getFreezeMessagesDescription } from "./kilocode/freeze-messages" // kilocode_change
 
 // kilocode_change start: Morph fast apply
 import { isFastApplyAvailable } from "../../tools/kilocode/editFileTool"
@@ -57,7 +56,6 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
 	fast_edit_file: () => getEditFileDescription(),
 	// kilocode_change end
 	delete_file: (args) => getDeleteFileDescription(args), // kilocode_change
-	freeze_messages: (args) => getFreezeMessagesDescription(args), // kilocode_change
 	apply_diff: (args) =>
 		args.diffStrategy ? args.diffStrategy.getToolDescription({ cwd: args.cwd, toolOptions: args.toolOptions }) : "",
 	update_todo_list: (args) => getUpdateTodoListDescription(args),
