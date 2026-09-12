@@ -363,7 +363,10 @@ main() {
 	if [ "$DRY_RUN" = true ]; then
 		log "Dry run finished. Nothing was published."
 		echo "VSIX: $VSIX_PATH"
-		printf '%s\n' "${BUILT_ARCHIVES[@]}"
+		# Building VS Code alone leaves this empty, and an empty array is an error under `set -u`.
+		if [ "${#BUILT_ARCHIVES[@]}" -gt 0 ]; then
+			printf '%s\n' "${BUILT_ARCHIVES[@]}"
+		fi
 		return 0
 	fi
 
