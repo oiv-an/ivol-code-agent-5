@@ -36,11 +36,20 @@ export const condenseTool = async (
 					),
 				)
 			} else {
+				if ((await cline.getIntelligentContextResetConfig()).enabled) {
+					await cline.queueOrdinaryContextPreparation("tool")
+					pushToolResult(
+						formatResponse.toolResult(
+							"Context compression queued. Update CURRENT_TASK.md with ordinary file tools first; compression will run after the tool results are saved.",
+						),
+					)
+					return
+				}
 				// If no response, the user accepted the condensed version
 				const { contextTokens: prevContextTokens } = cline.getTokenUsage()
 
 				await cline.runContextPreparation(async (signal) => {
-					const intelligentReset = await cline.getIntelligentContextResetConfig()
+					const { useNativeTools } = await cline.getIntelligentContextResetConfig()
 					// Use summarizeConversation to create a condensed version of the conversation
 					const summarizedMessages = await summarizeConversation(
 						cline.apiConversationHistory,
@@ -51,26 +60,13 @@ export const condenseTool = async (
 						false,
 						undefined,
 						undefined,
-						intelligentReset.useNativeTools,
+						useNativeTools,
 						{
-							enabled: intelligentReset.enabled,
 							signal,
-							prompt: intelligentReset.prompt,
-							...(intelligentReset.taskDocument
-								? { taskDocument: true, taskDocumentContext: cline.getTaskDocumentPreparationContext() }
-								: {}),
-							...(intelligentReset.enabled
-								? { onBeforeRequest: cline.notifyContextHandoffPreparing }
-								: {}),
 						},
 					)
-					// Persist and verify the restart handoff before changing history.
-					await cline.commitContextCondensation(
-						summarizedMessages,
-						"tool",
-						prevContextTokens,
-						intelligentReset.enabled,
-					)
+					// kilocode_change: CURRENT_TASK.md is saved and verified before history changes.
+					await cline.commitContextCondensation(summarizedMessages, "tool", prevContextTokens)
 					await cline.say(
 						"condense_context",
 						undefined,

@@ -1037,7 +1037,7 @@
 		"label": "Current Task (experimental)",
 		"description": "From the first task message, maintain CURRENT_TASK.md in the project root: requirements, all major blocks, completed stages and the exact next action. The internal TODO list belongs to the current block and does not replace the global plan.",
 		"compaction": "Update the file before automatic or manual context compaction and read it again afterwards. The task file is not deleted after compaction. Its contents are sent to the selected model and use additional tokens.",
-		"scope": "Experimental in VS Code, PhpStorm, IntelliJ IDEA and PyCharm. Off by default for each provider profile. Mutually exclusive with intelligent context reset: enabling either option turns the other off. Save the profile to apply. Disabling does not delete the file or task history."
+		"scope": "Experimental in VS Code, PhpStorm, IntelliJ IDEA and PyCharm. On by default for profiles without a saved choice; explicit opt-outs are preserved. Save the profile to apply changes. Disabling does not delete the file or task history."
 	},
 	"experimental": {
 		"DIFF_STRATEGY_UNIFIED": {

@@ -30,6 +30,22 @@ export class FileContextTracker {
 	private recentlyEditedByRoo = new Set<string>()
 	private checkpointPossibleFiles = new Set<string>()
 
+	// kilocode_change start: task-instance-local evidence from completed file tools, never watchers.
+	private taskDocumentWriteObservation?: { workspacePath: string; written: boolean }
+
+	public observeTaskDocumentWrites(workspacePath: string): { wasWritten: () => boolean; dispose: () => void } {
+		if (this.taskDocumentWriteObservation) throw new Error("Task document write observation is already active")
+		const observation = { workspacePath: path.resolve(workspacePath), written: false }
+		this.taskDocumentWriteObservation = observation
+		return {
+			wasWritten: () => observation.written,
+			dispose: () => {
+				if (this.taskDocumentWriteObservation === observation) this.taskDocumentWriteObservation = undefined
+			},
+		}
+	}
+	// kilocode_change end
+
 	constructor(provider: ClineProvider, taskId: string) {
 		this.providerRef = new WeakRef(provider)
 		this.taskId = taskId
@@ -79,11 +95,27 @@ export class FileContextTracker {
 	// Tracks a file operation in metadata and sets up a watcher for the file
 	// This is the main entry point for FileContextTracker and is called when a file is passed to Roo via a tool, mention, or edit.
 	async trackFileContext(filePath: string, operation: RecordSource) {
+		// kilocode_change: capture the scope before any await; an older edit cannot satisfy a newer preparation.
+		const observation = this.taskDocumentWriteObservation
 		try {
 			const cwd = this.getCwd()
 			if (!cwd) {
 				return
 			}
+
+			// kilocode_change start
+			// This entry point is called after file tools save. Metadata persistence is not write evidence.
+			// Reject deleted paths, directories and symlinks; no filesystem watcher calls this with roo_edited.
+			if (
+				operation === "roo_edited" &&
+				observation &&
+				path.resolve(cwd) === observation.workspacePath &&
+				path.resolve(cwd, filePath) === path.join(observation.workspacePath, "CURRENT_TASK.md")
+			) {
+				const stat = await fs.lstat(path.resolve(cwd, filePath))
+				if (stat.isFile() && this.taskDocumentWriteObservation === observation) observation.written = true
+			}
+			// kilocode_change end
 
 			await this.addFileToFileContextTracker(this.taskId, filePath, operation)
 

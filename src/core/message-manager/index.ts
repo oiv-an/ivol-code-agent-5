@@ -1,10 +1,6 @@
 import { Task } from "../task/Task"
 import { ClineMessage } from "@roo-code/types"
-import { ApiMessage } from "../task-persistence/apiMessages"
-import { cleanupAfterTruncation, getEffectiveApiHistory } from "../condense"
-// kilocode_change start: keep the restart handoff consistent with rewound history
-import { deleteContextHandoffFileIfOwned, hydratePendingContextHandoff } from "../context-management/context-handoff"
-// kilocode_change end
+import { cleanupAfterTruncation } from "../condense"
 
 export interface RewindOptions {
 	/** Whether to include the target message in deletion (edit=true, delete=false) */
@@ -17,86 +13,6 @@ interface ContextEventIds {
 	condenseIds: Set<string>
 	truncationIds: Set<string>
 }
-
-// kilocode_change start: identify the exact message that consumed a handoff.
-// Direct assistant text completes it immediately, while a tool call completes
-// only after its successful user tool_result is durable (matching Task behavior).
-function messageCompletesContextHandoff(message: ApiMessage, handoffId?: string): boolean {
-	if (message.isSummary) {
-		return false
-	}
-	if (
-		handoffId &&
-		(message as ApiMessage & { contextHandoffContinuationForId?: string }).contextHandoffContinuationForId ===
-			handoffId
-	) {
-		// Task records the exact durable message that completed a physical XML or
-		// native handoff read (and accepted embedded-only completions).
-		return true
-	}
-
-	if (typeof message.content === "string") {
-		return (
-			message.role === "assistant" &&
-			message.content.trim().length > 0 &&
-			!/^Failure: I did not provide a response\.?$/i.test(message.content.trim())
-		)
-	}
-
-	if (message.role === "user") {
-		return message.content.some((block) => {
-			const candidate = block as unknown as { type?: string; is_error?: boolean }
-			return candidate.type === "tool_result" && candidate.is_error !== true
-		})
-	}
-
-	const hasToolCall = message.content.some((block) => {
-		const type = (block as unknown as { type?: string }).type
-		return type === "tool_use" || type === "mcp_tool_use"
-	})
-	if (hasToolCall) {
-		return false
-	}
-
-	return message.content.some(
-		(block) =>
-			block.type === "text" &&
-			block.text.trim().length > 0 &&
-			!/^Failure: I did not provide a response\.?$/i.test(block.text.trim()),
-	)
-}
-
-function findConsumingContinuationMessage(messages: ApiMessage[], summary: ApiMessage): ApiMessage | undefined {
-	if (!summary.contextHandoffConsumedAt) {
-		return undefined
-	}
-
-	const summaryIndex = messages.findIndex((message) => message === summary)
-	if (summaryIndex === -1) {
-		return undefined
-	}
-
-	const createdAt = summary.contextHandoffCreatedAt ?? Number.NEGATIVE_INFINITY
-	const consumedAt = summary.contextHandoffConsumedAt
-	let consumingMessage: ApiMessage | undefined
-
-	for (let index = summaryIndex + 1; index < messages.length; index++) {
-		const message = messages[index]
-		if (!messageCompletesContextHandoff(message, summary.contextHandoffId)) {
-			continue
-		}
-
-		if (message.ts === undefined || (message.ts >= createdAt && message.ts <= consumedAt)) {
-			// The consumed marker is saved immediately after this continuation.
-			// Choosing the last bounded candidate also handles equal-ms timestamps
-			// from messages that already existed when condensation ran.
-			consumingMessage = message
-		}
-	}
-
-	return consumingMessage
-}
-// kilocode_change end
 
 /**
  * MessageManager provides centralized handling for all conversation rewind operations.
@@ -285,52 +201,6 @@ export class MessageManager {
 			})
 		}
 
-		// kilocode_change start: keep CONTEXT_RESTART.md aligned with rewind state.
-		// Capture pending summaries that disappeared so their file can be removed
-		// after history commits. For retained consumed summaries, re-arm only when
-		// the exact continuation message that consumed the handoff was removed.
-		const retainedHandoffIds = new Set(
-			apiHistory.flatMap((message) => (message.contextHandoffId ? [message.contextHandoffId] : [])),
-		)
-		const removedPendingHandoffs = new Map<string, { handoffId: string; sha256: string }>()
-		for (const message of originalHistory) {
-			const handoffId = message.contextHandoffId
-			const sha256 = message.contextHandoffSha256
-			if (
-				message.isSummary &&
-				handoffId &&
-				sha256 &&
-				/^[a-f0-9]{64}$/.test(sha256) &&
-				!message.contextHandoffConsumedAt &&
-				!retainedHandoffIds.has(handoffId)
-			) {
-				removedPendingHandoffs.set(`${handoffId}.${sha256}`, { handoffId, sha256 })
-			}
-		}
-		// Missing or malformed hashes cannot identify the saved revision safely.
-		// Preserve those files rather than deleting user edits by handoff ID alone.
-		const retainedMessages = new Set(apiHistory)
-		let rearmedHandoff = false
-		apiHistory = apiHistory.map((message) => {
-			if (!message.isSummary || !message.contextHandoffId || !message.contextHandoffConsumedAt) {
-				return message
-			}
-
-			const originalSummary = originalHistory.find(
-				(candidate) => candidate.contextHandoffId === message.contextHandoffId,
-			)
-			const consumingMessage = originalSummary
-				? findConsumingContinuationMessage(originalHistory, originalSummary)
-				: undefined
-			if (!consumingMessage || retainedMessages.has(consumingMessage)) {
-				return message
-			}
-
-			rearmedHandoff = true
-			return { ...message, contextHandoffConsumedAt: undefined }
-		})
-		// kilocode_change end
-
 		// Step 5: Cleanup orphaned tags (unless skipped)
 		if (!skipCleanup) {
 			apiHistory = cleanupAfterTruncation(apiHistory)
@@ -343,24 +213,5 @@ export class MessageManager {
 		if (historyChanged) {
 			await this.task.overwriteApiConversationHistory(apiHistory)
 		}
-
-		// kilocode_change start: perform file side effects only after the rewound
-		// history has been persisted. Ownership checks prevent one task from
-		// deleting another task's fixed workspace handoff.
-		for (const { handoffId, sha256 } of removedPendingHandoffs.values()) {
-			try {
-				await deleteContextHandoffFileIfOwned({ workspacePath: this.task.cwd, handoffId, sha256 })
-			} catch (error) {
-				console.warn(`[MessageManager] Failed to remove rewound context handoff ${handoffId}:`, error)
-			}
-		}
-
-		if (rearmedHandoff) {
-			await hydratePendingContextHandoff({
-				messages: getEffectiveApiHistory(apiHistory),
-				workspacePath: this.task.cwd,
-			})
-		}
-		// kilocode_change end
 	}
 }

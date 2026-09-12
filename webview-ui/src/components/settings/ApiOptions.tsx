@@ -1,3 +1,4 @@
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { convertHeadersToObject } from "./utils/headers"
 import { useDebounce } from "react-use"
@@ -52,7 +53,6 @@ import {
 	nanoGptDefaultModelId, //kilocode_change
 	poeDefaultModelId, // kilocode_change
 	isDynamicProvider, // kilocode_change
-	isIntelligentContextResetEnabled, // kilocode_change
 } from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
@@ -68,8 +68,8 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 //} from "@src/components/ui/hooks/useOpenRouterModelProviders"
 // kilocode_change start
 import { filterModels } from "./utils/organizationFilters"
+// kilocode_change: the removed context-reset action no longer needs Button.
 import {
-	Button, // kilocode_change
 	Select,
 	SelectTrigger,
 	SelectValue,
@@ -168,7 +168,6 @@ export interface ApiOptionsProps {
 	setErrorMessage: React.Dispatch<React.SetStateAction<string | undefined>>
 	hideKiloCodeButton?: boolean // kilocode_change
 	currentApiConfigName?: string // kilocode_change
-	onEditIntelligentContextResetPrompt?: () => void // kilocode_change
 }
 
 const ApiOptions = ({
@@ -180,7 +179,6 @@ const ApiOptions = ({
 	setErrorMessage,
 	hideKiloCodeButton = false,
 	currentApiConfigName, // kilocode_change
-	onEditIntelligentContextResetPrompt, // kilocode_change
 }: ApiOptionsProps) => {
 	const { t } = useAppTranslation()
 	const {
@@ -191,12 +189,10 @@ const ApiOptions = ({
 		openAiCodexIsAuthenticated,
 		taskDocumentSettings, // kilocode_change: feature support is decided by the host, not by the selected profile.
 	} = useExtensionState()
-	// kilocode_change start: imported conflicting profiles prefer the explicitly opted-in task mode.
+	// kilocode_change start: the host decides support; the profile decides the opt-in.
 	const intelligentTaskSupported = taskDocumentSettings?.supported === true
-	const intelligentTaskEnabled = intelligentTaskSupported && apiConfiguration.intelligentTaskEnabled === true
-	// kilocode_change: freezing is off until the profile asks for it
-	const intelligentContextResetEnabled =
-		!intelligentTaskEnabled && isIntelligentContextResetEnabled(apiConfiguration.intelligentContextResetEnabled)
+	const intelligentTaskEnabled =
+		intelligentTaskSupported && isIntelligentTaskEnabled(apiConfiguration.intelligentTaskEnabled)
 	// kilocode_change end
 
 	const [customHeaders, setCustomHeaders] = useState<[string, string][]>(() => {
@@ -629,59 +625,29 @@ const ApiOptions = ({
 			)}
 			{/* kilocode_change end */}
 
-			{/* kilocode_change start: per-profile context reset is a primary provider setting. */}
-			{!fromWelcomeView && (
+			{/* kilocode_change start: the per-profile working file is a primary provider setting. */}
+			{!fromWelcomeView && intelligentTaskSupported && (
 				<div className="flex flex-col gap-1">
 					<VSCodeCheckbox
-						data-testid="provider-intelligent-context-reset-checkbox"
-						checked={intelligentContextResetEnabled}
-						onChange={(event) => {
-							const enabled = (event.target as HTMLInputElement).checked
-							if (enabled) {
-								if (intelligentTaskSupported) setApiConfigurationField("intelligentTaskEnabled", false)
-							}
-							setApiConfigurationField("intelligentContextResetEnabled", enabled)
-						}}>
-						{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
+						data-testid="provider-intelligent-task-checkbox"
+						checked={intelligentTaskEnabled}
+						onChange={(event) =>
+							setApiConfigurationField(
+								"intelligentTaskEnabled",
+								(event.target as HTMLInputElement).checked,
+							)
+						}>
+						{t("settings:intelligentTask.label")}
 					</VSCodeCheckbox>
-					<div className="text-vscode-descriptionForeground text-sm">
-						{t("prompts:supportPrompts.condense.intelligentContextReset.profileDescription")}
-					</div>
-					{onEditIntelligentContextResetPrompt && (
-						<Button
-							type="button"
-							variant="link"
-							className="self-start h-auto p-0"
-							data-testid="edit-intelligent-context-reset-prompt"
-							onClick={onEditIntelligentContextResetPrompt}>
-							{t("prompts:supportPrompts.condense.intelligentContextReset.editPrompt")}
-						</Button>
-					)}
-					{intelligentTaskSupported && (
-						<div className="mt-2 space-y-1">
-							<VSCodeCheckbox
-								data-testid="provider-intelligent-task-checkbox"
-								checked={intelligentTaskEnabled}
-								onChange={(event) => {
-									const enabled = (event.target as HTMLInputElement).checked
-									if (enabled) {
-										setApiConfigurationField("intelligentContextResetEnabled", false)
-									}
-									setApiConfigurationField("intelligentTaskEnabled", enabled)
-								}}>
-								{t("settings:intelligentTask.label")}
-							</VSCodeCheckbox>
-							<p className="m-0 text-sm text-vscode-descriptionForeground">
-								{t("settings:intelligentTask.description")}
-							</p>
-							<p className="m-0 text-sm text-vscode-descriptionForeground">
-								{t("settings:intelligentTask.compaction")}
-							</p>
-							<p className="m-0 text-xs text-vscode-descriptionForeground">
-								{t("settings:intelligentTask.scope")}
-							</p>
-						</div>
-					)}
+					<p className="m-0 text-sm text-vscode-descriptionForeground">
+						{t("settings:intelligentTask.description")}
+					</p>
+					<p className="m-0 text-sm text-vscode-descriptionForeground">
+						{t("settings:intelligentTask.compaction")}
+					</p>
+					<p className="m-0 text-xs text-vscode-descriptionForeground">
+						{t("settings:intelligentTask.scope")}
+					</p>
 				</div>
 			)}
 			{/* kilocode_change end */}

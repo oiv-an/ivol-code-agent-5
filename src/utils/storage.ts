@@ -76,10 +76,11 @@ export function getStorageBasePathSync(defaultPath: string): string {
 /**
  * Gets the storage directory path for a task
  */
-export async function getTaskDirectoryPath(globalStoragePath: string, taskId: string): Promise<string> {
+export async function getTaskDirectoryPath(globalStoragePath: string, taskId: string, create = true): Promise<string> {
+	// kilocode_change
 	const basePath = await getStorageBasePath(globalStoragePath)
 	const taskDir = path.join(basePath, "tasks", taskId)
-	await fs.mkdir(taskDir, { recursive: true })
+	if (create) await fs.mkdir(taskDir, { recursive: true }) // kilocode_change: intent reads must not create task directories
 	return taskDir
 }
 

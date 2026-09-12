@@ -76,6 +76,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { result } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
+		// kilocode_change start: a preparation turn is not completion of the user's task.
+		if (task.isOrdinaryContextPreparationEditing) {
+			pushToolResult(
+				formatResponse.toolError(
+					"Context preparation is pending. Update CURRENT_TASK.md with ordinary file tools; do not complete the task.",
+				),
+			)
+			return
+		}
+		// kilocode_change end
+
 		// Prevent attempt_completion if any tool failed in the current turn
 		if (task.didToolFailInCurrentTurn) {
 			const errorMsg = t("common:errors.attempt_completion_tool_failed")

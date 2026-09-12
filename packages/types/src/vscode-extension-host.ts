@@ -325,7 +325,7 @@ export interface ExtensionMessage {
 		| "askReviewScope" // kilocode_change: Review mode scope selection
 		| "openAiCodexRateLimits"
 	text?: string
-	contextMemoryMode?: "task" | "handoff" | "standard" // kilocode_change: actual mode of context preparation progress.
+	contextMemoryMode?: "task" | "standard" // kilocode_change: actual mode of context preparation progress.
 	// kilocode_change start
 	completionRequestId?: string // Correlation ID from request
 	completionText?: string // The completed text
@@ -633,7 +633,6 @@ export type ExtensionState = Pick<
 	| "autoPurgeLastRunTimestamp" // kilocode_change
 	| "condensingApiConfigId"
 	| "customCondensingPrompt"
-	| "intelligentContextResetPrompt"
 	| "yoloGatekeeperApiConfigId" // kilocode_change: AI gatekeeper for YOLO mode
 	| "codebaseIndexConfig"
 	| "codebaseIndexModels"
@@ -659,7 +658,6 @@ export type ExtensionState = Pick<
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	currentTaskCumulativeCost?: number // kilocode_change: cumulative cost including deleted messages
 	apiConfiguration: ProviderSettings
-	intelligentContextResetEnabled?: boolean // kilocode_change: effective active-profile alias for older clients
 	uriScheme?: string
 	uiKind?: string // kilocode_change
 
@@ -1083,7 +1081,7 @@ export interface WebviewMessage {
 		| "refreshSkills"
 		| "reviewScopeSelected" // kilocode_change: Review mode scope selection
 	text?: string
-	contextMemoryMode?: "task" | "handoff" | "standard" // kilocode_change: supported hosts send the saved mode selected for manual compaction.
+	contextMemoryMode?: "task" | "standard" // kilocode_change: supported hosts send the saved mode selected for manual compaction.
 	suggestionLength?: number // kilocode_change: Length of accepted suggestion for telemetry
 	completionRequestId?: string // kilocode_change
 	shareId?: string // kilocode_change - for sessionFork

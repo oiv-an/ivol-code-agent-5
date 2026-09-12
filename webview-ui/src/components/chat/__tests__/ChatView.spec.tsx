@@ -1435,11 +1435,7 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		{ type: "say", say: "text", ts: 1000, text: "Initial task" },
 		{ type: "say", say: "text", ts: 2000, text: "Working on the task" },
 	]
-	const dispatchProgress = async (
-		type: string,
-		taskId = "test-task-id",
-		contextMemoryMode?: "task" | "handoff" | "standard",
-	) => {
+	const dispatchProgress = async (type: string, taskId = "test-task-id", contextMemoryMode?: "task" | "standard") => {
 		await act(async () => {
 			window.dispatchEvent(new MessageEvent("message", { data: { type, text: taskId, contextMemoryMode } }))
 		})
@@ -1471,6 +1467,8 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 			mockPostMessage({
 				clineMessages: taskMessages,
 				currentTaskItem: { id: "previous-task", ts: 1000, task: "Initial task" },
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
+				taskDocumentSettings: { enabled: true, supported: true, fileName: "CURRENT_TASK.md" },
 			})
 			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
 			await dispatchProgress("contextHandoffStarted", "previous-task")
@@ -1482,6 +1480,8 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 					{ type: "say", say: "text", ts: 5000, text: "Different work" },
 				],
 				currentTaskItem: { id: "test-task-id", ts: 4000, task: "Different task" },
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
+				taskDocumentSettings: { enabled: true, supported: true, fileName: "CURRENT_TASK.md" },
 			})
 			await waitFor(() => expect(container.textContent).toContain("Different work"))
 			expect(partialRows(container)).toEqual([])
@@ -1540,14 +1540,14 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		expect(partialRows(container)).toEqual([])
 	})
 
-	it.each([undefined, true, false])(
-		"chooses the correct initial manual progress for intelligent reset %s",
-		async (intelligentContextResetEnabled) => {
+	it.each([undefined, false])(
+		"condenses without preparation while host support is unknown (%s)",
+		async (intelligentTaskEnabled) => {
 			const { container } = renderChatView()
 			mockPostMessage({
 				clineMessages: taskMessages,
 				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
-				apiConfiguration: { apiProvider: "anthropic", intelligentContextResetEnabled },
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled },
 			})
 			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
 			const button = container.querySelector("button:has(svg.lucide-fold-vertical)")
@@ -1558,9 +1558,7 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 				type: "condenseTaskContextRequest",
 				text: "test-task-id",
 			})
-			expect(partialRows(container).map((row) => row.say)).toEqual([
-				intelligentContextResetEnabled === false ? "condense_context" : "context_handoff",
-			])
+			expect(partialRows(container).map((row) => row.say)).toEqual(["condense_context"])
 			await dispatchProgress("condenseTaskContextResponse")
 			expect(partialRows(container)).toEqual([])
 			expect(container.querySelector("input[data-sending-disabled]")).toHaveAttribute(
@@ -1578,11 +1576,7 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 			mockPostMessage({
 				clineMessages: taskMessages,
 				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
-				apiConfiguration: {
-					apiProvider: "anthropic",
-					intelligentContextResetEnabled: false,
-					intelligentTaskEnabled: true,
-				},
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
 				taskDocumentSettings: { enabled: supported, supported, fileName: "CURRENT_TASK.md" },
 			})
 			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
@@ -1607,32 +1601,17 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 	)
 
 	it.each([
-		{
-			intelligentTaskEnabled: true,
-			intelligentContextResetEnabled: true,
-			cachedEnabled: false,
-			expectedMode: "task",
-		},
-		{
-			intelligentTaskEnabled: false,
-			intelligentContextResetEnabled: true,
-			cachedEnabled: true,
-			expectedMode: "handoff",
-		},
-		{
-			intelligentTaskEnabled: false,
-			intelligentContextResetEnabled: false,
-			cachedEnabled: true,
-			expectedMode: "standard",
-		},
+		{ intelligentTaskEnabled: true, cachedEnabled: false, expectedMode: "task" },
+		{ intelligentTaskEnabled: undefined, cachedEnabled: false, expectedMode: "task" },
+		{ intelligentTaskEnabled: false, cachedEnabled: true, expectedMode: "standard" },
 	])(
 		"uses saved profile flags for manual mode $expectedMode even when derived settings are stale",
-		async ({ intelligentTaskEnabled, intelligentContextResetEnabled, cachedEnabled, expectedMode }) => {
+		async ({ intelligentTaskEnabled, cachedEnabled, expectedMode }) => {
 			const { container } = renderChatView()
 			mockPostMessage({
 				clineMessages: taskMessages,
 				currentTaskItem: { id: "test-task-id", ts: 1000, task: "Initial task" },
-				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled, intelligentContextResetEnabled },
+				apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled },
 				taskDocumentSettings: { enabled: cachedEnabled, supported: true, fileName: "CURRENT_TASK.md" },
 			})
 			await waitFor(() => expect(container.textContent).toContain("Working on the task"))
@@ -1665,7 +1644,7 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 			clineMessages: taskMessages,
 			apiConfiguration: { apiProvider: "anthropic", intelligentTaskEnabled: true },
 		})
-		await dispatchProgress("contextHandoffStarted", "test-task-id", "handoff")
+		await dispatchProgress("contextHandoffStarted", "test-task-id", "standard")
 		expect(partialRows(container)[0].text).toBeUndefined()
 		await dispatchProgress("contextHandoffStarted", "previous-task", "task")
 		expect(partialRows(container)[0].text).toBeUndefined()
@@ -1698,13 +1677,12 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		expect(partialRows(container)[0].text).toBeUndefined()
 	})
 
-	it("identifies automatic persistent task preparation using the active profile without relabeling legacy mode", async () => {
+	it("identifies automatic persistent task preparation using the active profile", async () => {
 		const { container } = renderChatView()
 		mockPostMessage({
 			clineMessages: taskMessages,
 			apiConfiguration: {
 				apiProvider: "anthropic",
-				intelligentContextResetEnabled: false,
 				intelligentTaskEnabled: true,
 			},
 			taskDocumentSettings: { enabled: true, supported: true, fileName: "CURRENT_TASK.md" },

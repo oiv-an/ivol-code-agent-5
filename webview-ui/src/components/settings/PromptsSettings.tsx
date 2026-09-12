@@ -1,12 +1,8 @@
-import { useState, useEffect, useRef, FormEvent } from "react" // kilocode_change
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
+import { useState, useEffect, FormEvent } from "react" // kilocode_change
 import { VSCodeTextArea, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 
 import { supportPrompt, SupportPromptType } from "@roo/support-prompt"
-import {
-	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
-	getIntelligentContextResetPrompt,
-	isIntelligentContextResetEnabled,
-} from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -33,11 +29,8 @@ interface PromptsSettingsProps {
 	includeTaskHistoryInEnhance?: boolean
 	setIncludeTaskHistoryInEnhance?: (value: boolean) => void
 	// kilocode_change start: edit the selected provider profile, which may not be the active profile.
-	intelligentContextResetEnabled?: boolean
-	onIntelligentContextResetEnabledChange?: (enabled: boolean) => void
 	intelligentTaskEnabled?: boolean
 	onIntelligentTaskEnabledChange?: (enabled: boolean) => void
-	focusIntelligentContextResetPrompt?: boolean
 	// kilocode_change end
 }
 
@@ -47,11 +40,8 @@ const PromptsSettings = ({
 	includeTaskHistoryInEnhance: propsIncludeTaskHistoryInEnhance,
 	setIncludeTaskHistoryInEnhance: propsSetIncludeTaskHistoryInEnhance,
 	// kilocode_change start
-	intelligentContextResetEnabled: profileIntelligentContextResetEnabled,
-	onIntelligentContextResetEnabledChange,
 	intelligentTaskEnabled: profileIntelligentTaskEnabled,
 	onIntelligentTaskEnabledChange,
-	focusIntelligentContextResetPrompt = false,
 	// kilocode_change end
 }: PromptsSettingsProps) => {
 	const { t } = useAppTranslation()
@@ -66,8 +56,6 @@ const PromptsSettings = ({
 		apiConfiguration,
 		setApiConfiguration,
 		currentApiConfigName,
-		intelligentContextResetPrompt,
-		setIntelligentContextResetPrompt,
 		taskDocumentSettings, // kilocode_change: supported host only, no local capability inference.
 		includeTaskHistoryInEnhance: contextIncludeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance: contextSetIncludeTaskHistoryInEnhance,
@@ -79,35 +67,15 @@ const PromptsSettings = ({
 
 	const [testPrompt, setTestPrompt] = useState("")
 	const [isEnhancing, setIsEnhancing] = useState(false)
-	const [activeSupportOption, setActiveSupportOption] = useState<SupportPromptType>(
-		focusIntelligentContextResetPrompt ? "CONDENSE" : "ENHANCE",
-	) // kilocode_change
+	const [activeSupportOption, setActiveSupportOption] = useState<SupportPromptType>("ENHANCE")
 	// kilocode_change start
-	const editingProfile = !!onIntelligentContextResetEnabledChange || !!onIntelligentTaskEnabledChange
+	const editingProfile = !!onIntelligentTaskEnabledChange
 	const intelligentTaskSupported = taskDocumentSettings?.supported === true
 	const intelligentTaskEnabled =
 		intelligentTaskSupported &&
-		(editingProfile ? profileIntelligentTaskEnabled : apiConfiguration?.intelligentTaskEnabled) === true
-	const profileContextResetEnabled = editingProfile
-		? profileIntelligentContextResetEnabled
-		: apiConfiguration?.intelligentContextResetEnabled
-	const intelligentContextResetEnabled =
-		!intelligentTaskEnabled && isIntelligentContextResetEnabled(profileContextResetEnabled)
-	const intelligentContextResetSectionRef = useRef<HTMLDivElement>(null)
-	useEffect(() => {
-		if (focusIntelligentContextResetPrompt) {
-			setActiveSupportOption("CONDENSE")
-		}
-	}, [focusIntelligentContextResetPrompt])
-	useEffect(() => {
-		if (focusIntelligentContextResetPrompt && activeSupportOption === "CONDENSE") {
-			const section = intelligentContextResetSectionRef.current
-			section?.scrollIntoView?.({ block: "center" })
-			section
-				?.querySelector<HTMLElement>('[data-testid="intelligent-context-reset-prompt"]')
-				?.focus({ preventScroll: true })
-		}
-	}, [focusIntelligentContextResetPrompt, activeSupportOption])
+		isIntelligentTaskEnabled(
+			editingProfile ? profileIntelligentTaskEnabled : apiConfiguration?.intelligentTaskEnabled,
+		)
 
 	// Local state for condensing prompt to prevent flickering during typing
 	const [localCondensingPrompt, setLocalCondensingPrompt] = useState<string | undefined>(undefined)
@@ -206,42 +174,14 @@ const PromptsSettings = ({
 		})
 	}
 
-	const updateIntelligentContextResetEnabled = (enabled: boolean) => {
-		// kilocode_change start: never save a provider checkbox as a global setting.
-		if (editingProfile && !onIntelligentContextResetEnabledChange) return
-		if (onIntelligentContextResetEnabledChange) {
-			if (enabled && intelligentTaskSupported) onIntelligentTaskEnabledChange?.(false)
-			onIntelligentContextResetEnabledChange(enabled)
-			return
-		}
-		const updatedConfiguration = {
-			...apiConfiguration,
-			intelligentContextResetEnabled: enabled,
-			...(enabled && intelligentTaskSupported ? { intelligentTaskEnabled: false } : {}),
-		}
-		setApiConfiguration(updatedConfiguration)
-		vscode.postMessage({
-			type: "upsertApiConfiguration",
-			text: currentApiConfigName || "default",
-			apiConfiguration: updatedConfiguration,
-		})
-		// kilocode_change end
-	}
-
-	// kilocode_change start: switch modes within the same selected provider draft.
+	// kilocode_change start: the working file is a per-profile choice, never a global setting.
 	const updateIntelligentTaskEnabled = (enabled: boolean) => {
 		if (!intelligentTaskSupported) return
-		if (editingProfile && !onIntelligentTaskEnabledChange) return
-		if (onIntelligentTaskEnabledChange) {
-			if (enabled) onIntelligentContextResetEnabledChange?.(false)
-			onIntelligentTaskEnabledChange(enabled)
+		if (editingProfile) {
+			onIntelligentTaskEnabledChange?.(enabled)
 			return
 		}
-		const updatedConfiguration = {
-			...apiConfiguration,
-			intelligentTaskEnabled: enabled,
-			...(enabled ? { intelligentContextResetEnabled: false } : {}),
-		}
+		const updatedConfiguration = { ...apiConfiguration, intelligentTaskEnabled: enabled }
 		setApiConfiguration(updatedConfiguration)
 		vscode.postMessage({
 			type: "upsertApiConfiguration",
@@ -250,14 +190,6 @@ const PromptsSettings = ({
 		})
 	}
 	// kilocode_change end
-
-	const updateIntelligentContextResetPrompt = (prompt: string) => {
-		setIntelligentContextResetPrompt(prompt)
-		vscode.postMessage({
-			type: "updateSettings",
-			updatedSettings: { intelligentContextResetPrompt: prompt },
-		})
-	}
 
 	return (
 		<div>
@@ -402,82 +334,29 @@ const PromptsSettings = ({
 								</div>
 							</div>
 
-							{/* kilocode_change start: keep mutually exclusive memory modes adjacent and profile-scoped. */}
-							{activeSupportOption === "CONDENSE" && (
-								<div ref={intelligentContextResetSectionRef}>
+							{/* kilocode_change start: the working file is chosen per provider profile. */}
+							{activeSupportOption === "CONDENSE" && intelligentTaskSupported && (
+								<div className="space-y-1">
 									<VSCodeCheckbox
-										data-testid="intelligent-context-reset-checkbox"
-										disabled={editingProfile && !onIntelligentContextResetEnabledChange}
-										checked={intelligentContextResetEnabled}
+										data-testid="intelligent-task-checkbox"
+										checked={intelligentTaskEnabled}
 										onChange={(e: Event | FormEvent<HTMLElement>) => {
 											const target = ("target" in e ? e.target : null) as HTMLInputElement | null
 											if (target) {
-												updateIntelligentContextResetEnabled(target.checked)
+												updateIntelligentTaskEnabled(target.checked)
 											}
 										}}>
-										<span className="font-medium">
-											{t("prompts:supportPrompts.condense.intelligentContextReset.label")}
-										</span>
+										<span className="font-medium">{t("settings:intelligentTask.label")}</span>
 									</VSCodeCheckbox>
-									<div className="text-vscode-descriptionForeground text-sm mt-1">
-										{t("prompts:supportPrompts.condense.intelligentContextReset.description")}
-									</div>
-
-									{intelligentTaskSupported && (
-										<div className="mt-3 space-y-1">
-											<VSCodeCheckbox
-												data-testid="intelligent-task-checkbox"
-												disabled={editingProfile && !onIntelligentTaskEnabledChange}
-												checked={intelligentTaskEnabled}
-												onChange={(event) =>
-													updateIntelligentTaskEnabled(
-														(event.target as HTMLInputElement).checked,
-													)
-												}>
-												<span className="font-medium">
-													{t("settings:intelligentTask.label")}
-												</span>
-											</VSCodeCheckbox>
-											<p className="m-0 text-sm text-vscode-descriptionForeground">
-												{t("settings:intelligentTask.description")}
-											</p>
-											<p className="m-0 text-sm text-vscode-descriptionForeground">
-												{t("settings:intelligentTask.compaction")}
-											</p>
-											<p className="m-0 text-xs text-vscode-descriptionForeground">
-												{t("settings:intelligentTask.scope")}
-											</p>
-										</div>
-									)}
-
-									{(intelligentContextResetEnabled || focusIntelligentContextResetPrompt) && (
-										<div className="mt-3">
-											<label className="block font-medium mb-1">
-												{t(
-													"prompts:supportPrompts.condense.intelligentContextReset.promptLabel",
-												)}
-											</label>
-											<VSCodeTextArea
-												data-testid="intelligent-context-reset-prompt"
-												resize="vertical"
-												rows={12}
-												className="w-full"
-												value={getIntelligentContextResetPrompt(intelligentContextResetPrompt)}
-												placeholder={DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT}
-												onInput={(e) => {
-													const value =
-														(e as unknown as CustomEvent)?.detail?.target?.value ??
-														((e as any).target as HTMLTextAreaElement).value
-													updateIntelligentContextResetPrompt(value)
-												}}
-											/>
-											<div className="text-vscode-descriptionForeground text-sm mt-1">
-												{t(
-													"prompts:supportPrompts.condense.intelligentContextReset.promptDescription",
-												)}
-											</div>
-										</div>
-									)}
+									<p className="m-0 text-sm text-vscode-descriptionForeground">
+										{t("settings:intelligentTask.description")}
+									</p>
+									<p className="m-0 text-sm text-vscode-descriptionForeground">
+										{t("settings:intelligentTask.compaction")}
+									</p>
+									<p className="m-0 text-xs text-vscode-descriptionForeground">
+										{t("settings:intelligentTask.scope")}
+									</p>
 								</div>
 							)}
 

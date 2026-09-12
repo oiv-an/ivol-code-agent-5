@@ -42,12 +42,11 @@ describe("condenseTool preparation transaction", () => {
 			}),
 			getTokenUsage: vi.fn().mockReturnValue({ contextTokens: 150_000 }),
 			getIntelligentContextResetConfig: vi.fn().mockResolvedValue({
-				enabled: true,
-				prompt: "Save precise task handoff",
+				enabled: false,
 				useNativeTools: true,
 			}),
 			getSystemPrompt: vi.fn().mockResolvedValue("System instructions"),
-			notifyContextHandoffPreparing: vi.fn().mockResolvedValue(undefined),
+			notifyTaskDocumentPreparing: vi.fn().mockResolvedValue(undefined),
 			runContextPreparation: vi
 				.fn()
 				.mockImplementation(async (operation: (signal: AbortSignal) => Promise<void>) => {
@@ -95,6 +94,18 @@ describe("condenseTool preparation transaction", () => {
 		await condenseTool(task as Task, block, vi.fn(), handleError, pushToolResult, (_tag, content) => content ?? "")
 	}
 
+	it("queues ordinary editing without summarizing or claiming compression in task mode", async () => {
+		task.getIntelligentContextResetConfig.mockResolvedValue({ enabled: true, useNativeTools: true })
+		task.queueOrdinaryContextPreparation = vi.fn().mockResolvedValue(undefined)
+		await execute()
+		expect(task.queueOrdinaryContextPreparation).toHaveBeenCalledWith("tool")
+		expect(summarize).not.toHaveBeenCalled()
+		expect(task.commitContextCondensation).not.toHaveBeenCalled()
+		expect(pushToolResult).toHaveBeenCalledWith(expect.stringContaining("queued"))
+		expect(pushToolResult).not.toHaveBeenCalledWith("CONDENSATION_COMMITTED")
+		expect(handleError).not.toHaveBeenCalled()
+	})
+
 	it("reports success only after preparation, verified commit, and the saved UI result", async () => {
 		await execute()
 		expect(events).toEqual([
@@ -114,7 +125,6 @@ describe("condenseTool preparation transaction", () => {
 			expect.objectContaining({ summary: "Saved handoff", condenseId: "summary-1" }),
 			"tool",
 			150_000,
-			true,
 		)
 		expect(task.say).toHaveBeenCalledWith(
 			"condense_context",
@@ -134,7 +144,7 @@ describe("condenseTool preparation transaction", () => {
 		)
 	})
 
-	it("passes the preparation's exact AbortSignal and handoff callback to summarization", async () => {
+	it("passes the preparation's exact AbortSignal to ordinary summarization", async () => {
 		await execute()
 		expect(summarize).toHaveBeenCalledWith(
 			task.apiConversationHistory,
@@ -147,10 +157,7 @@ describe("condenseTool preparation transaction", () => {
 			undefined,
 			true,
 			{
-				enabled: true,
 				signal: controller.signal,
-				prompt: "Save precise task handoff",
-				onBeforeRequest: task.notifyContextHandoffPreparing,
 			},
 		)
 	})
@@ -257,11 +264,12 @@ describe("condenseTool preparation transaction", () => {
 		expect(task.finishContextCondensation).toHaveBeenCalledOnce()
 	})
 
-	it("keeps the handoff checkbox disabled without enabling its preflight callback", async () => {
+	it("keeps the task document mode disabled without enabling its preflight callback", async () => {
 		task.getIntelligentContextResetConfig.mockResolvedValue({ enabled: false, useNativeTools: false })
 		await execute()
-		expect(summarize.mock.calls[0][9]).toEqual({ enabled: false, signal: controller.signal, prompt: undefined })
-		expect(task.commitContextCondensation).toHaveBeenCalledWith(expect.anything(), "tool", 150_000, false)
+		expect(summarize.mock.calls[0][9]).toEqual({ signal: controller.signal })
+		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
+		expect(task.commitContextCondensation).toHaveBeenCalledWith(expect.anything(), "tool", 150_000)
 	})
 
 	it("returns user feedback without performing a context transaction", async () => {

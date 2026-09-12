@@ -1,3 +1,4 @@
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react"
 import { useDeepCompareEffect, useEvent } from "react-use"
 import debounce from "debounce"
@@ -129,14 +130,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		sendMessageOnEnter, // kilocode_change
 		isBrowserSessionActive,
 	} = useExtensionState()
-	const intelligentTaskEnabled =
-		taskDocumentSettings?.supported === true && apiConfiguration?.intelligentTaskEnabled === true // kilocode_change
 	// kilocode_change start: manual requests use saved extension state, never an unsaved settings draft.
-	const contextMemoryMode = intelligentTaskEnabled
-		? "task"
-		: (apiConfiguration?.intelligentContextResetEnabled ?? true)
-			? "handoff"
-			: "standard"
+	const intelligentTaskEnabled =
+		taskDocumentSettings?.supported === true && isIntelligentTaskEnabled(apiConfiguration?.intelligentTaskEnabled)
+	const contextMemoryMode = intelligentTaskEnabled ? "task" : "standard"
 	// kilocode_change end
 
 	const messagesRef = useRef(messages)

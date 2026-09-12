@@ -1,9 +1,10 @@
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 // kilocode_change - new file
 import path from "node:path"
 import type { WorkspaceFolder } from "vscode"
-import { isIntelligentContextResetEnabled, type TaskDocumentSettings } from "@roo-code/types"
+import type { TaskDocumentSettings } from "@roo-code/types"
 import type { KiloCodeWrapperProperties } from "../../shared/kilocode/wrapper"
-import { DEFAULT_TASK_DOCUMENT_FILE } from "./document"
+const DEFAULT_TASK_DOCUMENT_FILE = "CURRENT_TASK.md"
 
 export interface TaskDocumentSettingsEnvironment {
 	appName: string
@@ -14,7 +15,6 @@ export interface TaskDocumentSettingsEnvironment {
 
 export interface ContextMemoryConfiguration {
 	intelligentTaskEnabled?: boolean
-	intelligentContextResetEnabled?: boolean
 }
 
 /** Never turn the generic HOME/current-directory fallback into an opted-in project. */
@@ -51,17 +51,16 @@ export function resolveTaskDocumentSettings(
 ): TaskDocumentSettings {
 	const supported = isTaskDocumentSupported(environment)
 	return {
-		enabled: supported && configuration.intelligentTaskEnabled === true,
+		enabled: supported && isIntelligentTaskEnabled(configuration.intelligentTaskEnabled),
 		fileName: DEFAULT_TASK_DOCUMENT_FILE,
 		supported,
 	}
 }
 
-/** A new mode never silently disables the existing handoff on unsupported editions. */
+/** An unsupported edition always falls back to ordinary condensing. */
 export function resolveContextMemoryMode(
 	configuration: ContextMemoryConfiguration,
 	supported: boolean,
-): "task" | "handoff" | "standard" {
-	if (supported && configuration.intelligentTaskEnabled === true) return "task"
-	return isIntelligentContextResetEnabled(configuration.intelligentContextResetEnabled) ? "handoff" : "standard"
+): "task" | "standard" {
+	return supported && isIntelligentTaskEnabled(configuration.intelligentTaskEnabled) ? "task" : "standard"
 }

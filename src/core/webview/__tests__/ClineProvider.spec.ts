@@ -14,7 +14,6 @@ import {
 	type ExtensionState,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService } from "@roo-code/cloud" // kilocode_change
@@ -636,7 +635,6 @@ describe("ClineProvider", () => {
 				apiProvider: "openai",
 				openAiModelId: "original-model",
 				intelligentTaskEnabled: false,
-				intelligentContextResetEnabled: true,
 			},
 			condenseContext: vi.fn().mockResolvedValue(undefined),
 			say: vi.fn(),
@@ -646,7 +644,6 @@ describe("ClineProvider", () => {
 			apiProvider: "openai",
 			openAiModelId: "other-model",
 			intelligentTaskEnabled: true,
-			intelligentContextResetEnabled: false,
 		})
 		vi.spyOn(provider, "getTaskDocumentSettings").mockReturnValue({
 			enabled: true,
@@ -659,7 +656,6 @@ describe("ClineProvider", () => {
 			apiProvider: "openai",
 			openAiModelId: "original-model",
 			intelligentTaskEnabled: true,
-			intelligentContextResetEnabled: false,
 		})
 	})
 
@@ -1056,7 +1052,6 @@ describe("ClineProvider", () => {
 				autoPurgeLastRunTimestamp: 123456789,
 				customInstructions: "Keep my project instructions unchanged.",
 				customCondensingPrompt: "Keep my compression instructions unchanged.",
-				intelligentContextResetPrompt: "Keep my restart instructions unchanged.",
 			}
 			const stateSpy = vi.spyOn(provider, "getState").mockResolvedValue({ ...savedState, ...unchangedSettings })
 			const postSpy = vi.spyOn(provider, "postMessageToWebview").mockResolvedValue(undefined)
@@ -1230,35 +1225,21 @@ describe("ClineProvider", () => {
 		expect(mockPostMessage).toHaveBeenCalled()
 	})
 
-	test("intelligent context reset defaults to enabled with the complete built-in prompt", async () => {
-		;(mockContext.globalState.get as any).mockImplementation((key: string) =>
-			key === "intelligentContextResetEnabled" || key === "intelligentContextResetPrompt" ? undefined : null,
-		)
-
-		const state = await provider.getState()
-		expect(state.intelligentContextResetEnabled).toBe(true)
-		expect(state.intelligentContextResetPrompt).toBe(DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT)
-	})
-
-	test("persists the shared intelligent context reset prompt independently of provider settings", async () => {
+	test("persists the shared condensing prompt independently of provider settings", async () => {
 		await provider.resolveWebviewView(mockWebviewView)
 		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as any).mock.calls[0][0]
 
 		await messageHandler({
 			type: "updateSettings",
 			updatedSettings: {
-				intelligentContextResetPrompt: "Custom complete snapshot prompt",
+				customCondensingPrompt: "Custom compression prompt",
 			},
 		})
 
-		expect(updateGlobalStateSpy).not.toHaveBeenCalledWith("intelligentContextResetEnabled", expect.anything())
-		expect(updateGlobalStateSpy).toHaveBeenCalledWith(
-			"intelligentContextResetPrompt",
-			"Custom complete snapshot prompt",
-		)
+		expect(updateGlobalStateSpy).toHaveBeenCalledWith("customCondensingPrompt", "Custom compression prompt")
 		expect(mockContext.globalState.update).toHaveBeenCalledWith(
-			"intelligentContextResetPrompt",
-			"Custom complete snapshot prompt",
+			"customCondensingPrompt",
+			"Custom compression prompt",
 		)
 	})
 

@@ -2,23 +2,14 @@ import Anthropic from "@anthropic-ai/sdk"
 import crypto from "crypto"
 
 import { TelemetryService } from "@roo-code/telemetry"
-import { getIntelligentContextResetPrompt, ModelInfo } from "@roo-code/types" // kilocode_change
+import { ModelInfo } from "@roo-code/types"
 
 import { t } from "../../i18n"
 import { ApiHandler } from "../../api"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "../../shared/array"
-import { buildContextHandoffPrompt } from "../context-management/context-handoff"
-import { INTELLIGENT_TASK_PREPARATION_PROMPT } from "../task-document/prompts" // kilocode_change
-// kilocode_change start: generation uses the same task-document capacity as storage.
-import {
-	MAX_TASK_DOCUMENT_BLOCK_BYTES,
-	TASK_DOCUMENT_TARGET_BYTES,
-	encodeTaskDocumentId,
-	isTaskDocumentBodyWithinLimit,
-	normalizeTaskDocumentBody,
-} from "../task-document/limits"
+// kilocode_change start
 import { collectToolPairIndices } from "../kilocode/context-pinning"
 // kilocode_change end
 
@@ -223,322 +214,14 @@ export type SummarizeResponse = {
 	condenseId?: string // The unique ID of the created Summary message, for linking to condense_context clineMessage
 }
 
-export type ContextHandoffGenerationOptions = {
-	taskDocument?: boolean // kilocode_change: persistent task replaces temporary restart file
-	/** Explicit manual task-memory reset can be exercised before the context fills up. */
-	manualTaskCompaction?: boolean // kilocode_change: never applies to automatic or legacy compression
-	/** Current persistent plan evidence; never persisted as a duplicate history message. */
-	taskDocumentContext?: string // kilocode_change
-	/** Defaults to true so existing callers use the lossless IVOL restart flow. */
-	enabled?: boolean
-	/** Editable task sent to the active model immediately before context compression. */
-	prompt?: string
-	/** Called only after validation, immediately before the real memory-task request. */
-	onBeforeRequest?: (prompt: string) => Promise<void> // kilocode_change
-	/** Cancels preparation without accepting a late provider response as a saved summary. */
-	signal?: AbortSignal // kilocode_change
+// kilocode_change start: ordinary summary controls, independent of task-document maintenance.
+export type ContextPreparationOptions = {
+	/** Explicit manual compaction supports short conversations without relaxing automatic limits. */
+	manualTaskCompaction?: boolean
+	/** Reject late responses and preserve history when cancelled. */
+	signal?: AbortSignal
 }
-
-const HANDOFF_MAX_STRING_CHARS = 24_000
-const HANDOFF_MIN_PAYLOAD_CHARS = 8_000
-const HANDOFF_MAX_PAYLOAD_CHARS = 128_000
-// At roughly four characters per token this reserves at most ~7.5% of the active model's window.
-const HANDOFF_CONTEXT_WINDOW_CHAR_RATIO = 0.3
-const HANDOFF_MAX_COLLECTION_ITEMS = 40
-const HANDOFF_MAX_OBJECT_DEPTH = 6
-const HANDOFF_OMITTED_VALUE = "[opaque content omitted]"
-const HANDOFF_REDACTED_VALUE = "[REDACTED]"
-const OMIT_FROM_HANDOFF = Symbol("omit-from-handoff")
-
-type HandoffSanitizedValue = unknown | typeof OMIT_FROM_HANDOFF
-
-function truncateHandoffText(value: string, maxChars: number, omittedPartLabel: string): string {
-	if (value.length <= maxChars) {
-		return value
-	}
-
-	const marker = `\n... [${omittedPartLabel} omitted; beginning and end preserved] ...\n`
-	const retainedChars = Math.max(0, maxChars - marker.length)
-	const leadingChars = Math.ceil(retainedChars / 2)
-	const trailingChars = Math.floor(retainedChars / 2)
-
-	return `${value.slice(0, leadingChars)}${marker}${value.slice(value.length - trailingChars)}`
-}
-
-function redactCredentialPatterns(value: string): string {
-	return value
-		.replace(
-			/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----/gi,
-			HANDOFF_REDACTED_VALUE,
-		)
-		.replace(/\b(?:ivol-managed|sk-(?:ant-|proj-)?|rk-|pk-)[A-Za-z0-9_-]{12,}\b/gi, HANDOFF_REDACTED_VALUE)
-		.replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, HANDOFF_REDACTED_VALUE)
-		.replace(/\b(?:xox[baprs]-[A-Za-z0-9-]{12,}|npm_[A-Za-z0-9]{20,})\b/g, HANDOFF_REDACTED_VALUE)
-		.replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, HANDOFF_REDACTED_VALUE)
-		.replace(/\bAIza[A-Za-z0-9_-]{30,}\b/g, HANDOFF_REDACTED_VALUE)
-		.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, HANDOFF_REDACTED_VALUE)
-		.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${HANDOFF_REDACTED_VALUE}`)
-		.replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${HANDOFF_REDACTED_VALUE}@`)
-		.replace(
-			/((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|auth(?:orization)?|password|passwd|secret(?:[_-]?access[_-]?key)?|client[_-]?secret|private[_-]?key|session[_-]?(?:id|token)|credential|cookie)(?:["']?)\s*(?:=|:)\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}\]]+)/gi,
-			`$1${HANDOFF_REDACTED_VALUE}`,
-		)
-}
-
-function sanitizeHandoffText(value: string): string {
-	if (/[^\t\n\r\x20-\x7e\u00a0-\uffff]/u.test(value)) {
-		return HANDOFF_OMITTED_VALUE
-	}
-
-	const redacted = redactCredentialPatterns(value)
-		.replace(/data:[\w.+-]+\/[\w.+-]+;base64,[A-Za-z0-9+/_=-]+/gi, HANDOFF_OMITTED_VALUE)
-		.replace(/\b[A-Za-z0-9+/_-]{200,}={0,2}\b/g, HANDOFF_OMITTED_VALUE)
-		.replace(/\b[0-9a-f]{160,}\b/gi, HANDOFF_OMITTED_VALUE)
-
-	return truncateHandoffText(redacted, HANDOFF_MAX_STRING_CHARS, "part of oversized raw output")
-}
-
-function normalizeHandoffKey(key: string): string {
-	return key.replace(/[^a-z0-9]/gi, "").toLowerCase()
-}
-
-function isOpaqueHandoffKey(key: string): boolean {
-	const normalized = normalizeHandoffKey(key)
-	return (
-		normalized.startsWith("reasoning") ||
-		normalized.startsWith("thinking") ||
-		normalized === "redactedthinking" ||
-		normalized === "chainofthought" ||
-		normalized.includes("thoughtsignature") ||
-		normalized.endsWith("signature") ||
-		normalized.startsWith("encryptedcontent") ||
-		normalized.startsWith("extracontent")
-	)
-}
-
-function isCredentialHandoffKey(key: string): boolean {
-	const normalized = normalizeHandoffKey(key)
-	return (
-		normalized === "key" ||
-		normalized.endsWith("apikey") ||
-		normalized.endsWith("accesstoken") ||
-		normalized.endsWith("refreshtoken") ||
-		normalized === "token" ||
-		normalized.endsWith("authtoken") ||
-		normalized === "auth" ||
-		normalized.endsWith("authorization") ||
-		normalized.endsWith("password") ||
-		normalized === "passwd" ||
-		normalized.endsWith("secret") ||
-		normalized.endsWith("secretaccesskey") ||
-		normalized.endsWith("privatekey") ||
-		normalized.endsWith("sessionid") ||
-		normalized.endsWith("sessiontoken") ||
-		normalized.endsWith("credential") ||
-		normalized.endsWith("credentials") ||
-		normalized.endsWith("cookie")
-	)
-}
-
-function isBinaryHandoffKey(key: string): boolean {
-	const normalized = normalizeHandoffKey(key)
-	return (
-		normalized === "base64" ||
-		normalized === "binary" ||
-		normalized === "blob" ||
-		normalized === "bytes" ||
-		normalized === "imagedata" ||
-		normalized === "audiodata" ||
-		normalized === "videodata" ||
-		normalized === "filedata" ||
-		normalized === "screenshot"
-	)
-}
-
-function isOpaqueOrBinaryHandoffObject(value: Record<string, unknown>): boolean {
-	const type = typeof value.type === "string" ? normalizeHandoffKey(value.type) : ""
-	const encoding = typeof value.encoding === "string" ? normalizeHandoffKey(value.encoding) : ""
-
-	return (
-		[
-			"reasoning",
-			"thinking",
-			"redactedthinking",
-			"thoughtsignature",
-			"encryptedcontent",
-			"extracontent",
-			"base64",
-			"binary",
-			"buffer",
-			"image",
-			"imageurl",
-			"audio",
-			"video",
-			"document",
-		].includes(type) ||
-		encoding === "base64" ||
-		(("media_type" in value || "mime_type" in value) && ("data" in value || "source" in value))
-	)
-}
-
-function selectHandoffCollectionEdges<T>(values: T[]): Array<T | string> {
-	if (values.length <= HANDOFF_MAX_COLLECTION_ITEMS) {
-		return values
-	}
-
-	const half = HANDOFF_MAX_COLLECTION_ITEMS / 2
-	return [
-		...values.slice(0, half),
-		`[${values.length - HANDOFF_MAX_COLLECTION_ITEMS} collection items omitted; beginning and end preserved]`,
-		...values.slice(-half),
-	]
-}
-
-function sanitizeToolValue(value: unknown, depth = 0, ancestors = new WeakSet<object>()): HandoffSanitizedValue {
-	if (value === null || typeof value === "number" || typeof value === "boolean") {
-		return value
-	}
-	if (typeof value === "string") {
-		return sanitizeHandoffText(value)
-	}
-	if (typeof value !== "object" || depth >= HANDOFF_MAX_OBJECT_DEPTH) {
-		return OMIT_FROM_HANDOFF
-	}
-	if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-		return OMIT_FROM_HANDOFF
-	}
-	if (ancestors.has(value)) {
-		return OMIT_FROM_HANDOFF
-	}
-
-	ancestors.add(value)
-	try {
-		if (Array.isArray(value)) {
-			return selectHandoffCollectionEdges(value)
-				.map((item) => sanitizeToolValue(item, depth + 1, ancestors))
-				.filter((item) => item !== OMIT_FROM_HANDOFF)
-		}
-
-		const record = value as Record<string, unknown>
-		if (isOpaqueOrBinaryHandoffObject(record)) {
-			return OMIT_FROM_HANDOFF
-		}
-
-		const entries = selectHandoffCollectionEdges(Object.entries(record))
-		const sanitized: Record<string, unknown> = {}
-		for (const entry of entries) {
-			if (typeof entry === "string") {
-				sanitized.__omitted_fields__ = entry
-				continue
-			}
-
-			const [key, nestedValue] = entry
-			if (isOpaqueHandoffKey(key) || isBinaryHandoffKey(key)) {
-				continue
-			}
-			if (isCredentialHandoffKey(key)) {
-				sanitized[key] = HANDOFF_REDACTED_VALUE
-				continue
-			}
-
-			const sanitizedValue = sanitizeToolValue(nestedValue, depth + 1, ancestors)
-			if (sanitizedValue !== OMIT_FROM_HANDOFF) {
-				sanitized[key] = sanitizedValue
-			}
-		}
-		return sanitized
-	} finally {
-		ancestors.delete(value)
-	}
-}
-
-function sanitizeToolResultContent(content: unknown): unknown {
-	if (typeof content === "string") {
-		return sanitizeHandoffText(content)
-	}
-	if (!Array.isArray(content)) {
-		const sanitized = sanitizeToolValue(content)
-		return sanitized === OMIT_FROM_HANDOFF ? HANDOFF_OMITTED_VALUE : sanitized
-	}
-
-	const sanitized = selectHandoffCollectionEdges(content)
-		.map((block) => {
-			if (typeof block === "string") {
-				return sanitizeHandoffText(block)
-			}
-			if (typeof block === "object" && block !== null && (block as Record<string, unknown>).type === "text") {
-				const text = (block as Record<string, unknown>).text
-				return typeof text === "string" ? { type: "text", text: sanitizeHandoffText(text) } : OMIT_FROM_HANDOFF
-			}
-
-			return sanitizeToolValue(block)
-		})
-		.filter((block) => block !== OMIT_FROM_HANDOFF)
-
-	return sanitized.length > 0 ? sanitized : HANDOFF_OMITTED_VALUE
-}
-
-function sanitizeHandoffContentBlock(block: unknown): HandoffSanitizedValue {
-	if (typeof block !== "object" || block === null) {
-		return typeof block === "string" ? sanitizeHandoffText(block) : OMIT_FROM_HANDOFF
-	}
-
-	const record = block as Record<string, unknown>
-	if (record.type === "text" && typeof record.text === "string") {
-		return { type: "text", text: sanitizeHandoffText(record.text) }
-	}
-	if (record.type === "tool_use" && typeof record.id === "string" && typeof record.name === "string") {
-		const input = sanitizeToolValue(record.input)
-		return {
-			type: "tool_use",
-			id: sanitizeHandoffText(record.id),
-			name: sanitizeHandoffText(record.name),
-			input: input === OMIT_FROM_HANDOFF ? HANDOFF_OMITTED_VALUE : input,
-		}
-	}
-	if (record.type === "tool_result" && typeof record.tool_use_id === "string") {
-		return {
-			type: "tool_result",
-			tool_use_id: sanitizeHandoffText(record.tool_use_id),
-			...(typeof record.is_error === "boolean" ? { is_error: record.is_error } : {}),
-			content: sanitizeToolResultContent(record.content),
-		}
-	}
-
-	return OMIT_FROM_HANDOFF
-}
-
-function getHandoffPayloadCharLimit(apiHandler: ApiHandler): number {
-	const contextWindow = apiHandler.getModel().info.contextWindow
-	if (!Number.isFinite(contextWindow) || contextWindow <= 0) {
-		return HANDOFF_MAX_PAYLOAD_CHARS
-	}
-
-	return Math.min(
-		HANDOFF_MAX_PAYLOAD_CHARS,
-		Math.max(HANDOFF_MIN_PAYLOAD_CHARS, Math.floor(contextWindow * HANDOFF_CONTEXT_WINDOW_CHAR_RATIO)),
-	)
-}
-
-function serializeRecentMessagesForHandoff(messages: ApiMessage[], maxPayloadChars: number): string {
-	const sanitizedMessages = messages.map(({ role, content }) => {
-		const sanitizedContent =
-			typeof content === "string"
-				? sanitizeHandoffText(content)
-				: content.map(sanitizeHandoffContentBlock).filter((block) => block !== OMIT_FROM_HANDOFF)
-
-		return {
-			role,
-			content:
-				Array.isArray(sanitizedContent) && sanitizedContent.length === 0
-					? HANDOFF_OMITTED_VALUE
-					: sanitizedContent,
-		}
-	})
-	const serialized = JSON.stringify(sanitizedMessages, null, 2)
-
-	return truncateHandoffText(serialized, maxPayloadChars, "middle of oversized recent messages payload")
-}
+// kilocode_change end
 
 /**
  * Summarizes the conversation messages using an LLM call
@@ -562,7 +245,7 @@ function serializeRecentMessagesForHandoff(messages: ApiMessage[], maxPayloadCha
  * @param {string} customCondensingPrompt - Optional custom prompt to use for condensing
  * @param {ApiHandler} condensingApiHandler - Optional specific API handler to use for condensing
  * @param {boolean} useNativeTools - Whether native tools protocol is being used (requires tool_use/tool_result pairing)
- * @param {ContextHandoffGenerationOptions} contextHandoff - Controls the optional lossless restart-file handoff
+ * @param {ContextPreparationOptions} preparation - Controls manual compaction and cancellation // kilocode_change
  * @returns {SummarizeResponse} - The result of the summarization operation (see above)
  */
 export async function summarizeConversation(
@@ -575,7 +258,7 @@ export async function summarizeConversation(
 	customCondensingPrompt?: string,
 	condensingApiHandler?: ApiHandler,
 	useNativeTools?: boolean,
-	contextHandoff: ContextHandoffGenerationOptions = { enabled: true },
+	preparation: ContextPreparationOptions = {}, // kilocode_change
 ): Promise<SummarizeResponse> {
 	TelemetryService.instance.captureContextCondensed(
 		taskId,
@@ -587,11 +270,11 @@ export async function summarizeConversation(
 	const response: SummarizeResponse = { messages, cost: 0, summary: "" }
 	// kilocode_change start: never forward arbitrary cancellation reasons into the UI.
 	const cancellationError = "Context preparation was cancelled"
-	if (contextHandoff.signal?.aborted) {
+	if (preparation.signal?.aborted) {
 		return { ...response, error: cancellationError }
 	}
 	const assertPreparationActive = (): void => {
-		if (contextHandoff.signal?.aborted) {
+		if (preparation.signal?.aborted) {
 			throw new Error(cancellationError)
 		}
 	}
@@ -599,13 +282,10 @@ export async function summarizeConversation(
 
 	// Always preserve the first message (which may contain slash command content)
 	const firstMessage = messages[0]
-	// kilocode_change start: a manual CURRENT_TASK reset must be testable after one
+	// kilocode_change start: an explicit manual reset must be testable after one
 	// completed exchange. Keep as much of the normal tail as possible while still
-	// summarizing at least two messages; automatic and legacy retention is unchanged.
-	const manualTaskCompaction =
-		contextHandoff.manualTaskCompaction === true &&
-		contextHandoff.taskDocument === true &&
-		isAutomaticTrigger === false
+	// summarizing at least two messages; automatic and ordinary retention is unchanged.
+	const manualTaskCompaction = preparation.manualTaskCompaction === true && isAutomaticTrigger === false
 	const keepCount = manualTaskCompaction
 		? Math.min(N_MESSAGES_TO_KEEP, Math.max(0, messages.length - 2))
 		: N_MESSAGES_TO_KEEP
@@ -663,7 +343,7 @@ export async function summarizeConversation(
 		return { ...response, error }
 	}
 
-	// Use the handler that will actually receive the handoff request for capability checks and sizing.
+	// Use the handler that will actually receive the summary request.
 	let handlerToUse = condensingApiHandler || apiHandler
 
 	if (!handlerToUse || typeof handlerToUse.createMessage !== "function") {
@@ -680,47 +360,13 @@ export async function summarizeConversation(
 		}
 	}
 
-	const contextHandoffEnabled = contextHandoff.taskDocument || (contextHandoff.enabled ?? true)
-	const handoffTask = contextHandoff.taskDocument
-		? INTELLIGENT_TASK_PREPARATION_PROMPT
-		: getIntelligentContextResetPrompt(contextHandoff.prompt) // kilocode_change
-	let requestSourceMessages = messagesToSummarize
-	if (contextHandoffEnabled) {
-		const recentMessagesForHandoff = serializeRecentMessagesForHandoff(
-			keepMessages,
-			getHandoffPayloadCharLimit(handlerToUse),
-		)
-		const finalRequestMessage: Anthropic.MessageParam = {
-			// kilocode_change: recent state supplements the task-focused handoff.
-			role: "user",
-			content: `${handoffTask}
-
-The recent messages below will remain in the live API context. Use them as task evidence to identify the current state, unresolved obligations, and next action. Include only details needed to continue; prefer file references over copying project contents. Do not copy raw secrets.
-
-<recent_messages>
-${recentMessagesForHandoff}
-</recent_messages>`,
-		}
-		requestSourceMessages = [...messagesToSummarize, finalRequestMessage]
-	}
-
-	const requestMessages = maybeRemoveImageBlocks(requestSourceMessages, handlerToUse).map(({ role, content }) => ({
+	const requestMessages = maybeRemoveImageBlocks(messagesToSummarize, handlerToUse).map(({ role, content }) => ({
 		role,
 		content,
 	}))
 
-	// kilocode_change start: preparation follows the handoff task, never the
-	// separate conversation-summary prompt (which imposes a conflicting structure).
-	const basePrompt = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
-	const preparationPrompt = contextHandoff.taskDocument
-		? handoffTask
-		: contextHandoffEnabled
-			? buildContextHandoffPrompt(handoffTask)
-			: basePrompt
-	const promptToUse = contextHandoff.taskDocumentContext
-		? `${preparationPrompt}\n\n${contextHandoff.taskDocumentContext}`
-		: preparationPrompt
-	// kilocode_change end
+	// kilocode_change: ordinary summarization always honors the user's custom prompt.
+	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
 
 	let summary = ""
 	let cost = 0
@@ -736,110 +382,34 @@ ${recentMessagesForHandoff}
 	let lastAntThinking: { thinking: string; signature: string } | null = null
 	// kilocode_change end
 
-	// kilocode_change start: expose the actual preparation before the provider call;
-	// failures remain a failed preparation, never a successful compression.
+	// kilocode_change start: one ordinary summary request; cancellation never commits partial output.
 	try {
-		assertPreparationActive() // kilocode_change
-		if (contextHandoffEnabled) {
-			await contextHandoff.onBeforeRequest?.(handoffTask)
-		}
-		// kilocode_change start: a task document gets at most one size-recovery request.
-		// Keep the original request/evidence intact; never feed a rejected draft or its thinking back to the model.
-		if (contextHandoff.taskDocument) {
-			encodeTaskDocumentId(taskId)
-		}
-		const attempts = contextHandoff.taskDocument ? 2 : 1
-		for (let attempt = 0; attempt < attempts; attempt++) {
-			assertPreparationActive()
-			summary = ""
-			outputTokens = 0
-			summaryThinkingBlocks.length = 0
-			lastAntThinking = null
-			let redactedThinkingBytes = 0
-			let signedThinkingBytes = 0
-			let oversized = false
-			const previousAttemptsCost = cost
-			const attemptPrompt =
-				attempt === 0
-					? promptToUse
-					: `${promptToUse}\n\n<task_document_size_retry>\nThe previous preparation exceeded the CURRENT_TASK Markdown size limit. Rebuild it from the SAME original conversation and saved task evidence supplied here. Target at most ${TASK_DOCUMENT_TARGET_BYTES / 1024} KiB (${TASK_DOCUMENT_TARGET_BYTES} UTF-8 bytes), including non-ASCII text. Preserve every user requirement, unfinished branch, constraint, decision, current status, and exact next action. Use concise Markdown; replace copied code, logs, repeated history, and duplicate explanations with precise file references and brief verified facts. Do not omit outstanding work to fit the target. Output only the complete replacement Markdown body.\n</task_document_size_retry>`
-			const stream = contextHandoff.signal
-				? handlerToUse.createMessage(attemptPrompt, requestMessages, { taskId, signal: contextHandoff.signal })
-				: handlerToUse.createMessage(attemptPrompt, requestMessages)
-			for await (const chunk of stream) {
-				assertPreparationActive() // Some providers ignore AbortSignal.
-				if (chunk.type === "text") {
-					// Bound retained text before concatenating an arbitrarily large provider chunk.
-					// The character check is only a cheap upper bound; UTF-8 bytes are authoritative.
-					if (
-						contextHandoff.taskDocument &&
-						(summary.length + chunk.text.length > MAX_TASK_DOCUMENT_BLOCK_BYTES ||
-							Buffer.byteLength(summary + chunk.text, "utf8") > MAX_TASK_DOCUMENT_BLOCK_BYTES)
-					) {
-						oversized = true
-						break // for-await closes the iterator before any retry request.
-					}
-					summary += chunk.text
-				} else if (chunk.type === "usage") {
-					// Keep the latest reported usage per attempt, with all attempts' known costs.
-					// An early-closed provider may not have emitted its final usage yet.
-					cost = previousAttemptsCost + (chunk.totalCost ?? 0)
-					outputTokens = chunk.outputTokens ?? 0
-				} else if (chunk.type === "ant_thinking") {
-					// Only the last complete signed block is valid for the accepted response.
-					if (chunk.thinking && chunk.signature) {
-						signedThinkingBytes =
-							Buffer.byteLength(chunk.thinking, "utf8") + Buffer.byteLength(chunk.signature, "utf8")
-						if (
-							contextHandoff.taskDocument &&
-							signedThinkingBytes + redactedThinkingBytes > MAX_TASK_DOCUMENT_BLOCK_BYTES
-						) {
-							throw new Error(
-								"Task preparation reasoning is too large; reduce the model's reasoning budget and retry",
-							)
-						}
-						lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
-					}
-				} else if (chunk.type === "ant_redacted_thinking") {
-					// Include per-block overhead so even a stream of empty blocks stays bounded.
-					redactedThinkingBytes += Buffer.byteLength(chunk.data, "utf8") + 64
-					if (
-						contextHandoff.taskDocument &&
-						signedThinkingBytes + redactedThinkingBytes > MAX_TASK_DOCUMENT_BLOCK_BYTES
-					) {
-						throw new Error(
-							"Task preparation reasoning is too large; reduce the model's reasoning budget and retry",
-						)
-					}
-					summaryThinkingBlocks.push({
-						type: "redacted_thinking",
-						data: chunk.data,
-					} as Anthropic.Messages.RedactedThinkingBlock)
+		assertPreparationActive()
+		const stream = preparation.signal
+			? handlerToUse.createMessage(promptToUse, requestMessages, { taskId, signal: preparation.signal })
+			: handlerToUse.createMessage(promptToUse, requestMessages)
+		for await (const chunk of stream) {
+			assertPreparationActive() // Some providers ignore AbortSignal.
+			if (chunk.type === "text") {
+				summary += chunk.text
+			} else if (chunk.type === "usage") {
+				cost = chunk.totalCost ?? 0
+				outputTokens = chunk.outputTokens ?? 0
+			} else if (chunk.type === "ant_thinking") {
+				if (chunk.thinking && chunk.signature) {
+					lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
 				}
-			}
-			// Cancellation during iterator cleanup must prevent starting the recovery request.
-			assertPreparationActive()
-			if (contextHandoff.taskDocument && !oversized && summary.trim()) {
-				// Validate malformed Markdown separately; only size failures warrant an automatic retry.
-				normalizeTaskDocumentBody(summary.trim())
-				oversized = !isTaskDocumentBodyWithinLimit(summary.trim(), taskId)
-			}
-			if (!oversized) {
-				break
-			}
-			if (attempt === attempts - 1) {
-				throw new Error(
-					`CURRENT_TASK is still too large after one automatic retry (maximum ${MAX_TASK_DOCUMENT_BLOCK_BYTES / 1024} KiB including ownership markers). Ask the model to reduce code, logs, and duplicated detail while retaining all requirements and unfinished branches, then retry. The original conversation has been preserved.`,
-				)
+			} else if (chunk.type === "ant_redacted_thinking") {
+				summaryThinkingBlocks.push({ type: "redacted_thinking", data: chunk.data })
 			}
 		}
-		// kilocode_change end
+		assertPreparationActive()
 	} catch (error) {
 		return {
 			...response,
 			cost,
 			// kilocode_change: an SDK may expose a custom abort reason; use a safe stable message.
-			error: contextHandoff.signal?.aborted
+			error: preparation.signal?.aborted
 				? cancellationError
 				: `Context preparation failed: ${error instanceof Error ? error.message : String(error)}`,
 		}
@@ -1016,13 +586,13 @@ ${recentMessagesForHandoff}
 
 	const newContextTokens = outputTokens + (await apiHandler.countTokens(contextBlocks))
 	// kilocode_change start: cancellation during asynchronous sizing is still a cancelled preparation.
-	if (contextHandoff.signal?.aborted) {
+	if (preparation.signal?.aborted) {
 		return { ...response, cost, error: cancellationError }
 	}
 	// kilocode_change end
 	// kilocode_change start: a requested small-context reset may cost more than it
 	// frees. Report real counts; the task commit still enforces the active model's
-	// capacity after reloading CURRENT_TASK. Never relax automatic compression.
+	// capacity before committing. Never relax automatic compression.
 	if (manualTaskCompaction && (!Number.isFinite(newContextTokens) || newContextTokens <= 0)) {
 		return { ...response, cost, error: "Context preparation produced an invalid token estimate" }
 	}

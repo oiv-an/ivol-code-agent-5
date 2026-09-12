@@ -47,8 +47,6 @@ import {
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_MODES,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-	getIntelligentContextResetPrompt,
-	isIntelligentContextResetEnabled,
 	getModelId,
 	isPersonalProvider, // kilocode_change
 	isYoloModeActive, // kilocode_change
@@ -2036,14 +2034,10 @@ export class ClineProvider
 				if (!supported || resolveContextMemoryMode(saved, supported) !== expectedMemoryMode) {
 					throw new Error("The selected context mode changed. Save the profile settings and try again.")
 				}
-				if (
-					task.apiConfiguration.intelligentTaskEnabled !== saved.intelligentTaskEnabled ||
-					task.apiConfiguration.intelligentContextResetEnabled !== saved.intelligentContextResetEnabled
-				) {
+				if (task.apiConfiguration.intelligentTaskEnabled !== saved.intelligentTaskEnabled) {
 					task.apiConfiguration = {
 						...task.apiConfiguration,
 						intelligentTaskEnabled: saved.intelligentTaskEnabled,
-						intelligentContextResetEnabled: saved.intelligentContextResetEnabled,
 					}
 				}
 			} catch (error) {
@@ -2360,8 +2354,6 @@ export class ClineProvider
 			ghostServiceSettings, // kilocode_changes
 			condensingApiConfigId,
 			customCondensingPrompt,
-			intelligentContextResetEnabled,
-			intelligentContextResetPrompt,
 			codebaseIndexConfig,
 			codebaseIndexModels,
 			profileThresholds,
@@ -2581,8 +2573,6 @@ export class ClineProvider
 			organizationSettingsVersion,
 			condensingApiConfigId,
 			customCondensingPrompt,
-			intelligentContextResetEnabled: isIntelligentContextResetEnabled(intelligentContextResetEnabled),
-			intelligentContextResetPrompt: getIntelligentContextResetPrompt(intelligentContextResetPrompt),
 			yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			codebaseIndexModels: codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: {
@@ -2916,10 +2906,6 @@ export class ClineProvider
 			organizationSettingsVersion,
 			condensingApiConfigId: stateValues.condensingApiConfigId,
 			customCondensingPrompt: stateValues.customCondensingPrompt,
-			intelligentContextResetEnabled: isIntelligentContextResetEnabled(
-				stateValues.intelligentContextResetEnabled,
-			),
-			intelligentContextResetPrompt: getIntelligentContextResetPrompt(stateValues.intelligentContextResetPrompt),
 			yoloGatekeeperApiConfigId: stateValues.yoloGatekeeperApiConfigId, // kilocode_change: AI gatekeeper for YOLO mode
 			codebaseIndexModels: stateValues.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: {

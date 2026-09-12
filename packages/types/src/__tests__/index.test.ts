@@ -23,16 +23,10 @@ describe("GLOBAL_STATE_KEYS", () => {
 		expect(GLOBAL_STATE_KEYS).not.toContain("codebaseIndexOpenAiCompatibleApiKey")
 	})
 
-	it("should contain intelligent context reset settings", () => {
-		expect(GLOBAL_STATE_KEYS).toContain("intelligentContextResetEnabled")
-		expect(GLOBAL_STATE_KEYS).toContain("intelligentContextResetPrompt")
-	})
-
 	// kilocode_change: profile enablement must survive profile filtering and switching.
-	it("stores reset enablement with provider settings and keeps the prompt global", () => {
-		expect(PROVIDER_SETTINGS_KEYS).toContain("intelligentContextResetEnabled")
-		expect(GLOBAL_SETTINGS_KEYS).not.toContain("intelligentContextResetEnabled")
-		expect(GLOBAL_SETTINGS_KEYS).toContain("intelligentContextResetPrompt")
-		expect(PROVIDER_SETTINGS_KEYS).not.toContain("intelligentContextResetPrompt")
+	it("stores the working file opt-in with provider settings", () => {
+		expect(GLOBAL_STATE_KEYS).toContain("intelligentTaskEnabled")
+		expect(PROVIDER_SETTINGS_KEYS).toContain("intelligentTaskEnabled")
+		expect(GLOBAL_SETTINGS_KEYS).not.toContain("intelligentTaskEnabled")
 	})
 })

@@ -1,3 +1,4 @@
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 // kilocode_change: new file
 import { memo, useRef, useState } from "react"
 import { useWindowSize } from "react-use"
@@ -79,7 +80,7 @@ const KiloTaskHeader = ({
 
 	const { width: windowWidth } = useWindowSize()
 	const condenseContextLabel = t(
-		taskDocumentSettings?.supported === true && apiConfiguration?.intelligentTaskEnabled === true
+		taskDocumentSettings?.supported === true && isIntelligentTaskEnabled(apiConfiguration?.intelligentTaskEnabled)
 			? "chat:task.condenseCurrentWorkNow"
 			: "chat:task.condenseContext",
 	)

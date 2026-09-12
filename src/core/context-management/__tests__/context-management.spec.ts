@@ -622,7 +622,7 @@ describe("Context Management", () => {
 				undefined, // customCondensingPrompt
 				undefined, // condensingApiHandler
 				undefined, // useNativeTools
-				{ enabled: false, prompt: undefined },
+				{},
 			)
 
 			// Verify the result contains the summary information
@@ -697,44 +697,43 @@ describe("Context Management", () => {
 		})
 
 		// kilocode_change start: cancellation cannot become a successful reduction or destructive fallback.
-		it.each([
-			{ autoCondenseContext: true, requireContextHandoff: true },
-			{ autoCondenseContext: false, requireContextHandoff: true },
-			{ autoCondenseContext: true, requireContextHandoff: false },
-		])("forwards cancellation and preserves history for %o", async (settings) => {
-			const controller = new AbortController()
-			const summarizeSpy = vi
-				.spyOn(condenseModule, "summarizeConversation")
-				.mockImplementation(async (...args) => {
-					expect(args[9]?.signal).toBe(controller.signal)
-					controller.abort()
-					return { messages: [], summary: "Late summary", condenseId: "late", cost: 0.01 }
-				})
-			try {
-				const result = await manageContext({
-					messages,
-					totalTokens: 95_000,
-					contextWindow: 100_000,
-					apiHandler: mockApiHandler,
-					autoCondenseContextPercent: 90,
-					systemPrompt: "System prompt",
-					taskId,
-					profileThresholds: {},
-					currentProfileId: "default",
-					contextHandoffSignal: controller.signal,
-					...settings,
-				})
-				expect(summarizeSpy).toHaveBeenCalledOnce()
-				expect(result.messages).toBe(messages)
-				expect(result.summary).toBe("")
-				expect(result.condenseId).toBeUndefined()
-				expect(result.truncationId).toBeUndefined()
-				expect(result.error).toBe("Context preparation was cancelled")
-				expect(result.cost).toBe(0.01)
-			} finally {
-				summarizeSpy.mockRestore()
-			}
-		})
+		it.each([{ autoCondenseContext: true }])(
+			"forwards cancellation and preserves history for %o",
+			async (settings) => {
+				const controller = new AbortController()
+				const summarizeSpy = vi
+					.spyOn(condenseModule, "summarizeConversation")
+					.mockImplementation(async (...args) => {
+						expect(args[9]?.signal).toBe(controller.signal)
+						controller.abort()
+						return { messages: [], summary: "Late summary", condenseId: "late", cost: 0.01 }
+					})
+				try {
+					const result = await manageContext({
+						messages,
+						totalTokens: 95_000,
+						contextWindow: 100_000,
+						apiHandler: mockApiHandler,
+						autoCondenseContextPercent: 90,
+						systemPrompt: "System prompt",
+						taskId,
+						profileThresholds: {},
+						currentProfileId: "default",
+						contextPreparationSignal: controller.signal,
+						...settings,
+					})
+					expect(summarizeSpy).toHaveBeenCalledOnce()
+					expect(result.messages).toBe(messages)
+					expect(result.summary).toBe("")
+					expect(result.condenseId).toBeUndefined()
+					expect(result.truncationId).toBeUndefined()
+					expect(result.error).toBe("Context preparation was cancelled")
+					expect(result.cost).toBe(0.01)
+				} finally {
+					summarizeSpy.mockRestore()
+				}
+			},
+		)
 
 		it("does not return truncated history when cancelled during fallback token sizing", async () => {
 			const controller = new AbortController()
@@ -755,7 +754,7 @@ describe("Context Management", () => {
 					taskId,
 					profileThresholds: {},
 					currentProfileId: "default",
-					contextHandoffSignal: controller.signal,
+					contextPreparationSignal: controller.signal,
 				})
 				expect(counts).toBeGreaterThan(1)
 				expect(result.messages).toBe(messages)
@@ -782,7 +781,7 @@ describe("Context Management", () => {
 					taskId,
 					profileThresholds: {},
 					currentProfileId: "default",
-					contextHandoffSignal: controller.signal,
+					contextPreparationSignal: controller.signal,
 				})
 				expect(summarizeSpy).not.toHaveBeenCalled()
 				expect(result.messages).toBe(messages)
@@ -794,7 +793,7 @@ describe("Context Management", () => {
 		})
 		// kilocode_change end
 
-		it("keeps every message when a required restart handoff cannot be generated", async () => {
+		it("uses ordinary non-destructive fallback when summary generation fails", async () => {
 			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation").mockResolvedValue({
 				messages,
 				summary: "",
@@ -818,11 +817,14 @@ describe("Context Management", () => {
 				taskId,
 				profileThresholds: {},
 				currentProfileId: "default",
-				requireContextHandoff: true,
 			})
 
-			expect(result.messages).toBe(messagesWithSmallContent)
-			expect(result.truncationId).toBeUndefined()
+			expect(result.messages.filter((message) => !message.isTruncationMarker)).toEqual(
+				messagesWithSmallContent.map((message, index) =>
+					index === 1 || index === 2 ? { ...message, truncationParent: result.truncationId } : message,
+				),
+			)
+			expect(result.truncationId).toBeDefined()
 			expect(result.error).toBe("Summarization failed")
 			summarizeSpy.mockRestore()
 		})
@@ -877,63 +879,28 @@ describe("Context Management", () => {
 			summarizeSpy.mockRestore()
 		})
 
-		it("creates the required restart handoff before the hard-safety reduction when auto-condense is off", async () => {
-			const handoffResult: condenseModule.SummarizeResponse = {
-				messages: [
-					{ role: "user", content: "First message" },
-					{
-						role: "assistant",
-						content: "complete continuation state",
-						isSummary: true,
-						condenseId: "required-handoff",
-					},
-				],
-				summary: "complete continuation state",
-				cost: 0.02,
-				newContextTokens: 20_000,
-				condenseId: "required-handoff",
+		it("does not invoke a managed preparation when auto-condense is disabled", async () => {
+			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation")
+			try {
+				const result = await manageContext({
+					messages,
+					totalTokens: 95_000,
+					contextWindow: 100_000,
+					apiHandler: mockApiHandler,
+					autoCondenseContext: false,
+					autoCondenseContextPercent: 50,
+					systemPrompt: "System prompt",
+					taskId,
+					profileThresholds: {},
+					currentProfileId: "default",
+				})
+				expect(summarizeSpy).not.toHaveBeenCalled()
+				expect(result.summary).toBe("")
+				expect(result.truncationId).toBeDefined()
+				expect(result.messagesRemoved).toBe(2)
+			} finally {
+				summarizeSpy.mockRestore()
 			}
-			const summarizeSpy = vi.spyOn(condenseModule, "summarizeConversation").mockResolvedValue(handoffResult)
-			const messagesWithSmallContent = [
-				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
-			]
-
-			const result = await manageContext({
-				messages: messagesWithSmallContent,
-				totalTokens: 90_000,
-				contextWindow: 100_000,
-				maxTokens: 30_000,
-				apiHandler: mockApiHandler,
-				autoCondenseContext: false,
-				autoCondenseContextPercent: 50,
-				systemPrompt: "System prompt",
-				taskId,
-				profileThresholds: {},
-				currentProfileId: "default",
-				requireContextHandoff: true,
-			})
-
-			expect(summarizeSpy).toHaveBeenCalledOnce()
-			expect(summarizeSpy).toHaveBeenCalledWith(
-				messagesWithSmallContent,
-				mockApiHandler,
-				"System prompt",
-				taskId,
-				90_000,
-				true,
-				undefined,
-				undefined,
-				undefined,
-				{ enabled: true, prompt: undefined },
-			)
-			expect(result).toMatchObject({
-				summary: "complete continuation state",
-				condenseId: "required-handoff",
-				prevContextTokens: 90_000,
-			})
-			expect(result.truncationId).toBeUndefined()
-			summarizeSpy.mockRestore()
 		})
 
 		it("should use summarizeConversation when autoCondenseContext is true and context percent exceeds threshold", async () => {
@@ -988,7 +955,7 @@ describe("Context Management", () => {
 				undefined, // customCondensingPrompt
 				undefined, // condensingApiHandler
 				undefined, // useNativeTools
-				{ enabled: false, prompt: undefined },
+				{},
 			)
 
 			// Verify the result contains the summary information

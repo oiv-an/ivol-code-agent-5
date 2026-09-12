@@ -17,7 +17,7 @@ function taskFixture(id: string, approval = deferredApproval()) {
 		todoList: [{ id: `${id}-old`, content: `${id} previous stage`, status: "pending" }],
 		updatePersistentTaskDocument: vi.fn().mockResolvedValue(undefined),
 		say: vi.fn(),
-	} as unknown as Task
+	} as unknown as Task & { updatePersistentTaskDocument: ReturnType<typeof vi.fn> }
 	const callbacks: ToolCallbacks = {
 		askApproval: vi.fn(() => approval.promise),
 		handleError: vi.fn(),
@@ -34,16 +34,8 @@ describe("Intelligent Task rollout approval isolation", () => {
 		async (order) => {
 			const a = taskFixture("task-a")
 			const b = taskFixture("task-b")
-			const aRun = a.tool.execute(
-				{ todos: "[-] A current stage", task_document: "# A global plan\nKeep A's remaining branches" },
-				a.task,
-				a.callbacks,
-			)
-			const bRun = b.tool.execute(
-				{ todos: "[-] B current stage", task_document: "# B global plan\nKeep B's remaining branches" },
-				b.task,
-				b.callbacks,
-			)
+			const aRun = a.tool.execute({ todos: "[-] A current stage" }, a.task, a.callbacks)
+			const bRun = b.tool.execute({ todos: "[-] B current stage" }, b.task, b.callbacks)
 			if (order === "a-first") {
 				a.approval.settle(true)
 				await aRun
@@ -60,12 +52,8 @@ describe("Intelligent Task rollout approval isolation", () => {
 			expect(b.task.todoList).toEqual([
 				expect.objectContaining({ content: "B current stage", status: "in_progress" }),
 			])
-			expect(a.task.updatePersistentTaskDocument).toHaveBeenCalledWith(
-				"# A global plan\nKeep A's remaining branches",
-			)
-			expect(b.task.updatePersistentTaskDocument).toHaveBeenCalledWith(
-				"# B global plan\nKeep B's remaining branches",
-			)
+			expect(a.task.updatePersistentTaskDocument).not.toHaveBeenCalled()
+			expect(b.task.updatePersistentTaskDocument).not.toHaveBeenCalled()
 			expect(a.task.say).not.toHaveBeenCalled()
 			expect(b.task.say).not.toHaveBeenCalled()
 			expect(a.callbacks.handleError).not.toHaveBeenCalled()
@@ -76,16 +64,8 @@ describe("Intelligent Task rollout approval isolation", () => {
 	it("a declined task cannot replace a separately approved task's checklist", async () => {
 		const a = taskFixture("task-a")
 		const b = taskFixture("task-b")
-		const aRun = a.tool.execute(
-			{ todos: "[-] Approved A stage", task_document: "# A approved plan" },
-			a.task,
-			a.callbacks,
-		)
-		const bRun = b.tool.execute(
-			{ todos: "[-] Declined B stage", task_document: "# B declined plan" },
-			b.task,
-			b.callbacks,
-		)
+		const aRun = a.tool.execute({ todos: "[-] Approved A stage" }, a.task, a.callbacks)
+		const bRun = b.tool.execute({ todos: "[-] Declined B stage" }, b.task, b.callbacks)
 		b.approval.settle(false)
 		await bRun
 		a.approval.settle(true)

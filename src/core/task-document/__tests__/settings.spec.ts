@@ -43,20 +43,20 @@ function folder(fsPath: string, scheme = "file"): WorkspaceFolder {
 }
 
 describe("experimental task document profile settings", () => {
-	it("starts disabled and always uses the fixed CURRENT_TASK.md name", () => {
+	it("starts enabled and always uses the fixed CURRENT_TASK.md name", () => {
 		expect(resolveTaskDocumentSettings({}, environment)).toEqual({
-			enabled: false,
+			enabled: true,
 			fileName: "CURRENT_TASK.md",
 			supported: true,
 		})
 	})
 
-	it("keeps opt-in isolated to the supplied profile without changing it", () => {
+	it("keeps the preference isolated to the supplied profile without changing it", () => {
 		const personal = Object.freeze({ intelligentTaskEnabled: true })
 		const other = Object.freeze({ intelligentTaskEnabled: false })
 		expect(resolveTaskDocumentSettings(personal, environment).enabled).toBe(true)
 		expect(resolveTaskDocumentSettings(other, environment).enabled).toBe(false)
-		expect(resolveTaskDocumentSettings({}, environment).enabled).toBe(false)
+		expect(resolveTaskDocumentSettings({}, environment).enabled).toBe(true)
 		expect(resolveTaskDocumentSettings(personal, environment).enabled).toBe(true)
 	})
 
@@ -77,14 +77,14 @@ describe("experimental task document profile settings", () => {
 		["IU", "2026.2.2"],
 		["IU", "2025.3.6.1"],
 		["PY", "2025.1.1.1"],
-	])("supports the maintained %s %s wrapper without enabling existing profiles", (code, version) => {
+	])("supports the maintained %s %s wrapper with the default enabled", (code, version) => {
 		const target = {
 			...environment,
 			appName: `wrapper|jetbrains|${code}|${version}`,
 			wrapper: { ...wrapper(code), kiloCodeWrapperVersion: version },
 		}
 		expect(resolveTaskDocumentSettings({}, target)).toEqual({
-			enabled: false,
+			enabled: true,
 			supported: true,
 			fileName: "CURRENT_TASK.md",
 		})
@@ -136,36 +136,16 @@ describe("task document workspace selection", () => {
 })
 
 describe("effective context memory mode", () => {
-	it.each([true, false, undefined])("prefers an enabled supported task mode over handoff=%s", (handoff) => {
-		expect(
-			resolveContextMemoryMode({ intelligentTaskEnabled: true, intelligentContextResetEnabled: handoff }, true),
-		).toBe("task")
+	it("uses the working file only where the opted-in profile is supported", () => {
+		expect(resolveContextMemoryMode({ intelligentTaskEnabled: true }, true)).toBe("task")
 	})
 
-	it.each([true, false])("preserves the previous default handoff when supported=%s", (supported) => {
-		expect(resolveContextMemoryMode({}, supported)).toBe("handoff")
-		expect(resolveContextMemoryMode({ intelligentTaskEnabled: false }, supported)).toBe("handoff")
+	it.each([true, false])("resolves the default and explicit opt-out when supported=%s", (supported) => {
+		expect(resolveContextMemoryMode({}, supported)).toBe(supported ? "task" : "standard")
+		expect(resolveContextMemoryMode({ intelligentTaskEnabled: false }, supported)).toBe("standard")
 	})
 
-	it("retains handoff protection if a task-enabled profile is imported into an unsupported IDE", () => {
-		expect(resolveContextMemoryMode({ intelligentTaskEnabled: true }, false)).toBe("handoff")
-		expect(
-			resolveContextMemoryMode({ intelligentTaskEnabled: true, intelligentContextResetEnabled: true }, false),
-		).toBe("handoff")
-	})
-
-	it.each([true, false])("honors an explicit opt-out from both modes when supported=%s", (supported) => {
-		expect(
-			resolveContextMemoryMode(
-				{ intelligentTaskEnabled: false, intelligentContextResetEnabled: false },
-				supported,
-			),
-		).toBe("standard")
-	})
-
-	it("does not silently re-enable handoff on an unsupported IDE after an explicit opt-out", () => {
-		expect(
-			resolveContextMemoryMode({ intelligentTaskEnabled: true, intelligentContextResetEnabled: false }, false),
-		).toBe("standard")
+	it("ignores an opted-in profile imported into an unsupported IDE", () => {
+		expect(resolveContextMemoryMode({ intelligentTaskEnabled: true }, false)).toBe("standard")
 	})
 })

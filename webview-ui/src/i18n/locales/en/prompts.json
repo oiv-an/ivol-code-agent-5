@@ -105,15 +105,7 @@
 		"condense": {
 			"apiConfiguration": "API Configuration for Context Condensing",
 			"apiConfigDescription": "Select which API configuration to use for context condensing operations. Leave unselected to use the current active configuration.",
-			"useCurrentConfig": "Use currently selected API configuration",
-			"intelligentContextReset": {
-				"label": "Intelligent context compression",
-				"profileDescription": "Enabled by default for each provider profile. Before automatic or manual compression, save a working-state snapshot for this profile's task.",
-				"editPrompt": "Edit compression prompt",
-				"description": "Before condensing, create a complete working-state handoff and use it to continue after the reset. When disabled, ordinary context condensing continues without the handoff.",
-				"promptLabel": "Working-state snapshot prompt",
-				"promptDescription": "This prompt is shared by all provider profiles. It controls what the model must preserve before compression. Blank text uses the complete built-in prompt."
-			}
+			"useCurrentConfig": "Use currently selected API configuration"
 		},
 		"types": {
 			"ENHANCE": {

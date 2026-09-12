@@ -20,7 +20,6 @@ import {
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-	DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 } from "@roo-code/types"
 
 import { findLastIndex } from "@roo/array"
@@ -106,10 +105,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setCondensingApiConfigId: (value: string) => void
 	customCondensingPrompt?: string
 	setCustomCondensingPrompt: (value: string) => void
-	intelligentContextResetEnabled?: boolean
-	setIntelligentContextResetEnabled: (value: boolean) => void
-	intelligentContextResetPrompt?: string
-	setIntelligentContextResetPrompt: (value: string) => void
 	yoloGatekeeperApiConfigId?: string // kilocode_change: AI gatekeeper for YOLO mode
 	setYoloGatekeeperApiConfigId: (value: string) => void // kilocode_change: AI gatekeeper for YOLO mode
 	speechToTextStatus?: { available: boolean; reason?: "openaiKeyMissing" | "ffmpegNotInstalled" } // kilocode_change: Speech-to-text availability status with failure reason
@@ -342,8 +337,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		ghostServiceSettings: {}, // kilocode_change
 		condensingApiConfigId: "", // Default empty string for condensing API config ID
 		customCondensingPrompt: "", // Default empty string for custom condensing prompt
-		intelligentContextResetEnabled: true,
-		intelligentContextResetPrompt: DEFAULT_INTELLIGENT_CONTEXT_RESET_PROMPT,
 		yoloGatekeeperApiConfigId: "", // kilocode_change: Default empty string for gatekeeper API config ID
 		hasOpenedModeSelector: false, // Default to false (not opened yet)
 		hasCompletedOnboarding: undefined, // kilocode_change: Leave unset until extension sends value
@@ -767,10 +760,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setCondensingApiConfigId: (value) => setState((prevState) => ({ ...prevState, condensingApiConfigId: value })),
 		setCustomCondensingPrompt: (value) =>
 			setState((prevState) => ({ ...prevState, customCondensingPrompt: value })),
-		setIntelligentContextResetEnabled: (value) =>
-			setState((prevState) => ({ ...prevState, intelligentContextResetEnabled: value })),
-		setIntelligentContextResetPrompt: (value) =>
-			setState((prevState) => ({ ...prevState, intelligentContextResetPrompt: value })),
 		setYoloGatekeeperApiConfigId: (value) =>
 			setState((prevState) => ({ ...prevState, yoloGatekeeperApiConfigId: value })), // kilocode_change: AI gatekeeper for YOLO mode
 		setProfileThresholds: (value) => setState((prevState) => ({ ...prevState, profileThresholds: value })),

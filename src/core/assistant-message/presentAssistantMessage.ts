@@ -72,8 +72,10 @@ import { captureAskApproval } from "./kilocode/captureAskApprovalEvent"
  */
 
 export async function presentAssistantMessage(cline: Task) {
+	// kilocode_change: queued presentation callbacks can resume after cancellation.
+	// They must neither execute another tool nor reject an unawaited callback.
 	if (cline.abort) {
-		throw new Error(`[Task#presentAssistantMessage] task ${cline.taskId}.${cline.instanceId} aborted`)
+		return
 	}
 
 	if (cline.presentAssistantMessageLocked) {

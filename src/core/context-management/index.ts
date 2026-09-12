@@ -220,8 +220,6 @@ export function willManageContext({
  */
 
 export type ContextManagementOptions = {
-	taskDocument?: boolean // kilocode_change
-	taskDocumentContext?: string // kilocode_change: current persistent plan evidence
 	messages: ApiMessage[]
 	totalTokens: number
 	contextWindow: number
@@ -236,15 +234,10 @@ export type ContextManagementOptions = {
 	profileThresholds: Record<string, number>
 	currentProfileId: string
 	useNativeTools?: boolean
-	// When enabled, never hide messages through the sliding-window fallback.
-	// Task will first persist a model-generated context restart handoff instead.
-	requireContextHandoff?: boolean
-	/** Editable user task for the model-generated restart snapshot. */
-	contextHandoffPrompt?: string
-	/** Fired only when the active model is about to receive the memory task. */
-	onBeforeContextHandoff?: (prompt: string) => Promise<void> // kilocode_change
+	// kilocode_change start
 	/** Cancels context preparation before it can reduce the conversation. */
-	contextHandoffSignal?: AbortSignal // kilocode_change
+	contextPreparationSignal?: AbortSignal
+	// kilocode_change end
 }
 
 export type ContextManagementResult = SummarizeResponse & {
@@ -261,8 +254,6 @@ export type ContextManagementResult = SummarizeResponse & {
  * @returns {Promise<ApiMessage[]>} The original, condensed, or truncated conversation messages.
  */
 export async function manageContext({
-	taskDocument, // kilocode_change
-	taskDocumentContext, // kilocode_change
 	messages,
 	totalTokens,
 	contextWindow,
@@ -276,10 +267,9 @@ export async function manageContext({
 	profileThresholds,
 	currentProfileId,
 	useNativeTools,
-	requireContextHandoff = false,
-	contextHandoffPrompt,
-	onBeforeContextHandoff,
-	contextHandoffSignal, // kilocode_change
+	// kilocode_change start
+	contextPreparationSignal,
+	// kilocode_change end
 }: ContextManagementOptions): Promise<ContextManagementResult> {
 	let error: string | undefined
 	let cost = 0
@@ -301,7 +291,7 @@ export async function manageContext({
 		prevContextTokens,
 		error: "Context preparation was cancelled",
 	})
-	if (contextHandoffSignal?.aborted) {
+	if (contextPreparationSignal?.aborted) {
 		return cancelledResult()
 	}
 	// kilocode_change end
@@ -327,12 +317,10 @@ export async function manageContext({
 	// If no specific threshold is found for the profile, fall back to global setting
 	const allowedUsagePercent = autoCondenseContext ? effectiveThreshold : DEFAULT_CONDENSE_USAGE_PERCENT
 	const allowedTokens = contextWindow * (allowedUsagePercent / 100)
-	let handoffGenerationAttempted = false
 
 	if (autoCondenseContext) {
 		const contextPercent = (100 * prevContextTokens) / contextWindow
 		if (contextPercent >= effectiveThreshold) {
-			handoffGenerationAttempted = true
 			// Attempt to intelligently condense the context
 			const result = await summarizeConversation(
 				messages,
@@ -344,17 +332,14 @@ export async function manageContext({
 				customCondensingPrompt,
 				condensingApiHandler,
 				useNativeTools,
+				// kilocode_change start
 				{
-					enabled: requireContextHandoff,
-					...(taskDocument ? { taskDocument } : {}), // kilocode_change
-					...(taskDocumentContext ? { taskDocumentContext } : {}), // kilocode_change
-					prompt: contextHandoffPrompt,
-					...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
-					...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change
+					...(contextPreparationSignal ? { signal: contextPreparationSignal } : {}),
 				},
+				// kilocode_change end
 			)
 			// kilocode_change start
-			if (contextHandoffSignal?.aborted) {
+			if (contextPreparationSignal?.aborted) {
 				cost = result.cost
 				return cancelledResult()
 			}
@@ -365,55 +350,6 @@ export async function manageContext({
 			} else {
 				return { ...result, prevContextTokens }
 			}
-		}
-	}
-
-	// Even when ordinary auto-condense is disabled, the legacy hard-safety path
-	// used to hide half of the conversation at 90%. A required IVOL handoff must
-	// run before that safety reduction too; silently dropping work is forbidden.
-	if (prevContextTokens >= allowedTokens && requireContextHandoff && !handoffGenerationAttempted) {
-		const result = await summarizeConversation(
-			messages,
-			apiHandler,
-			systemPrompt,
-			taskId,
-			prevContextTokens,
-			true,
-			customCondensingPrompt,
-			condensingApiHandler,
-			useNativeTools,
-			{
-				enabled: true,
-				...(taskDocument ? { taskDocument } : {}), // kilocode_change
-				...(taskDocumentContext ? { taskDocumentContext } : {}), // kilocode_change
-				prompt: contextHandoffPrompt,
-				...(onBeforeContextHandoff ? { onBeforeRequest: onBeforeContextHandoff } : {}),
-				...(contextHandoffSignal ? { signal: contextHandoffSignal } : {}), // kilocode_change
-			},
-		)
-		// kilocode_change start
-		if (contextHandoffSignal?.aborted) {
-			cost = result.cost
-			return cancelledResult()
-		}
-		// kilocode_change end
-		if (!result.error) {
-			return { ...result, prevContextTokens }
-		}
-		error = result.error
-		cost = result.cost
-	}
-
-	// Fall back to sliding window truncation if needed
-	if (prevContextTokens >= allowedTokens && requireContextHandoff) {
-		return {
-			messages,
-			summary: "",
-			cost,
-			prevContextTokens,
-			error:
-				error ??
-				"Context reduction was cancelled because IVOL Code must create CONTEXT_RESTART.md before hiding earlier work.",
 		}
 	}
 
@@ -445,7 +381,7 @@ export async function manageContext({
 			}
 		}
 		// kilocode_change start: stopping during asynchronous fallback sizing must preserve history too.
-		if (contextHandoffSignal?.aborted) {
+		if (contextPreparationSignal?.aborted) {
 			return cancelledResult()
 		}
 		// kilocode_change end

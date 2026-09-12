@@ -9,7 +9,6 @@ import { getLatestTodo } from "../../shared/todo"
 
 interface UpdateTodoListParams {
 	todos: string
-	task_document?: string | null // kilocode_change
 }
 
 // kilocode_change start: approvals are isolated by live task instance, including reused task IDs after resume.
@@ -23,7 +22,6 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 	parseLegacy(params: Partial<Record<string, string>>): UpdateTodoListParams {
 		return {
 			todos: params.todos || "",
-			...(params.task_document !== undefined ? { task_document: params.task_document } : {}), // kilocode_change
 		}
 	}
 
@@ -93,8 +91,7 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 				)
 			}
 
-			// kilocode_change: durable document first; a failed save must not claim an updated plan.
-			await task.updatePersistentTaskDocument?.(params.task_document)
+			// kilocode_change: the stage checklist is independent of ordinary file edits.
 			await setTodoListForTask(task, normalizedTodos)
 
 			if (isTodoListChanged) {

@@ -234,166 +234,85 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 		;(useExtensionState as any).mockReturnValue(defaultExtensionState)
 	})
 
-	// kilocode_change start
-	it("opens the intelligent prompt without losing unsaved settings or the non-active editing profile", async () => {
-		vi.mocked(ApiOptions).mockImplementation(
-			({
-				apiConfiguration,
-				currentApiConfigName,
-				setApiConfigurationField,
-				onEditIntelligentContextResetPrompt,
-			}) => (
-				<div data-testid="api-options">
-					<span data-testid="editing-profile">{currentApiConfigName}</span>
-					<span data-testid="editing-base-url">{apiConfiguration.openAiBaseUrl}</span>
-					<span data-testid="editing-reset-enabled">
-						{String(apiConfiguration.intelligentContextResetEnabled)}
-					</span>
-					<button onClick={() => setApiConfigurationField("openAiBaseUrl", "https://unsaved.example/v1")}>
-						Edit provider URL
-					</button>
-					<button onClick={onEditIntelligentContextResetPrompt}>Edit intelligent prompt</button>
-				</div>
-			),
-		)
-		vi.mocked(PromptsSettings).mockImplementation(
-			({
-				intelligentContextResetEnabled,
-				onIntelligentContextResetEnabledChange,
-				focusIntelligentContextResetPrompt,
-			}) => (
-				<div data-testid="prompts-settings">
-					<span data-testid="direct-prompt-navigation">{String(focusIntelligentContextResetPrompt)}</span>
-					<span data-testid="prompt-profile-enabled">{String(intelligentContextResetEnabled)}</span>
-					<button onClick={() => onIntelligentContextResetEnabledChange?.(true)}>
-						Enable edited profile
-					</button>
-				</div>
-			),
-		)
-		render(
-			<QueryClientProvider client={queryClient}>
-				<SettingsView onDone={vi.fn()} editingProfile="Second provider" />
-			</QueryClientProvider>,
-		)
-		fireEvent(
-			window,
-			new MessageEvent("message", {
-				data: {
-					type: "profileConfigurationForEditing",
-					text: "Second provider",
-					apiConfiguration: { apiProvider: "openai", intelligentContextResetEnabled: false },
-				},
-			}),
-		)
-		await waitFor(() => expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider"))
-		fireEvent.click(screen.getByText("Edit provider URL"))
-		fireEvent.click(screen.getByText("Edit intelligent prompt"))
-		expect(screen.getByTestId("direct-prompt-navigation")).toHaveTextContent("true")
-		expect(screen.getByTestId("prompt-profile-enabled")).toHaveTextContent("false")
-		fireEvent.click(screen.getByText("Enable edited profile"))
-		fireEvent.click(screen.getByText("settings:sections.providers"))
-		expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider")
-		expect(screen.getByTestId("editing-base-url")).toHaveTextContent("https://unsaved.example/v1")
-		expect(screen.getByTestId("editing-reset-enabled")).toHaveTextContent("true")
-		expect(screen.getByTestId("save-button")).toBeEnabled()
-		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "loadApiConfiguration" }))
-		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "upsertApiConfiguration" }))
-	})
-	// kilocode_change end
-
-	// kilocode_change start: the experimental mode follows the existing provider Save/Discard lifecycle.
-	it.each(["save", "discard"])("keeps intelligent task in the selected profile draft until %s", async (action) => {
-		const onDone = vi.fn()
-		vi.mocked(ApiOptions).mockImplementation(
-			({ apiConfiguration, setApiConfigurationField, onEditIntelligentContextResetPrompt }) => (
-				<div data-testid="api-options">
-					<span data-testid="draft-task-enabled">{String(apiConfiguration.intelligentTaskEnabled)}</span>
-					<span data-testid="draft-reset-enabled">
-						{String(apiConfiguration.intelligentContextResetEnabled)}
-					</span>
-					<button onClick={onEditIntelligentContextResetPrompt}>Go to prompt modes</button>
-					<button
-						onClick={() => {
-							setApiConfigurationField("intelligentContextResetEnabled", false)
-							setApiConfigurationField("intelligentTaskEnabled", true)
-						}}>
-						Enable task in provider
-					</button>
-				</div>
-			),
-		)
-		vi.mocked(PromptsSettings).mockImplementation(
-			({
-				intelligentTaskEnabled,
-				intelligentContextResetEnabled,
-				onIntelligentTaskEnabledChange,
-				onIntelligentContextResetEnabledChange,
-			}) => (
-				<div>
-					<span data-testid="prompt-draft-task">{String(intelligentTaskEnabled)}</span>
-					<span data-testid="prompt-draft-reset">{String(intelligentContextResetEnabled)}</span>
-					<button
-						onClick={() => {
-							onIntelligentContextResetEnabledChange?.(false)
-							onIntelligentTaskEnabledChange?.(true)
-						}}>
-						Enable task in prompts
-					</button>
-				</div>
-			),
-		)
-		render(
-			<QueryClientProvider client={queryClient}>
-				<SettingsView onDone={onDone} editingProfile="Second provider" />
-			</QueryClientProvider>,
-		)
-		fireEvent(
-			window,
-			new MessageEvent("message", {
-				data: {
-					type: "profileConfigurationForEditing",
+	// kilocode_change start: the working-file mode follows the provider Save/Discard lifecycle.
+	it.each(["save", "discard"])(
+		"keeps the task working file in the selected profile draft until %s",
+		async (action) => {
+			const onDone = vi.fn()
+			vi.mocked(ApiOptions).mockImplementation(
+				({ apiConfiguration, currentApiConfigName, setApiConfigurationField }) => (
+					<div data-testid="api-options">
+						<span data-testid="editing-profile">{currentApiConfigName}</span>
+						<span data-testid="editing-base-url">{apiConfiguration.openAiBaseUrl}</span>
+						<span data-testid="draft-task-enabled">{String(apiConfiguration.intelligentTaskEnabled)}</span>
+						<button onClick={() => setApiConfigurationField("intelligentTaskEnabled", true)}>
+							Enable task in provider
+						</button>
+					</div>
+				),
+			)
+			vi.mocked(PromptsSettings).mockImplementation(
+				({ intelligentTaskEnabled, onIntelligentTaskEnabledChange }) => (
+					<div data-testid="prompts-settings">
+						<span data-testid="prompt-draft-task">{String(intelligentTaskEnabled)}</span>
+						<button onClick={() => onIntelligentTaskEnabledChange?.(true)}>Enable task in prompts</button>
+					</div>
+				),
+			)
+			render(
+				<QueryClientProvider client={queryClient}>
+					<SettingsView onDone={onDone} editingProfile="Second provider" />
+				</QueryClientProvider>,
+			)
+			fireEvent(
+				window,
+				new MessageEvent("message", {
+					data: {
+						type: "profileConfigurationForEditing",
+						text: "Second provider",
+						apiConfiguration: {
+							apiProvider: "openai",
+							openAiBaseUrl: "https://selected.example/v1",
+							intelligentTaskEnabled: false,
+						},
+					},
+				}),
+			)
+			await waitFor(() => expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider"))
+			expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("false")
+			if (action === "save") fireEvent.click(screen.getByText("Enable task in provider"))
+			fireEvent.click(screen.getByText("settings:sections.prompts"))
+			if (action === "discard") fireEvent.click(screen.getByText("Enable task in prompts"))
+			expect(screen.getByTestId("prompt-draft-task")).toHaveTextContent("true")
+			expect(mockPostMessage).not.toHaveBeenCalledWith(
+				expect.objectContaining({ type: "upsertApiConfiguration" }),
+			)
+			fireEvent.click(screen.getByText("settings:sections.providers"))
+			expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider")
+			expect(screen.getByTestId("editing-base-url")).toHaveTextContent("https://selected.example/v1")
+			expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("true")
+			expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "loadApiConfiguration" }))
+			if (action === "save") {
+				fireEvent.click(screen.getByTestId("save-button"))
+				expect(mockPostMessage).toHaveBeenCalledWith({
+					type: "upsertApiConfiguration",
 					text: "Second provider",
 					apiConfiguration: {
 						apiProvider: "openai",
 						openAiBaseUrl: "https://selected.example/v1",
-						intelligentContextResetEnabled: true,
-						intelligentTaskEnabled: false,
+						intelligentTaskEnabled: true,
 					},
-				},
-			}),
-		)
-		await waitFor(() => expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("false"))
-		if (action === "save") fireEvent.click(screen.getByText("Enable task in provider"))
-		fireEvent.click(screen.getByText("Go to prompt modes"))
-		if (action === "discard") fireEvent.click(screen.getByText("Enable task in prompts"))
-		expect(screen.getByTestId("prompt-draft-task")).toHaveTextContent("true")
-		expect(screen.getByTestId("prompt-draft-reset")).toHaveTextContent("false")
-		expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "upsertApiConfiguration" }))
-		fireEvent.click(screen.getByText("settings:sections.providers"))
-		expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("true")
-		expect(screen.getByTestId("draft-reset-enabled")).toHaveTextContent("false")
-		if (action === "save") {
-			fireEvent.click(screen.getByTestId("save-button"))
-			expect(mockPostMessage).toHaveBeenCalledWith({
-				type: "upsertApiConfiguration",
-				text: "Second provider",
-				apiConfiguration: {
-					apiProvider: "openai",
-					openAiBaseUrl: "https://selected.example/v1",
-					intelligentContextResetEnabled: false,
-					intelligentTaskEnabled: true,
-				},
-			})
-		} else {
-			fireEvent.click(screen.getByText("settings:common.done"))
-			fireEvent.click(screen.getByText("settings:unsavedChangesDialog.discardButton"))
-			expect(onDone).toHaveBeenCalledTimes(1)
-			expect(mockPostMessage).not.toHaveBeenCalledWith(
-				expect.objectContaining({ type: "upsertApiConfiguration" }),
-			)
-		}
-	})
+				})
+			} else {
+				fireEvent.click(screen.getByText("settings:common.done"))
+				fireEvent.click(screen.getByText("settings:unsavedChangesDialog.discardButton"))
+				expect(onDone).toHaveBeenCalledTimes(1)
+				expect(mockPostMessage).not.toHaveBeenCalledWith(
+					expect.objectContaining({ type: "upsertApiConfiguration" }),
+				)
+			}
+		},
+	)
 	// kilocode_change end
 
 	// TODO: Fix underlying issue - dialog appears even when no user changes have been made

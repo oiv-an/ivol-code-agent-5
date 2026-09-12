@@ -151,8 +151,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 	)
 
 	const [editingApiConfigName, setEditingApiConfigName] = useState<string>(currentApiConfigName || "default") // kilocode_change: Track which profile is being edited separately from the active profile
-	const [focusIntelligentContextResetPrompt, setFocusIntelligentContextResetPrompt] = useState(false) // kilocode_change
-
 	const scrollPositions = useRef<Record<SectionName, number>>(
 		Object.fromEntries(sectionNames.map((s) => [s, 0])) as Record<SectionName, number>,
 	)
@@ -708,7 +706,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 	// Handle tab changes with unsaved changes check
 	const handleTabChange = useCallback(
 		(newTab: SectionName) => {
-			setFocusIntelligentContextResetPrompt(false) // kilocode_change
 			if (contentRef.current) {
 				scrollPositions.current[activeTab] = contentRef.current.scrollTop
 			}
@@ -716,13 +713,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		},
 		[activeTab],
 	)
-	// kilocode_change start: navigate in the current settings view without saving or replacing the editing profile.
-	const editIntelligentContextResetPrompt = useCallback(() => {
-		handleTabChange("prompts")
-		setFocusIntelligentContextResetPrompt(true)
-	}, [handleTabChange])
-	// kilocode_change end
-
 	useLayoutEffect(() => {
 		if (contentRef.current) {
 			contentRef.current.scrollTop = scrollPositions.current[activeTab] ?? 0
@@ -1108,7 +1098,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 										errorMessage={errorMessage}
 										setErrorMessage={setErrorMessage}
 										currentApiConfigName={editingApiConfigName}
-										onEditIntelligentContextResetPrompt={editIntelligentContextResetPrompt}
 									/>
 									{/* kilocode_change end - pass editing profile name */}
 								</Section>
@@ -1271,16 +1260,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 								setIncludeTaskHistoryInEnhance={(value) =>
 									setCachedStateField("includeTaskHistoryInEnhance", value)
 								}
-								intelligentContextResetEnabled={apiConfiguration.intelligentContextResetEnabled}
-								onIntelligentContextResetEnabledChange={(enabled) =>
-									setApiConfigurationField("intelligentContextResetEnabled", enabled)
-								}
-								// kilocode_change: both mutually-exclusive modes stay in the selected profile's unsaved draft.
+								// kilocode_change: the mode stays in the selected profile's unsaved draft.
 								intelligentTaskEnabled={apiConfiguration.intelligentTaskEnabled}
 								onIntelligentTaskEnabledChange={(enabled) =>
 									setApiConfigurationField("intelligentTaskEnabled", enabled)
 								}
-								focusIntelligentContextResetPrompt={focusIntelligentContextResetPrompt}
 							/>
 						)}
 

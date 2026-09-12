@@ -350,32 +350,8 @@ describe("ApiOptions", () => {
 		expect(screen.queryByRole("checkbox", { name: /TLS/i })).not.toBeInTheDocument()
 	})
 	// kilocode_change end
-	// kilocode_change start
-	it("shows intelligent reset enabled by default in the main provider settings", () => {
-		const setApiConfigurationField = vi.fn()
-		renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, setApiConfigurationField })
-		const checkbox = screen.getByRole("checkbox", { name: /intelligent|Интеллектуальный/i })
-		expect(checkbox).toBeChecked()
-		fireEvent.click(checkbox)
-		expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentContextResetEnabled", false)
-	})
-
-	it.each(["anthropic", "ollama", "lmstudio", "openai-codex"] as const)(
-		"keeps intelligent reset specific to a disabled %s profile and offers prompt navigation",
-		(apiProvider) => {
-			const editPrompt = vi.fn()
-			renderApiOptions({
-				apiConfiguration: { apiProvider, intelligentContextResetEnabled: false },
-				onEditIntelligentContextResetPrompt: editPrompt,
-			})
-			expect(screen.getByRole("checkbox", { name: /intelligent|Интеллектуальный/i })).not.toBeChecked()
-			fireEvent.click(screen.getByRole("button", { name: /edit.*prompt|редактировать.*промпт|editPrompt/i }))
-			expect(editPrompt).toHaveBeenCalledTimes(1)
-		},
-	)
-	// kilocode_change end
-	// kilocode_change start: intelligent task is an opt-in, mutually exclusive provider setting.
-	describe("intelligent task experiment", () => {
+	// kilocode_change start: the working file is a default-on provider setting.
+	describe("task working file", () => {
 		let stateSpy: ReturnType<typeof vi.spyOn>
 		beforeEach(() => {
 			stateSpy = vi.spyOn(ExtensionStateContext, "useExtensionState").mockReturnValue({
@@ -384,77 +360,45 @@ describe("ApiOptions", () => {
 		})
 		afterEach(() => stateSpy.mockRestore())
 
-		it("appears below intelligent context reset, defaults off and stages without saving", () => {
+		it("defaults to on without saving and stages an explicit opt-out", () => {
 			const setApiConfigurationField = vi.fn()
 			renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, setApiConfigurationField })
-			const reset = screen.getByTestId("provider-intelligent-context-reset-checkbox")
 			const task = screen.getByTestId("provider-intelligent-task-checkbox")
-			expect(reset.querySelector("input")).toBeChecked()
-			expect(task.querySelector("input")).not.toBeChecked()
-			expect(reset.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+			expect(task.querySelector("input")).toBeChecked()
 			expect(setApiConfigurationField).not.toHaveBeenCalledWith("intelligentTaskEnabled", true)
 			fireEvent.click(task.querySelector("input")!)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentContextResetEnabled", false)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", true)
-		})
-
-		it("disables task mode when context reset is enabled, including imported conflicting flags", () => {
-			const setApiConfigurationField = vi.fn()
-			renderApiOptions({
-				apiConfiguration: {
-					apiProvider: "openai",
-					intelligentContextResetEnabled: true,
-					intelligentTaskEnabled: true,
-				},
-				setApiConfigurationField,
-			})
-			const reset = screen.getByTestId("provider-intelligent-context-reset-checkbox").querySelector("input")!
-			expect(reset).not.toBeChecked()
-			expect(screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")).toBeChecked()
-			fireEvent.click(reset)
 			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", false)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentContextResetEnabled", true)
 		})
 
-		it("allows disabling both modes without implicitly enabling context reset", () => {
-			const setApiConfigurationField = vi.fn()
-			renderApiOptions({
-				apiConfiguration: {
-					apiProvider: "openai",
-					intelligentContextResetEnabled: false,
-					intelligentTaskEnabled: true,
-				},
-				setApiConfigurationField,
-			})
-			fireEvent.click(screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")!)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", false)
-			expect(setApiConfigurationField).not.toHaveBeenCalledWith("intelligentContextResetEnabled", true)
+		it.each(["anthropic", "ollama", "lmstudio", "openai-codex"] as const)(
+			"keeps the saved per-profile choice for %s",
+			(apiProvider) => {
+				const setApiConfigurationField = vi.fn()
+				renderApiOptions({
+					apiConfiguration: { apiProvider, intelligentTaskEnabled: true },
+					setApiConfigurationField,
+				})
+				const input = screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")!
+				expect(input).toBeChecked()
+				fireEvent.click(input)
+				expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", false)
+			},
+		)
+
+		it.each([false, "true", 1, null])("does not enable an explicit opt-out or invalid import %s", (value) => {
+			renderApiOptions({ apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: value } as never })
+			expect(screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")).not.toBeChecked()
 		})
 
-		it.each([false, undefined])("hides task mode for unsupported or not-yet-known hosts (%s)", (supported) => {
+		it.each([false, undefined])("hides the setting for unsupported or not-yet-known hosts (%s)", (supported) => {
 			stateSpy.mockReturnValue({ taskDocumentSettings: supported === undefined ? undefined : { supported } })
 			renderApiOptions({ apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: true } })
 			expect(screen.queryByTestId("provider-intelligent-task-checkbox")).not.toBeInTheDocument()
-			expect(
-				screen.getByTestId("provider-intelligent-context-reset-checkbox").querySelector("input"),
-			).toBeChecked()
 		})
 
-		it("does not expose the experimental setting during welcome onboarding", () => {
+		it("does not expose the setting during welcome onboarding", () => {
 			renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, fromWelcomeView: true })
 			expect(screen.queryByTestId("provider-intelligent-task-checkbox")).not.toBeInTheDocument()
-		})
-
-		it("does not mutate hidden experimental flags when using the legacy reset control on unsupported hosts", () => {
-			stateSpy.mockReturnValue({ taskDocumentSettings: { supported: false } })
-			const setApiConfigurationField = vi.fn()
-			renderApiOptions({
-				apiConfiguration: { apiProvider: "openai", intelligentContextResetEnabled: false },
-				setApiConfigurationField,
-			})
-			fireEvent.click(screen.getByTestId("provider-intelligent-context-reset-checkbox").querySelector("input")!)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentContextResetEnabled", true)
-			expect(setApiConfigurationField).not.toHaveBeenCalledWith("intelligentTaskEnabled", false)
 		})
 	})
 	// kilocode_change end

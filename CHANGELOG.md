@@ -1,5 +1,19 @@
 # IVOL Code Agent 5
 
+## 5.16.258
+
+### Patch Changes
+
+- Enable experimental Current Task by default on supported IDEs while preserving each profile's explicit opt-out.
+
+## 5.16.257
+
+### Patch Changes
+
+- Use ordinary file edits for task notes and preserve normal summaries, manual compaction, and cancellation safety.
+- Require a successful Current Task update before condensation, with explicit retry or continue choices and safe waiting after restart.
+- Remove the obsolete intelligent context reset mode and document the shared behavior across supported IDE editions.
+
 ## 5.16.256
 
 ### Patch Changes

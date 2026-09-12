@@ -1,5 +1,12 @@
 import { z } from "zod"
 
+// kilocode_change start
+/** Resolve the profile preference without materializing defaults or accepting invalid imports. */
+export function isIntelligentTaskEnabled(value: unknown): boolean {
+	return value === undefined || value === true
+}
+// kilocode_change end
+
 import { modelInfoSchema, reasoningEffortSettingSchema, verbosityLevelsSchema, serviceTierSchema } from "./model.js"
 import { codebaseIndexProviderSchema } from "./codebase-index.js"
 import { profileTypeSchema } from "./profile-type.js" // kilocode_change
@@ -245,8 +252,7 @@ export type ProviderSettingsEntry = z.infer<typeof providerSettingsEntrySchema>
 
 const baseProviderSettingsSchema = z.object({
 	profileType: profileTypeSchema.optional(), // kilocode_change - autocomplete profile type system
-	intelligentContextResetEnabled: z.boolean().optional(), // kilocode_change: per-profile, enabled when unset
-	intelligentTaskEnabled: z.boolean().optional(), // kilocode_change: experimental per-profile opt-in, mutually exclusive with intelligent context reset
+	intelligentTaskEnabled: z.boolean().optional(), // kilocode_change: per-profile CURRENT_TASK.md choice; unset defaults on without persisting a value
 	allowInsecureTls: z.boolean().optional(), // kilocode_change: opt-in per-profile only; verify certificates when unset
 	includeMaxTokens: z.boolean().optional(),
 	diffEnabled: z.boolean().optional(),

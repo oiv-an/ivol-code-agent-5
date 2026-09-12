@@ -45,14 +45,6 @@ export type ApiMessage = Anthropic.MessageParam & {
 	// Set when a message that had already been condensed or truncated was brought back by a pin.
 	pinRestored?: boolean
 	// kilocode_change end
-	// IVOL context restart handoff metadata. The summary text stays body-only;
-	// the complete verified document is injected into the first continuation.
-	contextHandoffId?: string
-	contextHandoffPath?: string
-	contextHandoffSha256?: string
-	contextHandoffContent?: string
-	contextHandoffCreatedAt?: number
-	contextHandoffConsumedAt?: number
 }
 
 export async function readApiMessages({

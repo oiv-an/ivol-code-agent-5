@@ -1,3 +1,4 @@
+import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 // npx vitest core/config/__tests__/ContextProxy.spec.ts
 
 import * as vscode from "vscode"
@@ -299,18 +300,18 @@ describe("ContextProxy", () => {
 
 	describe("setProviderSettings", () => {
 		// kilocode_change: switching to an unset profile restores the enabled default.
-		it("clears another profile's reset flag while retaining the shared prompt", async () => {
-			await proxy.updateGlobalState("intelligentContextResetPrompt", "Shared prompt")
-			await proxy.setProviderSettings({ apiProvider: "openai", intelligentContextResetEnabled: false })
-			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBe(false)
+		it("clears another profile's opt-out and inherits the default without persisting it", async () => {
+			await proxy.setProviderSettings({ apiProvider: "openai", intelligentTaskEnabled: false })
+			expect(proxy.getProviderSettings().intelligentTaskEnabled).toBe(false)
+			expect(isIntelligentTaskEnabled(proxy.getProviderSettings().intelligentTaskEnabled)).toBe(false)
 
 			await proxy.setProviderSettings({ apiProvider: "ollama" })
-			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBeUndefined()
-			expect(proxy.getGlobalState("intelligentContextResetPrompt")).toBe("Shared prompt")
-			expect(mockGlobalState.update).toHaveBeenCalledWith("intelligentContextResetEnabled", undefined)
+			expect(proxy.getProviderSettings().intelligentTaskEnabled).toBeUndefined()
+			expect(isIntelligentTaskEnabled(proxy.getProviderSettings().intelligentTaskEnabled)).toBe(true)
+			expect(mockGlobalState.update).toHaveBeenCalledWith("intelligentTaskEnabled", undefined)
 
-			await proxy.setProviderSettings({ apiProvider: "openai", intelligentContextResetEnabled: true })
-			expect(proxy.getProviderSettings().intelligentContextResetEnabled).toBe(true)
+			await proxy.setProviderSettings({ apiProvider: "openai", intelligentTaskEnabled: true })
+			expect(proxy.getProviderSettings().intelligentTaskEnabled).toBe(true)
 		})
 
 		it("should clear old API configuration values and set new ones", async () => {

@@ -77,6 +77,16 @@ export function validateAndFixToolResultIds(
 		return userMessage
 	}
 
+	// kilocode_change start: subsequent user messages must not recreate already durable outcomes.
+	const recordedToolResultIds = new Set<string>()
+	for (const message of apiConversationHistory.slice(prevAssistantIdx + 1)) {
+		if (message.role !== "user" || !Array.isArray(message.content)) continue
+		for (const block of message.content) {
+			if (block.type === "tool_result") recordedToolResultIds.add(block.tool_use_id)
+		}
+	}
+	// kilocode_change end
+
 	// Find tool_result blocks in the user message
 	let toolResults = userMessage.content.filter(
 		(block): block is Anthropic.ToolResultBlockParam => block.type === "tool_result",
@@ -87,7 +97,7 @@ export function validateAndFixToolResultIds(
 	// duplicate tool_results with the same tool_use_id. The root cause (approval feedback
 	// creating duplicate results) has been fixed in presentAssistantMessage.ts, but this
 	// deduplication remains as a defensive measure for unknown edge cases.
-	const seenToolResultIds = new Set<string>()
+	const seenToolResultIds = new Set(recordedToolResultIds) // kilocode_change
 	const deduplicatedContent = userMessage.content.filter((block) => {
 		if (block.type !== "tool_result") {
 			return true
@@ -112,7 +122,7 @@ export function validateAndFixToolResultIds(
 	const validToolUseIds = new Set(toolUseBlocks.map((block) => block.id))
 
 	// Build a set of existing tool_result IDs
-	const existingToolResultIds = new Set(toolResults.map((r) => r.tool_use_id))
+	const existingToolResultIds = new Set([...recordedToolResultIds, ...toolResults.map((r) => r.tool_use_id)]) // kilocode_change
 
 	// Check for missing tool_results (tool_use IDs that don't have corresponding tool_results)
 	const missingToolUseIds = toolUseBlocks
@@ -166,7 +176,7 @@ export function validateAndFixToolResultIds(
 	}
 
 	// Match tool_results to tool_uses by position and fix incorrect IDs
-	const usedToolUseIds = new Set<string>()
+	const usedToolUseIds = new Set(recordedToolResultIds) // kilocode_change
 	const contentArray = userMessage.content as Anthropic.Messages.ContentBlockParam[]
 
 	const correctedContent = contentArray
@@ -214,7 +224,10 @@ export function validateAndFixToolResultIds(
 			.map((r: Anthropic.ToolResultBlockParam) => r.tool_use_id),
 	)
 
-	const stillMissingToolUseIds = toolUseBlocks.filter((toolUse) => !coveredToolUseIds.has(toolUse.id))
+	// kilocode_change: a previous user message may already contain this tool's result.
+	const stillMissingToolUseIds = toolUseBlocks.filter(
+		(toolUse) => !coveredToolUseIds.has(toolUse.id) && !recordedToolResultIds.has(toolUse.id),
+	)
 
 	// Build final content: add missing tool_results at the beginning if any
 	const missingToolResults: Anthropic.ToolResultBlockParam[] = stillMissingToolUseIds.map((toolUse) => ({

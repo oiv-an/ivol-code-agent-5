@@ -71,7 +71,6 @@ export const globalSettingsSchema = z.object({
 
 	condensingApiConfigId: z.string().optional(),
 	customCondensingPrompt: z.string().optional(),
-	intelligentContextResetPrompt: z.string().optional(), // kilocode_change: shared prompt; enablement belongs to the profile
 
 	autoApprovalEnabled: z.boolean().optional(),
 	yoloMode: z.boolean().optional(), // kilocode_change
