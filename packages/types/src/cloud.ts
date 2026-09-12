@@ -470,7 +470,10 @@ export enum ExtensionBridgeEventName {
 	HeartbeatUpdated = "heartbeat_updated",
 }
 
-export const extensionBridgeEventSchema = z.discriminatedUnion("type", [
+// kilocode_change: the inferred type of this union is too long for the compiler to serialize once
+// ClineMessage carries a few more fields, so the schema type is stated explicitly. ExtensionBridgeEvent
+// below still derives the precise shape through z.infer.
+export const extensionBridgeEventSchema: z.ZodTypeAny = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal(ExtensionBridgeEventName.TaskCreated),
 		instance: extensionInstanceSchema,
