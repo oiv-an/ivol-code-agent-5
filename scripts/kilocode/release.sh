@@ -284,8 +284,9 @@ confirm_publication() {
 	echo "  Marketplace : $(basename "$VSIX_PATH")"
 	echo "  GitHub tag  : v$VERSION"
 
-	local archive
-	for archive in "${BUILT_ARCHIVES[@]}"; do
+	local archive index
+	for ((index = 0; index < ${#BUILT_ARCHIVES[@]}; index++)); do
+		archive="${BUILT_ARCHIVES[index]}"
 		printf '  Attachment  : %s (%s)\n' "$(basename "$archive")" \
 			"$(du -h "$archive" | cut -f1 | tr -d ' ')"
 	done
@@ -344,11 +345,19 @@ publish_github_release() {
 	notes+=$'\n\nJetBrains IDEs: download the archive for your IDE below and install it'
 	notes+=$' with Settings, Plugins, Install Plugin from Disk.'
 
+	# Building VS Code alone leaves the archive list empty, and bash 3.2 treats an
+	# empty array as unbound under `set -u`, so the attachments are collected first.
+	local attachments=("$VSIX_PATH")
+	local index
+	for ((index = 0; index < ${#BUILT_ARCHIVES[@]}; index++)); do
+		attachments+=("${BUILT_ARCHIVES[index]}")
+	done
+
 	gh release create "v$VERSION" \
 		--repo "$(github_repository)" \
 		--title "IVOL Code Agent 5 $VERSION" \
 		--notes "$notes" \
-		"$VSIX_PATH" "${BUILT_ARCHIVES[@]}"
+		"${attachments[@]}"
 }
 
 main() {
