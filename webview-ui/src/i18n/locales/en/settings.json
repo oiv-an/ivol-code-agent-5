@@ -1042,6 +1042,12 @@
 		"compaction": "Update the file before automatic or manual context compaction and read it again afterwards. The task file is not deleted after compaction. Its contents are sent to the selected model and use additional tokens.",
 		"scope": "Experimental in VS Code, PhpStorm, IntelliJ IDEA and PyCharm. Off by default for each provider profile. Mutually exclusive with intelligent context reset: enabling either option turns the other off. Save the profile to apply. Disabling does not delete the file or task history."
 	},
+	"freezeMessages": {
+		"label": "Freeze messages (experimental)",
+		"description": "Keep the freeze control on written answers in the chat. Freezing a message sends it with every later request, so a decision or a requirement stays in front of the model however old it becomes.",
+		"compaction": "Condensing still runs over the whole conversation, but a frozen message is never folded away. Each frozen message is re-sent on every request and uses additional tokens.",
+		"scope": "Off by default for each provider profile. Mutually exclusive with intelligent context reset and Current Task: enabling this turns those off. Save the profile to apply. Disabling leaves existing marks in place."
+	},
 	"experimental": {
 		"DIFF_STRATEGY_UNIFIED": {
 			"name": "Use experimental unified diff strategy",
