@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "AI के संदर्भ विंडो में शामिल जानकारी को नियंत्रित करें, जो token उपयोग और प्रतिक्रिया गुणवत्ता को प्रभावित करता है",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "बुद्धिमान संदर्भ संघनन को ट्रिगर करने की सीमा",
 			"description": "जब संदर्भ विंडो इस सीमा तक पहुंचती है, तो IVOL Code इसे स्वचालित रूप से संघनित कर देगा।"

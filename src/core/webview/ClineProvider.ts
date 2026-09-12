@@ -2289,6 +2289,7 @@ export class ClineProvider
 			allowedMaxCost,
 			autoCondenseContext,
 			autoCondenseContextPercent,
+			frozenMessagesBudgetPercent, // kilocode_change
 			soundEnabled,
 			ttsEnabled,
 			ttsSpeed,
@@ -2483,6 +2484,7 @@ export class ClineProvider
 			allowedMaxCost,
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
+			frozenMessagesBudgetPercent, // kilocode_change
 			uriScheme: vscode.env.uriScheme,
 			uiKind: vscode.UIKind[vscode.env.uiKind], // kilocode_change
 			kiloCodeWrapperProperties, // kilocode_change wrapper information
@@ -2822,6 +2824,7 @@ export class ClineProvider
 			allowedMaxCost: stateValues.allowedMaxCost,
 			autoCondenseContext: stateValues.autoCondenseContext ?? true,
 			autoCondenseContextPercent: stateValues.autoCondenseContextPercent ?? 90,
+			frozenMessagesBudgetPercent: stateValues.frozenMessagesBudgetPercent, // kilocode_change
 			// taskHistory: stateValues.taskHistory ?? [], // kilocode_change
 			allowedCommands: stateValues.allowedCommands,
 			deniedCommands: stateValues.deniedCommands,

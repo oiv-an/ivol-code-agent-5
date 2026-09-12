@@ -80,6 +80,7 @@ import { OpenMarkdownPreviewButton } from "./OpenMarkdownPreviewButton"
 import { LowCreditWarning } from "../kilocode/chat/LowCreditWarning"
 import { NewTaskPreview } from "../kilocode/chat/NewTaskPreview"
 import { KiloChatRowGutterBar } from "../kilocode/chat/KiloChatRowGutterBar"
+import { PinMessageButton } from "./kilocode/PinMessageButton" // kilocode_change
 import { StandardTooltip } from "../ui"
 import { FastApplyChatDisplay } from "./kilocode/FastApplyChatDisplay"
 import { InvalidModelWarning } from "../kilocode/chat/InvalidModelWarning"
@@ -155,13 +156,33 @@ const ChatRow = memo(
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
 
+		// kilocode_change start: a message still being streamed has no final place in the history
+		// yet, so it cannot be frozen or numbered.
+		const canFreeze = !message.partial && typeof message.ts === "number"
+		// kilocode_change end
+
 		const [chatrow, { height }] = useSize(
 			<div
 				// kilocode_change: add highlighted className
 				className={cn(
 					`px-[15px] py-[10px] pr-[6px] relative ${highlighted ? "animate-message-highlight" : ""}`,
+					// kilocode_change: reveal the freeze control on hover, keep it visible once frozen
+					"group",
 				)}>
 				{showTaskTimeline && <KiloChatRowGutterBar message={message} />}
+				{/* kilocode_change start: freeze this message in the model's context */}
+				{canFreeze && (
+					<PinMessageButton
+						message={message}
+						className={cn(
+							"absolute top-1 right-1 z-10",
+							message.pinned
+								? "opacity-100"
+								: "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+						)}
+					/>
+				)}
+				{/* kilocode_change end */}
 				<ChatRowContent {...props} />
 			</div>,
 		)

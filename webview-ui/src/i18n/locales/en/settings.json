@@ -842,6 +842,10 @@
 	},
 	"contextManagement": {
 		"description": "Control what information is included in the AI's context window, affecting token usage and response quality",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Remaining context that triggers condensing",
 			"description": "IVOL Code automatically condenses when this percentage of the total context window remains."

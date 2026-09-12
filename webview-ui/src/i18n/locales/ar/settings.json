@@ -861,6 +861,10 @@
 	},
 	"contextManagement": {
 		"description": "تحكّم بالمعلومات المُدرجة في سياق الذكاء.",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "نسبة تشغيل التلخيص الذكي",
 			"description": "عند الوصول لهذه النسبة، يختصر IVOL Code السياق."

@@ -847,6 +847,10 @@
 	},
 	"contextManagement": {
 		"description": "ควบคุมข้อมูลที่รวมอยู่ในหน้าต่างบริบทของ AI ซึ่งส่งผลต่อการใช้โทเค็นและคุณภาพการตอบกลับ",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "เกณฑ์ในการกระตุ้นการย่อบริบทอย่างชาญฉลาด",
 			"description": "เมื่อหน้าต่างบริบทถึงเกณฑ์นี้ IVOL Code จะย่อโดยอัตโนมัติ"

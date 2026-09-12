@@ -262,6 +262,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [reviewScopeInfo, setReviewScopeInfo] = useState<ReviewScopeInfo | null>(null)
 	// kilocode_change end: Review mode state
 
+	// kilocode_change start: display-only filter that hides everything except frozen messages
+	const [showFrozenOnly, setShowFrozenOnly] = useState(false)
+	// kilocode_change end
+
 	const clineAskRef = useRef(clineAsk)
 	useEffect(() => {
 		clineAskRef.current = clineAsk
@@ -1364,6 +1368,22 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		contextMemoryMode,
 	]) // kilocode_change
 
+	// kilocode_change start: "only frozen" is a pure display filter, it never touches history or context
+	const frozenCount = useMemo(() => groupedMessages.filter((msg) => msg.pinned).length, [groupedMessages])
+
+	// Turn the filter off by itself once the last frozen message is unfrozen, otherwise the chat looks empty.
+	useEffect(() => {
+		if (showFrozenOnly && frozenCount === 0) {
+			setShowFrozenOnly(false)
+		}
+	}, [showFrozenOnly, frozenCount])
+
+	const displayedMessages = useMemo(
+		() => (showFrozenOnly ? groupedMessages.filter((msg) => msg.pinned) : groupedMessages),
+		[showFrozenOnly, groupedMessages],
+	)
+	// kilocode_change end
+
 	// scrolling
 
 	const scrollToBottomSmooth = useMemo(
@@ -1610,7 +1630,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					isExpanded={expandedRows[messageOrGroup.ts] || false}
 					onToggleExpand={toggleRowExpansion} // This was already stabilized
 					lastModifiedMessage={modifiedMessages.at(-1)} // Original direct access
-					isLast={index === groupedMessages.length - 1} // Original direct access
+					isLast={index === displayedMessages.length - 1} // kilocode_change: index belongs to the displayed list
 					onHeightChange={handleRowHeightChange}
 					isStreaming={isStreaming}
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
@@ -1642,7 +1662,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			expandedRows,
 			toggleRowExpansion,
 			modifiedMessages,
-			groupedMessages.length,
+			displayedMessages.length, // kilocode_change
 			handleRowHeightChange,
 			isStreaming,
 			handleSuggestionClickInRow,
@@ -1913,6 +1933,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			{task && (
 				<>
+					{/* kilocode_change start: toggle between the whole chat and frozen messages only */}
+					{frozenCount > 0 && (
+						<div className="flex items-center gap-2 px-[15px] pb-1 text-vscode-descriptionForeground">
+							<button
+								type="button"
+								onClick={() => setShowFrozenOnly(!showFrozenOnly)}
+								className="flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-vscode-foreground">
+								<span className="codicon codicon-pin text-xs" />
+								<span className="text-xs underline">
+									{showFrozenOnly
+										? t("chat:contextPinning.showAll")
+										: t("chat:contextPinning.showPinnedOnly")}
+								</span>
+							</button>
+							<span className="text-xs">
+								{t("chat:contextPinning.pinnedCount", { count: frozenCount })}
+							</span>
+						</div>
+					)}
+					{/* kilocode_change end */}
 					<div className="grow flex flex-col min-h-0" ref={scrollContainerRef}>
 						<div className="flex-auto min-h-0">
 							<Virtuoso
@@ -1920,7 +1960,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								key={task.ts}
 								className="scrollable grow overflow-y-scroll mb-1"
 								increaseViewportBy={{ top: 400, bottom: 400 }} // kilocode_change: use more modest numbers to see if they reduce gray screen incidence
-								data={groupedMessages}
+								data={displayedMessages} // kilocode_change
 								itemContent={itemContent}
 								followOutput={(isAtBottom: boolean) => isAtBottom || stickyFollowRef.current}
 								atBottomStateChange={(isAtBottom: boolean) => {
@@ -1929,7 +1969,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									setShowScrollToBottom(!isAtBottom)
 								}}
 								atBottomThreshold={10}
-								initialTopMostItemIndex={groupedMessages.length - 1}
+								initialTopMostItemIndex={displayedMessages.length - 1} // kilocode_change
 							/>
 						</div>
 					</div>

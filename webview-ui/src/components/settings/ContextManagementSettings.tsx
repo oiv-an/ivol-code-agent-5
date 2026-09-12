@@ -28,6 +28,7 @@ const remainingPercentToUsageThreshold = (value: number) => 100 - Math.min(Math.
 type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
+	frozenMessagesBudgetPercent?: number // kilocode_change
 	listApiConfigMeta: any[]
 	maxOpenTabsContext: number
 	maxWorkspaceFiles: number
@@ -48,6 +49,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	setCachedStateField: SetCachedStateField<
 		| "autoCondenseContext"
 		| "autoCondenseContextPercent"
+		| "frozenMessagesBudgetPercent" // kilocode_change
 		| "maxOpenTabsContext"
 		| "maxWorkspaceFiles"
 		| "showRooIgnoredFiles"
@@ -70,6 +72,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 export const ContextManagementSettings = ({
 	autoCondenseContext,
 	autoCondenseContextPercent,
+	frozenMessagesBudgetPercent, // kilocode_change
 	listApiConfigMeta,
 	maxOpenTabsContext,
 	maxWorkspaceFiles,
@@ -604,6 +607,30 @@ export const ContextManagementSettings = ({
 						</div>
 					</div>
 				)}
+
+				{/* kilocode_change start: how much of the window frozen messages may occupy */}
+				<div>
+					<div className="flex items-center gap-2">
+						<span className="font-medium">
+							{t("settings:contextManagement.frozenMessagesBudget.label")}
+						</span>
+					</div>
+					<div className="flex items-center gap-2 mt-2">
+						<Slider
+							min={5}
+							max={90}
+							step={5}
+							value={[frozenMessagesBudgetPercent ?? 50]}
+							onValueChange={([value]) => setCachedStateField("frozenMessagesBudgetPercent", value)}
+							data-testid="frozen-budget-slider"
+						/>
+						<span className="w-12 shrink-0 text-right">{frozenMessagesBudgetPercent ?? 50}%</span>
+					</div>
+					<div className="text-vscode-descriptionForeground text-sm mt-1">
+						{t("settings:contextManagement.frozenMessagesBudget.description")}
+					</div>
+				</div>
+				{/* kilocode_change end */}
 			</Section>
 		</div>
 	)

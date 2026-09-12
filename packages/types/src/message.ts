@@ -314,6 +314,19 @@ export const clineMessageSchema = z.object({
 	isProtected: z.boolean().optional(),
 	apiProtocol: z.union([z.literal("openai"), z.literal("anthropic")]).optional(),
 	isAnswered: z.boolean().optional(),
+	// kilocode_change start: explicit keep mark. A pinned message is never hidden from the model by
+	// context condensing or sliding-window truncation, and can be restored after it was hidden.
+	//
+	// `seq` mirrors the stable number of the matching API message, so the number shown in the chat
+	// is the exact number the model sees. The user has to be able to say "unfreeze #20" and mean
+	// the same message the model would.
+	seq: z.number().optional(),
+	pinned: z.boolean().optional(),
+	pinnedBy: z.union([z.literal("model"), z.literal("user")]).optional(),
+	pinnedNote: z.string().optional(),
+	pinnedAt: z.number().optional(),
+	pinRestored: z.boolean().optional(),
+	// kilocode_change end
 	// kilocode_change start
 	metadata: z
 		.object({

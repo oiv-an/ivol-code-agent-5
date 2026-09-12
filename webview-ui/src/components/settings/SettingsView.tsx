@@ -188,6 +188,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		alwaysAllowDelete, // kilocode_change
 		autoCondenseContext,
 		autoCondenseContextPercent,
+		frozenMessagesBudgetPercent, // kilocode_change
 		browserToolEnabled,
 		browserViewportSize,
 		enableCheckpoints,
@@ -542,6 +543,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 					allowedMaxCost: allowedMaxCost ?? null,
 					autoCondenseContext,
 					autoCondenseContextPercent,
+					frozenMessagesBudgetPercent, // kilocode_change
 					browserToolEnabled: browserToolEnabled ?? true,
 					soundEnabled: soundEnabled ?? true,
 					soundVolume: soundVolume ?? 0.5,
@@ -1212,6 +1214,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 							<ContextManagementSettings
 								autoCondenseContext={autoCondenseContext}
 								autoCondenseContextPercent={autoCondenseContextPercent}
+								frozenMessagesBudgetPercent={frozenMessagesBudgetPercent} // kilocode_change
 								listApiConfigMeta={listApiConfigMeta ?? []}
 								maxOpenTabsContext={maxOpenTabsContext}
 								maxWorkspaceFiles={maxWorkspaceFiles ?? 200}

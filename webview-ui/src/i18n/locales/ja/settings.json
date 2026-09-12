@@ -762,6 +762,10 @@
 	},
 	"contextManagement": {
 		"description": "AIのコンテキストウィンドウに含まれる情報を制御し、token使用量とレスポンスの品質に影響します",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "インテリジェントなコンテキスト圧縮をトリガーするしきい値",
 			"description": "コンテキストウィンドウがこのしきい値に達すると、IVOL Codeは自動的に圧縮します。"

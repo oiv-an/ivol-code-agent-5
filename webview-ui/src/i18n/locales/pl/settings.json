@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Kontroluj, jakie informacje są zawarte w oknie kontekstu AI, wpływając na zużycie token i jakość odpowiedzi",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Próg wyzwalający inteligentną kondensację kontekstu",
 			"description": "Gdy okno kontekstu osiągnie ten próg, IVOL Code automatycznie je skondensuje."

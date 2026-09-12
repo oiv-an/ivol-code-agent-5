@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "AI의 컨텍스트 창에 포함되는 정보를 제어하여 token 사용량과 응답 품질에 영향을 미칩니다",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "지능적 컨텍스트 압축을 트리거하는 임계값",
 			"description": "컨텍스트 창이 이 임계값에 도달하면 IVOL Code가 자동으로 압축합니다."

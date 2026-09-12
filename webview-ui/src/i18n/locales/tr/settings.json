@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Yapay zekanın bağlam penceresine hangi bilgilerin dahil edileceğini kontrol edin, token kullanımını ve yanıt kalitesini etkiler",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Akıllı bağlam sıkıştırmayı tetikleyecek eşik",
 			"description": "Bağlam penceresi bu eşiğe ulaştığında, IVOL Code otomatik olarak sıkıştıracaktır."

@@ -19,6 +19,7 @@ import {
 	isTaskDocumentBodyWithinLimit,
 	normalizeTaskDocumentBody,
 } from "../task-document/limits"
+import { collectToolPairIndices } from "../kilocode/context-pinning"
 // kilocode_change end
 
 /**
@@ -981,6 +982,11 @@ ${recentMessagesForHandoff}
 		if (index >= keepStartIndex) {
 			return msg
 		}
+		// kilocode_change: a frozen message is NOT excluded from the summary input. The summary must
+		// be written from the complete conversation - pulling the most important messages out of it
+		// would leave the summarizing model with holes exactly where the key decisions were made.
+		// Frozen messages are tagged like everything else here and are re-added to the effective
+		// history by getEffectiveApiHistory() instead.
 		// Middle messages get tagged with condenseParent (unless they already have one from a previous condense)
 		// If they already have a condenseParent, we leave it - nested condense is handled by filtering
 		if (!msg.condenseParent) {
@@ -1091,10 +1097,30 @@ export function getEffectiveApiHistory(messages: ApiMessage[]): ApiMessage[] {
 		}
 	}
 
+	// kilocode_change start: frozen messages are re-added here, after condensing has already run on
+	// the complete conversation. This is the single place that decides what the API actually sees,
+	// so keeping a message in context means not filtering it out here. A frozen message stays in
+	// every request until its mark is removed.
+	const keepFrozen = new Set<number>()
+
+	for (let i = 0; i < messages.length; i++) {
+		if (!messages[i].pinned) continue
+		// A tool_result without its tool_use (or the other way round) is rejected by the API, so a
+		// frozen half always brings its partner back with it.
+		for (const index of collectToolPairIndices(messages, i)) {
+			keepFrozen.add(index)
+		}
+	}
+	// kilocode_change end
+
 	// Filter out messages whose condenseParent points to an existing summary
 	// or whose truncationParent points to an existing truncation marker.
 	// Messages with orphaned parents (summary/marker was deleted) are included
-	return messages.filter((msg) => {
+	return messages.filter((msg, index) => {
+		// kilocode_change: an explicit freeze mark outranks both condensing and truncation.
+		if (keepFrozen.has(index)) {
+			return true
+		}
 		// Filter out condensed messages if their summary exists
 		if (msg.condenseParent && existingSummaryIds.has(msg.condenseParent)) {
 			return false

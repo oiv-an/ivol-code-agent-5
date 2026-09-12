@@ -857,6 +857,10 @@
 	},
 	"contextManagement": {
 		"description": "Kontrolujte, aké informácie sú zahrnuté v kontextovom okne AI, čo ovplyvňuje využitie tokenov a kvalitu odpovede",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Prahová hodnota pre spustenie inteligentného zhusťovania kontextu",
 			"description": "Keď kontextové okno dosiahne túto prahovú hodnotu, IVOL Code ho automaticky zhustí."

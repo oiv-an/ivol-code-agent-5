@@ -855,6 +855,10 @@
 	},
 	"contextManagement": {
 		"description": "Контролюйте, яка інформація включається у вікно контексту ШІ, що впливає на використання токенів та якість відповіді",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Поріг для запуску інтелектуального стиснення контексту",
 			"description": "Коли вікно контексту досягне цього порогу, IVOL Code автоматично його стисне."

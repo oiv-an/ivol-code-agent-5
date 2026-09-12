@@ -75,6 +75,7 @@ export const toolParamNames = [
 	"code_edit",
 	"old_str",
 	"new_str",
+	"messages", // freeze_messages parameter: the [#N] numbers to freeze or unfreeze
 	// kilocode_change end
 	"query",
 	"args",
@@ -111,6 +112,7 @@ export type NativeToolArgs = {
 	edit_file: { file_path: string; old_string: string; new_string: string; expected_replacements?: number }
 	// kilocode_change start: Fast Apply
 	fast_edit_file: { target_file: string; instructions: string; code_edit: string }
+	freeze_messages: { messages: string; action?: string }
 	// kilocode_change end
 	apply_patch: { patch: string }
 	ask_followup_question: {
@@ -306,6 +308,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	delete_file: "delete files",
 	report_bug: "report bug",
 	condense: "condense the current context window",
+	freeze_messages: "keep messages in context",
 	// kilocode_change start
 	search_and_replace: "apply changes using search and replace",
 	search_replace: "apply single search and replace",
@@ -374,6 +377,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"new_task",
 	"report_bug",
 	"condense", // kilocode_Change
+	"freeze_messages", // kilocode_change: keeping context is needed in every mode
 	"update_todo_list",
 	"run_slash_command",
 ] as const

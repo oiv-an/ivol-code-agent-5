@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Kontrol informasi apa yang disertakan dalam context window AI, mempengaruhi penggunaan token dan kualitas respons",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Ambang batas untuk memicu kondensasi konteks cerdas",
 			"description": "Ketika context window mencapai ambang batas ini, IVOL Code akan secara otomatis mengondensasikannya."

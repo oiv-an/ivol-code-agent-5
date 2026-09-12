@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Steuer, welche Informationen im KI-Kontextfenster enthalten sind, was den Token-Verbrauch und die Antwortqualität beeinflusst",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Schwellenwert für intelligente Kontextkomprimierung",
 			"description": "Wenn das Kontextfenster diesen Schwellenwert erreicht, wird IVOL Code es automatisch komprimieren."

@@ -749,6 +749,14 @@ export class NativeToolCallParser {
 				case "new_rule":
 				case "report_bug":
 					break
+				case "freeze_messages":
+					if (args.messages !== undefined) {
+						nativeArgs = {
+							messages: args.messages,
+							...(args.action !== undefined ? { action: args.action } : {}),
+						} as NativeArgsFor<TName>
+					}
+					break
 				// kilocode_change end
 
 				case "apply_diff":

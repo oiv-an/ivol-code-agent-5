@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Kiểm soát thông tin nào được đưa vào cửa sổ ngữ cảnh của AI, ảnh hưởng đến việc sử dụng token và chất lượng phản hồi",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Ngưỡng kích hoạt nén ngữ cảnh thông minh",
 			"description": "Khi cửa sổ ngữ cảnh đạt đến ngưỡng này, IVOL Code sẽ tự động nén nó."

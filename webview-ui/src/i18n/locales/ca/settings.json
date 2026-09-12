@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Controleu quina informació s'inclou a la finestra de context de la IA, afectant l'ús de token i la qualitat de resposta",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Llindar per activar la condensació intel·ligent de context",
 			"description": "Quan la finestra de context assoleix aquest llindar, IVOL Code la condensarà automàticament."

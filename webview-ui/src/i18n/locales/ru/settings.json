@@ -800,6 +800,10 @@
 	},
 	"contextManagement": {
 		"description": "Управляйте, какая информация включается в окно контекста ИИ, что влияет на расход токенов и качество ответов",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Остаток контекста для запуска сжатия",
 			"description": "IVOL Code автоматически сожмёт контекст, когда останется указанный процент общего окна."

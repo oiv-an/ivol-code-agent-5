@@ -767,6 +767,10 @@
 	},
 	"contextManagement": {
 		"description": "控制 AI 上下文視窗中要包含哪些資訊，會影響 Token 用量和回應品質",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "觸發智慧上下文壓縮的閾值",
 			"description": "當上下文視窗達到此閾值時，IVOL Code 將自動壓縮它。"

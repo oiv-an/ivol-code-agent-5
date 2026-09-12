@@ -211,6 +211,18 @@
 		},
 		"current": "ปัจจุบัน"
 	},
+	"contextPinning": {
+		"pin": "Freeze this message in context",
+		"pinned": "Frozen. Click to unfreeze",
+		"pinnedByModel": "Frozen by IVOL Code. Click to unfreeze",
+		"showPinnedOnly": "Only frozen",
+		"showAll": "Show all",
+		"pinnedCount_one": "{{count}} frozen",
+		"pinnedCount_other": "{{count}} frozen",
+		"restoredPrefix": "[restored by user]",
+		"messageNumber": "Message #{{number}}",
+		"budgetExceeded": "Frozen messages already use {{used}} of the {{allowed}} tokens allowed. Unfreeze an older one first."
+	},
 	"contextManagement": {
 		"tokens": "tokens",
 		"condensation": {

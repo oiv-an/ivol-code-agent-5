@@ -723,6 +723,7 @@ export type ExtensionState = Pick<
 
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
+	frozenMessagesBudgetPercent?: number // kilocode_change
 	marketplaceItems?: MarketplaceItem[]
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
@@ -877,6 +878,7 @@ export interface WebviewMessage {
 		| "draggedImages"
 		| "deleteMessage"
 		| "deleteMessageConfirm"
+		| "togglePinnedMessage" // kilocode_change: keep a message out of context compaction
 		| "submitEditedMessage"
 		| "editMessageConfirm"
 		| "enableMcpServerCreation"
@@ -1148,6 +1150,7 @@ export interface WebviewMessage {
 	hasSystemPromptOverride?: boolean
 	terminalOperation?: "continue" | "abort"
 	messageTs?: number
+	pinned?: boolean // kilocode_change: requested state for togglePinnedMessage
 	restoreCheckpoint?: boolean
 	historyPreviewCollapsed?: boolean
 	filters?: { type?: string; search?: string; tags?: string[] }

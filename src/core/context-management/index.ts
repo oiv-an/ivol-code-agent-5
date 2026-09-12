@@ -84,6 +84,9 @@ export function truncateConversation(messages: ApiMessage[], fracToRemove: numbe
 
 	// Filter to only visible messages (those not already truncated)
 	// We need to track original indices to correctly tag messages in the full array
+	// kilocode_change: frozen messages are tagged like any other message here. Excluding them from
+	// truncation bookkeeping would shift the window and the marker boundary; they are re-added to
+	// the effective history by getEffectiveApiHistory() instead.
 	const visibleIndices: number[] = []
 	messages.forEach((msg, index) => {
 		if (!msg.truncationParent && !msg.isTruncationMarker) {

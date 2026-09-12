@@ -156,6 +156,16 @@ import {
 	getEffectiveApiHistory,
 	uncondenseForExtendedThinking,
 } from "../condense"
+// kilocode_change: stable numbers make a message addressable ("freeze #42").
+import {
+	applyNumberPrefixToContent,
+	assignNumbersToChatMessages,
+	ensureSequenceNumbers,
+	getMessageNumber,
+} from "../kilocode/context-pinning/numbering"
+// kilocode_change start: explicit keep marks that survive context compaction
+import { type PinChange, type PinnedBy, pinMessages, unpinMessages } from "../kilocode/context-pinning"
+// kilocode_change end
 // kilocode_change start: verified context restart handoff
 import {
 	CONTEXT_HANDOFF_RELATIVE_PATH,
@@ -1243,7 +1253,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// API Messages
 
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
-		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+		const messages = await readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+		// kilocode_change: tasks saved before numbering existed get their numbers here, once, in
+		// order. Numbering on load also means a reopened task continues the sequence instead of
+		// restarting it and colliding with numbers the user already quoted.
+		ensureSequenceNumbers(messages)
+		return messages
 	}
 
 	// kilocode_change start: lifecycle helpers for the one-shot restart handoff.
@@ -1557,6 +1572,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.apiConversationHistory.push(messageWithTs)
 		}
 
+		// kilocode_change: give the new message its permanent number before the history is saved.
+		ensureSequenceNumbers(this.apiConversationHistory)
+
 		// kilocode_change start: consume only the durable continuation that owns this handoff
 		const requiresContextHandoffFileRead =
 			Boolean(this.activeContextHandoffId) && this.activeContextHandoffFileReady !== false
@@ -1723,6 +1741,52 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// kilocode_change end
 	}
 
+	// kilocode_change start: explicit keep marks.
+	/**
+	 * Marks or unmarks a message so context compaction leaves it alone.
+	 *
+	 * Pinning a message that condensing or truncation had already hidden brings it back, together
+	 * with the other half of its tool_use/tool_result pair. Both histories are updated so the chat
+	 * shows the state and the API request reflects it.
+	 */
+	public async setMessagePinned(
+		messageTs: number,
+		pinned: boolean,
+		by: PinnedBy,
+		note?: string,
+	): Promise<PinChange | undefined> {
+		const apiResult = pinned
+			? pinMessages(this.apiConversationHistory, [{ ts: messageTs, ...(note ? { note } : {}) }], by)
+			: unpinMessages(this.apiConversationHistory, [messageTs])
+
+		const change = apiResult.changes[0]
+		if (!change) {
+			return undefined
+		}
+
+		await this.overwriteApiConversationHistory(apiResult.messages)
+
+		const pinnedApiMessage = apiResult.messages.find((message) => message.ts === messageTs)
+		const updatedChatMessages = this.clineMessages.map((message) =>
+			message.ts === messageTs
+				? pinned
+					? {
+							...message,
+							pinned: true,
+							pinnedBy: by,
+							pinnedAt: pinnedApiMessage?.pinnedAt ?? Date.now(),
+							...(note ? { pinnedNote: note } : {}),
+							...(change.restored ? { pinRestored: true } : {}),
+						}
+					: (({ pinned: _p, pinnedBy: _b, pinnedNote: _n, pinnedAt: _a, ...rest }) => rest)(message)
+				: message,
+		)
+		await this.overwriteClineMessages(updatedChatMessages)
+
+		return change
+	}
+	// kilocode_change end
+
 	public async overwriteClineMessages(newMessages: ClineMessage[]) {
 		this.clineMessages = newMessages
 		restoreTodoListForTask(this)
@@ -1761,6 +1825,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveClineMessages() {
 		try {
+			// kilocode_change: carry the API message numbers over to the chat rows, so the number
+			// the user reads is the number the model was given. Saying "unfreeze #20" has to mean
+			// the same message on both sides.
+			this.clineMessages = assignNumbersToChatMessages(this.clineMessages, this.apiConversationHistory)
+
 			await saveTaskMessages({
 				messages: this.clineMessages,
 				taskId: this.taskId,
@@ -6319,7 +6388,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (msg.role) {
 				cleanConversationHistory.push({
 					role: msg.role,
-					content: msg.content as Anthropic.Messages.ContentBlockParam[] | string,
+					// kilocode_change: the number travels with the request only - the stored history
+					// keeps clean text, so the prefix is never persisted or duplicated.
+					content: applyNumberPrefixToContent(
+						msg.content as Anthropic.Messages.ContentBlockParam[] | string,
+						getMessageNumber(msg),
+					) as Anthropic.Messages.ContentBlockParam[] | string,
 				})
 			}
 		}

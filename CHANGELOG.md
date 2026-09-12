@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.249
+
+### Patch Changes
+
+- Freeze messages so they stay in context: every chat message now carries a number, and either you or the model can freeze the ones that matter. Frozen messages are sent with every request until they are unfrozen, even after the conversation is condensed.
+
 ## 5.16.248
 
 ### Patch Changes

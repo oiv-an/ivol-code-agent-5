@@ -2431,6 +2431,25 @@ export const webviewMessageHandler = async (
 
 			await handleDeleteMessageConfirm(message.messageTs, message.restoreCheckpoint)
 			break
+		// kilocode_change start: the user decides what context compaction may not touch.
+		case "togglePinnedMessage": {
+			const currentTask = provider.getCurrentTask()
+			if (!currentTask || typeof message.messageTs !== "number") {
+				break
+			}
+			try {
+				await currentTask.setMessagePinned(message.messageTs, message.pinned === true, "user")
+				await provider.postStateToWebview()
+			} catch (error) {
+				provider.log(
+					`Failed to toggle the keep mark for message ${message.messageTs}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			}
+			break
+		}
+		// kilocode_change end
 		case "editMessageConfirm":
 			if (message.messageTs && message.text) {
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })

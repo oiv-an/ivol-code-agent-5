@@ -112,6 +112,7 @@ export const globalSettingsSchema = z.object({
 	allowedMaxCost: z.number().nullish(),
 	autoCondenseContext: z.boolean().optional(),
 	autoCondenseContextPercent: z.number().optional(),
+	frozenMessagesBudgetPercent: z.number().optional(), // kilocode_change: share of the context window frozen messages may take
 	maxConcurrentFileReads: z.number().optional(),
 	allowVeryLargeReads: z.boolean().optional(), // kilocode_change
 

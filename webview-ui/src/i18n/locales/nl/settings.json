@@ -757,6 +757,10 @@
 	},
 	"contextManagement": {
 		"description": "Bepaal welke informatie wordt opgenomen in het contextvenster van de AI, wat invloed heeft op tokengebruik en antwoordkwaliteit",
+		"frozenMessagesBudget": {
+			"label": "Frozen messages budget",
+			"description": "Share of the context window that frozen messages may take. Freezing is refused once this share is used up."
+		},
 		"autoCondenseContextPercent": {
 			"label": "Drempelwaarde om intelligente contextcompressie te activeren",
 			"description": "Wanneer het contextvenster deze drempelwaarde bereikt, zal IVOL Code het automatisch comprimeren."
