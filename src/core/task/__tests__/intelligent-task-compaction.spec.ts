@@ -152,8 +152,10 @@ describe("intelligent task ordinary compaction boundaries", () => {
 	it("instructs first-response creation, preservation and recovery before the file exists", async () => {
 		const { task } = setup()
 		const prompt = await task.getSystemPrompt()
-		expect(prompt).toContain("Write it on your first response")
-		expect(prompt).toContain("constraints, what is done and verified, what is left")
+		expect(prompt).toContain("create or refresh the current task's block")
+		expect(prompt).toContain(
+			"goal and constraints; an extended checklist of what is done and verified, what is left",
+		)
 		expect(prompt).toContain("read it again")
 		expect(prompt).not.toContain("CURRENT_WORK.md")
 	})

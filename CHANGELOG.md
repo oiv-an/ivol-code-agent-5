@@ -1,5 +1,12 @@
 # IVOL Code Agent 5
 
+## 5.16.264
+
+### Patch Changes
+
+- Guide the model to replace task blocks with structured checklists instead of accumulating progress logs, and remove completed blocks after user confirmation.
+- Ask the model to reorganize an existing task document on its first new or resumed turn while preserving unfinished work.
+
 ## 5.16.263
 
 ### Patch Changes
