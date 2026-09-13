@@ -391,20 +391,39 @@ export async function summarizeConversation(
 			...(preparation.signal ? { signal: preparation.signal } : {}),
 			tool_choice: "none",
 		})
-		for await (const chunk of stream) {
-			assertPreparationActive() // Some providers ignore AbortSignal.
-			if (chunk.type === "text") {
-				summary += chunk.text
-			} else if (chunk.type === "usage") {
-				cost = chunk.totalCost ?? 0
-				outputTokens = chunk.outputTokens ?? 0
-			} else if (chunk.type === "ant_thinking") {
-				if (chunk.thinking && chunk.signature) {
-					lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
+		// Race reads themselves: a provider may ignore cancellation while waiting for data.
+		const iterator = stream[Symbol.asyncIterator]()
+		let onAbort: (() => void) | undefined
+		const cancelled = new Promise<never>((_, reject) => {
+			onAbort = () => reject(new Error(cancellationError))
+			preparation.signal?.addEventListener("abort", onAbort, { once: true })
+			if (preparation.signal?.aborted) onAbort()
+		})
+		try {
+			while (true) {
+				const item = await Promise.race([iterator.next(), cancelled])
+				assertPreparationActive()
+				if (item.done) break
+				const chunk = item.value
+				if (chunk.type === "text") {
+					summary += chunk.text
+				} else if (chunk.type === "usage") {
+					cost = chunk.totalCost ?? 0
+					outputTokens = chunk.outputTokens ?? 0
+				} else if (chunk.type === "ant_thinking") {
+					if (chunk.thinking && chunk.signature) {
+						lastAntThinking = { thinking: chunk.thinking, signature: chunk.signature }
+					}
+				} else if (chunk.type === "ant_redacted_thinking") {
+					summaryThinkingBlocks.push({ type: "redacted_thinking", data: chunk.data })
 				}
-			} else if (chunk.type === "ant_redacted_thinking") {
-				summaryThinkingBlocks.push({ type: "redacted_thinking", data: chunk.data })
 			}
+		} finally {
+			if (onAbort) preparation.signal?.removeEventListener("abort", onAbort)
+			// Do not await return(): async generators queue it behind a stalled next().
+			void iterator.return?.(undefined).catch((error) => {
+				console.warn("Could not close context compression stream:", error)
+			})
 		}
 		assertPreparationActive()
 	} catch (error) {

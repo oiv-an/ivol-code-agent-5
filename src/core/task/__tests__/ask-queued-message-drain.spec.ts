@@ -4,6 +4,23 @@ import { Task } from "../Task"
 // it should be consumed and used to fulfill the ask.
 
 describe("Task.ask queued message drain", () => {
+	// kilocode_change start: preparation questions must remain stoppable without consuming queued work.
+	it("rejects a pending preparation question when the task is stopped", async () => {
+		const task = Object.create(Task.prototype) as Task
+		Object.assign(task, {
+			abort: false,
+			clineMessages: [],
+			ordinaryPreparationDecision: true,
+			addToClineMessages: vi.fn(async () => {}),
+			providerRef: { deref: () => undefined },
+		})
+		const pending = task.ask("followup", "Preparation decision", false)
+		const rejected = expect(pending).rejects.toThrow("cancelled while waiting")
+		Object.assign(task, { abort: true })
+		await rejected
+	})
+	// kilocode_change end
+
 	it("consumes queued message while blocked on followup ask", async () => {
 		const task = Object.create(Task.prototype) as Task
 		;(task as any).abort = false

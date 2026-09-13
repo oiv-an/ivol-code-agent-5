@@ -668,10 +668,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		if (
 			latestMessage?.ask === "followup" &&
 			latestMessage.partial !== true &&
+			latestMessage.isAnswered !== true &&
 			safeJsonParse<{ contextPreparationDecision?: boolean }>(latestMessage.text)?.contextPreparationDecision ===
 				true
 		)
 			return false
+		// kilocode_change: after the decision, summary streaming has no ordinary chat chunks.
+		if (isCondensing) return true
 		if (
 			latestMessage?.type === "ask" &&
 			(latestMessage.ask === "resume_task" ||
@@ -726,7 +729,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		return false
-	}, [messages, modifiedMessages, clineAsk, enableButtons, primaryButtonText])
+	}, [messages, modifiedMessages, clineAsk, enableButtons, primaryButtonText, isCondensing])
 
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")

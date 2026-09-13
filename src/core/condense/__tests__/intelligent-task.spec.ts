@@ -46,6 +46,35 @@ function setup() {
 }
 
 describe("ordinary summary streaming", () => {
+	it("cancels a stalled provider read without waiting for generator cleanup", async () => {
+		const { messages, createMessage, run } = setup()
+		const controller = new AbortController()
+		let started!: () => void
+		const reading = new Promise<void>((resolve) => {
+			started = resolve
+		})
+		let release!: () => void
+		const stalled = new Promise<void>((resolve) => {
+			release = resolve
+		})
+		createMessage.mockImplementationOnce(async function* () {
+			started()
+			await stalled
+			yield { type: "text", text: "Late summary" }
+		})
+		const pending = run({ signal: controller.signal })
+		await reading
+		controller.abort()
+		try {
+			const result = await pending
+			expect(result.error).toBe("Context preparation was cancelled")
+			expect(result.messages).toBe(messages)
+			expect(result.summary).toBe("")
+		} finally {
+			release()
+		}
+	})
+
 	it("honors the custom summary and sends only the ordinary summary slice", async () => {
 		const { messages, createMessage, run } = setup()
 		const controller = new AbortController()

@@ -585,6 +585,23 @@ describe("ClineProvider", () => {
 	})
 
 	// kilocode_change start: only the owning Task operation may clear context progress.
+	test.each([true, false])(
+		"only resumes recoverable context preparation (%s)",
+		async (canResumeContextPreparation) => {
+			const condenseContext = vi.fn().mockResolvedValue(undefined)
+			;(provider as any).clineStack = [
+				{
+					taskId: "waiting-task",
+					isContextCondensationInProgress: true,
+					canResumeContextPreparation,
+					condenseContext,
+				},
+			]
+			await provider.condenseTaskContext("waiting-task")
+			expect(condenseContext).toHaveBeenCalledTimes(canResumeContextPreparation ? 1 : 0)
+		},
+	)
+
 	test("does not publish a completion when a duplicate condensation request returns early", async () => {
 		let finishFirst!: () => void
 		const pending = new Promise<void>((resolve) => {

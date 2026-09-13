@@ -173,13 +173,14 @@ describe("ordinary context preparation", () => {
 	})
 
 	it("requires an explicit continue decision when no write is observed", async () => {
-		const { task, boundary } = fixture()
+		const { task, boundary, provider } = fixture()
 		Object.assign(task, { ask: vi.fn(async () => ({ text: "Continue without updating" })) })
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary()
 		for (let i = 0; i < 4; i++) await boundary()
 		expect(task.ask).toHaveBeenCalledOnce()
 		expect(summarizeConversation).toHaveBeenCalledOnce()
+		expect(provider.postMessageToWebview).toHaveBeenCalledWith({ type: "condenseTaskContextStarted", text: "task" })
 	})
 
 	it("never compacts with an outstanding native tool result", async () => {

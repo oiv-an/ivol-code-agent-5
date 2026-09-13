@@ -1799,6 +1799,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Wait for askResponse to be set
 		await pWaitFor(
 			() => {
+				// kilocode_change: a stopped preparation must not retain a live question forever.
+				if (this.abort) {
+					timeouts.forEach((timeout) => clearTimeout(timeout))
+					throw new Error("Task was cancelled while waiting for a response")
+				}
 				if (this.askResponse !== undefined || this.lastMessageTs !== askTs) {
 					return true
 				}
@@ -2128,6 +2133,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.ordinaryContextPreparation?.phase === "editing"
 	}
 
+	public get canResumeContextPreparation(): boolean {
+		return this.ordinaryContextPreparation?.phase === "waiting" && !this.ordinaryRequestLoopActive && !this.abort
+	}
+
 	public async queueOrdinaryContextPreparation(trigger: ContextPreparationTrigger): Promise<void> {
 		if (this.ordinaryContextPreparation) return
 		const preparation = new OrdinaryContextPreparation(trigger, this.apiConfiguration)
@@ -2243,11 +2252,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public async condenseContext(expectedMemoryMode?: ReturnType<typeof resolveContextMemoryMode>): Promise<void> {
 		// Repeated clicks must not clear the first operation's spinner or start a second request.
 		if (this.isContextCondensationInProgress) {
-			if (
-				this.ordinaryContextPreparation?.phase === "waiting" &&
-				!this.ordinaryRequestLoopActive &&
-				!this.abort
-			) {
+			if (this.canResumeContextPreparation) {
 				await this.flushPendingToolResultsToHistory()
 				await this.recursivelyMakeClineRequests([])
 			}
@@ -2319,6 +2324,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async performContextCondensation(signal: AbortSignal): Promise<void> {
+		// Restored preparations reach this path without the automatic threshold notification.
+		await this.providerRef.deref()?.postMessageToWebview({
+			type: "condenseTaskContextStarted",
+			text: this.taskId,
+		})
 		// kilocode_change end
 		// CRITICAL: Flush any pending tool results before condensing
 		// to ensure tool_use/tool_result pairs are complete in history

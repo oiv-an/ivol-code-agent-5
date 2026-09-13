@@ -17,6 +17,7 @@ interface ClineMessage {
 	ts: number
 	text?: string
 	partial?: boolean
+	isAnswered?: boolean // kilocode_change
 }
 
 interface ExtensionState {
@@ -1223,7 +1224,7 @@ describe.skip("ChatView - Message Queueing Tests", () => {
 	it.each(["Retry update", "Continue without updating"])(
 		"sends preparation decision %s directly despite a busy request and queue",
 		async (answer) => {
-			const { getByTestId } = renderChatView()
+			const { getByTestId, getByText } = renderChatView()
 			mockPostMessage({
 				messageQueue: [{ id: "queued", text: "Unrelated queued work", images: [], timestamp: 1 }],
 				clineMessages: [
@@ -1260,6 +1261,23 @@ describe.skip("ChatView - Message Queueing Tests", () => {
 				images: [],
 			})
 			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "queueMessage" }))
+			// kilocode_change: accepting the decision must restore cancellation while the summary waits.
+			mockPostMessage({
+				clineMessages: [
+					{ type: "say", say: "task", ts: 1, text: "Initial task" },
+					{ type: "say", say: "api_req_started", ts: 2, text: "{}" },
+					{
+						type: "ask",
+						ask: "followup",
+						ts: 3,
+						isAnswered: true,
+						text: JSON.stringify({ contextPreparationDecision: true, question: "Preparation failed" }),
+					},
+				],
+			})
+			await waitFor(() => expect(getByText("chat:cancel.title")).toBeEnabled())
+			fireEvent.click(getByText("chat:cancel.title"))
+			expect(vscode.postMessage).toHaveBeenCalledWith({ type: "cancelTask" })
 		},
 	)
 	// kilocode_change end

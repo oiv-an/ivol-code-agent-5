@@ -1,5 +1,17 @@
 # IVOL Code Agent 5
 
+## 5.16.263
+
+### Patch Changes
+
+- Show compression progress and keep Cancel available after answering a restored context preparation question.
+
+## 5.16.262
+
+### Patch Changes
+
+- Allow interrupted context preparation to resume and keep cancellation responsive while waiting for a decision or a stalled summary.
+
 ## 5.16.261
 
 ### Patch Changes

@@ -2026,7 +2026,11 @@ export class ClineProvider
 		// kilocode_change start: pin the manual action to the saved mode shown in this window.
 		// Existing tasks may hold an older API configuration snapshot. Only memory settings
 		// are synchronized here; do not switch models, providers, profiles, or other projects.
-		if (task.isContextCondensationInProgress) return
+		if (task.isContextCondensationInProgress) {
+			// Let the task recover a stopped preparation, but never start a parallel request.
+			if (task.canResumeContextPreparation) await task.condenseContext()
+			return
+		}
 		if (expectedMemoryMode !== undefined) {
 			try {
 				const saved = this.contextProxy.getProviderSettings()
