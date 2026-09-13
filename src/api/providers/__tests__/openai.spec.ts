@@ -212,6 +212,28 @@ describe("OpenAiHandler", () => {
 			expect(body).not.toHaveProperty("parallel_tool_calls")
 		})
 
+		it("omits provider-added search for text-only summary requests", async () => {
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { role: "assistant", content: "Summary" }, finish_reason: "stop" }],
+			})
+			const handler = new OpenAiHandler({
+				...mockOptions,
+				openAiWebSearchEnabled: true,
+				openAiStreamingEnabled: false,
+			})
+			const chunks = []
+			for await (const chunk of handler.createMessage(systemPrompt, messages, {
+				taskId: "summary",
+				tool_choice: "none",
+			}))
+				chunks.push(chunk)
+			expect(chunks).toContainEqual({ type: "text", text: "Summary" })
+			const body = mockCreate.mock.calls[0][0]
+			expect(body).not.toHaveProperty("tools")
+			expect(body).not.toHaveProperty("tool_choice")
+			expect(body).not.toHaveProperty("parallel_tool_calls")
+		})
+
 		it("keeps web search available for an XML-locked task without changing its Chat transport", async () => {
 			mockCreate.mockResolvedValueOnce({
 				choices: [

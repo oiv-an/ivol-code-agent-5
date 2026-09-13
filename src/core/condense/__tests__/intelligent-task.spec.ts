@@ -54,7 +54,7 @@ describe("ordinary summary streaming", () => {
 		const request = createMessage.mock.calls[0] as unknown as Parameters<ApiHandler["createMessage"]>
 		expect(request[0]).toBe("CUSTOM OLD CONVERSATION SUMMARY INSTRUCTIONS")
 		expect(request[1]).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
-		expect(request[2]).toEqual({ taskId: "task-one", signal: controller.signal })
+		expect(request[2]).toEqual({ taskId: "task-one", signal: controller.signal, tool_choice: "none" })
 		expect(result.messages.filter((message) => message.isSummary)).toHaveLength(1)
 	})
 

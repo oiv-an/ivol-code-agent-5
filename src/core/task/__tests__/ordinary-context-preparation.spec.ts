@@ -62,6 +62,7 @@ function fixture() {
 	return {
 		task,
 		events,
+		provider,
 		write: () => {
 			written = true
 		},
@@ -77,6 +78,56 @@ function fixture() {
 }
 
 describe("ordinary context preparation", () => {
+	it("offers enabling instead of a retry that cannot work, and that choice proceeds", async () => {
+		const { task, boundary, write, provider } = fixture()
+		await task.queueOrdinaryContextPreparation("automatic")
+		const enable = vi.fn(async () => {
+			task.apiConfiguration.intelligentTaskEnabled = true
+		})
+		Object.assign(provider, { enableIntelligentTaskForCurrentProfile: enable })
+		Object.assign(task, {
+			apiConfiguration: { intelligentTaskEnabled: false },
+			ask: vi.fn(async () => ({ text: "Enable Current Task and retry" })),
+		})
+		await boundary(false)
+		const question = vi.mocked(task.ask).mock.calls[0][1] as string
+		expect(JSON.parse(question).suggest).toEqual([
+			{ answer: "Enable Current Task and retry" },
+			{ answer: "Continue without updating" },
+		])
+		expect(enable).toHaveBeenCalledOnce()
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+		write()
+		await boundary()
+		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+
+	it("never repeats the same unanswerable question when the feature stays off", async () => {
+		const { task, boundary, provider } = fixture()
+		await task.queueOrdinaryContextPreparation("automatic")
+		Object.assign(provider, { getTaskDocumentSettings: () => ({ supported: false }) })
+		Object.assign(task, {
+			apiConfiguration: { intelligentTaskEnabled: false },
+			ask: vi
+				.fn()
+				.mockResolvedValueOnce({ text: "Retry update" })
+				.mockResolvedValue({ text: "Continue without updating" }),
+		})
+		await boundary(false)
+		const suggestions = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string).suggest
+		expect(suggestions).toEqual([{ answer: "Continue without updating" }])
+		expect(task.ask).toHaveBeenCalledTimes(2)
+		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
+		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+
+	it("compares normalized prototypes without accepting changed values", () => {
+		const config = { headers: Object.assign(Object.create(null), { tier: "standard" }) }
+		const preparation = new OrdinaryContextPreparation("manual", config)
+		expect(preparation.matchesConfiguration(config)).toBe(true)
+		config.headers.tier = "priority"
+		expect(preparation.matchesConfiguration(config)).toBe(false)
+	})
 	beforeEach(() => vi.clearAllMocks())
 
 	it("waits for file-tool evidence and saved results, preserving the ordinary summary", async () => {

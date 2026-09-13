@@ -462,6 +462,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	private getToolRequestOptions(
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): Pick<OpenAI.Chat.Completions.ChatCompletionCreateParams, "tools" | "tool_choice" | "parallel_tool_calls"> {
+		// Summaries and connection probes have no executor for local function calls.
+		if (metadata?.tool_choice === "none") return {}
 		const webSearchEnabled = this.options.openAiWebSearchEnabled ?? DEFAULT_OPENAI_WEB_SEARCH_ENABLED
 		// Only force the OpenAI-specific serial-call flag when web search was
 		// explicitly enabled on the saved provider profile. Some compatible

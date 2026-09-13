@@ -1,5 +1,12 @@
 # IVOL Code Agent 5
 
+## 5.16.261
+
+### Patch Changes
+
+- Context preparation now offers only choices it can carry out, so the prompt before compression never repeats itself without progress and can turn Current Task back on when you ask it to.
+- Summary requests no longer advertise tools the summarizer cannot run.
+
 ## 5.16.259
 
 ### Patch Changes

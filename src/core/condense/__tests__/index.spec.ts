@@ -924,6 +924,7 @@ describe("summarizeConversation", () => {
 		expect(mockApiHandler.createMessage).toHaveBeenCalledWith(
 			expect.stringContaining("Your task is to create a detailed summary"),
 			expect.any(Array),
+			expect.objectContaining({ taskId, tool_choice: "none" }), // kilocode_change: summaries cannot execute tools
 		)
 
 		// kilocode_change: ordinary condensing keeps the most recent messages out of the request.

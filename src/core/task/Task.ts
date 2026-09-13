@@ -2159,11 +2159,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			preparation.fail("Could not save tool results; context compression was stopped")
 			throw new NonRetryableApiError("Could not save tool results; history was preserved")
 		}
-		if (
-			!preparation.continuedWithoutUpdate &&
-			(!preparation.matchesConfiguration(this.apiConfiguration) || this.getContextMemoryMode() !== "task")
-		) {
-			preparation.fail("Provider settings changed during context preparation")
+		if (!preparation.continuedWithoutUpdate) {
+			if (this.getContextMemoryMode() !== "task") {
+				preparation.fail(
+					"Current Task is disabled or unavailable in this workspace. Enable it before retrying, or continue without updating.",
+				)
+			} else if (!preparation.matchesConfiguration(this.apiConfiguration)) {
+				preparation.fail("Provider settings changed during context preparation")
+			}
 		}
 		if (preparation.phase === "editing" && preparation.completedTurn) {
 			preparation.completedTurn = false
@@ -2173,17 +2176,34 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.ordinaryPreparationDecision = true
 			try {
 				while (preparation.phase === "waiting" && !this.abort) {
+					// A restored pending intent can outlive an opt-out, and an unsupported
+					// workspace cannot write the file at all. Offer only answers that this
+					// task can actually carry out, so every choice ends the wait.
+					const disabledByProfile =
+						this.getContextMemoryMode() !== "task" &&
+						this.providerRef.deref()?.getTaskDocumentSettings?.(this.apiConfiguration, this.cwd)
+							.supported === true
+					const enableAnswer = "Enable Current Task and retry"
 					const { text } = await this.ask(
 						"followup",
 						JSON.stringify({
 							contextPreparationDecision: true,
-							question: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose Retry update or Continue without updating.`,
-							suggest: [{ answer: "Retry update" }, { answer: "Continue without updating" }],
+							question: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`,
+							suggest: [
+								...(disabledByProfile ? [{ answer: enableAnswer }] : []),
+								...(this.getContextMemoryMode() === "task" ? [{ answer: "Retry update" }] : []),
+								{ answer: "Continue without updating" },
+							],
 						}),
 						false,
 					)
 					if (text === "Continue without updating") preparation.continueWithoutUpdate()
-					else if (text === "Retry update") {
+					else if (text === enableAnswer && disabledByProfile) {
+						// Turning the feature on is the user's explicit answer here, never implicit.
+						await this.providerRef.deref()?.enableIntelligentTaskForCurrentProfile()
+						preparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
+						this.ordinaryContextPreparation = preparation
+					} else if (text === "Retry update" && this.getContextMemoryMode() === "task") {
 						preparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
 						this.ordinaryContextPreparation = preparation
 					}

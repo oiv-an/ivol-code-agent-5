@@ -385,9 +385,12 @@ export async function summarizeConversation(
 	// kilocode_change start: one ordinary summary request; cancellation never commits partial output.
 	try {
 		assertPreparationActive()
-		const stream = preparation.signal
-			? handlerToUse.createMessage(promptToUse, requestMessages, { taskId, signal: preparation.signal })
-			: handlerToUse.createMessage(promptToUse, requestMessages)
+		// A summary has no tool executor. Explicitly prevent provider-added search tools.
+		const stream = handlerToUse.createMessage(promptToUse, requestMessages, {
+			taskId,
+			...(preparation.signal ? { signal: preparation.signal } : {}),
+			tool_choice: "none",
+		})
 		for await (const chunk of stream) {
 			assertPreparationActive() // Some providers ignore AbortSignal.
 			if (chunk.type === "text") {

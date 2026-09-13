@@ -31,7 +31,8 @@ export class OrdinaryContextPreparation {
 	}
 
 	matchesConfiguration(configuration: unknown): boolean {
-		return isDeepStrictEqual(configuration, this.configuration)
+		// Compare snapshots on both sides: structuredClone normalizes object prototypes.
+		return isDeepStrictEqual(structuredClone(configuration), this.configuration)
 	}
 
 	start(observation: WriteObservation): void {

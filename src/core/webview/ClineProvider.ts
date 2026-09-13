@@ -3907,6 +3907,21 @@ export class ClineProvider
 		}
 	}
 
+	/**
+	 * Turns Current Task back on for the profile in use, in answer to an explicit user choice.
+	 * Only this one preference is written; models, providers and every other setting stay as they are.
+	 */
+	public async enableIntelligentTaskForCurrentProfile(): Promise<void> {
+		const { currentApiConfigName, apiConfiguration } = await this.getState()
+		if (!currentApiConfigName) throw new Error("No provider profile is selected")
+		await this.upsertProviderProfile(currentApiConfigName, {
+			...apiConfiguration,
+			intelligentTaskEnabled: true,
+		})
+		const task = this.getCurrentTask()
+		if (task) task.apiConfiguration = { ...task.apiConfiguration, intelligentTaskEnabled: true }
+	}
+
 	public getTaskDocumentSettings(apiConfiguration?: { intelligentTaskEnabled?: boolean }, cwd = this.cwd) {
 		return resolveTaskDocumentSettings(
 			apiConfiguration ?? this.contextProxy.getProviderSettings(),
