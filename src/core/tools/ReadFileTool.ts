@@ -32,6 +32,18 @@ import { FILE_READ_BUDGET_PERCENT, readFileWithTokenBudget } from "./helpers/fil
 import { truncateDefinitionsToLineLimit } from "./helpers/truncateDefinitions"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
+// kilocode_change start
+/**
+ * Asking for a file that is not there is a perfectly ordinary thing to do - the
+ * model often checks whether it has to create one. Reporting that as a failed
+ * tool call makes the turn look broken, so the absence is passed back as plain
+ * information instead.
+ */
+function isFileNotFoundError(error: unknown): boolean {
+	return typeof error === "object" && error !== null && (error as NodeJS.ErrnoException).code === "ENOENT"
+}
+// kilocode_change end
+
 interface FileResult {
 	path: string
 	status: "approved" | "denied" | "blocked" | "error" | "pending"
@@ -610,6 +622,17 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 						nativeContent: `File: ${relPath}\n${nativeInfo}`,
 					})
 				} catch (error) {
+					// kilocode_change start: a missing file is an answer, not a failure
+					if (isFileNotFoundError(error)) {
+						const notice = `File does not exist: ${relPath}`
+						updateFileResult(relPath, {
+							xmlContent: `<file><path>${relPath}</path><notice>${notice}</notice></file>`,
+							nativeContent: `File: ${relPath}\nNotice: ${notice}`,
+						})
+						continue
+					}
+					// kilocode_change end
+
 					const errorMsg = error instanceof Error ? error.message : String(error)
 					updateFileResult(relPath, {
 						status: "error",

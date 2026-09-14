@@ -5,6 +5,7 @@
 ### Patch Changes
 
 - Notify you five minutes after a task finishes if you have left the editor, so a result never sits unnoticed.
+- Treat reading a file that does not exist as an ordinary answer instead of failing the turn with an error.
 
 ## 5.16.264
 

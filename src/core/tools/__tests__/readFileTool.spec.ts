@@ -1474,6 +1474,47 @@ describe("read_file tool output structure", () => {
 			expect(mockCline.say).toHaveBeenCalledWith("error", expect.stringContaining("is a directory"))
 			expect(mockCline.say).toHaveBeenCalledWith("error", expect.stringContaining("list_files tool"))
 		})
+
+		// kilocode_change start
+		it("reports a missing file as information rather than a failure", async () => {
+			const missingPath = "test/not-here.md"
+			const absoluteMissingPath = "/test/not-here.md"
+
+			mockedPathResolve.mockReturnValue(absoluteMissingPath)
+
+			const notFound = Object.assign(
+				new Error(`ENOENT: no such file or directory, stat '${absoluteMissingPath}'`),
+				{ code: "ENOENT" },
+			)
+			fsPromises.stat.mockRejectedValue(notFound)
+
+			const result = await executeReadFileTool({ args: `<file><path>${missingPath}</path></file>` })
+
+			// The model is told the file is absent so it can create one.
+			expect(result).toContain(`File: ${missingPath}`)
+			expect(result).toContain(`Notice: File does not exist: ${missingPath}`)
+			expect(result).not.toContain("Error")
+
+			// Nothing is shown to the user as a failed tool call.
+			expect(mockCline.say).not.toHaveBeenCalledWith("error", expect.stringContaining("ENOENT"))
+			expect(mockCline.didToolFailInCurrentTurn).not.toBe(true)
+		})
+
+		it("still reports a genuine read failure as an error", async () => {
+			const unreadablePath = "test/locked.md"
+			const absoluteUnreadablePath = "/test/locked.md"
+
+			mockedPathResolve.mockReturnValue(absoluteUnreadablePath)
+
+			const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" })
+			fsPromises.stat.mockRejectedValue(denied)
+
+			const result = await executeReadFileTool({ args: `<file><path>${unreadablePath}</path></file>` })
+
+			expect(result).toContain("Error: Error reading file: EACCES: permission denied")
+			expect(mockCline.say).toHaveBeenCalledWith("error", expect.stringContaining("permission denied"))
+		})
+		// kilocode_change end
 	})
 })
 
