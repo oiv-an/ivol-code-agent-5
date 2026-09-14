@@ -15,6 +15,9 @@
 		"title": "餘額不足警告！",
 		"message": "請查看是否有免費額度可儲值，或購買更多額度！"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "工作早就完成了，正在等你查看。"
+	},
 	"task": {
 		"noAssistantMessages": "模型的回應意外結束（沒有助理訊息）。這可能是速率限制的跡象。",
 		"notLoggedInError": "無法完成請求，請確認已連線並登入所選的供應商。\n\n{{error}}",

@@ -133,6 +133,7 @@ import { getEffectiveTelemetrySetting, getKiloCodeWrapperProperties } from "../.
 import { getKilocodeConfig, KilocodeConfig } from "../../utils/kilo-config-file"
 import { resolveToolProtocol } from "../../utils/resolveToolProtocol"
 import { kilo_execIfExtension } from "../../shared/kilocode/cli-sessions/extension/session-manager-utils"
+import { IdleCompletionReminder } from "../../integrations/notifications/kilocode/idleCompletionReminder" // kilocode_change
 
 export type ClineProviderState = Awaited<ReturnType<ClineProvider["getState"]>>
 // kilocode_change end
@@ -177,6 +178,7 @@ export class ClineProvider
 	protected skillsManager?: SkillsManager
 	private marketplaceManager: MarketplaceManager
 	private mdmService?: MdmService
+	private idleCompletionReminder = new IdleCompletionReminder() // kilocode_change
 	private taskCreationCallback: (task: Task) => void
 	private taskEventListeners: WeakMap<Task, Array<() => void>> = new WeakMap()
 	private currentWorkspacePath: string | undefined
@@ -256,6 +258,10 @@ export class ClineProvider
 					SessionManager.init()?.doSync(true)
 				})
 
+				// kilocode_change start: remind the user later if they walked away
+				this.scheduleIdleCompletionReminder()
+				// kilocode_change end
+
 				return this.emit(RooCodeEventName.TaskCompleted, taskId, tokenUsage, toolUsage) // kilocode_change: return
 			}
 			const onTaskAborted = async () => {
@@ -289,6 +295,12 @@ export class ClineProvider
 			}
 			const onTaskFocused = () => this.emit(RooCodeEventName.TaskFocused, instance.taskId)
 			const onTaskUnfocused = () => this.emit(RooCodeEventName.TaskUnfocused, instance.taskId)
+			// kilocode_change start: a task that keeps going makes an older reminder pointless
+			const onTaskResumedByUser = (taskId: string) => {
+				this.idleCompletionReminder.cancel()
+				return this.emit(RooCodeEventName.TaskUserMessage, taskId)
+			}
+			// kilocode_change end
 			const onTaskActive = (taskId: string) => this.emit(RooCodeEventName.TaskActive, taskId)
 			const onTaskInteractive = (taskId: string) => this.emit(RooCodeEventName.TaskInteractive, taskId)
 			const onTaskResumable = (taskId: string) => this.emit(RooCodeEventName.TaskResumable, taskId)
@@ -296,7 +308,7 @@ export class ClineProvider
 			const onTaskPaused = (taskId: string) => this.emit(RooCodeEventName.TaskPaused, taskId)
 			const onTaskUnpaused = (taskId: string) => this.emit(RooCodeEventName.TaskUnpaused, taskId)
 			const onTaskSpawned = (taskId: string) => this.emit(RooCodeEventName.TaskSpawned, taskId)
-			const onTaskUserMessage = (taskId: string) => this.emit(RooCodeEventName.TaskUserMessage, taskId)
+			const onTaskUserMessage = onTaskResumedByUser // kilocode_change
 			const onTaskTokenUsageUpdated = (taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage) =>
 				this.emit(RooCodeEventName.TaskTokenUsageUpdated, taskId, tokenUsage, toolUsage)
 			const onModelChanged = () => this.postStateToWebview() // kilocode_change: Listen for model changes in virtual quota fallback
@@ -663,6 +675,23 @@ export class ClineProvider
 			}
 		}
 	}
+
+	// kilocode_change start
+	/**
+	 * Arranges for the user to be told that a task has finished, but only after
+	 * a delay and only if they are not looking at the editor by then. Someone
+	 * who is still at their desk has already seen the result and does not need
+	 * to be interrupted.
+	 */
+	private scheduleIdleCompletionReminder() {
+		if (!(this.getGlobalState("systemNotificationsEnabled") ?? true)) {
+			this.idleCompletionReminder.cancel()
+			return
+		}
+
+		this.idleCompletionReminder.scheduleReminder(t("kilocode:notifications.taskCompletedWhileAway"))
+	}
+	// kilocode_change end
 
 	async dispose() {
 		disposeProviderConnectionTest(this) // kilocode_change: stop only this view's isolated settings check.

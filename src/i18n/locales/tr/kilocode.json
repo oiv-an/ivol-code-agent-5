@@ -11,6 +11,9 @@
 		"title": "Düşük Kredi Uyarısı!",
 		"message": "Ücretsiz kredilerle yükleme yapamayacağınızı veya daha fazla satın alıp alamayacağınızı kontrol edin!"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "Görevin bir süre önce bitti ve seni bekliyor."
+	},
 	"task": {
 		"noAssistantMessages": "Modelin yanıtı beklenmedik şekilde sona erdi (asistan mesajı yok). Bu hız sınırlamasının bir işareti olabilir.",
 		"notLoggedInError": "İstek tamamlanamıyor, seçili sağlayıcıyla bağlantı kurduğunuzdan ve oturum açtığınızdan emin olun.\n\n{{error}}",

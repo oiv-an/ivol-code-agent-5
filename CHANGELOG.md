@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.265
+
+### Patch Changes
+
+- Notify you five minutes after a task finishes if you have left the editor, so a result never sits unnoticed.
+
 ## 5.16.264
 
 ### Patch Changes

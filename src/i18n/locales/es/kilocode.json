@@ -11,6 +11,9 @@
 		"title": "¡Advertencia de Crédito Bajo!",
 		"message": "¡Comprueba si puedes recargar con créditos gratuitos o comprar más!"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "Tu tarea terminó hace un rato y te está esperando."
+	},
 	"task": {
 		"noAssistantMessages": "La respuesta del modelo terminó inesperadamente (sin mensajes del asistente). Esto puede ser una señal de limitación de tasa.",
 		"notLoggedInError": "No se puede completar la solicitud, asegúrate de que estás conectado y has iniciado sesión con el proveedor seleccionado.\n\n{{error}}",

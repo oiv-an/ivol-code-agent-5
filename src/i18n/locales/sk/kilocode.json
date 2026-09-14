@@ -11,6 +11,9 @@
 		"title": "Varovanie o nízkom kredite!",
 		"message": "Skontroluj, či môžeš doplniť bezplatné kredity alebo si kúpiť ďalšie!"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "Tvoja úloha je už chvíľu hotová a čaká na teba."
+	},
 	"task": {
 		"noAssistantMessages": "Odpoveď modelu neočakávane skončila (žiadne správy asistenta). Môže to byť známka obmedzenia počtu požiadaviek.",
 		"notLoggedInError": "Požiadavku nie je možné dokončiť, uisti sa, že si pripojený a prihlásený u vybraného poskytovateľa.\n\n{{error}}",

@@ -11,6 +11,9 @@
 		"title": "Cảnh báo Tín dụng Thấp!",
 		"message": "Hãy kiểm tra xem bạn có thể nạp thêm tín dụng miễn phí hoặc mua thêm không!"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "Công việc của bạn đã xong từ lâu và đang chờ bạn."
+	},
 	"task": {
 		"noAssistantMessages": "Phản hồi của mô hình kết thúc bất ngờ (không có tin nhắn trợ lý). Điều này có thể là dấu hiệu của giới hạn tốc độ.",
 		"notLoggedInError": "Không thể hoàn thành yêu cầu, hãy đảm bảo bạn đã kết nối và đăng nhập bằng nhà cung cấp đã chọn.\n\n{{error}}",

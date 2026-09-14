@@ -11,6 +11,9 @@
 		"title": "Warnung: Niedriges Guthaben!",
 		"message": "Überprüfe, ob du kostenloses Guthaben einlösen oder mehr kaufen kannst!"
 	},
+	"notifications": {
+		"taskCompletedWhileAway": "Deine Aufgabe ist längst fertig und wartet auf dich."
+	},
 	"task": {
 		"noAssistantMessages": "Die Antwort des Modells endete unerwartet (keine Assistant-Nachrichten). Dies könnte ein Hinweis auf Raten-Limitierung sein.",
 		"notLoggedInError": "Anfrage kann nicht abgeschlossen werden. Stelle sicher, dass du mit dem ausgewählten Anbieter verbunden und angemeldet bist.\n\n{{error}}",
