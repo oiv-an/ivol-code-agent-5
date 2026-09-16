@@ -2481,6 +2481,36 @@ describe("Queued message processing after condense", () => {
 		apiKey: "test-api-key",
 	} as any
 
+	// kilocode_change start - cancellation must retain pending input until same-task rehydration.
+	it("retains queued input across repeated disposal and restores an independent queue", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "initial",
+			startTask: false,
+			context: provider.context,
+		})
+		const message = task.messageQueueService.addMessage("Pending context", ["image.png"])
+		task.dispose()
+		task.dispose()
+		expect(task.queuedMessages).toEqual([message])
+		const restored = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "restored",
+			startTask: false,
+			context: provider.context,
+			initialQueuedMessages: task.queuedMessages,
+		})
+		expect(restored.queuedMessages).toEqual([message])
+		restored.messageQueueService.updateMessage(message!.id, "Edited context", [])
+		expect(task.queuedMessages[0].text).toBe("Pending context")
+		expect(task.queuedMessages[0].images).toEqual(["image.png"])
+		restored.dispose()
+	})
+	// kilocode_change end
+
 	it("processes queued message after condense completes", async () => {
 		const provider = createProvider()
 		const task = new Task({

@@ -1140,6 +1140,8 @@ export class ClineProvider
 			enableBridge: BridgeOrchestrator.isEnabled(cloudUserInfo, taskSyncEnabled),
 			// Preserve the status from the history item to avoid overwriting it when the task saves messages
 			initialStatus: historyItem.status,
+			// kilocode_change: only the same task may inherit pending user input.
+			initialQueuedMessages: isRehydratingCurrentTask ? currentTask.queuedMessages : undefined,
 		})
 
 		if (isRehydratingCurrentTask) {
@@ -3013,7 +3015,9 @@ export class ClineProvider
 	}
 
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
-		const history = (this.getGlobalState("taskHistory") as HistoryItem[] | undefined) || []
+		// kilocode_change start - keep the memento's previous snapshot intact for delta-based storage.
+		const history = [...((this.getGlobalState("taskHistory") as HistoryItem[] | undefined) || [])]
+		// kilocode_change end
 		const existingItemIndex = history.findIndex((h) => h.id === item.id)
 
 		if (existingItemIndex !== -1) {

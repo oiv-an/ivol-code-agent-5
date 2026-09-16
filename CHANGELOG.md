@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.16.266
+
+### Patch Changes
+
+- Keep tasks visible in JetBrains history and preserve queued messages across retry prompts and task restarts.
+
 ## 5.16.265
 
 ### Patch Changes

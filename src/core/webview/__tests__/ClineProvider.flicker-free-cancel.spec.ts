@@ -4,6 +4,7 @@ import * as vscode from "vscode"
 import { ClineProvider } from "../ClineProvider"
 import { Task } from "../../task/Task"
 import { ContextProxy } from "../../config/ContextProxy"
+import { MessageQueueService } from "../../message-queue/MessageQueueService" // kilocode_change
 import type { ProviderSettings, HistoryItem } from "@roo-code/types"
 
 // Mock dependencies
@@ -203,6 +204,22 @@ describe("ClineProvider flicker-free cancel", () => {
 		// Mock Task constructor
 		vi.mocked(Task).mockImplementation(() => mockTask2 as any)
 	})
+
+	// kilocode_change start - queued user input must survive replacement of the same task.
+	it("passes pending messages to the replacement task before the old queue is disposed", async () => {
+		const queue = new MessageQueueService()
+		const message = queue.addMessage("Keep this context", ["image.png"])
+		mockTask1.messageQueueService = queue
+		Object.defineProperty(mockTask1, "queuedMessages", { get: () => queue.messages })
+		mockTask1.abortTask.mockImplementation(async () => queue.dispose())
+		;(provider as any).clineStack = [mockTask1]
+		const { historyItem } = await provider.getTaskWithId("task-1")
+
+		await provider.createTaskWithHistoryItem(historyItem)
+
+		expect(vi.mocked(Task).mock.calls.at(-1)?.[0]).toMatchObject({ initialQueuedMessages: [message] })
+	})
+	// kilocode_change end
 
 	it("should not remove current task from stack when rehydrating same taskId", async () => {
 		// Setup: Add a task to the stack first

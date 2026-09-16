@@ -17,11 +17,16 @@ export interface QueueEvents {
 export class MessageQueueService extends EventEmitter<QueueEvents> {
 	private _messages: QueuedMessage[]
 
-	constructor() {
+	// kilocode_change start - restore pending input without sharing mutable state with the old task.
+	constructor(initialMessages: QueuedMessage[] = []) {
 		super()
 
-		this._messages = []
+		this._messages = initialMessages.map((message) => ({
+			...message,
+			images: message.images ? [...message.images] : undefined,
+		}))
 	}
+	// kilocode_change end
 
 	private findMessage(id: string) {
 		const index = this._messages.findIndex((msg) => msg.id === id)

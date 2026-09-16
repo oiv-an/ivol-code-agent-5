@@ -259,6 +259,7 @@ export interface TaskOptions extends CreateTaskOptions {
 	taskNumber?: number
 	onCreated?: (task: Task) => void
 	initialTodos?: TodoItem[]
+	initialQueuedMessages?: QueuedMessage[] // kilocode_change
 	workspacePath?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
 	initialStatus?: "active" | "delegated" | "completed"
@@ -486,6 +487,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// Message Queue Service
 	public readonly messageQueueService: MessageQueueService
+	private stoppedQueuedMessages?: QueuedMessage[] // kilocode_change: retain pending input for same-task rehydration.
 	private messageQueueStateChangedHandler: (() => void) | undefined
 
 	// Streaming
@@ -591,6 +593,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		taskNumber = -1,
 		onCreated,
 		initialTodos,
+		initialQueuedMessages, // kilocode_change
 		workspacePath,
 		initialStatus,
 	}: TaskOptions) {
@@ -727,7 +730,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const effectiveProtocol = this._taskToolProtocol || "xml"
 		this.assistantMessageParser = effectiveProtocol !== "native" ? new AssistantMessageParser() : undefined
 
-		this.messageQueueService = new MessageQueueService()
+		this.messageQueueService = new MessageQueueService(initialQueuedMessages) // kilocode_change
 
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
@@ -1733,7 +1736,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// The state is mutable if the message is complete and the task will
 		// block (via the `pWaitFor`).
 		const isBlocking = !(this.askResponse !== undefined || this.lastMessageTs !== askTs)
-		const isMessageQueued = !this.ordinaryPreparationDecision && !this.messageQueueService.isEmpty() // kilocode_change
+		// kilocode_change start - button-only decisions must never consume queued user context.
+		const acceptsQueuedText = [
+			"followup",
+			"tool",
+			"command",
+			"command_output",
+			"browser_action_launch",
+			"use_mcp_server",
+			"completion_result",
+			"resume_task",
+			"resume_completed_task",
+			"mistake_limit_reached",
+		].includes(type)
+		const canConsumeQueuedText = () => acceptsQueuedText && !this.ordinaryPreparationDecision
+		const isMessageQueued = canConsumeQueuedText() && !this.messageQueueService.isEmpty()
+		// kilocode_change end
 		const isStatusMutable = !partial && isBlocking && !isMessageQueued && approval.decision === "ask"
 
 		if (isStatusMutable) {
@@ -1811,7 +1829,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// If a queued message arrives while we're blocked on an ask (e.g. a follow-up
 				// suggestion click that was incorrectly queued due to UI state), consume it
 				// immediately so the task doesn't hang.
-				if (!this.ordinaryPreparationDecision && !this.messageQueueService.isEmpty()) {
+				if (canConsumeQueuedText() && !this.messageQueueService.isEmpty()) {
 					// kilocode_change
 					const message = this.messageQueueService.dequeueMessage()
 					if (message) {
@@ -3075,6 +3093,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.messageQueueStateChangedHandler = undefined
 			}
 
+			// kilocode_change: abort/dispose can run twice before the provider rehydrates this task.
+			this.stoppedQueuedMessages ??= this.messageQueueService.messages.map((message) => ({
+				...message,
+				images: message.images ? [...message.images] : undefined,
+			}))
 			this.messageQueueService.dispose()
 		} catch (error) {
 			console.error("Error disposing message queue:", error)
@@ -6120,7 +6143,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	public get queuedMessages(): QueuedMessage[] {
-		return this.messageQueueService.messages
+		return this.stoppedQueuedMessages ?? this.messageQueueService.messages // kilocode_change
 	}
 
 	public get tokenUsage(): TokenUsage | undefined {

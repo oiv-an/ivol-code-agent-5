@@ -509,6 +509,33 @@ describe("ClineProvider", () => {
 		})
 	})
 
+	// kilocode_change start - memento merge metadata must see the unmodified previous history.
+	test.each([false, true])(
+		"preserves the stored history snapshot when updating an existing task: %s",
+		async (existing) => {
+			const original = {
+				number: 1,
+				id: "original",
+				ts: 1,
+				task: "Original task",
+				tokensIn: 0,
+				tokensOut: 0,
+				totalCost: 0,
+			}
+			const stored = Object.freeze([Object.freeze(original)])
+			await mockContext.globalState.update("taskHistory", stored)
+			const incoming = { ...original, id: existing ? original.id : "new-task", ts: 2, task: "Updated task" }
+
+			const updated = await provider.updateTaskHistory(incoming)
+
+			expect(stored).toEqual([original])
+			expect(updated).not.toBe(stored)
+			expect(updated).toEqual(existing ? [incoming] : [original, incoming])
+			expect(mockContext.globalState.get("taskHistory")).toEqual(updated)
+		},
+	)
+	// kilocode_change end
+
 	test("constructor initializes correctly", () => {
 		expect(provider).toBeInstanceOf(ClineProvider)
 		// Since getVisibleInstance returns the last instance where view.visible is true
