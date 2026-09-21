@@ -72,6 +72,19 @@ describe("OpenAiCodexHandler.getModel", () => {
 	})
 
 	// kilocode_change start: preserve max while retaining legacy stale-setting fallback
+	it.each([true, false])("preserves literal ultra in the request only when enabled: %s", (enabled) => {
+		const handler = new OpenAiCodexHandler({
+			apiModelId: "gpt-5.5",
+			reasoningEffort: "ultra",
+			enableReasoningEffort: enabled,
+		})
+		const model = handler.getModel()
+		const effort = (handler as any).getReasoningEffort(model)
+		const body = (handler as any).buildRequestBody(model, [], "system", effort, { taskId: "ultra-test" })
+		expect(effort).toBe(enabled ? "ultra" : undefined)
+		expect(body.reasoning?.effort).toBe(enabled ? "ultra" : undefined)
+	})
+
 	it("falls back from max to xhigh for GPT-5.5", () => {
 		const handler = new OpenAiCodexHandler({ apiModelId: "gpt-5.5", reasoningEffort: "max" })
 		const model = handler.getModel()

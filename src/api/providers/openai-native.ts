@@ -1301,6 +1301,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 	private getReasoningEffort(model: OpenAiNativeModel): ReasoningEffortExtended | undefined {
 		// kilocode_change start: resolve only the new Maximum preference here;
 		// preserve the legacy behavior of every existing effort value.
+		if (this.options.enableReasoningEffort === false) return undefined
 		const selected =
 			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ??
 			model.info.reasoningEffort

@@ -88,9 +88,13 @@ export const ThinkingBudget = ({ apiConfiguration, setApiConfigurationField, mod
 				: (reasoningEfforts as readonly ReasoningEffortWithMinimal[])
 	// Expose one stable maximum preference for every
 	// effort-capable model; request builders resolve it to max/xhigh/high/etc.
-	const baseAvailableOptions: ReadonlyArray<ReasoningEffortWithMinimal> = declaredAvailableOptions.includes("max")
-		? declaredAvailableOptions
+	const baseAvailableOptions: ReasoningEffortWithMinimal[] = declaredAvailableOptions.includes("max")
+		? [...declaredAvailableOptions]
 		: [...declaredAvailableOptions, "max"]
+	const allowsExplicitUltra = ["openai", "openai-responses", "openai-native", "openai-codex"].includes(
+		apiConfiguration.apiProvider ?? "",
+	)
+	if (allowsExplicitUltra && !baseAvailableOptions.includes("ultra")) baseAvailableOptions.push("ultra")
 	// kilocode_change end
 
 	// "disable" turns off reasoning entirely; "none" is a valid reasoning level.

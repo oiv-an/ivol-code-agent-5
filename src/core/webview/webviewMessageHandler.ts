@@ -126,6 +126,9 @@ function canUseStoredCatalogSettings(
 }
 // kilocode_change end
 
+// kilocode_change: one explicit browser preparation flow per provider; revoke invalidates it immediately.
+const browserOSConnectRequests = new WeakMap<ClineProvider, object>()
+
 export const webviewMessageHandler = async (
 	provider: ClineProvider,
 	message: MaybeTypedWebviewMessage, // kilocode_change switch to MaybeTypedWebviewMessage for better type-safety
@@ -758,6 +761,33 @@ export const webviewMessageHandler = async (
 				}
 
 				await provider.postStateToWebview()
+				// kilocode_change start: saving the BrowserOS mode also prepares its built-in MCP server.
+				if (message.updatedSettings.browserMode === "browseros") {
+					const hub = provider.getMcpHub()
+					try {
+						if (!hub) throw new Error("MCP is not available")
+						const setup = await hub.ensureBrowserOSConnection()
+						await provider.postMessageToWebview({
+							type: "browserOSAccessResult",
+							success: true,
+							text: hub.browserOSAccess.getStatus(),
+							values: {
+								serverName: setup.serverName,
+								source: setup.source,
+								endpoint: setup.endpoint,
+								changed: setup.changes.length > 0,
+							},
+						})
+					} catch (error) {
+						// Setup problems must stay visible instead of leaving an unusable browser mode.
+						await provider.postMessageToWebview({
+							type: "browserOSAccessResult",
+							success: false,
+							text: error instanceof Error ? error.message : String(error),
+						})
+					}
+				}
+				// kilocode_change end
 			}
 
 			break
@@ -1741,6 +1771,239 @@ export const webviewMessageHandler = async (
 			stopTts()
 			break
 
+		// kilocode_change start: launch does not grant browser access and is never auto-approved.
+		case "launchPersonalBrowser": {
+			try {
+				if (message.text !== "chrome-extension" && message.text !== "browseros")
+					throw new Error("Select a personal browser mode first")
+				const { launchPersonalBrowser } = await import("../../services/browser/kilocode/BrowserLauncher")
+				const launched = await launchPersonalBrowser(message.text)
+				await provider.postMessageToWebview({
+					type: "personalBrowserLaunchResult",
+					success: true,
+					text: launched ? "launched" : "cancelled",
+				})
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "personalBrowserLaunchResult",
+					success: false,
+					text: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
+		// kilocode_change end
+		// kilocode_change start: BrowserOS grants are never controlled by model auto-approval.
+		case "browserOSAccess": {
+			const hub = provider.getMcpHub()
+			try {
+				if (!hub) throw new Error("MCP is not available")
+				switch (message.text) {
+					// kilocode_change start: one button prepares the browser and requests task permission.
+					case "connectAndGrant": {
+						if (browserOSConnectRequests.has(provider))
+							throw new Error("Browser connection is already in progress")
+						// The explicit action also stores the checkbox, so the choice survives without pressing Save.
+						const allowTaskActions =
+							typeof message.values?.allowTaskActions === "boolean"
+								? message.values.allowTaskActions
+								: provider.contextProxy.getValue("browserOSAllowTaskActions") === true
+						const request = {}
+						browserOSConnectRequests.set(provider, request)
+						const isCurrent = () =>
+							browserOSConnectRequests.get(provider) === request &&
+							provider.contextProxy.getValue("browserMode") === "browseros"
+						try {
+							await provider.contextProxy.setValue("browserMode", "browseros")
+							await provider.contextProxy.setValue("browserOSAllowTaskActions", allowTaskActions)
+							await provider.postStateToWebview()
+							const { connectBrowserOSForTask } = await import(
+								"../../services/browser/kilocode/BrowserOSConnectFlow"
+							)
+							const { launchPersonalBrowser } = await import(
+								"../../services/browser/kilocode/BrowserLauncher"
+							)
+							const setup = await connectBrowserOSForTask({
+								isCurrent,
+								connect: () =>
+									hub.prepareSelectedBrowserOSConnection(message.serverName, message.source),
+								launch: () => launchPersonalBrowser("browseros", isCurrent),
+								progress: async (stage) => {
+									await provider.postMessageToWebview({
+										type: "browserOSAccessResult",
+										success: true,
+										text: hub.browserOSAccess.getStatus(),
+										values: { stage, busy: true },
+									})
+								},
+								grant: async (connection) => {
+									await hub.grantBrowserOSAccess(
+										connection.serverName,
+										async () => {
+											if (!isCurrent()) return false
+											const allow = t("mcp:browserOS.allow")
+											const answer = await vscode.window.showWarningMessage(
+												t(
+													allowTaskActions
+														? "mcp:browserOS.permissionTaskActions"
+														: "mcp:browserOS.permission",
+													{ serverName: connection.serverName },
+												),
+												{ modal: true },
+												allow,
+											)
+											return answer === allow && isCurrent()
+										},
+										connection.source,
+										allowTaskActions,
+									)
+								},
+							})
+							await provider.postMessageToWebview({
+								type: "browserOSAccessResult",
+								success: true,
+								text: hub.browserOSAccess.getStatus(),
+								values: {
+									busy: false,
+									stage: setup ? "ready" : "cancelled",
+									serverName: setup?.serverName,
+									source: setup?.source,
+								},
+							})
+						} finally {
+							if (browserOSConnectRequests.get(provider) === request)
+								browserOSConnectRequests.delete(provider)
+						}
+						return
+					}
+					// kilocode_change end
+					// kilocode_change start: the built-in browser server is configured by IVOL, not by hand.
+					case "connect": {
+						const setup = await hub.ensureBrowserOSConnection()
+						await provider.postMessageToWebview({
+							type: "browserOSAccessResult",
+							success: true,
+							text: hub.browserOSAccess.getStatus(),
+							values: {
+								serverName: setup.serverName,
+								source: setup.source,
+								endpoint: setup.endpoint,
+								changed: setup.changes.length > 0,
+							},
+						})
+						return
+					}
+					// kilocode_change end
+					case "grant": {
+						const serverName = message.serverName || "browseros-neo"
+						await hub.grantBrowserOSAccess(
+							serverName,
+							async () => {
+								const allow = t("mcp:browserOS.allow")
+								return (
+									(await vscode.window.showWarningMessage(
+										t("mcp:browserOS.permission", { serverName }),
+										{ modal: true },
+										allow,
+									)) === allow
+								)
+							},
+							message.source,
+						)
+						break
+					}
+					case "pause":
+						browserOSConnectRequests.delete(provider) // kilocode_change
+						hub.cancelBrowserOSPreparation?.() // kilocode_change: a pending dialog cannot undo manual pause
+						if (hub.browserOSAccess.getStatus() === "awaitingPermission") hub.browserOSAccess.revoke()
+						else hub.browserOSAccess.pause()
+						break
+					case "resume":
+						hub.browserOSAccess.resume()
+						break
+					case "revoke":
+						browserOSConnectRequests.delete(provider) // kilocode_change: cancel pending launch/setup/grant
+						hub.cancelBrowserOSPreparation?.() // kilocode_change: also cancel preparation initiated by a tool
+						hub.browserOSAccess.revoke()
+						break
+					case "status":
+						break
+					default:
+						throw new Error("Unknown BrowserOS access action")
+				}
+				await provider.postMessageToWebview({
+					type: "browserOSAccessResult",
+					success: true,
+					text: hub.browserOSAccess.getStatus(),
+				})
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "browserOSAccessResult",
+					success: false,
+					text: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
+		// kilocode_change end
+		// kilocode_change start: pairing credentials only cross the trusted settings channel.
+		case "pairChromeConnector": {
+			const { chromeConnector } = await import("../../services/browser/kilocode/ChromeConnector")
+			try {
+				const text = await chromeConnector.startPairing()
+				await provider.postMessageToWebview({ type: "chromeConnectorResult", success: true, text })
+			} catch {
+				await provider.postMessageToWebview({
+					type: "chromeConnectorResult",
+					success: false,
+					text: "Could not start Chrome pairing.",
+				})
+			}
+			break
+		}
+		case "chromeControl": {
+			const { chromeConnector } = await import("../../services/browser/kilocode/ChromeConnector")
+			try {
+				if (message.text !== "status" && provider.context.globalState.get("browserMode") !== "chrome-extension")
+					throw new Error("Select personal Chrome before changing browser control")
+				if (message.text === "pause") await chromeConnector.pause()
+				else if (message.text === "resume") {
+					const allow = t("mcp:browserOS.allow")
+					await chromeConnector.resume(
+						async () =>
+							(await vscode.window.showWarningMessage(
+								t("mcp:chromeControl.resumePermission"),
+								{ modal: true },
+								allow,
+							)) === allow,
+						() => provider.context.globalState.get("browserMode") === "chrome-extension",
+					)
+				} else if (message.text !== "status") throw new Error("Unknown Chrome control action")
+				await provider.postMessageToWebview({
+					type: "chromeConnectorResult",
+					success: true,
+					text: chromeConnector.getStatus(),
+				})
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "chromeConnectorResult",
+					success: false,
+					text: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
+		case "stopChromeConnector": {
+			const { chromeConnector } = await import("../../services/browser/kilocode/ChromeConnector")
+			await chromeConnector.stop()
+			await provider.postMessageToWebview({
+				type: "chromeConnectorResult",
+				success: true,
+				text: chromeConnector.getStatus(),
+			})
+			break
+		}
+		// kilocode_change end
 		case "testBrowserConnection":
 			// If no text is provided, try auto-discovery
 			if (!message.text) {

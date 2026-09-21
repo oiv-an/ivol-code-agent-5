@@ -47,6 +47,19 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 
 			const { serverName, toolName, parsedArguments } = validation
 
+			// kilocode_change start: prepare browser transport and explicit consent before the first action.
+			const browserReady = await task.providerRef
+				.deref()
+				?.getMcpHub()
+				?.prepareBrowserOSInvocation?.(serverName, task)
+			if (browserReady === false) {
+				pushToolResult(
+					"Browser control was declined or cancelled. No browser action was sent. Do not retry without a new user request.",
+				)
+				return
+			}
+			// kilocode_change end
+
 			// Validate that the tool exists on the server
 			const toolValidation = await this.validateToolExists(task, serverName, toolName, pushToolResult)
 			if (!toolValidation.isValid) {
@@ -65,7 +78,15 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			} satisfies ClineAskUseMcpServer)
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
-			const didApprove = await askApproval("use_mcp_server", completeMessage)
+			// kilocode_change start: explicit task-scoped browser consent avoids duplicate per-call prompts.
+			const taskConsent =
+				task.providerRef
+					.deref()
+					?.getMcpHub()
+					?.canAutoApproveBrowserOSTool?.(serverName, toolName, parsedArguments, task) === true
+			if (taskConsent) await task.say("text", `BrowserOS: ${toolName} (browser control enabled)`)
+			const didApprove = taskConsent || (await askApproval("use_mcp_server", completeMessage))
+			// kilocode_change end
 
 			if (!didApprove) {
 				return
@@ -87,6 +108,9 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 
 	override async handlePartial(task: Task, block: ToolUse<"use_mcp_tool">): Promise<void> {
 		const params = block.params
+		// kilocode_change: defer browser consent to the complete, validated invocation.
+		const serverName = this.removeClosingTag("server_name", params.server_name, block.partial)
+		if (serverName && task.providerRef.deref()?.getMcpHub()?.isBrowserOSServer?.(serverName)) return
 		const partialMessage = JSON.stringify({
 			type: "use_mcp_tool",
 			serverName: this.removeClosingTag("server_name", params.server_name, block.partial),
@@ -307,7 +331,11 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			toolName,
 		})
 
-		const toolResult = await task.providerRef.deref()?.getMcpHub()?.callTool(serverName, toolName, parsedArguments)
+		// kilocode_change: preserve the originating task across approval and queued MCP calls.
+		const toolResult = await task.providerRef
+			.deref()
+			?.getMcpHub()
+			?.callTool(serverName, toolName, parsedArguments, undefined, task)
 
 		let toolResultPretty = "(No response)"
 
@@ -340,8 +368,32 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			})
 		}
 
-		await task.say("mcp_server_response", toolResultPretty)
-		pushToolResult(formatResponse.toolResult(toolResultPretty))
+		// kilocode_change start: preserve bounded MCP screenshots for visual browser tools.
+		const images: string[] = []
+		let imageBytes = 0
+		for (const item of toolResult?.content ?? []) {
+			if (item.type !== "image") continue
+			if (
+				!/^image\/(png|jpeg|webp|gif)$/.test(item.mimeType) ||
+				!item.data ||
+				!/^[A-Za-z0-9+/=]+$/.test(item.data) ||
+				images.length >= 4 ||
+				imageBytes + item.data.length > 16 * 1024 * 1024
+			) {
+				toolResultPretty += "\n[An MCP image was omitted because its format or size is unsupported.]"
+				continue
+			}
+			images.push(`data:${item.mimeType};base64,${item.data}`)
+			imageBytes += item.data.length
+		}
+		if (images.length) {
+			await task.say("mcp_server_response", toolResultPretty, images)
+			pushToolResult(formatResponse.toolResult(toolResultPretty, images))
+		} else {
+			await task.say("mcp_server_response", toolResultPretty)
+			pushToolResult(formatResponse.toolResult(toolResultPretty))
+		}
+		// kilocode_change end
 	}
 }
 

@@ -1,0 +1,9 @@
+{
+	"name": "ivol-browser-connector",
+	"version": "0.7.0",
+	"private": true,
+	"description": "Development preview of the IVOL Chrome connector",
+	"scripts": {
+		"check": "node --check background.js"
+	}
+}

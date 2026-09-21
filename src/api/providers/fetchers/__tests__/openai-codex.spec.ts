@@ -31,6 +31,7 @@ describe("normalizeOpenAiCodexCatalog", () => {
 						{ effort: "medium" },
 						{ effort: "max" },
 						{ effort: "ultra" },
+						{ effort: "unknown-effort" }, // kilocode_change: unknown values still get filtered
 					],
 					visibility: "list",
 					priority: 6,
@@ -53,7 +54,7 @@ describe("normalizeOpenAiCodexCatalog", () => {
 			contextWindow: 370_000,
 			supportsPromptCache: true,
 			reasoningEffort: "low",
-			supportsReasoningEffort: ["low", "medium", "max"],
+			supportsReasoningEffort: ["low", "medium", "max", "ultra"], // kilocode_change
 			displayName: "GPT-5.6-Sol",
 			preferredIndex: 6,
 		})

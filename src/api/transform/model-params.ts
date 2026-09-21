@@ -123,9 +123,16 @@ export function getModelParams({
 		requestedReasoningEffort === "max" &&
 		settings.enableReasoningEffort !== false &&
 		supportsOpenAiMaxReasoningEffort(modelId, model)
-	const requestReasoningModel: ModelInfo = recognizedMaximumRequest
-		? { ...model, supportsReasoningEffort: ["max"] }
-		: model
+	// Ultra is an explicit OpenAI-compatible wire value, never a max alias.
+	// Allow custom endpoints to validate it instead of silently downgrading it
+	// based on an older local model catalog.
+	const explicitUltraRequest =
+		format === "openai" && requestedReasoningEffort === "ultra" && settings.enableReasoningEffort === true
+	const requestReasoningModel: ModelInfo = explicitUltraRequest
+		? { ...model, supportsReasoningEffort: ["ultra"] }
+		: recognizedMaximumRequest
+			? { ...model, supportsReasoningEffort: ["max"] }
+			: model
 	// kilocode_change end
 
 	// kilocode_change start
@@ -160,7 +167,7 @@ export function getModelParams({
 		// Let's assume that "Hybrid" reasoning models require a temperature of
 		// 1.0 since Anthropic does.
 		temperature = 1.0
-	} else if (shouldUseReasoningEffort({ model, settings }) || recognizedMaximumRequest) {
+	} else if (shouldUseReasoningEffort({ model: requestReasoningModel, settings }) || recognizedMaximumRequest) {
 		// "Traditional" reasoning models use the `reasoningEffort` parameter.
 		// Only fallback to model default if user hasn't explicitly set a value.
 		// If customReasoningEffort is "disable", don't fallback to model default.

@@ -698,7 +698,8 @@
 			"medium": "Medium",
 			"high": "High",
 			"xhigh": "Extra High",
-			"max": "Maximum"
+			"max": "Maximum",
+			"ultra": "Ultra"
 		},
 		"verbosity": {
 			"label": "Output Verbosity",
@@ -726,6 +727,41 @@
 		}
 	},
 	"browser": {
+		"personal": {
+			"mode": "Browser mode",
+			"isolated": "Existing browser (isolated / remote CDP)",
+			"chrome": "My Chrome — IVOL extension (preview)",
+			"neo": "BrowserOS neo — MCP (preview)",
+			"chromeHelp": "Install IVOL Browser Connector once, then ask the agent to use Chrome in chat. Connection is automatic and every permission is requested in chat, never in the browser. Page content, screenshots and console messages may be sent to your AI provider and stored in task history.",
+			"launch": "Select and launch installed browser",
+			"launchHelp": "Choose a trusted installed browser application and confirm its launch. This does not install a browser, change its profile or grant the agent access. Local desktop IDE hosts only.",
+			"disconnect": "Disconnect Chrome",
+			"tabsHelp": "The agent controls the tab you were using, or opens the site you asked for. Ask in chat to stop, pause or switch tabs at any time.",
+			"neoHelp": "Connect once to allow browser control across chats in this IDE window until you disconnect or restart the extension host. A lost connection requires permission again. If BrowserOS is unavailable, IVOL offers to select and launch it first. Access covers the exposed browser profile, not just a named group. Cancelling stops setup.",
+			"connectAndGrant": "Connect and allow control",
+			"allowTaskActions": "Do not ask again while browser control is enabled",
+			"allowTaskActionsHelp": "Save remembers this preference, not permission. Connect and confirm to allow page views, clicks, typing, navigation and tabs across chats in this IDE window until disconnected or restarted. File transfers and PDF exports keep their usual approval. Changing this option revokes the previous permission.",
+			"advanced": "Advanced connection settings",
+			"stages": {
+				"connecting": "Connecting to BrowserOS…",
+				"launching": "Select and confirm the browser application to launch…",
+				"permission": "Confirm browser control for this task in the IDE dialog…",
+				"ready": "Ready for browser control",
+				"cancelled": "Connection setup cancelled"
+			},
+			"autoConnect": "Connect installed BrowserOS neo",
+			"autoConnectHelp": "Reads the endpoint the installed browser publishes, verifies the server identity and stores one MCP entry. Other MCP servers are left untouched and no page control is granted.",
+			"endpoint": "Connected endpoint: {{endpoint}}",
+			"server": "BrowserOS MCP connection",
+			"noServer": "Connect the installed browser first",
+			"mcpSettings": "Open MCP settings",
+			"grant": "Grant current task access",
+			"pause": "Take manual control",
+			"resume": "Return control to agent",
+			"revoke": "Disconnect browser control",
+			"refresh": "Refresh access status",
+			"status": "Access status: {{status}}"
+		},
 		"enable": {
 			"label": "Enable browser tool",
 			"description": "When enabled, IVOL Code can use a browser to interact with websites when using models that support computer use. <0>Learn more</0>"

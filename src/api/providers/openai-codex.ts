@@ -1038,6 +1038,7 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 
 		const configured =
 			(this.options.reasoningEffort as ReasoningEffortExtended | "disable" | undefined) ?? undefined
+		if (configured === "ultra" && this.options.enableReasoningEffort === true) return "ultra"
 		if (configured === "max") {
 			return model.reasoningEffort && model.reasoningEffort !== "none" ? model.reasoningEffort : undefined
 		}

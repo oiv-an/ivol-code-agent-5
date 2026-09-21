@@ -699,6 +699,18 @@ describe("OpenAiNativeHandler", () => {
 		})
 
 		// kilocode_change start: maximum preference fallback
+		it.each([true, false])("honors the explicit ultra enable switch: %s", (enabled) => {
+			const ultraHandler = new OpenAiNativeHandler({
+				...mockOptions,
+				apiModelId: "gpt-5.1-codex-max",
+				reasoningEffort: "ultra",
+				enableReasoningEffort: enabled,
+			})
+			expect((ultraHandler as any).getReasoningEffort(ultraHandler.getModel())).toBe(
+				enabled ? "ultra" : undefined,
+			)
+		})
+
 		it("should fall back from maximum to xhigh for GPT-5.1 Codex Max", async () => {
 			const mockFetch = vitest.fn().mockResolvedValue({
 				ok: true,

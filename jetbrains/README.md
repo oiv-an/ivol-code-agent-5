@@ -6,6 +6,7 @@ This directory contains the JetBrains plugin implementation for IVOL Code Agent 
 > For the separate IntelliJ IDEA build, use [the current IDEA build guide](INTELLIJ_IDEA.md).
 > IntelliJ IDEA **2025.3.6.1 (253)** uses a separate Java 21 package: [IDEA 2025.3 build guide](INTELLIJ_IDEA_2025_3.md).
 > PyCharm **2025.1.1.1 (251)** has a separate Java 21 target: [PyCharm build and installation guide](PYCHARM.md).
+> WebStorm **2024.3.5 (243)** and **2026.1.5 (261)** have separate Java 21 targets: [WebStorm build and installation guide](WEBSTORM.md).
 > The Java 21 examples below describe the older upstream setup, not this branch's current SDK.
 
 ## Prerequisites

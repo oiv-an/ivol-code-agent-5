@@ -1,5 +1,72 @@
 # IVOL Code Agent 5
 
+## 5.17.11
+
+- Add a separate WebStorm 2026.1.5 package for build 261.27258.45 while retaining the WebStorm 2024.3 package. Choose the archive matching your IDE platform.
+- Include the latest personal-browser preview across IDE packages with Chrome connector 0.7.0. BrowserOS thematic groups and automatic file transfers remain unavailable; Chrome connection and browser-consent lifecycle still need further live verification.
+
+## 5.17.10
+
+- Request browser consent on first use and retain it across chats until disconnect, connection loss or IDE host restart.
+- Respect the selected browser when advertising tools: BrowserOS tools are hidden in personal Chrome and isolated modes.
+- Add personal Chrome pause and confirmed resume, cancel stale browser requests, and use short topic names for working tab groups.
+- Requires Chrome connector 0.7.0 with protocol 2; update the IDE extension and Chrome connector together. BrowserOS thematic groups remain pending in this preview.
+
+## 5.17.9
+
+- Remember the choice not to ask again for browser actions instead of resetting it when settings are reopened.
+- The remembered choice stays a preference only: control of the browser is still granted per task through Connect and allow control and an explicit confirmation.
+
+## 5.17.8
+
+- Optionally approve subsequent BrowserOS page actions once per task and connection without repeated prompts, while retaining pause, revoke and file-operation checks.
+
+## 5.17.7
+
+- Connect BrowserOS and request task permission with one button, offering a confirmed browser launch only when needed.
+- Show setup progress and keep technical connection settings under Advanced. Permission remains explicit and limited to the current task.
+
+## 5.17.6
+
+- Connect the installed BrowserOS neo browser automatically when saving browser mode, without manual MCP setup or granting page access.
+- Preserve disabled connections and other MCP settings, detect interrupted setup, and report the actual connection state.
+
+## 5.17.5
+
+- Keep BrowserOS sessions consistent across actions and allow creation of the first tab after task permission.
+- Require a fresh view of the target BrowserOS page before each interaction. Unclassified operations, including arbitrary scripts, remain unavailable in this preview.
+- With Chrome connector 0.6.1, reuse a task's surviving tab group across connector restarts without restoring access to its old tabs. Existing group names are not migrated.
+
+## 5.17.4
+
+- Keep personal Chrome window dimensions, zoom and page layout unchanged during agent control.
+- Place newly created agent tabs in a visible group, even when there is only one tab.
+
+## 5.17.3
+
+- Browse in a background tab so you can keep using Chrome while a task runs.
+- Add a WebStorm 2024.3 package so the same agent can be installed there.
+
+## 5.17.2
+
+- Ask for browser permission in chat only. The Chrome extension no longer shows buttons or prompts of its own.
+- Start browsing immediately after the chat approval instead of waiting for a second confirmation in the browser.
+
+## 5.17.1
+
+- Connect the Chrome extension automatically from chat without copying pairing codes or configuring addresses.
+- Release the browser for another editor when a request is cancelled, rejected or finished.
+
+## 5.17.0
+
+- Preview personal Chrome control with a browser extension, per-task consent, approved tabs, and manual pause and revoke controls.
+- Preview BrowserOS neo integration through local MCP with explicit task permission and confirmed browser launching.
+- Includes the Ultra reasoning option introduced in 5.16.267. Personal browser integration still requires manual setup and live verification; automatic file transfers are not supported.
+
+## 5.16.267
+
+- Add an explicit Ultra reasoning option for OpenAI-compatible and Codex connections, preserving the selected effort in profiles and requests. The endpoint must support this effort value.
+
 ## 5.16.266
 
 ### Patch Changes

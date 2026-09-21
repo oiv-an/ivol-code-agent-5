@@ -485,6 +485,9 @@
 			"resized": "Resized to: {{size}}",
 			"resize": "Resize to {{size}}",
 			"screenshotSaved": "Screenshot saved",
+			"selectedTab": "Selected permitted tab {{id}}",
+			"createTab": "Request additional tab: {{url}}",
+			"openApplication": "Request browser application launch",
 			"screenshot": "Save screenshot to {{path}}",
 			"closed": "Closed browser",
 			"close": "Close browser"

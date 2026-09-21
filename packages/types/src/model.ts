@@ -7,9 +7,9 @@ import { DynamicProvider, LocalProvider } from "./provider-settings.js"
 
 export const reasoningEfforts = ["low", "medium", "high", "xhigh"] as const
 
-// kilocode_change start: GPT-5.6 adds the API-level "max" effort. Keep the
-// default boolean capability list unchanged so older models do not expose it.
-export const reasoningEffortsSchema = z.enum([...reasoningEfforts, "max"] as const)
+// kilocode_change start: preserve explicit advanced effort values in profiles.
+// Keep the default boolean capability list unchanged for older models.
+export const reasoningEffortsSchema = z.enum([...reasoningEfforts, "max", "ultra"] as const)
 // kilocode_change end
 
 export type ReasoningEffort = z.infer<typeof reasoningEffortsSchema>
@@ -26,7 +26,7 @@ export type ReasoningEffortWithMinimal = z.infer<typeof reasoningEffortWithMinim
  * Extended Reasoning Effort (includes "none" and "minimal")
  * Note: "disable" is a UI/control value, not a value sent as effort
  */
-export const reasoningEffortsExtended = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const // kilocode_change
+export const reasoningEffortsExtended = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] as const // kilocode_change
 
 export const reasoningEffortExtendedSchema = z.enum(reasoningEffortsExtended)
 
@@ -44,6 +44,7 @@ export const reasoningEffortSettingValues = [
 	"high",
 	"xhigh",
 	"max", // kilocode_change: GPT-5.6 maximum single-model effort
+	"ultra", // kilocode_change: explicit provider-specific effort, not a maximum alias
 ] as const
 export const reasoningEffortSettingSchema = z.enum(reasoningEffortSettingValues)
 
@@ -105,7 +106,7 @@ export const modelInfoSchema = z.object({
 	supportsReasoningEffort: z
 		.union([
 			z.boolean(),
-			z.array(z.enum(["disable", "none", "minimal", "low", "medium", "high", "xhigh", "max"])), // kilocode_change
+			z.array(z.enum(reasoningEffortSettingValues)), // kilocode_change
 		])
 		.optional(),
 	requiredReasoningEffort: z.boolean().optional(),

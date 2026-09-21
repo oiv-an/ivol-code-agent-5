@@ -179,13 +179,10 @@ class FileRPCProtocolLogger : IRPCProtocolLogger, Disposable {
             logEntry.append("[$initiatorStr] ")
             logEntry.append(str)
 
+            // RPC payloads can contain pairing tokens, provider credentials and page data.
+            // Retain transport diagnostics without serializing application content.
             if (data != null) {
-                val dataStr = if (str.endsWith("(")) {
-                    "$data)"
-                } else {
-                    data.toString()
-                }
-                logEntry.append(" ").append(dataStr)
+                logEntry.append(" [payload omitted]")
             }
 
             // Use coroutine to asynchronously add to queue

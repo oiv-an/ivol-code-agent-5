@@ -19,7 +19,8 @@ import Stringer from "stream-json/Stringer"
  * @returns {Promise<void>}
  */
 
-async function safeWriteJson(filePath: string, data: any): Promise<void> {
+// kilocode_change: optional optimistic-concurrency validation runs under the existing write lock.
+async function safeWriteJson(filePath: string, data: any, validateBeforeWrite?: () => Promise<void>): Promise<void> {
 	const absoluteFilePath = path.resolve(filePath)
 	let releaseLock = async () => {} // Initialized to a no-op
 
@@ -70,6 +71,7 @@ async function safeWriteJson(filePath: string, data: any): Promise<void> {
 	let actualTempBackupFilePath: string | null = null
 
 	try {
+		await validateBeforeWrite?.() // kilocode_change: reject stale configuration before creating temporary files
 		// Step 1: Write data to a new temporary file.
 		actualTempNewFilePath = path.join(
 			path.dirname(absoluteFilePath),

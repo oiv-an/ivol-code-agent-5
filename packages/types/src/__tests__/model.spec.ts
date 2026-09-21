@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { reasoningEffortsSchema, resolveReasoningEffortForModel, supportsOpenAiMaxReasoningEffort } from "../model.js" // kilocode_change
+import { providerSettingsSchema } from "../provider-settings.js" // kilocode_change
 
 // kilocode_change start: OpenAI API-level "max" reasoning effort model gating
 describe("supportsOpenAiMaxReasoningEffort", () => {
@@ -51,9 +52,26 @@ describe("supportsOpenAiMaxReasoningEffort", () => {
 		).toBe(false)
 	})
 
-	it("accepts the API value max and rejects the non-API label ultra", () => {
+	it("preserves ultra through profile JSON serialization and validation", () => {
+		const profile = {
+			apiProvider: "openai",
+			enableReasoningEffort: true,
+			reasoningEffort: "ultra",
+			openAiCustomModelInfo: {
+				contextWindow: 128000,
+				supportsPromptCache: true,
+				reasoningEffort: "ultra",
+				supportsReasoningEffort: ["high", "ultra"],
+			},
+		}
+		expect(providerSettingsSchema.parse(JSON.parse(JSON.stringify(profile)))).toMatchObject(profile)
+	})
+
+	it("accepts max and preserves ultra as a separate explicit effort", () => {
 		expect(reasoningEffortsSchema.safeParse("max").success).toBe(true)
-		expect(reasoningEffortsSchema.safeParse("ultra").success).toBe(false)
+		expect(reasoningEffortsSchema.safeParse("ultra").success).toBe(true)
+		expect(resolveReasoningEffortForModel("ultra", "custom-model")).toBe("ultra")
+		expect(reasoningEffortsSchema.safeParse("unknown-effort").success).toBe(false)
 	})
 })
 // kilocode_change end

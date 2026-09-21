@@ -57,7 +57,11 @@ export class AccessMcpResourceTool extends BaseTool<"access_mcp_resource"> {
 
 			// Now execute the tool
 			await task.say("mcp_server_request_started")
-			const resourceResult = await task.providerRef.deref()?.getMcpHub()?.readResource(server_name, uri)
+			// kilocode_change: browser grants belong to the originating task, not the currently displayed task.
+			const resourceResult = await task.providerRef
+				.deref()
+				?.getMcpHub()
+				?.readResource(server_name, uri, undefined, task)
 
 			const resourceResultPretty =
 				resourceResult?.contents

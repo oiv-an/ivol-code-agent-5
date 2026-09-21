@@ -3,6 +3,7 @@
 import { useMcpToolTool } from "../UseMcpToolTool"
 import { Task } from "../../task/Task"
 import { ToolUse } from "../../../shared/tools"
+import { formatResponse } from "../../prompts/responses" // kilocode_change
 
 // Mock dependencies
 vi.mock("../../prompts/responses", () => ({
@@ -184,6 +185,21 @@ describe("useMcpToolTool", () => {
 	})
 
 	describe("partial requests", () => {
+		// kilocode_change: the host asks once after a complete browser request, including custom server names.
+		it.each(["browseros-neo", "custom-browser"])("defers partial browser consent for %s", async (serverName) => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			hub.isBrowserOSServer = vi.fn().mockReturnValue(true)
+			await useMcpToolTool.handlePartial(mockTask as Task, {
+				type: "tool_use",
+				name: "use_mcp_tool",
+				params: { server_name: serverName, tool_name: "snapshot", arguments: "{}" },
+				partial: true,
+			})
+			expect(hub.isBrowserOSServer).toHaveBeenCalledWith(serverName)
+			expect(mockTask.ask).not.toHaveBeenCalled()
+			expect(hub.callTool).not.toHaveBeenCalled()
+		})
+
 		it("should handle partial requests", async () => {
 			const block: ToolUse = {
 				type: "tool_use",
@@ -211,6 +227,92 @@ describe("useMcpToolTool", () => {
 	})
 
 	describe("successful execution", () => {
+		// kilocode_change: task-scoped browser consent does not bypass the actual MCP execution guard.
+		it.each([true, false])("uses explicit browser task consent only when present (%s)", async (consent) => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			hub.getAllServers.mockReturnValue([{ name: "browser", tools: [{ name: "snapshot" }] }])
+			hub.canAutoApproveBrowserOSTool = vi.fn().mockReturnValue(consent)
+			hub.callTool.mockResolvedValue({ content: [{ type: "text", text: "Page" }] })
+			mockAskApproval.mockResolvedValue(true)
+			await useMcpToolTool.execute(
+				{ server_name: "browser", tool_name: "snapshot", arguments: { page: 2 } },
+				mockTask as Task,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					removeClosingTag: mockRemoveClosingTag,
+					toolProtocol: "native",
+				},
+			)
+			expect(mockHandleError).not.toHaveBeenCalled()
+			expect(mockAskApproval).toHaveBeenCalledTimes(consent ? 0 : 1)
+			expect(hub.callTool).toHaveBeenCalledWith("browser", "snapshot", { page: 2 }, undefined, mockTask)
+			if (consent)
+				expect(mockTask.say).toHaveBeenCalledWith("text", expect.stringContaining("browser control enabled"))
+		})
+
+		// kilocode_change: preparation must finish before approval and dispatch of the original action.
+		it.each([true, false])("prepares browser access before dispatch (allowed=%s)", async (allowed) => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			let prepared = false
+			hub.prepareBrowserOSInvocation = vi.fn(async () => {
+				prepared = true
+				return allowed
+			})
+			hub.getAllServers.mockReturnValue([{ name: "browseros-neo", tools: [{ name: "tabs" }] }])
+			hub.canAutoApproveBrowserOSTool = vi.fn(() => prepared && allowed)
+			hub.callTool.mockResolvedValue({ content: [{ type: "text", text: "Created" }] })
+			const args = { action: "new", url: "https://example.com" }
+			await useMcpToolTool.execute(
+				{ server_name: "browseros-neo", tool_name: "tabs", arguments: args },
+				mockTask as Task,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					removeClosingTag: mockRemoveClosingTag,
+					toolProtocol: "native",
+				},
+			)
+			expect(hub.prepareBrowserOSInvocation).toHaveBeenCalledWith("browseros-neo", mockTask)
+			expect(mockAskApproval).not.toHaveBeenCalled()
+			expect(mockHandleError).not.toHaveBeenCalled()
+			expect(hub.callTool).toHaveBeenCalledTimes(allowed ? 1 : 0)
+			if (allowed) expect(hub.callTool).toHaveBeenCalledWith("browseros-neo", "tabs", args, undefined, mockTask)
+			else expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
+		})
+
+		// kilocode_change: MCP browser screenshots must reach both history and the model.
+		it("preserves supported image results and omits unsupported image formats", async () => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			hub.getAllServers.mockReturnValue([{ name: "browser", tools: [{ name: "screenshot" }] }])
+			hub.callTool.mockResolvedValue({
+				content: [
+					{ type: "text", text: "Page screenshot" },
+					{ type: "image", mimeType: "image/png", data: "YQ==" },
+					{ type: "image", mimeType: "image/svg+xml", data: "YQ==" },
+				],
+			})
+			mockAskApproval.mockResolvedValue(true)
+			await useMcpToolTool.execute({ server_name: "browser", tool_name: "screenshot" }, mockTask as Task, {
+				askApproval: mockAskApproval,
+				handleError: mockHandleError,
+				pushToolResult: mockPushToolResult,
+				removeClosingTag: mockRemoveClosingTag,
+				toolProtocol: "native",
+			})
+			expect(mockHandleError).not.toHaveBeenCalled()
+			// kilocode_change: grant ownership must use the calling instance, including native tool execution.
+			expect(hub.callTool).toHaveBeenCalledWith("browser", "screenshot", undefined, undefined, mockTask)
+			expect(mockTask.say).toHaveBeenCalledWith("mcp_server_response", expect.stringContaining("omitted"), [
+				"data:image/png;base64,YQ==",
+			])
+			expect(formatResponse.toolResult).toHaveBeenCalledWith(expect.stringContaining("Page screenshot"), [
+				"data:image/png;base64,YQ==",
+			])
+		})
+
 		it("should execute tool successfully with valid parameters", async () => {
 			const block: ToolUse = {
 				type: "tool_use",
@@ -268,9 +370,11 @@ describe("useMcpToolTool", () => {
 				partial: false,
 			}
 
-			// Ensure validation does not fail due to unknown server by returning no provider once
-			// This makes validateToolExists return isValid: true and proceed to askApproval
-			mockProviderRef.deref.mockReturnValueOnce(undefined as any)
+			// Use a real advertised tool so rejection is independent of provider lookup count.
+			mockProviderRef
+				.deref()
+				.getMcpHub()
+				.getAllServers.mockReturnValue([{ name: "test_server", tools: [{ name: "test_tool" }] }])
 
 			mockAskApproval.mockResolvedValue(false)
 
@@ -300,7 +404,7 @@ describe("useMcpToolTool", () => {
 			}
 
 			// Ensure validation passes so askApproval is reached and throws
-			mockProviderRef.deref.mockReturnValueOnce({
+			mockProviderRef.deref.mockReturnValue({
 				getMcpHub: () => ({
 					getAllServers: vi
 						.fn()

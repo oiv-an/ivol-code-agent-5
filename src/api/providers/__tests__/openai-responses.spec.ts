@@ -557,7 +557,7 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		expect(mockResponsesCreate.mock.calls[0][0].model).toBe("1-gpt-sol")
 	})
 
-	it("sends the GPT-5.6 maximum reasoning effort in Responses requests", async () => {
+	it.each(["max", "ultra"] as const)("sends literal %s reasoning effort in Responses requests", async (effort) => {
 		mockResponsesCreate.mockResolvedValue({
 			[Symbol.asyncIterator]: async function* () {
 				yield { type: "response.output_text.delta", delta: "ok" }
@@ -571,7 +571,7 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 			openAiWebSearchEnabled: true,
 			openAiWebSearchModelId: "gpt-5.6-sol",
 			enableReasoningEffort: true,
-			reasoningEffort: "max",
+			reasoningEffort: effort,
 			openAiCustomModelInfo: {
 				contextWindow: 128_000,
 				maxTokens: 32_000,
@@ -583,7 +583,7 @@ describe("OpenAiCompatibleResponsesHandler", () => {
 		for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
 		}
 
-		expect(mockResponsesCreate.mock.calls[0][0].reasoning).toEqual({ summary: "auto", effort: "max" })
+		expect(mockResponsesCreate.mock.calls[0][0].reasoning).toEqual({ summary: "auto", effort })
 	})
 
 	it("does not inherit the primary model temperature for a GPT-5.6 search turn at maximum effort", async () => {

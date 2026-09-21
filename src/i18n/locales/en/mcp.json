@@ -1,4 +1,20 @@
 {
+	"browserLaunch": {
+		"select": "Select the installed {{name}} application",
+		"selectButton": "Select application",
+		"allow": "Launch selected application",
+		"confirm": "Launch {{name}} using this application?\n{{application}}\nOnly choose a trusted browser installation. No debugging flags or profile changes will be applied. Launching does not grant the agent browser access; pairing and task permission are separate."
+	},
+	"chromeControl": {
+		"resumePermission": "Return control of personal Chrome to the agent? Finish any manual file selection first. A fresh screenshot is required before the next action. You can pause or disconnect again in Browser settings.",
+		"permission": "Allow agents in this IDE window to control personal Chrome through IVOL Browser Connector until you disconnect, the connection ends, or the extension host restarts? Agents can create and use working tabs across chats. Personal tabs will not be closed or resized. Page content and screenshots may be sent to your AI provider and stored in task history. You can disconnect in Browser settings at any time."
+	},
+	"browserOS": {
+		"resumePermission": "BrowserOS control through {{serverName}} is paused. Return control to the agent and continue the requested action? A fresh page observation is required before interaction. You can pause or disconnect again at any time.",
+		"permissionTaskActions": "Allow agents in this IDE window to control BrowserOS through {{serverName}} without repeated prompts for page views, clicks, typing, navigation and tab actions? Permission continues across chats until you disconnect, the connection ends, or the IDE extension host restarts. Access covers the exposed browser profile, not just a named group. Page content and screenshots may be sent to your AI provider and saved in task history. File transfers and PDF exports keep their usual approval. Pause or disconnect in Browser settings at any time.",
+		"permission": "Allow agents in this IDE window to control BrowserOS neo through {{serverName}}? Permission continues across chats until you disconnect, the connection ends, or the IDE extension host restarts. This grants access to the exposed browser profile, not just one tab or named group. Page content and screenshots may be sent to your AI provider and stored in task history. Individual tool approvals remain enabled. Pause or disconnect in Browser settings before entering sensitive information.",
+		"allow": "Allow browser control"
+	},
 	"errors": {
 		"invalid_settings_format": "Invalid MCP settings JSON format. Please ensure your settings follow the correct JSON format.",
 		"invalid_settings_syntax": "Invalid MCP settings JSON format. Please check your settings file for syntax errors.",

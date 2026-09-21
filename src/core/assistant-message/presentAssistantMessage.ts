@@ -848,13 +848,19 @@ export async function presentAssistantMessage(cline: Task) {
 					}
 				}
 				const sessionActive = hasStarted && !isClosed
-				// Only auto-close when no active browser session is present, and this isn't a browser_action
-				if (!sessionActive && block.name !== "browser_action") {
+				// kilocode_change: personal-browser consent outlives individual chat tool sequences.
+				const personalChrome =
+					cline.providerRef.deref()?.context.globalState.get("browserMode") === "chrome-extension"
+				// Only auto-close isolated sessions when no active browser session is present.
+				if (!personalChrome && !sessionActive && block.name !== "browser_action") {
 					await cline.browserSession.closeBrowser()
 				}
 			} catch {
-				// On any unexpected error, fall back to conservative behavior
-				if (block.name !== "browser_action") {
+				// kilocode_change: do not revoke personal-browser consent on a history parsing failure.
+				if (
+					cline.providerRef.deref()?.context.globalState.get("browserMode") !== "chrome-extension" &&
+					block.name !== "browser_action"
+				) {
 					await cline.browserSession.closeBrowser()
 				}
 			}

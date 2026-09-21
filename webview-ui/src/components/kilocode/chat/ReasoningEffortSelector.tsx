@@ -41,6 +41,9 @@ export const ReasoningEffortSelector = ({
 		: modelInfo?.requiredReasoningEffort
 	const levels: Effort[] = Array.isArray(supports) ? [...supports] : [...reasoningEfforts]
 	if (!levels.includes("max")) levels.push("max")
+	const allowsExplicitUltra =
+		isCustomOpenAi || ["openai-native", "openai-codex"].includes(apiConfiguration.apiProvider ?? "")
+	if (allowsExplicitUltra && !levels.includes("ultra")) levels.push("ultra")
 	if (!required && supports === true && !levels.includes("disable")) levels.unshift("disable")
 	const available = isToggle
 		? required

@@ -362,6 +362,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated.
 export async function deactivate() {
+	// kilocode_change: invalidate browser grants and release the local listener on host shutdown.
+	await (await import("./services/browser/kilocode/ChromeConnector")).chromeConnector.stop()
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	// kilocode_change: no upstream cloud event handlers exist in the personal build

@@ -43,6 +43,17 @@ import { safeWriteJson } from "../../utils/safeWriteJson"
 import { sanitizeMcpName } from "../../utils/mcp-name"
 // kilocode_change start - MCP OAuth Authorization
 import { McpOAuthService, OAuthTokens } from "./oauth"
+import {
+	BrowserOSAccess,
+	browserOSOperation,
+	type BrowserOSOperation,
+	validateBrowserOSEndpoint,
+} from "../browser/kilocode/BrowserOSAccess" // kilocode_change
+import {
+	BROWSEROS_SERVER_NAME,
+	discoverBrowserOSEndpoint,
+	probeBrowserOSEndpoint,
+} from "../browser/kilocode/BrowserOSDiscovery" // kilocode_change
 // kilocode_change end
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
@@ -60,6 +71,17 @@ export type DisconnectedMcpConnection = {
 }
 
 export type McpConnection = ConnectedMcpConnection | DisconnectedMcpConnection
+
+// kilocode_change start: reported outcome of the automatic browser connection
+export type BrowserOSSetupResult = {
+	serverName: string
+	source: "global"
+	endpoint: string
+	/** Settings fields the automatic setup had to change, empty when the entry was already correct. */
+	changes: string[]
+	status: string
+}
+// kilocode_change end
 
 // Enum for disable reasons
 export enum DisableReason {
@@ -87,6 +109,7 @@ const OAuthConfigSchema = z
 // Base configuration schema for common settings
 const BaseConfigSchema = z.object({
 	disabled: z.boolean().optional(),
+	browserOS: z.boolean().optional(), // kilocode_change: explicit browser permission policy
 	timeout: z.number().min(1).max(3600).optional().default(60),
 	alwaysAllow: z.array(z.string()).default([]),
 	watchPaths: z.array(z.string()).optional(), // paths to watch for changes and restart server
@@ -172,6 +195,120 @@ const McpSettingsSchema = z.object({
 
 export class McpHub {
 	private providerRef: WeakRef<ClineProvider>
+	public readonly browserOSAccess = new BrowserOSAccess() // kilocode_change
+	private readonly browserOSOrigins = new Set<string>() // kilocode_change: retain protection until host disposal.
+	private browserOSSetup?: Promise<BrowserOSSetupResult> // kilocode_change: serialize automatic browser setup
+	// kilocode_change start: interactive preparation belongs to this IDE window, never to model auto-approval.
+	private browserOSPreparation?: Promise<boolean>
+	private browserOSDeclinedCallers = new WeakSet<object>()
+	private browserOSPreparationEpoch = 0
+
+	cancelBrowserOSPreparation(): void {
+		++this.browserOSPreparationEpoch
+	}
+
+	/** Resolve the actually authorized connection, including custom server names. */
+	getAuthorizedBrowserOSServer(): { serverName: string; source?: "global" | "project" } | undefined {
+		const connection = this.connections.find(
+			(candidate) =>
+				candidate.type === "connected" &&
+				candidate.server.status === "connected" &&
+				!candidate.server.disabled &&
+				this.browserOSAccess.hasAccess(candidate),
+		)
+		if (!connection) return undefined
+		return { serverName: connection.server.name, source: connection.server.source }
+	}
+
+	isBrowserOSServer(serverName: string): boolean {
+		const connection = this.findConnection(serverName)
+		return serverName === BROWSEROS_SERVER_NAME || (!!connection && this.isBrowserOSConnection(connection))
+	}
+
+	async prepareBrowserOSInvocation(serverName: string, caller: object): Promise<boolean> {
+		const existing = this.findConnection(serverName)
+		if (!this.isBrowserOSServer(serverName)) return true
+		const provider = this.providerRef.deref()
+		const epoch = this.browserOSPreparationEpoch
+		const isCurrent = () =>
+			!this.isDisposed &&
+			this.browserOSPreparationEpoch === epoch &&
+			provider?.getCurrentTask() === caller &&
+			provider.getCurrentTask()?.abandoned !== true &&
+			provider.context.globalState.get("browserMode") === "browseros"
+		if (!isCurrent()) throw new Error("Select BrowserOS mode before using its tools")
+		if (this.browserOSPreparation) throw new Error("Browser permission is already being requested")
+		if (
+			existing &&
+			!existing.server.disabled &&
+			existing.server.status === "connected" &&
+			this.browserOSAccess.hasAccess(existing)
+		)
+			return true
+		if (this.browserOSDeclinedCallers.has(caller)) return false
+		this.browserOSPreparation = (async () => {
+			const { connectBrowserOSForTask } = await import("../browser/kilocode/BrowserOSConnectFlow")
+			const { launchPersonalBrowser } = await import("../browser/kilocode/BrowserLauncher")
+			let refused = false
+			const setup = await connectBrowserOSForTask({
+				isCurrent,
+				connect: () => this.prepareSelectedBrowserOSConnection(serverName, existing?.server.source),
+				launch: async () => {
+					const launched = await launchPersonalBrowser("browseros", isCurrent)
+					if (!launched) this.browserOSDeclinedCallers.add(caller)
+					return launched
+				},
+				progress: async () => undefined,
+				grant: async (connection) => {
+					const selected = this.findConnection(connection.serverName, connection.source)
+					if (selected && this.browserOSAccess.hasAccess(selected)) return
+					const allow = t("mcp:browserOS.allow")
+					const confirm = async () => {
+						if (!isCurrent()) return false
+						const answer = await vscode.window.showWarningMessage(
+							t(
+								this.browserOSAccess.getStatus() === "paused"
+									? "mcp:browserOS.resumePermission"
+									: "mcp:browserOS.permissionTaskActions",
+								{ serverName: connection.serverName },
+							),
+							{ modal: true },
+							allow,
+						)
+						if (answer !== allow) {
+							refused = true
+							this.browserOSDeclinedCallers.add(caller)
+						}
+						return answer === allow && isCurrent()
+					}
+					if (this.browserOSAccess.getStatus() === "paused") {
+						if (!selected || !this.browserOSAccess.isPausedConnection(selected))
+							throw new Error("Another browser connection is paused; disconnect it before switching")
+						if (await confirm()) {
+							if (
+								this.findConnection(connection.serverName, connection.source) !== selected ||
+								!this.browserOSAccess.isPausedConnection(selected)
+							)
+								throw new Error("Paused browser connection changed during confirmation")
+							this.browserOSAccess.resume()
+						}
+						return
+					}
+					await this.grantBrowserOSAccess(connection.serverName, confirm, connection.source, true)
+				},
+			})
+			return !!setup && !refused && isCurrent() && this.browserOSAccess.getStatus() === "active"
+		})()
+		try {
+			return await this.browserOSPreparation
+		} catch (error) {
+			if (this.browserOSDeclinedCallers.has(caller)) return false
+			throw error
+		} finally {
+			this.browserOSPreparation = undefined
+		}
+	}
+	// kilocode_change end
 	private disposables: vscode.Disposable[] = []
 	private settingsWatcher?: vscode.FileSystemWatcher
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
@@ -899,7 +1036,15 @@ export class McpHub {
 			// If existing is project and current is global, keep existing (project wins)
 		}
 
-		return Array.from(serversByName.values())
+		// kilocode_change start: advertise browser tools/instructions only for the selected browser.
+		// Keep all connections in settings and retain execution-time guards for stale model calls.
+		const browserMode = this.providerRef.deref()?.context.globalState.get("browserMode")
+		return Array.from(serversByName.values()).filter((server) => {
+			if (browserMode === "browseros") return true
+			const connection = this.connections.find((candidate) => candidate.server === server)
+			return !connection || !this.isBrowserOSConnection(connection)
+		})
+		// kilocode_change end
 	}
 
 	getAllServers(): McpServer[] {
@@ -1120,6 +1265,12 @@ export class McpHub {
 		config: z.infer<typeof ServerConfigSchema>,
 		source: "global" | "project" = "global",
 	): Promise<void> {
+		// kilocode_change: browser control endpoints must stay local.
+		if (config.browserOS || name === "browseros-neo") {
+			if (config.type !== "streamable-http" || !config.url)
+				throw new Error("BrowserOS requires a Streamable HTTP connection")
+			this.browserOSOrigins.add(this.browserOrigin(validateBrowserOSEndpoint(config.url)))
+		}
 		// Remove existing connection if it exists with the same source
 		await this.deleteConnection(name, source)
 
@@ -1269,6 +1420,9 @@ export class McpHub {
 				transport.onerror = async (error) => {
 					console.error(`Transport error for "${name}" (streamable-http):`, error)
 					const connection = this.findConnection(name, source)
+					// kilocode_change: late events from replaced transports cannot affect a new grant.
+					if (!connection || connection.transport !== transport) return
+					this.browserOSAccess.revokeConnection(connection) // kilocode_change
 					if (connection) {
 						connection.server.status = "disconnected"
 						this.appendErrorMessage(connection, error instanceof Error ? error.message : `${error}`)
@@ -1280,9 +1434,10 @@ export class McpHub {
 
 				transport.onclose = async () => {
 					const connection = this.findConnection(name, source)
-					if (connection) {
-						connection.server.status = "disconnected"
-					}
+					// kilocode_change: reconnecting requires a new explicit browser grant.
+					if (!connection || connection.transport !== transport) return
+					this.browserOSAccess.revokeConnection(connection) // kilocode_change
+					connection.server.status = "disconnected"
 					await this.notifyWebviewOfServerChanges()
 					// kilocode_change - Schedule auto-reconnect on close
 					this.scheduleReconnect(name, source)
@@ -1672,6 +1827,13 @@ export class McpHub {
 	}
 
 	async deleteConnection(name: string, source?: "global" | "project"): Promise<void> {
+		// kilocode_change: replacement connections must acquire a new browser grant.
+		if (
+			this.connections.some(
+				(connection) => connection.server.name === name && this.isBrowserOSConnection(connection),
+			)
+		)
+			this.browserOSAccess.revoke()
 		// Clean up file watchers for this server
 		this.removeFileWatchersForServer(name)
 
@@ -2171,6 +2333,7 @@ export class McpHub {
 		serverName: string,
 		configUpdate: Record<string, any>,
 		source: "global" | "project" = "global",
+		validateCurrent?: (entry: unknown) => void, // kilocode_change: validate automatic setup after re-reading
 	): Promise<void> {
 		// Determine which config file to update
 		let configPath: string
@@ -2205,6 +2368,7 @@ export class McpHub {
 			config.mcpServers = {}
 		}
 
+		validateCurrent?.(config.mcpServers[serverName]) // kilocode_change
 		if (!config.mcpServers[serverName]) {
 			config.mcpServers[serverName] = {}
 		}
@@ -2224,6 +2388,7 @@ export class McpHub {
 
 		// Write the entire config back
 		const updatedConfig = {
+			...config, // kilocode_change: retain unrelated top-level settings
 			mcpServers: config.mcpServers,
 		}
 
@@ -2233,7 +2398,17 @@ export class McpHub {
 		}
 		this.isProgrammaticUpdate = true
 		try {
-			await safeWriteJson(configPath, updatedConfig)
+			// kilocode_change start: browser setup must not overwrite another IDE's intervening update.
+			if (validateCurrent) {
+				await safeWriteJson(configPath, updatedConfig, async () => {
+					const latest = await fs.readFile(configPath, "utf-8")
+					if (latest !== content) throw new Error("MCP settings changed during setup. Retry the connection.")
+					validateCurrent(JSON.parse(latest).mcpServers?.[serverName])
+				})
+			} else {
+				await safeWriteJson(configPath, updatedConfig)
+			}
+			// kilocode_change end
 		} finally {
 			// Reset flag after watcher debounce period (non-blocking)
 			this.flagResetTimer = setTimeout(() => {
@@ -2333,7 +2508,326 @@ export class McpHub {
 		}
 	}
 
-	async readResource(serverName: string, uri: string, source?: "global" | "project"): Promise<McpResourceResponse> {
+	// kilocode_change start: selecting the BrowserOS mode configures the built-in server without manual editing.
+	/**
+	 * Finds the MCP server the installed BrowserOS browser publishes, stores it in the global MCP
+	 * settings and connects it. Never grants page control: that stays a separate per-task decision.
+	 */
+	async ensureBrowserOSConnection(): Promise<BrowserOSSetupResult> {
+		// One setup at a time: concurrent settings writes would race on the same file.
+		if (!this.browserOSSetup) {
+			this.browserOSSetup = this.setupBrowserOSConnection().finally(() => {
+				this.browserOSSetup = undefined
+			})
+		}
+		return this.browserOSSetup
+	}
+
+	private async setupBrowserOSConnection(): Promise<BrowserOSSetupResult> {
+		if (
+			vscode.env?.remoteName ||
+			process.env.AGENT_CONFIG ||
+			process.env.SSH_CONNECTION ||
+			process.env.CODE_SERVER === "true"
+		)
+			throw new Error("Automatic BrowserOS connection requires a local desktop IDE host")
+		const provider = this.providerRef.deref()
+		const assertCurrent = () => {
+			if (this.isDisposed || !provider || provider.context.globalState.get("browserMode") !== "browseros")
+				throw new Error(
+					"Select and save the BrowserOS browser mode first; the setup request is no longer active",
+				)
+		}
+		assertCurrent()
+		if (!(await this.isMcpEnabled())) throw new Error("Enable MCP to use the BrowserOS browser")
+
+		const settingsPath = await this.getMcpSettingsFilePath()
+		const servers = await this.readServerEntries(settingsPath)
+		const serverName =
+			Object.keys(servers).find((name) => name === BROWSEROS_SERVER_NAME) ??
+			Object.keys(servers).find((name) => servers[name]?.browserOS === true) ??
+			BROWSEROS_SERVER_NAME
+		const existing = servers[serverName]
+		if (existing?.disabled === true)
+			throw new Error("The BrowserOS MCP connection is disabled. Enable it explicitly before connecting.")
+
+		const projectServers = await this.readProjectServerEntries()
+		if (projectServers[serverName])
+			throw new Error(
+				`A project MCP server is also named "${serverName}". Rename it so the browser connection stays unambiguous.`,
+			)
+
+		const changes: string[] = []
+		const endpoint = await this.resolveBrowserOSEndpoint(existing?.url)
+		assertCurrent()
+		const desired = {
+			type: "streamable-http",
+			url: endpoint,
+			browserOS: true,
+			disabled: false,
+			// The local browser proxy has no OAuth provider: probing one only produces noise.
+			oauth: { ...(existing?.oauth ?? {}), disabled: true },
+		}
+		if (!existing) changes.push("created")
+		else {
+			if (existing.url !== endpoint) changes.push("endpoint")
+			if (existing.type !== desired.type) changes.push("transport")
+			if (existing.browserOS !== true) changes.push("policy")
+			if (existing.oauth?.disabled !== true) changes.push("oauth")
+		}
+
+		if (changes.length > 0) {
+			await this.updateServerConfig(serverName, desired, "global", (entry) => {
+				assertCurrent()
+				if (JSON.stringify(entry) !== JSON.stringify(existing))
+					throw new Error("BrowserOS settings changed during discovery. Retry the connection.")
+			})
+		}
+		assertCurrent()
+
+		const connection = this.findConnection(serverName, "global")
+		if (
+			changes.length > 0 ||
+			!connection ||
+			connection.type !== "connected" ||
+			connection.server.status !== "connected"
+		) {
+			// A fresh grant must never survive a reconnect of the underlying transport.
+			this.browserOSAccess.revoke()
+			const config = this.validateServerConfig({ ...(existing ?? {}), ...desired }, serverName) as z.infer<
+				typeof ServerConfigSchema
+			>
+			await this.connectToServer(serverName, config, "global")
+			if (this.isDisposed || provider?.context.globalState.get("browserMode") !== "browseros") {
+				await this.deleteConnection(serverName, "global")
+				assertCurrent()
+			}
+			await this.notifyWebviewOfServerChanges()
+		}
+
+		assertCurrent()
+		const current = this.findConnection(serverName, "global")
+		if (
+			!current ||
+			current.type !== "connected" ||
+			current.server.status !== "connected" ||
+			current.server.disabled
+		)
+			throw new Error(current?.server.error || "BrowserOS did not accept the MCP connection")
+		return { serverName, source: "global", endpoint, changes, status: current.server.status }
+	}
+
+	private async readServerEntries(settingsPath: string): Promise<Record<string, any>> {
+		try {
+			const parsed = JSON.parse(await fs.readFile(settingsPath, "utf-8"))
+			const servers = parsed?.mcpServers
+			return servers && typeof servers === "object" ? servers : {}
+		} catch (error) {
+			console.error("Cannot read MCP settings for the browser connection:", error)
+			throw new Error("The MCP settings file is not readable or contains invalid JSON")
+		}
+	}
+
+	private async readProjectServerEntries(): Promise<Record<string, any>> {
+		const projectPath = await this.getProjectMcpPath()
+		if (!projectPath) return {}
+		try {
+			const parsed = JSON.parse(await fs.readFile(projectPath, "utf-8"))
+			const servers = parsed?.mcpServers
+			return servers && typeof servers === "object" ? servers : {}
+		} catch (error) {
+			// A broken project file must not silently widen the browser policy.
+			console.error("Cannot read the project MCP configuration:", error)
+			throw new Error("The project MCP configuration is not readable or contains invalid JSON")
+		}
+	}
+
+	private async resolveBrowserOSEndpoint(configured?: unknown): Promise<string> {
+		if (typeof configured === "string" && configured.length > 0) {
+			try {
+				// Keep an address the user already relies on when the browser answers on it.
+				const endpoint = validateBrowserOSEndpoint(configured)
+				await probeBrowserOSEndpoint(endpoint)
+				return endpoint
+			} catch (error) {
+				console.error("Configured BrowserOS endpoint unusable, falling back to discovery:", error)
+			}
+		}
+		return discoverBrowserOSEndpoint()
+	}
+	// kilocode_change end
+
+	// kilocode_change: explicitly selected advanced connections must never be silently replaced.
+	async prepareSelectedBrowserOSConnection(serverName?: string, source?: "global" | "project") {
+		if (this.isDisposed || this.providerRef.deref()?.context.globalState.get("browserMode") !== "browseros")
+			throw new Error("Select BrowserOS mode before connecting")
+		if (!(await this.isMcpEnabled())) throw new Error("Enable MCP to use the BrowserOS browser")
+		if (!serverName || (serverName === BROWSEROS_SERVER_NAME && source !== "project"))
+			return this.ensureBrowserOSConnection()
+		let connection = this.findConnection(serverName, source)
+		if (!connection || !this.isBrowserOSConnection(connection) || connection.server.disabled)
+			throw new Error("Select an enabled BrowserOS connection")
+		if (this.findConnection(serverName) !== connection) throw new Error("Selected BrowserOS connection is shadowed")
+		if (connection.server.status !== "connected") {
+			await this.restartConnection(serverName, source)
+			connection = this.findConnection(serverName, source)
+		}
+		if (!connection || connection.type !== "connected" || connection.server.status !== "connected")
+			throw new Error("Selected BrowserOS connection is unavailable")
+		return {
+			serverName,
+			source: connection.server.source ?? "global",
+			changes: [],
+			endpoint: validateBrowserOSEndpoint(JSON.parse(connection.server.config).url),
+			status: "connected",
+		}
+	}
+
+	// kilocode_change: task consent skips only ordinary browser prompts, never the execution guard.
+	canAutoApproveBrowserOSTool(
+		serverName: string,
+		toolName: string,
+		args: Record<string, unknown> | undefined,
+		owner: object,
+	): boolean {
+		const provider = this.providerRef.deref()
+		const connection = this.findConnection(serverName)
+		if (
+			!provider ||
+			provider.getCurrentTask() !== owner ||
+			provider.context.globalState.get("browserMode") !== "browseros" ||
+			!connection ||
+			connection.type !== "connected" ||
+			connection.server.status !== "connected" ||
+			connection.server.disabled ||
+			!this.browserOSAccess.canApproveTaskAction(owner, connection)
+		)
+			return false
+		if (!["tabs", "snapshot", "screenshot", "navigate", "act", "diff", "read", "grep", "wait"].includes(toolName))
+			return false
+		try {
+			return this.isBrowserOSConnection(connection) && browserOSOperation(toolName, args).kind !== "unsupported"
+		} catch {
+			// Invalid arguments still require normal validation and must not broaden approval.
+			return false
+		}
+	}
+
+	// kilocode_change start: trusted UI grants access independently of tool auto-approval.
+	async grantBrowserOSAccess(
+		serverName: string,
+		confirm: () => Promise<boolean>,
+		source?: "global" | "project",
+		allowTaskActions = false,
+	): Promise<void> {
+		const connection = this.findConnection(serverName, source)
+		const provider = this.providerRef.deref()
+		if (
+			!connection ||
+			connection.type !== "connected" ||
+			connection.server.disabled ||
+			!this.isBrowserOSConnection(connection)
+		)
+			throw new Error("Select a connected BrowserOS MCP server")
+		const browserConfig = JSON.parse(connection.server.config)
+		if (browserConfig.type !== "streamable-http") throw new Error("BrowserOS requires a Streamable HTTP connection")
+		validateBrowserOSEndpoint(browserConfig.url)
+		if (this.findConnection(serverName) !== connection)
+			throw new Error("This BrowserOS connection is shadowed by a project server. Use unique MCP server names.")
+		if (!provider || this.isDisposed || provider.context.globalState.get("browserMode") !== "browseros")
+			throw new Error("Select BrowserOS mode before granting access")
+		await this.browserOSAccess.acquire(
+			provider,
+			connection,
+			async () => {
+				const approved = await confirm()
+				if (
+					this.isDisposed ||
+					this.findConnection(serverName, source) !== connection ||
+					this.findConnection(serverName) !== connection ||
+					provider.context.globalState.get("browserMode") !== "browseros"
+				)
+					return false
+				return approved
+			},
+			allowTaskActions,
+		)
+	}
+	// kilocode_change end
+
+	// kilocode_change start: one policy covers direct MCP tools and resources.
+	private browserOrigin(value: string): string {
+		const url = new URL(value)
+		// All local aliases on the same port belong to the protected browser service.
+		if (["localhost", "[::1]", "127.0.0.1"].includes(url.hostname)) url.hostname = "127.0.0.1"
+		return url.origin
+	}
+
+	private isBrowserOSConnection(connection: McpConnection): boolean {
+		try {
+			// Discover marked peers before evaluating an unmarked alias, regardless of call order.
+			for (const peer of this.connections) {
+				const config = JSON.parse(peer.server.config)
+				if ((peer.server.name === "browseros-neo" || config.browserOS === true) && config.url)
+					this.browserOSOrigins.add(this.browserOrigin(config.url))
+			}
+			const config = JSON.parse(connection.server.config)
+			return (
+				connection.server.name === "browseros-neo" ||
+				config.browserOS === true ||
+				(typeof config.url === "string" && this.browserOSOrigins.has(this.browserOrigin(config.url)))
+			)
+		} catch (error) {
+			console.error("Cannot determine MCP browser policy:", error)
+			throw new Error("Invalid MCP connection configuration")
+		}
+	}
+
+	private async withBrowserOSAccess<T>(
+		connection: ConnectedMcpConnection,
+		observation: BrowserOSOperation,
+		request: () => Promise<T>,
+		caller?: object,
+	): Promise<T> {
+		if (!this.isBrowserOSConnection(connection)) return request()
+		const provider = this.providerRef.deref()
+		if (!caller || !provider || provider.getCurrentTask() !== caller)
+			throw new Error("BrowserOS requires the current calling task instance")
+		const checkContext = () => {
+			if (
+				this.isDisposed ||
+				provider.getCurrentTask() !== caller ||
+				provider.getCurrentTask()?.abandoned === true
+			) {
+				this.browserOSAccess.endTask(caller)
+				throw new Error("BrowserOS caller changed; stale request or result discarded")
+			}
+			if (
+				provider.context.globalState.get("browserMode") !== "browseros" ||
+				!this.connections.includes(connection) ||
+				connection.server.disabled ||
+				connection.server.status !== "connected"
+			) {
+				this.browserOSAccess.revoke()
+				throw new Error("BrowserOS task, mode or connection changed; request or result discarded")
+			}
+		}
+		checkContext()
+		return this.browserOSAccess.execute(caller, connection, observation, async () => {
+			checkContext()
+			const result = await request()
+			checkContext()
+			return result
+		})
+	}
+	// kilocode_change end
+
+	async readResource(
+		serverName: string,
+		uri: string,
+		source?: "global" | "project",
+		caller?: object, // kilocode_change: task identity is never supplied by the model.
+	): Promise<McpResourceResponse> {
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
 			throw new Error(`No connection found for server: ${serverName}${source ? ` with source ${source}` : ""}`)
@@ -2341,15 +2835,19 @@ export class McpHub {
 		if (connection.server.disabled) {
 			throw new Error(`Server "${serverName}" is disabled`)
 		}
-		return await connection.client.request(
-			{
-				method: "resources/read",
-				params: {
-					uri,
-				},
-			},
-			ReadResourceResultSchema,
-		)
+		return this.withBrowserOSAccess(
+			connection,
+			{ kind: "unsupported" },
+			() =>
+				connection.client.request(
+					{
+						method: "resources/read",
+						params: { uri },
+					},
+					ReadResourceResultSchema,
+				),
+			caller,
+		) // kilocode_change
 	}
 
 	async callTool(
@@ -2357,6 +2855,7 @@ export class McpHub {
 		toolName: string,
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
+		caller?: object, // kilocode_change: task identity is never supplied by the model.
 	): Promise<McpToolCallResponse> {
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
@@ -2378,19 +2877,34 @@ export class McpHub {
 			timeout = 60 * 1000
 		}
 
-		return await connection.client.request(
-			{
-				method: "tools/call",
-				params: {
-					name: toolName,
-					arguments: toolArguments,
-				},
-			},
-			CallToolResultSchema,
-			{
-				timeout,
-			},
-		)
+		// kilocode_change: freeze arguments before queueing so the observed target cannot change while waiting.
+		const browserConnection = this.isBrowserOSConnection(connection)
+		const browserArguments = browserConnection ? structuredClone(toolArguments ?? {}) : undefined
+		const observation: BrowserOSOperation = browserConnection
+			? browserOSOperation(toolName, browserArguments)
+			: { kind: "unsupported" }
+		return this.withBrowserOSAccess(
+			connection,
+			observation,
+			() =>
+				connection.client.request(
+					{
+						method: "tools/call",
+						params: {
+							name: toolName,
+							// kilocode_change: inject the private handle only inside the authorized queue.
+							arguments: browserConnection
+								? this.browserOSAccess.toolArguments(browserArguments)
+								: toolArguments,
+						},
+					},
+					CallToolResultSchema,
+					{
+						timeout,
+					},
+				),
+			caller,
+		) // kilocode_change
 	}
 
 	/**
@@ -2572,6 +3086,7 @@ export class McpHub {
 	}
 
 	async dispose(): Promise<void> {
+		this.browserOSAccess.revoke() // kilocode_change
 		// Prevent multiple disposals
 		if (this.isDisposed) {
 			return

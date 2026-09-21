@@ -3,10 +3,14 @@
 import * as path from "path"
 import { BrowserSession } from "../BrowserSession"
 import { discoverChromeHostUrl, tryChromeHostUrl } from "../browserDiscovery"
+import { chromeConnector } from "../kilocode/ChromeConnector" // kilocode_change
+import * as vscode from "vscode" // kilocode_change
+import { t } from "../../../i18n" // kilocode_change
 
 // Mock dependencies
 vi.mock("vscode", () => ({
 	ExtensionContext: vi.fn(),
+	window: { showWarningMessage: vi.fn() }, // kilocode_change
 	Uri: {
 		file: vi.fn((path) => ({ fsPath: path })),
 	},
@@ -104,6 +108,102 @@ describe("BrowserSession", () => {
 		// Create browser session
 		browserSession = new BrowserSession(mockContext)
 	})
+
+	// kilocode_change start: imported settings cannot silently retain personal browser control.
+	it.each([true, false])("requests Chrome resume on invocation and respects refusal (%s)", async (approved) => {
+		mockContext.globalState.get.mockReturnValue("chrome-extension")
+		;(browserSession as any).usingChromeConnector = true
+		let status: "paused" | "active" = "paused"
+		const getStatus = vi.spyOn(chromeConnector, "getStatus").mockImplementation(() => status)
+		const resume = vi.spyOn(chromeConnector, "resume").mockImplementation(async (confirm, isCurrent) => {
+			if (await confirm()) {
+				expect(isCurrent()).toBe(true)
+				status = "active"
+			}
+		})
+		const action = vi.spyOn(chromeConnector, "action").mockResolvedValue({
+			screenshot: "data:image/png;base64,YQ==",
+			currentUrl: "https://example.com",
+			viewportWidth: 900,
+			viewportHeight: 600,
+		})
+		vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+			(approved ? t("mcp:browserOS.allow") : undefined) as never,
+		)
+		try {
+			if (approved) {
+				await browserSession.snapshot()
+				expect(action).toHaveBeenCalledOnce()
+			} else {
+				await expect(browserSession.snapshot()).rejects.toThrow("remains paused")
+				await expect(browserSession.snapshot()).rejects.toThrow("declined")
+				expect(action).not.toHaveBeenCalled()
+			}
+			expect(resume).toHaveBeenCalledOnce()
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce()
+		} finally {
+			getStatus.mockRestore()
+			resume.mockRestore()
+			action.mockRestore()
+		}
+	})
+
+	it.each(["permission", "action"])("discards Chrome access when mode changes during %s", async (phase) => {
+		let mode = "chrome-extension"
+		mockContext.globalState.get.mockImplementation((key: string) => (key === "browserMode" ? mode : undefined))
+		const acquire = vi.spyOn(chromeConnector, "acquire").mockImplementation(async () => {
+			if (phase === "permission") mode = "isolated"
+		})
+		const release = vi.spyOn(chromeConnector, "release").mockResolvedValue(undefined)
+		const action = vi.spyOn(chromeConnector, "action").mockImplementation(async () => {
+			mode = "isolated"
+			return {
+				screenshot: "data:image/png;base64,YQ==",
+				currentUrl: "https://example.com",
+				viewportWidth: 900,
+				viewportHeight: 600,
+			}
+		})
+		try {
+			if (phase === "permission") {
+				await expect(browserSession.launchBrowser("https://example.com")).rejects.toThrow(
+					"waiting for permission",
+				)
+				expect(action).not.toHaveBeenCalled()
+			} else {
+				await browserSession.launchBrowser("https://example.com")
+				await expect(browserSession.snapshot()).rejects.toThrow("result discarded")
+			}
+			expect(release).toHaveBeenCalledOnce()
+			expect(browserSession.isSessionActive()).toBe(false)
+		} finally {
+			acquire.mockRestore()
+			release.mockRestore()
+			action.mockRestore()
+		}
+	})
+
+	it("releases personal Chrome before an action after the saved mode changes", async () => {
+		let mode = "chrome-extension"
+		mockContext.globalState.get.mockImplementation((key: string) => (key === "browserMode" ? mode : undefined))
+		const acquire = vi.spyOn(chromeConnector, "acquire").mockResolvedValue(undefined)
+		const release = vi.spyOn(chromeConnector, "release").mockResolvedValue(undefined)
+		const action = vi.spyOn(chromeConnector, "action")
+		try {
+			await browserSession.launchBrowser("https://example.com")
+			mode = "isolated"
+			await expect(browserSession.snapshot()).rejects.toThrow("Browser mode changed")
+			expect(release).toHaveBeenCalledOnce()
+			expect(action).not.toHaveBeenCalled()
+			const puppeteer = await import("puppeteer-core")
+			expect(puppeteer.launch).not.toHaveBeenCalled()
+		} finally {
+			acquire.mockRestore()
+			release.mockRestore()
+			action.mockRestore()
+		}
+	})
+	// kilocode_change end
 
 	describe("Remote browser disabled", () => {
 		it("should launch a local browser when remote browser is disabled", async () => {

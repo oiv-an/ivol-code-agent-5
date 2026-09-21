@@ -8,7 +8,16 @@ import { createProviderFetch } from "../utils/provider-tls" // kilocode_change
 const CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
 const CATALOG_TIMEOUT_MS = 30_000
 
-const supportedReasoningEfforts = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const)
+const supportedReasoningEfforts = new Set([
+	"none",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+	"ultra",
+] as const) // kilocode_change
 
 type SupportedReasoningEffort = typeof supportedReasoningEfforts extends Set<infer T> ? T : never
 

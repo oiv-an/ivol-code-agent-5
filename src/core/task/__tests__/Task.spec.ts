@@ -2402,6 +2402,31 @@ describe("Cline", () => {
 				expect(() => task.cancelCurrentRequest()).not.toThrow()
 			})
 
+			// kilocode_change start: asynchronous browser teardown must not leak an unhandled rejection.
+			it("should handle an asynchronous browser cleanup failure during dispose", async () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+					context: mockExtensionContext,
+				})
+				const failure = new Error("Browser disconnected during cleanup")
+				const closeSpy = vi.spyOn(task.browserSession, "closeBrowser").mockRejectedValueOnce(failure)
+				const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+				try {
+					expect(() => task.dispose()).not.toThrow()
+					await vi.waitFor(() =>
+						expect(errorSpy).toHaveBeenCalledWith("Error closing browser session:", failure),
+					)
+					expect(closeSpy).toHaveBeenCalledOnce()
+				} finally {
+					closeSpy.mockRestore()
+					errorSpy.mockRestore()
+				}
+			})
+			// kilocode_change end
+
 			it("should be called during dispose", () => {
 				const task = new Task({
 					provider: mockProvider,

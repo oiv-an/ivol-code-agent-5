@@ -553,6 +553,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 					browserViewportSize: browserViewportSize ?? "900x600",
 					remoteBrowserHost: remoteBrowserEnabled ? remoteBrowserHost : undefined,
 					remoteBrowserEnabled: remoteBrowserEnabled ?? false,
+					browserMode: cachedState.browserMode, // kilocode_change
+					browserOSAllowTaskActions: cachedState.browserOSAllowTaskActions, // kilocode_change
 					fuzzyMatchThreshold: fuzzyMatchThreshold ?? 1.0,
 					writeDelayMs,
 					screenshotQuality: screenshotQuality ?? 75,
@@ -1141,6 +1143,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 								screenshotQuality={screenshotQuality}
 								remoteBrowserHost={remoteBrowserHost}
 								remoteBrowserEnabled={remoteBrowserEnabled}
+								browserMode={cachedState.browserMode} // kilocode_change
+								browserOSAllowTaskActions={cachedState.browserOSAllowTaskActions} // kilocode_change
 								setCachedStateField={setCachedStateField}
 							/>
 						)}

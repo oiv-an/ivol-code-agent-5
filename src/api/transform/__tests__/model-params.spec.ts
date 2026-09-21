@@ -29,6 +29,31 @@ describe("getModelParams", () => {
 		format: "openrouter" as const,
 	}
 
+	// kilocode_change start: explicit Ultra must survive stale or absent catalogs.
+	it.each([undefined, false, ["low", "high"]] as const)(
+		"preserves explicit ultra with capability %j",
+		(capability) => {
+			const result = getModelParams({
+				...openaiParams,
+				model: { ...baseModel, supportsReasoningEffort: capability ? [...capability] : capability },
+				settings: { enableReasoningEffort: true, reasoningEffort: "ultra" },
+			})
+			expect(result.reasoningEffort).toBe("ultra")
+			expect(result.reasoning).toEqual({ reasoning_effort: "ultra" })
+		},
+	)
+
+	it("omits disabled ultra", () => {
+		const result = getModelParams({
+			...openaiParams,
+			model: { ...baseModel, supportsReasoningEffort: true },
+			settings: { enableReasoningEffort: false, reasoningEffort: "ultra" },
+		})
+		expect(result.reasoningEffort).toBeUndefined()
+		expect(result.reasoning).toBeUndefined()
+	})
+	// kilocode_change end
+
 	describe("Basic functionality", () => {
 		it("should return default values when no custom values are provided", () => {
 			const result = getModelParams({

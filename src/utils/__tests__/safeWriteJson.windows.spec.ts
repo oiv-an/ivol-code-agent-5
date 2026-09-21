@@ -67,6 +67,26 @@ describe("safeWriteJson Windows file synchronization", () => {
 		return { handles, injectedError }
 	}
 
+	// kilocode_change start: reject stale browser configuration under the shared file lock.
+	it("validates under the write lock and preserves the file when validation fails", async () => {
+		const previous = { mcpServers: { team: { command: "node" } } }
+		await fs.writeFile(filePath, JSON.stringify(previous))
+		vi.spyOn(console, "error").mockImplementation(() => undefined)
+		await expect(
+			safeWriteJson(filePath, {}, async () => {
+				expect(await fs.stat(`${filePath}.lock`)).toBeDefined()
+				expect(JSON.parse(await fs.readFile(filePath, "utf8"))).toEqual(previous)
+				throw new Error("Settings changed")
+			}),
+		).rejects.toThrow("Settings changed")
+		expect(JSON.parse(await fs.readFile(filePath, "utf8"))).toEqual(previous)
+		expect(await fs.readdir(tempDir)).toEqual([path.basename(filePath)])
+		await safeWriteJson(filePath, previous, async () => {
+			expect(await fs.stat(`${filePath}.lock`)).toBeDefined()
+		})
+	})
+	// kilocode_change end
+
 	test.each([false, true])("saves history with writable handles (existing history: %s)", async (exists) => {
 		const previousHistory = [{ role: "user", content: "Previous task message" }]
 		const nextHistory = [...previousHistory, { role: "assistant", content: "Saved response" }]

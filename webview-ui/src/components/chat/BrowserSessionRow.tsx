@@ -71,6 +71,14 @@ const getBrowserActionText = (
 			return t("chat:browser.actions.resized", {
 				size: typeof size === "string" ? size.split(/[x,]/).join(" x ") : String(size || ""), // kilocode_change
 			})
+		case "open_application": // kilocode_change
+			return t("chat:browser.actions.openApplication")
+		case "create_tab": // kilocode_change
+			return t("chat:browser.actions.createTab", { url: text })
+		case "select_tab": // kilocode_change
+			return t("chat:browser.actions.selectedTab", { id: text })
+		case "snapshot": // kilocode_change
+			return t("chat:browser.screenshot")
 		case "screenshot":
 			return t("chat:browser.actions.screenshotSaved")
 		case "close":
@@ -97,6 +105,7 @@ const getActionIcon = (action: BrowserAction) => {
 			return <Check className="w-4 h-4 opacity-80" />
 		case "resize":
 			return <Maximize2 className="w-4 h-4 opacity-80" />
+		case "snapshot": // kilocode_change
 		case "screenshot":
 			return <Camera className="w-4 h-4 opacity-80" />
 		case "hover":

@@ -668,13 +668,13 @@ describe("OpenAiHandler", () => {
 		})
 
 		// kilocode_change start: gate API-level max reasoning by the actual Chat Completions model
-		it("should include API max reasoning effort for a non-streaming GPT-5.6 request", async () => {
+		it.each(["max", "ultra"] as const)("includes literal %s effort in a non-streaming request", async (effort) => {
 			const reasoningHandler = new OpenAiHandler({
 				...mockOptions,
 				openAiModelId: "gpt-5.6-sol",
 				openAiStreamingEnabled: false,
 				enableReasoningEffort: true,
-				reasoningEffort: "max",
+				reasoningEffort: effort,
 				openAiCustomModelInfo: {
 					contextWindow: 128_000,
 					supportsPromptCache: false,
@@ -684,7 +684,7 @@ describe("OpenAiHandler", () => {
 			for await (const _chunk of reasoningHandler.createMessage(systemPrompt, messages)) {
 			}
 
-			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe("max")
+			expect(mockCreate.mock.calls[0][0].reasoning_effort).toBe(effort)
 		})
 
 		it("should fall back from max to xhigh for an unsupported streaming model", async () => {

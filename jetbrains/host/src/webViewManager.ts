@@ -32,7 +32,7 @@ class SimpleWebview {
 	}
 
 	postMessage(message: any, transfer?: readonly VSBuffer[]): Promise<boolean> {
-		console.log("[SimpleWebview] Post message:", message)
+		console.log("[SimpleWebview] Post message (payload omitted)")
 		return Promise.resolve(true)
 	}
 
@@ -140,7 +140,7 @@ export class WebViewManager implements MainThreadWebviewViewsShape, MainThreadWe
 	}
 
 	$postMessage(handle: string, value: string, ...buffers: VSBuffer[]): Promise<boolean> {
-		console.log("Post message to webview:", { handle, value, buffers })
+		console.log("Post message to webview:", { handle, payloadLength: value.length, bufferCount: buffers.length })
 		const webview = this._webviews.get(handle)
 		if (webview) {
 			return webview.postMessage(value, buffers)

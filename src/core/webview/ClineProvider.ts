@@ -258,6 +258,12 @@ export class ClineProvider
 					SessionManager.init()?.doSync(true)
 				})
 
+				// kilocode_change start: end stale BrowserOS work without revoking host-scoped consent.
+				this.getMcpHub()?.browserOSAccess?.endTask(instance)
+				void instance.browserSession?.disposeTask?.().catch((error) => {
+					this.log(`Failed to clean up browser task: ${error}`)
+				})
+				// kilocode_change end
 				// kilocode_change start: remind the user later if they walked away
 				this.scheduleIdleCompletionReminder()
 				// kilocode_change end
@@ -2539,6 +2545,10 @@ export class ClineProvider
 			browserViewportSize: browserViewportSize ?? "900x600",
 			screenshotQuality: screenshotQuality ?? 75,
 			remoteBrowserHost,
+			browserMode: this.contextProxy.getGlobalState("browserMode"), // kilocode_change
+			// kilocode_change start: the remembered checkbox is a preference only, never a granted permission.
+			browserOSAllowTaskActions: this.contextProxy.getGlobalState("browserOSAllowTaskActions") ?? false,
+			// kilocode_change end
 			remoteBrowserEnabled: remoteBrowserEnabled ?? false,
 			cachedChromeHostUrl: cachedChromeHostUrl,
 			writeDelayMs: writeDelayMs ?? DEFAULT_WRITE_DELAY_MS,
@@ -2863,6 +2873,8 @@ export class ClineProvider
 			browserViewportSize: stateValues.browserViewportSize ?? "900x600",
 			screenshotQuality: stateValues.screenshotQuality ?? 75,
 			remoteBrowserHost: stateValues.remoteBrowserHost,
+			browserMode: stateValues.browserMode, // kilocode_change
+			browserOSAllowTaskActions: stateValues.browserOSAllowTaskActions ?? false, // kilocode_change
 			remoteBrowserEnabled: stateValues.remoteBrowserEnabled ?? true,
 			cachedChromeHostUrl: stateValues.cachedChromeHostUrl as string | undefined,
 			fuzzyMatchThreshold: stateValues.fuzzyMatchThreshold ?? 1.0,

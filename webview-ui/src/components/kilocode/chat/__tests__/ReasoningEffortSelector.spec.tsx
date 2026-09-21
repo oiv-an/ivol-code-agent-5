@@ -60,6 +60,26 @@ describe("ReasoningEffortSelector", () => {
 		},
 	)
 
+	it.each(["openai", "openai-responses", "openai-native", "openai-codex"] as const)(
+		"enables and saves literal ultra for %s",
+		async (apiProvider) => {
+			mount({ ...config, apiProvider, enableReasoningEffort: false })
+			await choose(effortLabel("ultra"))
+			expect(vscode.postMessage).toHaveBeenCalledWith(
+				expect.objectContaining({
+					apiConfiguration: expect.objectContaining({
+						apiProvider,
+						enableReasoningEffort: true,
+						reasoningEffort: "ultra",
+						...(["openai", "openai-responses"].includes(apiProvider)
+							? { openAiCustomModelInfo: expect.objectContaining({ reasoningEffort: "ultra" }) }
+							: {}),
+					}),
+				}),
+			)
+		},
+	)
+
 	it("clears the custom model's effort when disabling it", async () => {
 		mount()
 		await choose(effortLabel("none"))

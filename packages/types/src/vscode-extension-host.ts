@@ -225,6 +225,9 @@ export interface ExtensionMessage {
 		| "humanRelayCancel"
 		| "browserToolEnabled"
 		| "browserConnectionResult"
+		| "chromeConnectorResult" // kilocode_change
+		| "browserOSAccessResult" // kilocode_change
+		| "personalBrowserLaunchResult" // kilocode_change
 		| "providerConnectionTestResult" // kilocode_change
 		| "providerConnectionReportCopyResult" // kilocode_change
 		| "standaloneWebSearchUpdate" // kilocode_change
@@ -585,6 +588,8 @@ export type ExtensionState = Pick<
 	| "showAutoApproveMenu" // kilocode_change
 	| "hideCostBelowThreshold" // kilocode_change
 	| "screenshotQuality"
+	| "browserMode" // kilocode_change
+	| "browserOSAllowTaskActions" // kilocode_change
 	| "remoteBrowserEnabled"
 	| "cachedChromeHostUrl"
 	| "remoteBrowserHost"
@@ -920,6 +925,11 @@ export interface WebviewMessage {
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"
 		| "testBrowserConnection"
+		| "pairChromeConnector" // kilocode_change
+		| "stopChromeConnector" // kilocode_change
+		| "chromeControl" // kilocode_change: trusted UI pause/resume/status
+		| "browserOSAccess" // kilocode_change: trusted settings grant/pause/resume/revoke/status
+		| "launchPersonalBrowser" // kilocode_change: user-picked application with separate confirmation
 		| "testProviderConnection" // kilocode_change: explicit isolated test of settings draft
 		| "cancelProviderConnectionTest" // kilocode_change
 		| "copyProviderConnectionReport" // kilocode_change
@@ -1462,6 +1472,10 @@ export const browserActions = [
 	"resize",
 	"close",
 	"screenshot",
+	"snapshot", // kilocode_change: observe without writing a file
+	"select_tab", // kilocode_change: select a user-granted tab using text as its ID
+	"create_tab", // kilocode_change: request explicit Chrome approval for an additional URL
+	"open_application", // kilocode_change: separate user-picked application launch; no browser grant
 ] as const
 
 export type BrowserAction = (typeof browserActions)[number]
@@ -1477,6 +1491,8 @@ export interface ClineSayBrowserAction {
 export type BrowserActionResult = {
 	screenshot?: string
 	logs?: string
+	pageContent?: string // kilocode_change: bounded accessibility summary
+	tabs?: Array<{ id: string; url: string; active: boolean }> // kilocode_change: user-granted tabs only
 	currentUrl?: string
 	currentMousePosition?: string
 	viewportWidth?: number

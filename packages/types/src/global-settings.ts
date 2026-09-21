@@ -144,6 +144,8 @@ export const globalSettingsSchema = z.object({
 	maxDiagnosticMessages: z.number().optional(),
 
 	browserToolEnabled: z.boolean().optional(),
+	browserMode: z.enum(["isolated", "chrome-extension", "browseros"]).optional(), // kilocode_change
+	browserOSAllowTaskActions: z.boolean().optional(), // kilocode_change
 	browserViewportSize: z.string().optional(),
 	showAutoApproveMenu: z.boolean().optional(), // kilocode_change
 	showTaskTimeline: z.boolean().optional(), // kilocode_change

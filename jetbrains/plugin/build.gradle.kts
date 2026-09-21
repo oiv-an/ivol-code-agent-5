@@ -35,7 +35,8 @@ fun resolvePlatformType(code: String): IntelliJPlatformType = when (code) {
     "PS" -> IntelliJPlatformType.PhpStorm
     "IU" -> IntelliJPlatformType.IntellijIdea
     "PY" -> IntelliJPlatformType.PyCharmProfessional
-    else -> throw GradleException("Unsupported platformType '$code': use PS (PhpStorm), IU (IntelliJ IDEA), or PY (PyCharm).")
+    "WS" -> IntelliJPlatformType.WebStorm
+    else -> throw GradleException("Unsupported platformType '$code': use PS (PhpStorm), IU (IntelliJ IDEA), PY (PyCharm), or WS (WebStorm).")
 }
 
 fun resolveIdeaTarget(platformCode: String, requestedTarget: String?): String? {
@@ -46,6 +47,18 @@ fun resolveIdeaTarget(platformCode: String, requestedTarget: String?): String? {
     val target = requestedTarget ?: "2026.2"
     require(target in setOf("2026.2", "2025.3")) {
         "Unsupported ideaTarget '$target': use 2026.2 (default) or 2025.3."
+    }
+    return target
+}
+
+fun resolveWebstormTarget(platformCode: String, requestedTarget: String?): String? {
+    if (platformCode != "WS") {
+        require(requestedTarget == null) { "webstormTarget applies only to platformType=WS." }
+        return null
+    }
+    val target = requestedTarget ?: "2024.3"
+    require(target in setOf("2024.3", "2026.1")) {
+        "Unsupported webstormTarget '$target': use 2024.3 (default) or 2026.1."
     }
     return target
 }
@@ -94,14 +107,15 @@ fun pruneObsoleteInstrumentedClasses(buildDirectory: File, outputDirectory: File
     return obsolete.size
 }
 
-fun descriptorForPlatform(source: String, platformCode: String): String {
-    if (platformCode != "PY") return source
+fun descriptorForPlatform(source: String, platformCode: String, webstormTarget: String? = null): String {
+    if (platformCode != "PY" && !(platformCode == "WS" && webstormTarget != "2026.1")) return source
     val modularJcefDependency = "<depends>com.intellij.modules.jcef</depends>"
     require(source.split(modularJcefDependency).size == 2) {
         "Expected exactly one modular JCEF dependency in the shared plugin descriptor."
     }
-    // JCEF is part of the base 251 platform, not a separately declared plugin.
-    // Leave all other dependencies, plugin identity, and registrations intact.
+    // JCEF belongs to the base 243/251 platforms, not a separately declared
+    // plugin module. Leave all other dependencies, plugin identity, and
+    // registrations intact.
     return source.replace(modularJcefDependency, "")
 }
 
@@ -157,6 +171,7 @@ fun validateLocalIdeTarget(
     val knownLegacyMinimumJava = when {
         productCode == "PY" && buildParts == listOf(251, 25410, 159) && info.get("version")?.asString == "2025.1.1.1" -> 21
         productCode == "IU" && buildParts == listOf(253, 33813, 55) && info.get("version")?.asString == "2025.3.6.1" -> 21
+        productCode == "WS" && buildParts == listOf(243, 26053, 12) && info.get("version")?.asString == "2024.3.5" -> 21
         else -> null
     }
     val minimumJava = info.get("minRequiredJavaVersion")?.takeUnless { it.isJsonNull }?.asInt
@@ -173,42 +188,58 @@ val platformCode = properties("platformType").orElse("PS").get().uppercase(Local
 val selectedPlatformType = resolvePlatformType(platformCode)
 val selectedIdeaTarget = resolveIdeaTarget(platformCode, properties("ideaTarget").orNull)
 val isIdea253 = selectedIdeaTarget == "2025.3"
+val selectedWebstormTarget = resolveWebstormTarget(platformCode, properties("webstormTarget").orNull)
+val isWebstorm261 = selectedWebstormTarget == "2026.1"
+val usesBasePlatformJcef = platformCode == "PY" || (platformCode == "WS" && !isWebstorm261)
 // IU 253 already modularizes JCEF, but its callback API is still the old one.
 // Descriptor/module selection and callback source selection are independent.
-val usesLegacyCefCallbacks = platformCode == "PY" || isIdea253
+// WebStorm 243 is older still and uses the same legacy CEF callbacks.
+val usesLegacyCefCallbacks = platformCode == "PY" || platformCode == "WS" || isIdea253
 // Global gradle.properties intentionally continues to describe PS/IU 2026.2.
 // Legacy targets cannot inherit its Java 25 bytecode or compatibility range.
 // IDEA 2025.3 is deliberately pinned to the user's exact supported SDK.
 val selectedPlatformVersion = when {
+    isWebstorm261 -> providers.provider { "2026.1.5" }
     isIdea253 -> providers.provider { "2025.3.6.1" }
     platformCode == "PY" -> properties("pycharmPlatformVersion").orElse("2025.1.1.1")
+    platformCode == "WS" -> properties("webstormPlatformVersion").orElse("2024.3.5")
     else -> properties("platformVersion")
 }
 val selectedSinceBuild = when {
+    isWebstorm261 -> providers.provider { "261.27258.45" }
     isIdea253 -> providers.provider { "253.33813.55" }
     platformCode == "PY" -> properties("pycharmSinceBuild").orElse("251.25410.159")
+    platformCode == "WS" -> properties("webstormSinceBuild").orElse("243.26053.12")
     else -> properties("pluginSinceBuild")
 }
 val selectedUntilBuild = when {
+    isWebstorm261 -> providers.provider { "261.*" }
     isIdea253 -> providers.provider { "253.*" }
     platformCode == "PY" -> properties("pycharmUntilBuild").orElse("251.*")
+    platformCode == "WS" -> properties("webstormUntilBuild").orElse("243.*")
     else -> properties("pluginUntilBuild")
 }
 val selectedJavaVersion = when {
+    isWebstorm261 -> providers.provider { "21" }
     isIdea253 -> providers.provider { "21" }
     platformCode == "PY" -> properties("pycharmJavaVersion").orElse("21")
+    platformCode == "WS" -> properties("webstormJavaVersion").orElse("21")
     else -> properties("javaVersion")
 }
 val selectedBuildDirectory = when {
+    isWebstorm261 -> "build/webstorm261"
     isIdea253 -> "build/idea253"
     platformCode == "IU" -> "build/idea"
     platformCode == "PY" -> "build/pycharm"
+    platformCode == "WS" -> "build/webstorm"
     else -> "build"
 }
 val selectedArchiveClassifier = when {
+    isWebstorm261 -> "webstorm-2026.1"
     isIdea253 -> "idea-2025.3"
     platformCode == "IU" -> "idea"
     platformCode == "PY" -> "pycharm"
+    platformCode == "WS" -> "webstorm-2024.3"
     else -> null
 }
 val localIdePath = providers.gradleProperty("localIdePath").orNull
@@ -339,12 +370,13 @@ dependencies {
         }
 
         bundledPlugin("org.jetbrains.plugins.terminal")
-        if (platformCode != "PY") {
+        if (!usesBasePlatformJcef) {
             bundledModule("com.intellij.modules.jcef")
         }
-        // In 251 JBCefBrowser and CefClient already belong to app-client.jar
-        // and lib-client.jar. The separate com.intellij.modules.jcef plugin
-        // dependency exists in both the 253 and 262 SDKs.
+        // In 243 and 251 JBCefBrowser and CefClient already belong to
+        // app-client.jar and lib-client.jar. The separate
+        // com.intellij.modules.jcef plugin dependency exists in both the 253
+        // and 262 SDKs.
 
         // Plugin verifier
         pluginVerifier()
@@ -420,10 +452,10 @@ tasks {
     }
 
     val pycharmDescriptor = layout.buildDirectory.file("generated/plugin-descriptor/META-INF/plugin.xml")
-    val generatePyCharmDescriptor = if (platformCode == "PY") {
+    val generatePyCharmDescriptor = if (usesBasePlatformJcef) {
         register("generatePyCharmPluginDescriptor") {
             group = "build"
-            description = "Adapt the shared descriptor for PyCharm 251 without modifying the source descriptor."
+            description = "Adapt the shared descriptor for the base-platform JCEF targets (PyCharm 251, WebStorm 243)."
             val sourceDescriptor = layout.projectDirectory.file("src/main/resources/META-INF/plugin.xml")
             inputs.file(sourceDescriptor)
             outputs.file(pycharmDescriptor)
@@ -481,9 +513,12 @@ tasks {
             check(resolvePlatformType("PS") == IntelliJPlatformType.PhpStorm)
             check(resolvePlatformType("IU") == IntelliJPlatformType.IntellijIdea)
             check(resolvePlatformType("PY") == IntelliJPlatformType.PyCharmProfessional)
+            check(resolvePlatformType("WS") == IntelliJPlatformType.WebStorm)
             check(runCatching { resolvePlatformType("IC") }.isFailure)
             check(resolveIdeaTarget("PS", null) == null)
             check(resolveIdeaTarget("PY", null) == null)
+            check(resolveIdeaTarget("WS", null) == null)
+            check(runCatching { resolveIdeaTarget("WS", "2025.3") }.isFailure)
             check(resolveIdeaTarget("IU", null) == "2026.2")
             check(resolveIdeaTarget("IU", "2026.2") == "2026.2")
             check(resolveIdeaTarget("IU", "2025.3") == "2025.3")
@@ -540,17 +575,21 @@ tasks {
             check(runCatching { validateLocalRuntimeMetadata(nativeRuntime - "JAVA_VERSION", 21, "Mac OS X", "arm64") }.isFailure)
             validateLocalRuntimeMetadata(mapOf("JAVA_VERSION" to "25", "OS_NAME" to "Linux", "OS_ARCH" to "x86_64"), 25, "Linux", "amd64")
             val expectedOutput = when {
+                isWebstorm261 -> "build/webstorm261"
                 isIdea253 -> "build/idea253"
                 platformCode == "IU" -> "build/idea"
                 platformCode == "PY" -> "build/pycharm"
+                platformCode == "WS" -> "build/webstorm"
                 else -> "build"
             }
             check(layout.buildDirectory.get().asFile == layout.projectDirectory.dir(expectedOutput).asFile)
             val archiveName = (project.tasks.getByName("buildPlugin") as Zip).archiveFileName.get()
             val expectedSuffix = when {
+                isWebstorm261 -> "-webstorm-2026.1.zip"
                 isIdea253 -> "-idea-2025.3.zip"
                 platformCode == "IU" -> "-idea.zip"
                 platformCode == "PY" -> "-pycharm.zip"
+                platformCode == "WS" -> "-webstorm-2024.3.zip"
                 else -> "-${project.version}.zip"
             }
             check(archiveName.endsWith(expectedSuffix))
@@ -573,10 +612,52 @@ tasks {
                 check(kotlinCompilerOptions.languageVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
                 check(kotlinCompilerOptions.apiVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
             }
+            if (platformCode == "WS" && !isWebstorm261) {
+                check(selectedPlatformVersion.get() == "2024.3.5")
+                check(selectedSinceBuild.get() == "243.26053.12")
+                check(selectedUntilBuild.get() == "243.*")
+                check(selectedJavaVersion.get() == "21")
+                check(kotlinCompilerOptions.languageVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+                check(kotlinCompilerOptions.apiVersion.get() == org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+            }
+            check(resolveWebstormTarget("WS", null) == "2024.3")
+            check(resolveWebstormTarget("WS", "2026.1") == "2026.1")
+            check(resolveWebstormTarget("PS", null) == null)
+            check(runCatching { resolveWebstormTarget("IU", "2026.1") }.isFailure)
+            check(runCatching { resolveWebstormTarget("WS", "2026.2") }.isFailure)
+            if (isWebstorm261) {
+                check(selectedPlatformVersion.get() == "2026.1.5")
+                check(selectedSinceBuild.get() == "261.27258.45")
+                check(selectedUntilBuild.get() == "261.*")
+                check(selectedJavaVersion.get() == "21")
+                check(usesLegacyCefCallbacks)
+                check(!usesBasePlatformJcef)
+            }
+            val webstorm261Info = com.google.gson.JsonParser.parseString(
+                """{"productCode":"WS","version":"2026.1.5","buildNumber":"261.27258.45","minRequiredJavaVersion":21}""",
+            ).asJsonObject
+            validateLocalIdeTarget(webstorm261Info, "WS", "261.27258.45", "261.*", 21, 25)
+            check(runCatching { validateLocalIdeTarget(webstorm261Info, "WS", "243.26053.12", "243.*", 21, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(webstorm261Info, "WS", "261.27258.45", "261.*", 25, 25) }.isFailure)
+            val webstormInfo = com.google.gson.JsonParser.parseString(
+                """{"productCode":"WS","version":"2024.3.5","buildNumber":"WS-243.26053.12"}""",
+            ).asJsonObject
+            validateLocalIdeTarget(webstormInfo, "WS", "243.26053.12", "243.*", 21, 21)
+            validateLocalIdeTarget(webstormInfo, "WS", "243.26053.12", "243.*", 21, 25)
+            check(runCatching { validateLocalIdeTarget(webstormInfo, "PS", "243.26053.12", "243.*", 21, 21) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(webstormInfo, "WS", "243.26053.12", "243.*", 25, 25) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(webstormInfo, "WS", "243.26053.12", "243.*", 21, 17) }.isFailure)
+            check(runCatching { validateLocalIdeTarget(webstormInfo, "WS", "262", "262.*", 21, 25) }.isFailure)
+            val earlierWebstormInfo = webstormInfo.deepCopy().apply { addProperty("buildNumber", "WS-243.26053.11") }
+            check(runCatching { validateLocalIdeTarget(earlierWebstormInfo, "WS", "243.26053.12", "243.*", 21, 21) }.isFailure)
+            val unknownWebstormInfo = webstormInfo.deepCopy().apply { addProperty("version", "2024.3.4") }
+            check(runCatching { validateLocalIdeTarget(unknownWebstormInfo, "WS", "243.26053.12", "243.*", 21, 21) }.isFailure)
             val sourceDescriptor = layout.projectDirectory.file("src/main/resources/META-INF/plugin.xml").asFile.readText()
             val legacyDescriptor = descriptorForPlatform(sourceDescriptor, "PY")
             check(descriptorForPlatform(sourceDescriptor, "PS") == sourceDescriptor)
             check(descriptorForPlatform(sourceDescriptor, "IU") == sourceDescriptor)
+            check(descriptorForPlatform(sourceDescriptor, "WS") == legacyDescriptor)
+            check(descriptorForPlatform(sourceDescriptor, "WS", "2026.1") == sourceDescriptor)
             check(!legacyDescriptor.contains("<depends>com.intellij.modules.jcef</depends>"))
             val pluginId = Regex("<id>([^<]+)</id>")
             check(pluginId.find(sourceDescriptor)?.groupValues?.get(1) == "pro.ivol.kilocode5.jetbrains")
@@ -585,7 +666,7 @@ tasks {
             check(legacyDescriptor.contains("<depends>org.jetbrains.plugins.terminal</depends>"))
             check(runCatching { descriptorForPlatform(legacyDescriptor, "PY") }.isFailure)
             check(runCatching { descriptorForPlatform(sourceDescriptor + "<depends>com.intellij.modules.jcef</depends>", "PY") }.isFailure)
-            if (platformCode == "PY") {
+            if (usesBasePlatformJcef) {
                 check(pycharmDescriptor.get().asFile.readText() == legacyDescriptor)
                 check((project.tasks.getByName("patchPluginXml") as PatchPluginXmlTask).inputFile.get().asFile == pycharmDescriptor.get().asFile)
             }
@@ -740,7 +821,12 @@ tasks {
         dependsOn("generateConfigProperties")
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(selectedJavaVersion.get()))
-            if (platformCode == "PY") {
+            if (platformCode == "WS" && !isWebstorm261) {
+                // The 243 platform ships the Kotlin 2.0 stdlib; newer stdlib
+                // calls would compile here but fail to resolve in that IDE.
+                languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+                apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+            } else if (platformCode == "PY") {
                 // The 251 SDK supplies Kotlin 2.1; do not emit calls to newer
                 // stdlib APIs merely because the build compiler is newer.
                 languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)

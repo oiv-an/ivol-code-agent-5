@@ -78,6 +78,7 @@ vi.mock("vscode", () => {
 		window: {
 			showInformationMessage,
 			showErrorMessage,
+			showWarningMessage: vi.fn(), // kilocode_change: explicit browser permission dialog.
 			showTextDocument,
 			createTextEditorDecorationType: vi.fn(() => ({ dispose: vi.fn() })), // kilocode_change
 		},
@@ -142,6 +143,261 @@ import type { ModeConfig } from "@roo-code/types"
 vi.mock("../../../utils/fs")
 vi.mock("../../../utils/path")
 vi.mock("../../../utils/globalContext")
+
+// kilocode_change start: browser permission must use an explicit modal decision.
+describe("webviewMessageHandler - Chrome control", () => {
+	it.each([true, false])("requires explicit modal consent to resume Chrome (%s)", async (approved) => {
+		const { chromeConnector } = await import("../../../services/browser/kilocode/ChromeConnector")
+		let status: "active" | "paused" = "paused"
+		const getStatus = vi.spyOn(chromeConnector, "getStatus").mockImplementation(() => status)
+		const resume = vi.spyOn(chromeConnector, "resume").mockImplementation(async (confirm, isCurrent) => {
+			if (await confirm()) {
+				expect(isCurrent()).toBe(true)
+				status = "active"
+			}
+		})
+		vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+			(approved ? "mcp:browserOS.allow" : undefined) as never,
+		)
+		const postMessageToWebview = vi.fn()
+		const provider = {
+			context: { globalState: { get: () => "chrome-extension" } },
+			postMessageToWebview,
+		} as unknown as ClineProvider
+		try {
+			await webviewMessageHandler(provider, { type: "chromeControl", text: "resume" })
+			expect(resume).toHaveBeenCalledOnce()
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+				"mcp:chromeControl.resumePermission",
+				{ modal: true },
+				"mcp:browserOS.allow",
+			)
+			expect(postMessageToWebview).toHaveBeenCalledWith({
+				type: "chromeConnectorResult",
+				success: true,
+				text: approved ? "active" : "paused",
+			})
+		} finally {
+			getStatus.mockRestore()
+			resume.mockRestore()
+		}
+	})
+})
+
+describe("webviewMessageHandler - BrowserOS permission", () => {
+	it.each([
+		[true, true],
+		[true, false],
+		[false, true],
+		[false, false],
+	])(
+		"combined button requests an explicit permission decision (approved=%s, taskActions=%s)",
+		async (approved, allowTaskActions) => {
+			const task = {}
+			let mode = "isolated"
+			let status = "idle"
+			const postMessageToWebview = vi.fn()
+			const prepareSelectedBrowserOSConnection = vi
+				.fn()
+				.mockResolvedValue({ serverName: "browseros-neo", source: "global" })
+			const grantBrowserOSAccess = vi.fn(async (_name, confirm) => {
+				if (!(await confirm())) throw new Error("Permission declined")
+				status = "active"
+			})
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+				(approved ? "mcp:browserOS.allow" : undefined) as never,
+			)
+			let savedChoice: unknown = undefined
+			const provider = {
+				getCurrentTask: () => task,
+				contextProxy: {
+					getValue: (key: string) => (key === "browserMode" ? mode : savedChoice),
+					setValue: async (key: string, value: unknown) => {
+						if (key === "browserMode") mode = value as string
+						else savedChoice = value
+					},
+				},
+				postStateToWebview: vi.fn(),
+				postMessageToWebview,
+				getMcpHub: () => ({
+					prepareSelectedBrowserOSConnection,
+					grantBrowserOSAccess,
+					browserOSAccess: { getStatus: () => status },
+				}),
+			} as unknown as ClineProvider
+			await webviewMessageHandler(provider, {
+				type: "browserOSAccess",
+				text: "connectAndGrant",
+				values: { allowTaskActions },
+			})
+			expect(grantBrowserOSAccess).toHaveBeenCalledWith(
+				"browseros-neo",
+				expect.any(Function),
+				"global",
+				allowTaskActions,
+			)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+				allowTaskActions ? "mcp:browserOS.permissionTaskActions" : "mcp:browserOS.permission",
+				{ modal: true },
+				"mcp:browserOS.allow",
+			)
+			expect(mode).toBe("browseros")
+			expect(savedChoice).toBe(allowTaskActions)
+			expect(prepareSelectedBrowserOSConnection).toHaveBeenCalledOnce()
+			expect(grantBrowserOSAccess).toHaveBeenCalledOnce()
+			expect(status).toBe(approved ? "active" : "idle")
+			expect(postMessageToWebview).toHaveBeenCalledWith(
+				expect.objectContaining({ success: approved, text: approved ? "active" : "Permission declined" }),
+			)
+		},
+	)
+
+	it("reuses the saved choice when the panel sends no explicit value", async () => {
+		const task = {}
+		const saved: Record<string, unknown> = { browserMode: "browseros", browserOSAllowTaskActions: true }
+		const grantBrowserOSAccess = vi.fn()
+		vi.mocked(vscode.window.showWarningMessage).mockResolvedValue("mcp:browserOS.allow" as never)
+		const provider = {
+			getCurrentTask: () => task,
+			contextProxy: {
+				getValue: (key: string) => saved[key],
+				setValue: async (key: string, value: unknown) => {
+					saved[key] = value
+				},
+			},
+			postStateToWebview: vi.fn(),
+			postMessageToWebview: vi.fn(),
+			getMcpHub: () => ({
+				prepareSelectedBrowserOSConnection: vi
+					.fn()
+					.mockResolvedValue({ serverName: "browseros-neo", source: "global" }),
+				grantBrowserOSAccess,
+				browserOSAccess: { getStatus: () => "active" },
+			}),
+		} as unknown as ClineProvider
+		await webviewMessageHandler(provider, { type: "browserOSAccess", text: "connectAndGrant" })
+		expect(grantBrowserOSAccess).toHaveBeenCalledWith("browseros-neo", expect.any(Function), "global", true)
+		expect(saved.browserOSAllowTaskActions).toBe(true)
+	})
+
+	it.each(["save", "connect"])("prepares the browser on %s without granting access", async (action) => {
+		const setValue = vi.fn()
+		const grantBrowserOSAccess = vi.fn()
+		const ensureBrowserOSConnection = vi.fn(async () => {
+			if (action === "save") expect(setValue).toHaveBeenCalledWith("browserMode", "browseros")
+			return { serverName: "browseros-neo", source: "global", endpoint: "http://127.0.0.1:9010/mcp", changes: [] }
+		})
+		const postMessageToWebview = vi.fn()
+		const provider = {
+			contextProxy: { setValue },
+			postStateToWebview: vi.fn(),
+			getMcpHub: () => ({
+				ensureBrowserOSConnection,
+				grantBrowserOSAccess,
+				browserOSAccess: { getStatus: () => "idle" },
+			}),
+			postMessageToWebview,
+		} as unknown as ClineProvider
+		await webviewMessageHandler(
+			provider,
+			action === "save"
+				? {
+						type: "updateSettings",
+						updatedSettings: { browserMode: "browseros", browserOSAllowTaskActions: true },
+					}
+				: { type: "browserOSAccess", text: "connect" },
+		)
+		expect(ensureBrowserOSConnection).toHaveBeenCalledOnce()
+		// A remembered checkbox is a preference only; saving it must never grant browser control.
+		expect(grantBrowserOSAccess).not.toHaveBeenCalled()
+		if (action === "save") expect(setValue).toHaveBeenCalledWith("browserOSAllowTaskActions", true)
+		expect(postMessageToWebview).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "browserOSAccessResult",
+				success: true,
+				text: "idle",
+			}),
+		)
+	})
+
+	it("reports automatic setup errors without rolling back saved browser mode", async () => {
+		const setValue = vi.fn()
+		const postMessageToWebview = vi.fn()
+		const provider = {
+			contextProxy: { setValue },
+			postStateToWebview: vi.fn(),
+			postMessageToWebview,
+			getMcpHub: () => ({
+				ensureBrowserOSConnection: vi.fn().mockRejectedValue(new Error("Browser unavailable")),
+			}),
+		} as unknown as ClineProvider
+		await webviewMessageHandler(provider, { type: "updateSettings", updatedSettings: { browserMode: "browseros" } })
+		expect(setValue).toHaveBeenCalledWith("browserMode", "browseros")
+		expect(postMessageToWebview).toHaveBeenCalledWith({
+			type: "browserOSAccessResult",
+			success: false,
+			text: "Browser unavailable",
+		})
+	})
+
+	it.each([true, false])("requires a modal decision (approved=%s)", async (approved) => {
+		vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+			(approved ? "mcp:browserOS.allow" : undefined) as never,
+		)
+		const postMessageToWebview = vi.fn()
+		const grantBrowserOSAccess = vi.fn(async (_server: string, confirm: () => Promise<boolean>) => {
+			if (!(await confirm())) throw new Error("BrowserOS permission declined")
+		})
+		const provider = {
+			getMcpHub: () => ({ grantBrowserOSAccess, browserOSAccess: { getStatus: () => "active" } }),
+			postMessageToWebview,
+		} as unknown as ClineProvider
+		await webviewMessageHandler(provider, { type: "browserOSAccess", text: "grant" })
+		expect(grantBrowserOSAccess).toHaveBeenCalledWith("browseros-neo", expect.any(Function), undefined)
+		expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+			"mcp:browserOS.permission",
+			{ modal: true },
+			"mcp:browserOS.allow",
+		)
+		expect(postMessageToWebview).toHaveBeenCalledWith({
+			type: "browserOSAccessResult",
+			success: approved,
+			text: approved ? "active" : "BrowserOS permission declined",
+		})
+	})
+
+	it("cancels pending browser permission when the user presses pause", async () => {
+		const access = {
+			pause: vi.fn(),
+			revoke: vi.fn(),
+			getStatus: () => "awaitingPermission",
+		}
+		const cancelBrowserOSPreparation = vi.fn()
+		const grantBrowserOSAccess = vi.fn()
+		const provider = {
+			getMcpHub: () => ({ browserOSAccess: access, cancelBrowserOSPreparation, grantBrowserOSAccess }),
+			postMessageToWebview: vi.fn(),
+		} as unknown as ClineProvider
+		await webviewMessageHandler(provider, { type: "browserOSAccess", text: "pause" })
+		expect(cancelBrowserOSPreparation).toHaveBeenCalledOnce()
+		expect(access.revoke).toHaveBeenCalledOnce()
+		expect(access.pause).not.toHaveBeenCalled()
+		expect(grantBrowserOSAccess).not.toHaveBeenCalled()
+	})
+
+	it.each(["pause", "resume", "revoke"] as const)("delegates %s without silently granting access", async (action) => {
+		const access = { pause: vi.fn(), resume: vi.fn(), revoke: vi.fn(), getStatus: () => "idle" }
+		const grantBrowserOSAccess = vi.fn()
+		const provider = {
+			getMcpHub: () => ({ grantBrowserOSAccess, browserOSAccess: access }),
+			postMessageToWebview: vi.fn(),
+		} as unknown as ClineProvider
+		await webviewMessageHandler(provider, { type: "browserOSAccess", text: action })
+		expect(access[action]).toHaveBeenCalledOnce()
+		expect(grantBrowserOSAccess).not.toHaveBeenCalled()
+	})
+})
+// kilocode_change end
 
 describe("webviewMessageHandler - personal profile deletion", () => {
 	beforeEach(() => {

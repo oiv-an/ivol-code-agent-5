@@ -679,6 +679,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 			}
 		})
+		// kilocode_change: command freshness is separate from host-scoped browser consent.
+		this.browserSession.setCallerGuard?.(
+			() => !this.abandoned && this.providerRef.deref()?.getCurrentTask() === this,
+		)
 		this.diffEnabled = enableDiff
 		this.fuzzyMatchThreshold = fuzzyMatchThreshold
 		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
@@ -3065,6 +3069,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	public dispose(): void {
 		console.log(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
+		this.providerRef.deref()?.getMcpHub?.()?.browserOSAccess?.endTask(this) // kilocode_change: cancel stale work, retain host consent
 
 		// Cancel any in-progress HTTP request
 		try {
@@ -3135,7 +3140,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		try {
-			this.browserSession.closeBrowser()
+			// kilocode_change: disposal is synchronous, but browser cleanup can reject asynchronously.
+			void Promise.resolve(this.browserSession.disposeTask()).catch((error) => {
+				console.error("Error closing browser session:", error)
+			})
 		} catch (error) {
 			console.error("Error closing browser session:", error)
 		}

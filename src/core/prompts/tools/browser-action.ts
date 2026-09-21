@@ -4,8 +4,9 @@ export function getBrowserActionDescription(args: ToolArgs): string | undefined 
 	if (!args.supportsComputerUse) {
 		return undefined
 	}
+	// kilocode_change: describe personal-browser consent and fresh observations too.
 	return `## browser_action
-Description: Request to interact with a Puppeteer-controlled browser. Every action, except \`close\`, will be responded to with a screenshot of the browser's current state, along with any new console logs. You may only perform one browser action per message, and wait for the user's response including a screenshot and logs to determine the next action.
+Description: Request to interact with the configured browser. Page actions return a screenshot and new console logs; \`close\` and \`open_application\` return text only. Perform one browser action per message and wait for its result before deciding the next action.
 
 This tool is particularly useful for web development tasks as it allows you to launch a browser, navigate to pages, interact with elements through clicks and keyboard input, and capture the results through screenshots and console logs. Use it at key stages of web development tasks - such as after implementing new features, making substantial changes, when troubleshooting issues, or to verify the result of your work. Analyze the provided screenshots to ensure correct rendering or identify errors, and review console logs for runtime issues.
 
@@ -15,10 +16,16 @@ The user may ask generic non-development tasks (such as "what's the latest news"
 - Browser sessions **start** with \`launch\` and **end** with \`close\`
 - The session remains active across multiple messages and tool uses
 - You can use other tools while the browser session is active - it will stay open in the background
+- Personal-browser consent lasts for this IDE host and connection until disconnect or restart, not for a chat identifier. Never bypass refusal or manual pause. The Chrome connector has no permission popup.
+- In BrowserOS mode, use launch with a URL to prepare the connection and request explicit consent automatically in the calling IDE window. After confirmation the original URL is opened once; use advertised MCP tools afterward. Do not require the user to visit settings before calling.
+- For personal Chrome launch/create_tab, provide text as one short English topic word, such as Research or Invoices. Only connector-created groups are reused; matching personal group titles never imply ownership.
+- After the user returns control, use \`snapshot\` before clicking or typing. Closing a personal session releases access without closing tabs.
+- Personal Chrome resizing is manual; file screenshots require PNG. Unsupported operations return an error.
 
 Parameters:
 - action: (required) The action to perform. The available actions are:
-    * launch: Launch a new Puppeteer-controlled browser instance at the specified URL. This **must always be the first action**.
+    * open_application: Request opening the installed application. No other parameters. The user selects a trusted application and confirms a separate modal; cancellation must be respected. Returns text, not a screenshot, and grants no browser access. BrowserOS launch can prepare the connection and request consent directly when needed.
+    * launch: Start a session in the configured browser at the specified URL. In personal Chrome, the user can instead preserve the selected tab's current page. This must precede page interaction; open_application may precede it.
         - Use with the \`url\` parameter to provide the URL.
         - Ensure the URL is valid and includes the appropriate protocol (e.g. http://localhost:3000/page, file:///path/to/file.html, etc.)
     * hover: Move the cursor to a specific x,y coordinate.
@@ -39,13 +46,16 @@ Parameters:
         - Use with the \`size\` parameter to specify the new size.
     * scroll_down: Scroll down the page by one page height.
     * scroll_up: Scroll up the page by one page height.
+    * snapshot: Get a fresh screenshot and new console messages without saving a file. Personal Chrome also returns a bounded accessibility summary and user-granted tab IDs. No path is required. Use after manual control returns.
+    * select_tab: In personal Chrome, select an authorized tab using its ID in the text parameter. Returns a fresh observation. Never assume access to unrelated tabs or OAuth windows.
+    * create_tab: Personal Chrome only. Open a background tab at url within the approved connection. Optionally pass one English topic word in text. The current tab is preserved; the result lists the new tab ID. Use select_tab afterward to control it.
     * screenshot: Take a screenshot and save it to a file.
         - Use with the \`path\` parameter to specify the destination file path.
         - Supported formats: .png, .jpeg, .webp
         - Example: \`<action>screenshot</action>\` with \`<path>screenshots/result.png</path>\`
-    * close: Close the Puppeteer-controlled browser instance. This **must always be the final browser action**.
+    * close: End the browser session; personal browser tabs remain open. This **must always be the final browser action**.
         - Example: \`<action>close</action>\`
-- url: (optional) Use this for providing the URL for the \`launch\` action.
+- url: (optional) Required for \`launch\` and \`create_tab\`. Personal Chrome supports HTTP(S) URLs only.
     * Example: <url>https://example.com</url>
 - coordinate: (optional) The X and Y coordinates for the \`click\` and \`hover\` actions.
     * **CRITICAL**: Screenshot dimensions are NOT the same as the browser viewport dimensions

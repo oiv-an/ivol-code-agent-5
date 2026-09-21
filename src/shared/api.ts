@@ -81,6 +81,7 @@ export const shouldUseReasoningEffort = ({
 		| "high"
 		| "xhigh"
 		| "max" // kilocode_change: GPT-5.6 maximum effort
+		| "ultra" // kilocode_change: explicit provider-specific effort
 		| undefined
 
 	// "disable" explicitly omits reasoning
@@ -117,6 +118,7 @@ export const shouldUseReasoningEffort = ({
 		| "high"
 		| "xhigh"
 		| "max" // kilocode_change: GPT-5.6 maximum effort
+		| "ultra" // kilocode_change: explicit provider-specific effort
 		| undefined
 	return !!modelDefaultEffort
 }

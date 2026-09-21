@@ -44,6 +44,7 @@ const getActionIcon = (action: string) => {
 			return <Check className="w-3.5 h-3.5 opacity-70" />
 		case "resize":
 			return <Maximize2 className="w-3.5 h-3.5 opacity-70" />
+		case "snapshot": // kilocode_change
 		case "screenshot":
 			return <Camera className="w-3.5 h-3.5 opacity-70" />
 		case "hover":
@@ -110,6 +111,14 @@ const BrowserActionRow = memo(({ message, nextMessage, actionIndex, totalActions
 				return t("chat:browser.actions.scrolledUp")
 			case "resize":
 				return t("chat:browser.actions.resized", { size: browserAction.size?.split(/[x,]/).join(" x ") })
+			case "open_application": // kilocode_change
+				return t("chat:browser.actions.openApplication")
+			case "create_tab": // kilocode_change
+				return t("chat:browser.actions.createTab", { url: browserAction.text })
+			case "select_tab": // kilocode_change
+				return t("chat:browser.actions.selectedTab", { id: browserAction.text })
+			case "snapshot": // kilocode_change: reuse the localized screenshot label, not "saved".
+				return t("chat:browser.screenshot")
 			case "screenshot":
 				return t("chat:browser.actions.screenshotSaved")
 			case "close":

@@ -12,6 +12,8 @@ import { type BrowserActionResult } from "@roo-code/types"
 import { fileExistsAtPath } from "../../utils/fs"
 
 import { discoverChromeHostUrl, tryChromeHostUrl } from "./browserDiscovery"
+import { chromeConnector, type ChromeCommand } from "./kilocode/ChromeConnector" // kilocode_change
+import { t } from "../../i18n" // kilocode_change
 
 // Timeout constants
 const BROWSER_NAVIGATION_TIMEOUT = 15_000 // 15 seconds
@@ -23,6 +25,66 @@ interface PCRStats {
 
 export class BrowserSession {
 	private context: vscode.ExtensionContext
+	// kilocode_change start: personal Chrome is a separate transport, never a Puppeteer fallback.
+	private isCurrentCaller: () => boolean = () => true
+	private chromePermissionDeclined = false
+
+	setCallerGuard(isCurrent: () => boolean): void {
+		this.isCurrentCaller = isCurrent
+	}
+
+	async disposeTask(): Promise<void> {
+		chromeConnector.endTask(this)
+		this.usingChromeConnector = false
+		await this.closeBrowser()
+	}
+
+	async closePersonalBrowser(): Promise<void> {
+		if (this.usingChromeConnector) await this.closeBrowser()
+	}
+	private usingChromeConnector = false
+	private chromeInitialSnapshot = false
+
+	private async resumeChromeIfPaused(): Promise<void> {
+		if (chromeConnector.getStatus() !== "paused") return
+		if (!this.isCurrentCaller()) throw new Error("Browser caller is no longer current")
+		if (this.chromePermissionDeclined)
+			throw new Error("Chrome control was declined. Return control explicitly in Browser settings.")
+		await chromeConnector.resume(
+			async () => {
+				const allow = t("mcp:browserOS.allow")
+				const answer = await vscode.window.showWarningMessage(
+					t("mcp:chromeControl.resumePermission"),
+					{ modal: true },
+					allow,
+				)
+				if (answer !== allow) this.chromePermissionDeclined = true
+				return answer === allow
+			},
+			() => this.isCurrentCaller() && this.context.globalState.get("browserMode") === "chrome-extension",
+		)
+		if (chromeConnector.getStatus() !== "active") throw new Error("Chrome control remains paused")
+	}
+
+	private async chromeAction(
+		method: ChromeCommand,
+		params: Record<string, unknown> = {},
+	): Promise<BrowserActionResult> {
+		if (this.context.globalState.get<string>("browserMode") !== "chrome-extension") {
+			await this.closePersonalBrowser()
+			throw new Error("Browser mode changed. Start a new browser session explicitly.")
+		}
+		await this.resumeChromeIfPaused()
+		const result = await chromeConnector.action(this, method, params, this.isCurrentCaller)
+		if (this.context.globalState.get<string>("browserMode") !== "chrome-extension") {
+			await this.closePersonalBrowser()
+			throw new Error("Browser mode changed during action; result discarded.")
+		}
+		this.lastViewportWidth = result.viewportWidth
+		this.lastViewportHeight = result.viewportHeight
+		return result
+	}
+	// kilocode_change end
 	private browser?: Browser
 	private page?: Page
 	private currentMousePosition?: string
@@ -171,8 +233,71 @@ export class BrowserSession {
 		return false
 	}
 
-	async launchBrowser(): Promise<void> {
+	// kilocode_change: app launch is distinct from pairing and permission to control it.
+	async openApplication(isCurrent: () => boolean): Promise<boolean> {
+		const mode = this.context.globalState.get<string>("browserMode")
+		if (mode !== "chrome-extension" && mode !== "browseros")
+			throw new Error("Select personal Chrome or BrowserOS mode before requesting application launch")
+		const { launchPersonalBrowser } = await import("./kilocode/BrowserLauncher")
+		return launchPersonalBrowser(mode, () => isCurrent() && this.context.globalState.get("browserMode") === mode)
+	}
+
+	async launchBrowser(url?: string, topic = "Browser"): Promise<void> {
+		// kilocode_change
 		console.log("launch browser called")
+		// kilocode_change start
+		const mode = this.context.globalState.get<string>("browserMode")
+		if (mode === "browseros")
+			throw new Error(
+				"BrowserOS mode uses the connected server's MCP tools, not browser_action. Ask the user to select a BrowserOS MCP connection and grant this task access in Browser settings, then use its advertised observation and interaction tools. Do not launch another browser as a fallback.",
+			)
+		if (mode === "chrome-extension") {
+			if (this.browser) await this.closeBrowser()
+			if (!this.isCurrentCaller()) throw new Error("Browser caller is no longer current")
+			this.usingChromeConnector = true
+			const alreadyConnected = chromeConnector.hasSession()
+			await this.resumeChromeIfPaused()
+			if (this.chromePermissionDeclined && chromeConnector.getStatus() !== "active")
+				throw new Error("Chrome control was declined. Do not retry without a new user request.")
+			await chromeConnector.acquire(
+				this,
+				url,
+				topic,
+				async () => {
+					const allow = t("mcp:browserOS.allow")
+					const answer = await vscode.window.showWarningMessage(
+						t("mcp:chromeControl.permission"),
+						{ modal: true },
+						allow,
+					)
+					if (answer !== allow) this.chromePermissionDeclined = true
+					return answer === allow
+				},
+				() => this.isCurrentCaller() && this.context.globalState.get("browserMode") === "chrome-extension",
+			)
+			if (!this.isCurrentCaller()) {
+				chromeConnector.endTask(this)
+				throw new Error("Browser caller changed during connection")
+			}
+			if (alreadyConnected && url) {
+				const before = await this.chromeAction("snapshot")
+				const previousTabs = new Set(before.tabs?.map((tab) => tab.id))
+				const created = await this.chromeAction("create_tab", { url, topic })
+				const newTabs = created.tabs?.filter((tab) => !previousTabs.has(tab.id)) ?? []
+				if (newTabs.length !== 1)
+					throw new Error("A tab was created but its target could not be identified. Do not retry creation.")
+				await this.chromeAction("select_tab", { tabId: newTabs[0].id })
+			}
+			if (this.context.globalState.get<string>("browserMode") !== "chrome-extension") {
+				await this.closePersonalBrowser()
+				throw new Error("Browser mode changed while waiting for permission. Start a new session explicitly.")
+			}
+			this.chromeInitialSnapshot = true
+			this.onStateChange?.(true)
+			return
+		}
+		if (this.usingChromeConnector) await this.closeBrowser()
+		// kilocode_change end
 
 		// Check if remote browser connection is enabled
 		const remoteBrowserEnabled = this.context.globalState.get("remoteBrowserEnabled") as boolean | undefined
@@ -209,6 +334,16 @@ export class BrowserSession {
 	 * Closes the browser and resets browser state
 	 */
 	async closeBrowser(): Promise<BrowserActionResult> {
+		// kilocode_change start
+		if (this.usingChromeConnector) {
+			await chromeConnector.release()
+			this.usingChromeConnector = false
+			this.chromeInitialSnapshot = false
+			this.resetBrowserState()
+			this.onStateChange?.(false)
+			return {}
+		}
+		// kilocode_change end
 		const wasActive = !!(this.browser || this.page)
 
 		if (wasActive) {
@@ -390,6 +525,15 @@ export class BrowserSession {
 	}
 
 	async navigateToUrl(url: string): Promise<BrowserActionResult> {
+		// kilocode_change start: connecting must not replace an existing form or page.
+		if (this.usingChromeConnector) {
+			if (this.chromeInitialSnapshot) {
+				this.chromeInitialSnapshot = false
+				return this.chromeAction("snapshot")
+			}
+			return this.chromeAction("navigate", { url })
+		}
+		// kilocode_change end
 		if (!this.browser) {
 			throw new Error("Browser is not launched")
 		}
@@ -593,7 +737,30 @@ export class BrowserSession {
 		page.off("request", requestListener)
 	}
 
+	// kilocode_change start: personal tab IDs are issued only by the permission-gated connector.
+	async createTab(url: string, topic?: string): Promise<BrowserActionResult> {
+		if (!this.usingChromeConnector) throw new Error("Tab creation is available in personal Chrome mode only")
+		return this.chromeAction("create_tab", { url, ...(topic ? { topic } : {}) })
+	}
+
+	async selectTab(tabId: string): Promise<BrowserActionResult> {
+		if (!this.usingChromeConnector) throw new Error("Tab selection is available in personal Chrome mode only")
+		return this.chromeAction("select_tab", { tabId })
+	}
+	// kilocode_change end
+
+	// kilocode_change start: fresh observation after manual control, without file I/O.
+	async snapshot(): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) return this.chromeAction("snapshot")
+		return this.doAction(async () => undefined)
+	}
+	// kilocode_change end
+
 	async click(coordinate: string): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) {
+			const [x, y] = coordinate.split(",").map(Number)
+			return this.chromeAction("click", { x, y })
+		} // kilocode_change
 		return this.doAction(async (page) => {
 			await this.handleMouseInteraction(page, coordinate, async (x, y) => {
 				await page.mouse.click(x, y)
@@ -602,12 +769,14 @@ export class BrowserSession {
 	}
 
 	async type(text: string): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) return this.chromeAction("type", { text }) // kilocode_change
 		return this.doAction(async (page) => {
 			await page.keyboard.type(text)
 		})
 	}
 
 	async press(key: string): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) return this.chromeAction("press", { key }) // kilocode_change
 		return this.doAction(async (page) => {
 			// Parse key combinations (e.g., "Cmd+K", "Shift+Enter")
 			const parts = key.split("+").map((k) => k.trim())
@@ -725,18 +894,24 @@ export class BrowserSession {
 	}
 
 	async scrollDown(): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) return this.chromeAction("scroll", { direction: "down" }) // kilocode_change
 		return this.doAction(async (page) => {
 			await this.scrollPage(page, "down")
 		})
 	}
 
 	async scrollUp(): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) return this.chromeAction("scroll", { direction: "up" }) // kilocode_change
 		return this.doAction(async (page) => {
 			await this.scrollPage(page, "up")
 		})
 	}
 
 	async hover(coordinate: string): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector) {
+			const [x, y] = coordinate.split(",").map(Number)
+			return this.chromeAction("hover", { x, y })
+		} // kilocode_change
 		return this.doAction(async (page) => {
 			await this.handleMouseInteraction(page, coordinate, async (x, y) => {
 				await page.mouse.move(x, y)
@@ -747,6 +922,8 @@ export class BrowserSession {
 	}
 
 	async resize(size: string): Promise<BrowserActionResult> {
+		if (this.usingChromeConnector)
+			throw new Error("Resize the personal Chrome window manually, then request a fresh screenshot.") // kilocode_change
 		return this.doAction(async (page) => {
 			const [width, height] = size.split(",").map(Number)
 			const session = await page.createCDPSession()
@@ -789,6 +966,16 @@ export class BrowserSession {
 			)
 		}
 
+		// kilocode_change start
+		if (this.usingChromeConnector) {
+			if (path.extname(fullPath).toLowerCase() !== ".png")
+				throw new Error("Chrome connector screenshots currently require a .png path")
+			const result = await this.chromeAction("snapshot")
+			await fs.mkdir(path.dirname(fullPath), { recursive: true })
+			await fs.writeFile(fullPath, Buffer.from(result.screenshot!.split(",")[1], "base64"))
+			return result
+		}
+		// kilocode_change end
 		return this.doAction(async (page) => {
 			// Ensure directory exists
 			await fs.mkdir(path.dirname(fullPath), { recursive: true })
@@ -875,7 +1062,8 @@ export class BrowserSession {
 	 * Returns whether a browser session is currently active
 	 */
 	isSessionActive(): boolean {
-		return !!(this.browser && this.page)
+		// kilocode_change: a revoked or disconnected personal tab is not an active session.
+		return this.usingChromeConnector ? chromeConnector.hasSession() : !!(this.browser && this.page)
 	}
 
 	/**

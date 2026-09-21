@@ -2,6 +2,8 @@ import fs from "fs/promises"
 
 import type { Mock } from "vitest"
 import type { ExtensionContext, Uri } from "vscode"
+import * as vscode from "vscode" // kilocode_change
+import { t } from "../../../i18n" // kilocode_change
 
 import type { ClineProvider } from "../../../core/webview/ClineProvider"
 
@@ -49,6 +51,15 @@ vi.mock("../../../utils/safeWriteJson", () => ({
 	}),
 }))
 
+// kilocode_change start: the browser lookup must never touch a real profile or socket in tests
+vi.mock("../../browser/kilocode/BrowserOSDiscovery", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../browser/kilocode/BrowserOSDiscovery")>()),
+	discoverBrowserOSEndpoint: vi.fn(),
+	probeBrowserOSEndpoint: vi.fn(),
+}))
+import { discoverBrowserOSEndpoint, probeBrowserOSEndpoint } from "../../browser/kilocode/BrowserOSDiscovery"
+// kilocode_change end
+
 // Mock NotificationService
 vi.mock("../kilocode/NotificationService", () => ({
 	NotificationService: vi.fn().mockImplementation(() => ({
@@ -57,6 +68,7 @@ vi.mock("../kilocode/NotificationService", () => ({
 }))
 
 vi.mock("vscode", () => ({
+	env: { remoteName: undefined }, // kilocode_change: local host for browser discovery
 	workspace: {
 		createFileSystemWatcher: vi.fn().mockReturnValue({
 			onDidChange: vi.fn(),
@@ -91,6 +103,11 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
 	Client: vi.fn(),
+}))
+
+// kilocode_change: exercise real hub callbacks without opening a network connection.
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+	StreamableHTTPClientTransport: vi.fn(),
 }))
 
 // Mock chokidar
@@ -136,7 +153,7 @@ describe("McpHub", () => {
 			context: {
 				subscriptions: [],
 				workspaceState: {} as any,
-				globalState: {} as any,
+				globalState: { get: vi.fn() } as any, // kilocode_change: model-visible tools follow the saved browser mode
 				secrets: {} as any,
 				extensionUri: mockUri,
 				extensionPath: "/test/path",
@@ -191,6 +208,396 @@ describe("McpHub", () => {
 			Object.defineProperty(process, "platform", originalPlatform)
 		}
 	})
+
+	// kilocode_change start: automatic setup of the built-in browser server
+	describe("automatic BrowserOS connection", () => {
+		const endpoint = "http://127.0.0.1:9010/mcp"
+		let hub: McpHubType
+		let written: Record<string, any>
+
+		const settings = (servers: Record<string, any>) => {
+			written = servers
+			vi.mocked(fs.readFile).mockImplementation(async (file: any) =>
+				String(file).includes("mcp.json")
+					? JSON.stringify({ mcpServers: {} })
+					: JSON.stringify({ mcpServers: written }),
+			)
+		}
+
+		beforeEach(async () => {
+			const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
+			const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
+			vi.mocked(StreamableHTTPClientTransport).mockImplementation(
+				() => ({ start: vi.fn(), close: vi.fn() }) as any,
+			)
+			vi.mocked(Client).mockImplementation(
+				() =>
+					({
+						connect: vi.fn(),
+						close: vi.fn(),
+						getInstructions: vi.fn(),
+						getServerCapabilities: () => ({}),
+						request: vi.fn().mockResolvedValue({ tools: [] }),
+					}) as any,
+			)
+			vi.mocked(discoverBrowserOSEndpoint).mockResolvedValue(endpoint)
+			vi.mocked(probeBrowserOSEndpoint).mockResolvedValue(undefined)
+			mockProvider.context!.globalState.get = vi.fn((key: string) =>
+				key === "browserMode" ? "browseros" : undefined,
+			) as any
+			// The written settings are echoed back so re-reads observe the stored entry.
+			vi.mocked(safeWriteJson).mockImplementation(async (_path: any, data: any, validate) => {
+				await validate?.()
+				written = data.mcpServers
+			})
+			settings({})
+			hub = new McpHub(mockProvider as ClineProvider)
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			vi.spyOn(hub as any, "scheduleReconnect").mockImplementation(() => undefined)
+		})
+
+		afterEach(async () => {
+			// Restore the shared write mock so later suites keep observing fs.writeFile.
+			vi.mocked(safeWriteJson).mockImplementation(async (filePath: any, data: any) => {
+				const fsPromises = await import("fs/promises")
+				return fsPromises.writeFile(filePath, JSON.stringify(data), "utf8")
+			})
+			mockProvider.context!.globalState.get = vi.fn() as any
+			await hub.dispose()
+		})
+
+		it("prepares and requests consent on invocation, then reuses it across chats", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(true)
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+			const calls = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			const next = {} as any
+			vi.mocked(mockProvider.getCurrentTask).mockReturnValue(next)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", next)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(calls)
+		})
+
+		it("does not dispatch or repeatedly prompt after permission is declined", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(undefined)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(false)
+			const calls = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(false)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(calls)
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+			// An explicit settings grant supersedes refusal without another automatic prompt.
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(calls)
+		})
+
+		it("cancels pending permission when disconnected from settings", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockImplementation(async () => {
+				hub.cancelBrowserOSPreparation()
+				return t("mcp:browserOS.allow") as never
+			})
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("discards permission when its invoking chat changes during the dialog", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockImplementation(async () => {
+				vi.mocked(mockProvider.getCurrentTask!).mockReturnValue({} as any)
+				return t("mcp:browserOS.allow") as never
+			})
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("discards permission when the current chat is abandoned during the dialog", async () => {
+			const caller = { abandoned: false } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockImplementation(async () => {
+				caller.abandoned = true
+				return t("mcp:browserOS.allow") as never
+			})
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("blocks dispatch from an abandoned chat without revoking host consent", async () => {
+			const caller = { abandoned: false } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			await hub.ensureBrowserOSConnection()
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
+			const connection = hub.connections.find((entry) => entry.server.name === "browseros-neo")!
+			const request = vi.mocked(connection.client!.request)
+			request.mockClear()
+			caller.abandoned = true
+			await expect(hub.callTool("browseros-neo", "tabs", { action: "new" }, "global", caller)).rejects.toThrow(
+				"caller changed",
+			)
+			expect(request).not.toHaveBeenCalled()
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+		})
+
+		it.each([true, false])("requires an explicit decision to resume paused control (%s)", async (approved) => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			await hub.ensureBrowserOSConnection()
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
+			hub.browserOSAccess.pause()
+			vi.mocked(vscode.window.showWarningMessage).mockImplementation(async () => {
+				expect(hub.browserOSAccess.getStatus()).toBe("paused")
+				return (approved ? t("mcp:browserOS.allow") : undefined) as never
+			})
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(approved)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+				t("mcp:browserOS.resumePermission", { serverName: "browseros-neo" }),
+				{ modal: true },
+				t("mcp:browserOS.allow"),
+			)
+			expect(hub.browserOSAccess.getStatus()).toBe(approved ? "active" : "paused")
+		})
+
+		it("auto-approves only page tools for the granted task, never file tools or another connection", async () => {
+			const task = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			await hub.ensureBrowserOSConnection()
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(true)
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "act", { page: 2, kind: "click" }, task)).toBe(true)
+			for (const name of ["upload", "download", "pdf", "run", "evaluate"])
+				expect(hub.canAutoApproveBrowserOSTool("browseros-neo", name, { page: 2 }, task)).toBe(false)
+			expect(hub.canAutoApproveBrowserOSTool("other", "snapshot", { page: 2 }, task)).toBe(false)
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, {})).toBe(false)
+			hub.browserOSAccess.pause()
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(false)
+			hub.browserOSAccess.resume()
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(true)
+			hub.browserOSAccess.revoke()
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(false)
+		})
+
+		it("creates and connects the entry without manual editing", async () => {
+			const result = await hub.ensureBrowserOSConnection()
+			expect(result).toMatchObject({ serverName: "browseros-neo", source: "global", endpoint })
+			expect(result.changes).toContain("created")
+			expect(written["browseros-neo"]).toMatchObject({
+				type: "streamable-http",
+				url: endpoint,
+				browserOS: true,
+				disabled: false,
+				oauth: { disabled: true },
+			})
+			expect(hub.connections.find((entry) => entry.server.name === "browseros-neo")?.server.status).toBe(
+				"connected",
+			)
+		})
+
+		it("keeps unrelated servers and does not create duplicates", async () => {
+			settings({ "team-server": { type: "stdio", command: "node", args: ["team.js"] } })
+			await hub.ensureBrowserOSConnection()
+			const second = await hub.ensureBrowserOSConnection()
+			expect(Object.keys(written).sort()).toEqual(["browseros-neo", "team-server"])
+			expect(written["team-server"]).toMatchObject({ command: "node" })
+			// The second call finds a healthy connection and changes nothing.
+			expect(second.changes).toEqual([])
+		})
+
+		it("reconnects a retained transport whose server status is disconnected", async () => {
+			await hub.ensureBrowserOSConnection()
+			const previous = hub.connections.find((entry) => entry.server.name === "browseros-neo")!
+			previous.server.status = "disconnected"
+			const result = await hub.ensureBrowserOSConnection()
+			expect(result.status).toBe("connected")
+			expect(hub.connections.find((entry) => entry.server.name === "browseros-neo")).not.toBe(previous)
+		})
+
+		it("does not report a failed transport connection as successful", async () => {
+			vi.spyOn(hub as any, "connectToServer").mockResolvedValue(undefined)
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("did not accept the MCP connection")
+		})
+
+		it("reuses an endpoint the user already configured when the browser answers there", async () => {
+			const configured = "http://127.0.0.1:9333/mcp"
+			settings({ "browseros-neo": { type: "streamable-http", url: configured, browserOS: true } })
+			const result = await hub.ensureBrowserOSConnection()
+			expect(result.endpoint).toBe(configured)
+			expect(probeBrowserOSEndpoint).toHaveBeenCalledWith(configured)
+			expect(discoverBrowserOSEndpoint).not.toHaveBeenCalled()
+		})
+
+		it("repairs a stale endpoint from the installed browser", async () => {
+			settings({ "browseros-neo": { type: "streamable-http", url: "http://127.0.0.1:9999/mcp" } })
+			vi.mocked(probeBrowserOSEndpoint).mockRejectedValueOnce(new Error("connection refused"))
+			const result = await hub.ensureBrowserOSConnection()
+			expect(result.endpoint).toBe(endpoint)
+			expect(result.changes).toContain("endpoint")
+			expect(written["browseros-neo"].url).toBe(endpoint)
+		})
+
+		it("preserves an explicitly selected named connection without rediscovery", async () => {
+			settings({ "my-browser": { type: "streamable-http", url: endpoint, browserOS: true } })
+			await hub.ensureBrowserOSConnection()
+			vi.mocked(discoverBrowserOSEndpoint).mockClear()
+			const result = await hub.prepareSelectedBrowserOSConnection("my-browser", "global")
+			expect(result.serverName).toBe("my-browser")
+			expect(discoverBrowserOSEndpoint).not.toHaveBeenCalled()
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("does not replace a missing explicit connection", async () => {
+			await expect(hub.prepareSelectedBrowserOSConnection("missing", "project")).rejects.toThrow(
+				"enabled BrowserOS",
+			)
+			expect(discoverBrowserOSEndpoint).not.toHaveBeenCalled()
+			expect(safeWriteJson).not.toHaveBeenCalled()
+		})
+
+		it("adopts a differently named entry marked as a browser server", async () => {
+			settings({ "my-browser": { type: "streamable-http", url: endpoint, browserOS: true } })
+			const result = await hub.ensureBrowserOSConnection()
+			expect(result.serverName).toBe("my-browser")
+			expect(Object.keys(written)).toEqual(["my-browser"])
+		})
+
+		it("preserves an explicitly disabled connection without probing or writing", async () => {
+			settings({ "browseros-neo": { type: "streamable-http", url: endpoint, browserOS: true, disabled: true } })
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("connection is disabled")
+			expect(written["browseros-neo"].disabled).toBe(true)
+			expect(safeWriteJson).not.toHaveBeenCalled()
+			expect(probeBrowserOSEndpoint).not.toHaveBeenCalled()
+			expect(discoverBrowserOSEndpoint).not.toHaveBeenCalled()
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("reports a missing browser instead of writing a guessed entry", async () => {
+			vi.mocked(discoverBrowserOSEndpoint).mockRejectedValue(new Error("Could not find an installed browser"))
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("Could not find an installed browser")
+			expect(written["browseros-neo"]).toBeUndefined()
+		})
+
+		it("does not discover a personal browser on an SSH host", async () => {
+			vi.stubEnv("SSH_CONNECTION", "test-remote-connection")
+			try {
+				await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("local desktop IDE host")
+				expect(discoverBrowserOSEndpoint).not.toHaveBeenCalled()
+				expect(safeWriteJson).not.toHaveBeenCalled()
+			} finally {
+				vi.unstubAllEnvs()
+			}
+		})
+
+		it("requires the saved browser mode", async () => {
+			mockProvider.context!.globalState.get = vi.fn().mockReturnValue("isolated") as any
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("BrowserOS browser mode")
+			expect(safeWriteJson).not.toHaveBeenCalled()
+		})
+
+		it("refuses to configure a name a project server also uses", async () => {
+			vi.spyOn(hub as any, "getProjectMcpPath").mockResolvedValue("/project/.kilocode/mcp.json")
+			vi.mocked(fs.readFile).mockImplementation(async (file: any) =>
+				String(file).includes("mcp.json")
+					? JSON.stringify({ mcpServers: { "browseros-neo": { type: "stdio", command: "node" } } })
+					: JSON.stringify({ mcpServers: {} }),
+			)
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("project MCP server is also named")
+			expect(safeWriteJson).not.toHaveBeenCalled()
+		})
+
+		it.each(["mode", "dispose"])("cancels setup during discovery after %s changes", async (reason) => {
+			vi.mocked(discoverBrowserOSEndpoint).mockImplementationOnce(async () => {
+				if (reason === "mode") {
+					mockProvider.context!.globalState.get = vi.fn().mockReturnValue("isolated")
+				} else {
+					await hub.dispose()
+				}
+				return endpoint
+			})
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("no longer active")
+			expect(safeWriteJson).not.toHaveBeenCalled()
+			expect(hub.connections.some((entry) => entry.server.name === "browseros-neo")).toBe(false)
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+		})
+
+		it("does not overwrite a connection disabled during discovery", async () => {
+			vi.mocked(discoverBrowserOSEndpoint).mockImplementationOnce(async () => {
+				written["browseros-neo"] = {
+					type: "streamable-http",
+					url: endpoint,
+					browserOS: true,
+					disabled: true,
+				}
+				return endpoint
+			})
+			await expect(hub.ensureBrowserOSConnection()).rejects.toThrow("settings changed during discovery")
+			expect(written["browseros-neo"].disabled).toBe(true)
+			expect(safeWriteJson).not.toHaveBeenCalled()
+		})
+
+		it("runs one setup at a time for concurrent requests", async () => {
+			const [first, second] = await Promise.all([
+				hub.ensureBrowserOSConnection(),
+				hub.ensureBrowserOSConnection(),
+			])
+			expect(second).toBe(first)
+			expect(vi.mocked(safeWriteJson).mock.calls.length).toBe(1)
+		})
+	})
+	// kilocode_change end
+
+	// kilocode_change start
+	it.each(["onerror", "onclose"] as const)(
+		"revokes BrowserOS on transport %s and ignores stale transport events",
+		async (event) => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+			const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
+			const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
+			const transport = { start: vi.fn(), close: vi.fn(), onerror: undefined, onclose: undefined } as any
+			vi.mocked(StreamableHTTPClientTransport).mockImplementation(() => transport)
+			vi.mocked(Client).mockImplementation(
+				() =>
+					({
+						connect: vi.fn(),
+						close: vi.fn(),
+						getInstructions: vi.fn(),
+						getServerCapabilities: () => ({}),
+					}) as any,
+			)
+			const hub = new McpHub(mockProvider as ClineProvider)
+			await new Promise((resolve) => setTimeout(resolve, 100))
+			vi.spyOn(hub as any, "scheduleReconnect").mockImplementation(() => undefined)
+			await hub["connectToServer"]("browseros-neo", {
+				type: "streamable-http",
+				url: "http://127.0.0.1:9200/mcp",
+				browserOS: true,
+				oauth: { disabled: true },
+			} as any)
+			const connection = hub.connections.find((entry) => entry.server.name === "browseros-neo")!
+			expect(connection.server.status).toBe("connected")
+			const owner = {}
+			await hub.browserOSAccess.acquire(owner, connection, async () => true)
+			await transport[event](new Error("Disconnected"))
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+			expect(connection.server.status).toBe("disconnected")
+			const replacement = {
+				...connection,
+				transport: {},
+				server: { ...connection.server, status: "connected" },
+			} as ConnectedMcpConnection
+			hub.connections = [replacement]
+			await hub.browserOSAccess.acquire(owner, replacement, async () => true)
+			await transport[event](new Error("Late event"))
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+			expect(replacement.server.status).toBe("connected")
+			hub.connections = []
+			await hub.dispose()
+		},
+	)
+	// kilocode_change end
 
 	describe("Discriminated union type handling", () => {
 		it("should create connected connections with proper type", async () => {
@@ -285,6 +692,176 @@ describe("McpHub", () => {
 			} else {
 				throw new Error("Connection should be of type 'disconnected'")
 			}
+		})
+
+		// kilocode_change: the live neo protocol returns its browser session in private metadata.
+		it("carries the BrowserOS session through discovery and still requires a page observation", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+			const task = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			mockProvider.context!.globalState.get = vi.fn().mockReturnValue("browseros")
+			const hub = new McpHub(mockProvider as ClineProvider)
+			await new Promise((resolve) => setTimeout(resolve, 100))
+			const request = vi.fn().mockResolvedValue({
+				content: [{ type: "text", text: "Page 7" }],
+				_meta: { "com.browseros.neo/session": "private-session" },
+			})
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "browseros-neo",
+						status: "connected",
+						config: JSON.stringify({
+							type: "streamable-http",
+							url: "http://127.0.0.1:9010/mcp",
+							browserOS: true,
+						}),
+					},
+					client: { request } as any,
+					transport: {} as any,
+				},
+			]
+			const call = (name: string, args: Record<string, unknown>) =>
+				hub.callTool("browseros-neo", name, args, undefined, task)
+			try {
+				await expect(call("tabs", { action: "list" })).rejects.toThrow("not been granted")
+				await hub.grantBrowserOSAccess("browseros-neo", async () => true)
+				const result = await call("tabs", { action: "list", session: "untrusted" })
+				expect(JSON.stringify(result)).not.toContain("private-session")
+				expect(request.mock.calls[0][0].params.arguments).toEqual({ action: "list" })
+				await expect(call("act", { page: 7, kind: "click" })).rejects.toThrow("fresh")
+				await expect(call("tabs", { action: "close", page: 7 })).rejects.toThrow("fresh")
+				await call("snapshot", { page: 7, session: "untrusted" })
+				expect(request.mock.calls[1][0].params.arguments).toEqual({ page: 7, session: "private-session" })
+				await call("act", { page: 7, kind: "click" })
+				expect(request).toHaveBeenCalledTimes(3)
+				hub.browserOSAccess.revoke()
+				await hub.grantBrowserOSAccess("browseros-neo", async () => true)
+				await call("tabs", { action: "active" })
+				expect(request.mock.calls[3][0].params.arguments).toEqual({ action: "active" })
+				await call("tabs", { action: "new", url: "https://example.com" })
+				await expect(call("act", { page: 7, kind: "click" })).rejects.toThrow("fresh")
+				await call("snapshot", { page: 7 })
+				await expect(call("act", { page: 8, kind: "click" })).rejects.toThrow("fresh")
+				await expect(call("run", { code: "return 1", page: 7 })).rejects.toThrow("not supported")
+				await expect(call("snapshot", { page: "7" })).rejects.toThrow("target page ID")
+				await expect(call("tabs", { action: "new", url: "file:///private" })).rejects.toThrow("HTTP(S)")
+				await call("navigate", { page: 7, action: "url", url: "https://example.com" })
+				await expect(call("act", { page: 7, kind: "click" })).rejects.toThrow("fresh")
+				await call("snapshot", { page: 7 })
+				const args = { page: 7, kind: "click" }
+				const pending = call("act", args)
+				args.page = 8
+				await pending
+				expect(request.mock.calls.at(-1)![0].params.arguments.page).toBe(7)
+			} finally {
+				hub.browserOSAccess.revoke()
+				hub.connections = []
+				await hub.dispose()
+			}
+		})
+
+		// kilocode_change: browser grants also cover direct MCP calls and resource reads.
+		it("blocks BrowserOS tools and resources without a grant and during manual pause", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+			const task = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			mockProvider.context!.globalState.get = vi.fn().mockReturnValue("browseros")
+			const hub = new McpHub(mockProvider as ClineProvider)
+			await new Promise((resolve) => setTimeout(resolve, 100))
+			const connection: ConnectedMcpConnection = {
+				type: "connected",
+				server: {
+					name: "browseros-neo",
+					config: JSON.stringify({
+						type: "streamable-http",
+						url: "http://127.0.0.1:9200/mcp",
+						browserOS: true,
+					}),
+					status: "connected",
+				},
+				client: { request: vi.fn().mockResolvedValue({ content: [] }) } as any,
+				transport: {} as any,
+			}
+			hub.connections = [connection]
+			connection.server.source = "global"
+			const projectConnection: ConnectedMcpConnection = {
+				...connection,
+				server: { ...connection.server, source: "project" },
+			}
+			hub.connections.push(projectConnection)
+			const confirm = vi.fn().mockResolvedValue(true)
+			await expect(hub.grantBrowserOSAccess("browseros-neo", confirm, "global")).rejects.toThrow("shadowed")
+			expect(confirm).not.toHaveBeenCalled()
+			hub.connections = [connection]
+			const alias: ConnectedMcpConnection = {
+				...connection,
+				server: {
+					...connection.server,
+					name: "unmarked-alias",
+					config: JSON.stringify({ type: "streamable-http", url: "http://localhost:9200/other-path" }),
+				},
+			}
+			hub.connections.push(alias)
+			await expect(hub.callTool("unmarked-alias", "snapshot", { page: 7 }, undefined, task)).rejects.toThrow(
+				"not been granted",
+			)
+			hub.connections = [alias]
+			await expect(hub.readResource("unmarked-alias", "page://current", undefined, task)).rejects.toThrow(
+				"not been granted",
+			)
+			hub.connections = [connection]
+			const call = (owner = task) => hub.callTool("browseros-neo", "snapshot", { page: 7 }, undefined, owner)
+			const read = (owner = task) => hub.readResource("browseros-neo", "page://current", undefined, owner)
+			await expect(call()).rejects.toThrow("not been granted")
+			await expect(read()).rejects.toThrow("not been granted")
+			expect(connection.client.request).not.toHaveBeenCalled()
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true)
+			await expect(hub.callTool("browseros-neo", "snapshot", { page: 7 })).rejects.toThrow(
+				"calling task instance",
+			)
+			await expect(hub.readResource("browseros-neo", "page://current")).rejects.toThrow("calling task instance")
+			await call()
+			hub.browserOSAccess.pause()
+			await expect(call()).rejects.toThrow("paused")
+			await expect(read()).rejects.toThrow("paused")
+			expect(connection.client.request).toHaveBeenCalledOnce()
+			hub.browserOSAccess.revoke()
+
+			// A new task's grant must never authorize a delayed call from the old task.
+			const replacement = {} as any
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(replacement)
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true)
+			await expect(call(task)).rejects.toThrow("calling task instance")
+			await expect(read(task)).rejects.toThrow("calling task instance")
+			expect(connection.client.request).toHaveBeenCalledOnce()
+			await call(replacement)
+			expect(connection.client.request).toHaveBeenCalledTimes(2)
+
+			// Check again after waiting in the queue, before sending anything to the browser.
+			const queued = call(replacement)
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(task)
+			await expect(queued).rejects.toThrow("caller changed")
+			expect(connection.client.request).toHaveBeenCalledTimes(2)
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+
+			// Host consent survives replacing the chat, but only its current caller can send commands.
+			await call(task)
+			expect(connection.client.request).toHaveBeenCalledTimes(3)
+			await expect(call(replacement)).rejects.toThrow("calling task instance")
+			hub.browserOSAccess.revoke()
+			await expect(
+				hub.grantBrowserOSAccess("browseros-neo", async () => {
+					vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(replacement)
+					return true
+				}),
+			).resolves.toBeUndefined()
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+			expect(connection.client.request).toHaveBeenCalledTimes(3)
+			hub.browserOSAccess.revoke()
+			hub.connections = []
+			await hub.dispose()
 		})
 
 		it("should handle type narrowing correctly in callTool", async () => {
@@ -1114,6 +1691,41 @@ describe("McpHub", () => {
 			const writtenConfig = JSON.parse(callToUse[1] as string)
 			expect(writtenConfig.mcpServers["test-server"].disabled).toBe(true)
 		})
+
+		// kilocode_change: browser selection controls model-visible tools, not saved connections.
+		it.each(["chrome-extension", "isolated", "browseros"])(
+			"advertises BrowserOS only in its selected mode (%s)",
+			(mode) => {
+				const get = mockProvider.context!.globalState.get
+				mockProvider.context!.globalState.get = vi.fn(() => mode) as any
+				mcpHub.connections = [
+					["browseros-neo", { url: "http://127.0.0.1:9010/mcp" }],
+					["browser-alias", { url: "http://localhost:9010/mcp" }],
+					["custom-browser", { browserOS: true, url: "http://127.0.0.1:9011/mcp" }],
+					["ordinary", { command: "node" }],
+				].map(([name, config]) => ({
+					type: "connected",
+					server: { name, config: JSON.stringify(config), status: "connected" },
+					client: {},
+					transport: {},
+				})) as ConnectedMcpConnection[]
+				try {
+					expect(mcpHub.getServers().map((server) => server.name)).toEqual(
+						mode === "browseros"
+							? ["browseros-neo", "browser-alias", "custom-browser", "ordinary"]
+							: ["ordinary"],
+					)
+					expect(mcpHub.getAllServers()).toHaveLength(4)
+					// A continuing chat reads the same hub again after a saved mode change.
+					mockProvider.context!.globalState.get = vi.fn(() => "chrome-extension") as any
+					expect(mcpHub.getServers().map((server) => server.name)).toEqual(["ordinary"])
+					mockProvider.context!.globalState.get = vi.fn(() => "browseros") as any
+					expect(mcpHub.getServers()).toHaveLength(4)
+				} finally {
+					mockProvider.context!.globalState.get = get
+				}
+			},
+		)
 
 		it("should filter out disabled servers from getServers", () => {
 			const mockConnections: McpConnection[] = [

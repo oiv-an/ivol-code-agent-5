@@ -1,0 +1,14 @@
+{
+	"manifest_version": 3,
+	"name": "IVOL Browser Connector",
+	"version": "0.7.0",
+	"description": "Connect Chrome to IVOL Code. All permissions and controls stay in the IVOL chat.",
+	"minimum_chrome_version": "125",
+	"permissions": ["debugger", "activeTab", "tabs", "tabGroups", "alarms"],
+	"host_permissions": ["http://127.0.0.1/*"],
+	"background": { "service_worker": "background.js", "type": "module" },
+	"action": { "default_title": "IVOL Browser Connector" },
+	"content_security_policy": {
+		"extension_pages": "script-src 'self'; object-src 'none'; connect-src ws://127.0.0.1:* http://127.0.0.1:*"
+	}
+}

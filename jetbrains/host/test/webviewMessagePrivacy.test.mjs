@@ -14,6 +14,27 @@ test("the prepared host dispatches webview messages without logging their privat
 	assert.doesNotMatch(handler, /console\.(?:log|debug|info|warn|error)\s*\(/)
 })
 
+test("outgoing webview diagnostics omit payloads and binary buffers", async () => {
+	const source = await readFile(new URL("../src/webViewManager.ts", import.meta.url), "utf8")
+	assert.doesNotMatch(source, /console\.log\([^\n]*,\s*message\)/)
+	assert.doesNotMatch(source, /console\.log\([^\n]*\{\s*handle,\s*value,\s*buffers\s*\}/)
+	assert.match(source, /payloadLength: value.length/)
+})
+
+test("optional Kotlin RPC file logging never serializes application payloads", async () => {
+	const source = await readFile(
+		new URL(
+			"../../plugin/src/main/kotlin/ai/kilocode/jetbrains/ipc/proxy/logger/FileRPCProtocolLogger.kt",
+			import.meta.url,
+		),
+		"utf8",
+	)
+	const formatter = source.split("private fun logMessage(")[1]?.split("private fun stringify(")[0]
+	assert.ok(formatter)
+	assert.match(formatter, /\[payload omitted\]/)
+	assert.doesNotMatch(formatter, /data\.toString\(\)|"\$data\)"/)
+})
+
 test("the tracked dependency patch cannot restore webview payload logging on rebuild", async () => {
 	const patch = await readFile(new URL("../../../deps/patches/vscode/jetbrains.patch", import.meta.url), "utf8")
 	const webviewPatch = patch
