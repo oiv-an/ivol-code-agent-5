@@ -8,6 +8,9 @@ WebStorm uses separate archives for different IntelliJ Platform generations. Ins
 | -------- | --------------- | --------------------- | ------------------- | --------------- |
 | 2024.3.5 | WS-243.26053.12 | 243.26053.12–243.\*   | webstorm-2024.3.zip | Java 21         |
 | 2026.1.5 | WS-261.27258.45 | 261.27258.45–261.\*   | webstorm-2026.1.zip | Java 21         |
+| 2026.2.3 | WS-262.10968.77 | 262.10968.77–262.\*   | webstorm-2026.2.zip | Java 25         |
+
+The 2026.2 target is available starting with plugin 5.17.13. Build with `-PwebstormTarget=2026.2` and Java 25; outputs use `build/webstorm262`. It retains the modular JCEF dependency and uses modern CEF callbacks, unlike the older WebStorm targets. Compilation, automated tests and Plugin Verifier against the exact WS-262.10968.77 SDK passed. Live installation remains a separate check.
 
 The 2026.1 package was built for release 5.17.11. Compilation and 206 automated tests passed, and Plugin Verifier reported **Compatible** against WS-261.27258.45. The final ZIP passed CRC, identity, version, build-range and Java 21 bytecode checks; its shared extension distribution matches the same-version VSIX byte for byte. These checks do not replace live installation testing. The SDK declares Java 21 as its minimum even though its bundled JBR runs Java 25.
 

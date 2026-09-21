@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.13
+
+- Add a dedicated WebStorm 2026.2.3 package for build 262.10968.77 with Java 25 and the current browser adapter. Older WebStorm targets remain separate.
+- Include the quiet automatic MCP reconnection fix from 5.17.12.
+
 ## 5.17.12
 
 - Stop showing restart and connection notifications during automatic MCP recovery and BrowserOS connection preparation. Manual restart notifications remain available and report success only when connected.
