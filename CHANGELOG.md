@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.12
+
+- Stop showing restart and connection notifications during automatic MCP recovery and BrowserOS connection preparation. Manual restart notifications remain available and report success only when connected.
+- Browser-control consent is still revoked on connection loss. This update reduces notification noise; it does not claim to resolve the underlying intermittent transport failures.
+
 ## 5.17.11
 
 - Add a separate WebStorm 2026.1.5 package for build 261.27258.45 while retaining the WebStorm 2024.3 package. Choose the archive matching your IDE platform.

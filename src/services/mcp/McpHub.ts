@@ -703,7 +703,7 @@ export class McpHub {
 
 			try {
 				console.log(`Auto-reconnecting to "${serverName}" (attempt ${attempts + 1})`)
-				await this.restartConnection(serverName, source)
+				await this.restartConnection(serverName, source, { silent: true }) // kilocode_change: background recovery must not show manual-restart notifications
 
 				// Check if reconnection was successful
 				const updatedConnection = this.findConnection(serverName, source)
@@ -2043,7 +2043,13 @@ export class McpHub {
 		}
 	}
 
-	async restartConnection(serverName: string, source?: "global" | "project"): Promise<void> {
+	// kilocode_change start: distinguish background recovery from an explicit user restart.
+	async restartConnection(
+		serverName: string,
+		source?: "global" | "project",
+		options: { silent?: boolean } = {},
+	): Promise<void> {
+		// kilocode_change end
 		this.isConnecting = true
 
 		// Check if MCP is globally enabled
@@ -2057,11 +2063,19 @@ export class McpHub {
 		const connection = this.findConnection(serverName, source)
 		const config = connection?.server.config
 		if (config) {
-			vscode.window.showInformationMessage(t("mcp:info.server_restarting", { serverName }))
+			// kilocode_change start
+			if (!options.silent) {
+				vscode.window.showInformationMessage(t("mcp:info.server_restarting", { serverName }))
+			}
+			// kilocode_change end
 			connection.server.status = "connecting"
 			connection.server.error = ""
 			await this.notifyWebviewOfServerChanges()
-			await delay(500) // artificial delay to show user that server is restarting
+			// kilocode_change start: only manual restarts need a visible progress delay.
+			if (!options.silent) {
+				await delay(500)
+			}
+			// kilocode_change end
 			try {
 				await this.deleteConnection(serverName, connection.server.source)
 				// Parse the config to validate it
@@ -2072,7 +2086,14 @@ export class McpHub {
 
 					// Try to connect again using validated config
 					await this.connectToServer(serverName, validatedConfig, connection.server.source || "global")
-					vscode.window.showInformationMessage(t("mcp:info.server_connected", { serverName }))
+					// kilocode_change start: OAuth-required placeholders are not successful connections.
+					if (
+						!options.silent &&
+						this.findConnection(serverName, connection.server.source)?.server.status === "connected"
+					) {
+						vscode.window.showInformationMessage(t("mcp:info.server_connected", { serverName }))
+					}
+					// kilocode_change end
 				} catch (validationError) {
 					this.showErrorMessage(`Invalid configuration for MCP server "${serverName}"`, validationError)
 				}
@@ -2669,7 +2690,7 @@ export class McpHub {
 			throw new Error("Select an enabled BrowserOS connection")
 		if (this.findConnection(serverName) !== connection) throw new Error("Selected BrowserOS connection is shadowed")
 		if (connection.server.status !== "connected") {
-			await this.restartConnection(serverName, source)
+			await this.restartConnection(serverName, source, { silent: true }) // kilocode_change: browser setup already reports its own progress
 			connection = this.findConnection(serverName, source)
 		}
 		if (!connection || connection.type !== "connected" || connection.server.status !== "connected")

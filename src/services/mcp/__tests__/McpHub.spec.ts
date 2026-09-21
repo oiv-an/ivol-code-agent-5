@@ -2505,6 +2505,72 @@ describe("McpHub", () => {
 		})
 	})
 
+	// kilocode_change start: background recovery must not spam IDE notifications.
+	describe("restart notifications", () => {
+		let hub: McpHub
+		let connection: McpConnection
+
+		beforeEach(() => {
+			hub = Object.create(McpHub.prototype) as McpHub
+			connection = {
+				server: {
+					name: "browseros-neo",
+					source: "global",
+					status: "disconnected",
+					config: JSON.stringify({ type: "streamable-http", url: "http://127.0.0.1:9010/mcp" }),
+				},
+			} as McpConnection
+			hub.connections = [connection]
+			vi.spyOn(hub as any, "isMcpEnabled").mockResolvedValue(true)
+			vi.spyOn(hub as any, "notifyWebviewOfServerChanges").mockResolvedValue(undefined)
+			vi.spyOn(hub as any, "deleteConnection").mockResolvedValue(undefined)
+			vi.spyOn(hub as any, "connectToServer").mockImplementation(async () => {
+				connection.server.status = "connected"
+			})
+			vi.useFakeTimers()
+		})
+
+		afterEach(() => {
+			vi.useRealTimers()
+		})
+
+		it("keeps automatic recovery silent", async () => {
+			Object.assign(hub, { reconnectTimers: new Map(), reconnectAttempts: new Map(), isDisposed: false })
+			const restart = vi.spyOn(hub, "restartConnection")
+			;(hub as any).scheduleReconnect("browseros-neo", "global")
+			await vi.advanceTimersByTimeAsync(1000)
+			expect(restart).toHaveBeenCalledWith("browseros-neo", "global", { silent: true })
+			expect(connection.server.status).toBe("connected")
+			expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+			expect(hub.isConnecting).toBe(false)
+		})
+
+		it("retains notifications for a successful manual restart", async () => {
+			const pending = hub.restartConnection("browseros-neo", "global")
+			await vi.advanceTimersByTimeAsync(500)
+			await pending
+			expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+				t("mcp:info.server_restarting", { serverName: "browseros-neo" }),
+			)
+			expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+				t("mcp:info.server_connected", { serverName: "browseros-neo" }),
+			)
+		})
+
+		it("does not announce success for a disconnected placeholder", async () => {
+			vi.mocked((hub as any).connectToServer).mockImplementation(async () => {
+				connection.server.status = "disconnected"
+			})
+			const pending = hub.restartConnection("browseros-neo", "global")
+			await vi.advanceTimersByTimeAsync(500)
+			await pending
+			expect(vscode.window.showInformationMessage).not.toHaveBeenCalledWith(
+				t("mcp:info.server_connected", { serverName: "browseros-neo" }),
+			)
+		})
+	})
+	// kilocode_change end
+
 	describe("Windows command wrapping", () => {
 		let StdioClientTransport: ReturnType<typeof vi.fn>
 		let Client: ReturnType<typeof vi.fn>
