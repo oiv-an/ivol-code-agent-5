@@ -1,3 +1,4 @@
+// kilocode_change: ranges remain available even when preview limiting is disabled
 import type OpenAI from "openai"
 import { createReadFileTool, type ReadFileToolOptions } from "../read_file"
 
@@ -73,12 +74,12 @@ describe("createReadFileTool", () => {
 			expect(description).toContain("Example with line ranges")
 		})
 
-		it("should not include line_ranges in description when partialReadsEnabled is false", () => {
+		it("should still include line_ranges in description when partialReadsEnabled is false", () => {
 			const tool = createReadFileTool({ partialReadsEnabled: false })
 			const description = getFunctionDef(tool).description
 
-			expect(description).not.toContain("line_ranges")
-			expect(description).not.toContain("Example with line ranges")
+			expect(description).toContain("line_ranges")
+			expect(description).toContain("Example with line ranges")
 		})
 
 		it("should include line_ranges parameter in schema when partialReadsEnabled is true", () => {
@@ -88,11 +89,11 @@ describe("createReadFileTool", () => {
 			expect(schema.properties.files.items.properties).toHaveProperty("line_ranges")
 		})
 
-		it("should not include line_ranges parameter in schema when partialReadsEnabled is false", () => {
+		it("should still include line_ranges parameter in schema when partialReadsEnabled is false", () => {
 			const tool = createReadFileTool({ partialReadsEnabled: false })
 			const schema = getFunctionDef(tool).parameters as any
 
-			expect(schema.properties.files.items.properties).not.toHaveProperty("line_ranges")
+			expect(schema.properties.files.items.properties).toHaveProperty("line_ranges")
 		})
 	})
 
@@ -159,7 +160,7 @@ describe("createReadFileTool", () => {
 			const description = getFunctionDef(tool).description
 
 			expect(description).toContain("only read one file at a time")
-			expect(description).not.toContain("line_ranges")
+			expect(description).toContain("line_ranges")
 			expect(description).not.toContain("Example multiple files")
 		})
 
@@ -184,8 +185,8 @@ describe("createReadFileTool", () => {
 			})
 			const description = getFunctionDef(tool).description
 
-			// Should have image support but no line_ranges
-			expect(description).not.toContain("line_ranges")
+			// Should have image support and continuation ranges
+			expect(description).toContain("line_ranges")
 			expect(description).toContain(
 				"Automatically processes and returns image files (PNG, JPG, JPEG, GIF, BMP, SVG, WEBP, ICO, AVIF) for visual analysis",
 			)

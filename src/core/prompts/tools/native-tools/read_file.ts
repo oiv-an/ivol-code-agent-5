@@ -33,7 +33,8 @@ export interface ReadFileToolOptions {
  * @returns Native tool definition for read_file
  */
 export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Chat.ChatCompletionTool {
-	const { partialReadsEnabled = true, maxConcurrentFileReads = 5, supportsImages = false } = options
+	const { maxConcurrentFileReads = 5, supportsImages = false } = options
+	const partialReadsEnabled = true // kilocode_change: continuation must remain available in full-file mode
 	const isMultipleReadsEnabled = maxConcurrentFileReads > 1
 
 	// Build description intro with concurrent reads limit message
@@ -46,7 +47,9 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 		"Structure: { files: [{ path: 'relative/path.ts'" +
 		(partialReadsEnabled ? ", line_ranges: [[1, 50], [100, 150]]" : "") +
 		" }] }. " +
-		"The 'path' is required and relative to workspace. "
+		"The 'path' is required and relative to workspace. " +
+		// kilocode_change: explain bounded reading and recovery
+		"Text results share a bounded response budget. Large files may be partial; follow the returned continuation line using line_ranges, and never treat unread content as read. If context is exhausted, compact the conversation before retrying instead of repeating the same full-file request. "
 
 	const optionalRangesDescription = partialReadsEnabled
 		? "The 'line_ranges' is optional for reading specific sections. Each range is a [start, end] tuple (1-based inclusive). "
@@ -82,7 +85,7 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 				"Optional line ranges to read. Each range is a [start, end] tuple with 1-based inclusive line numbers. Use multiple ranges for non-contiguous sections.",
 			items: {
 				type: "array",
-				items: { type: "integer" },
+				items: { type: "integer", minimum: 1 }, // kilocode_change
 				minItems: 2,
 				maxItems: 2,
 			},
@@ -121,4 +124,4 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 	} satisfies OpenAI.Chat.ChatCompletionTool
 }
 
-export const read_file = createReadFileTool({ partialReadsEnabled: false })
+export const read_file = createReadFileTool() // kilocode_change

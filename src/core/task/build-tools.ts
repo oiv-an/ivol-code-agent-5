@@ -94,7 +94,6 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		customModes,
 		experiments,
 		apiConfiguration,
-		maxReadFileLine,
 		maxConcurrentFileReads,
 		browserToolEnabled,
 		modelInfo,
@@ -117,8 +116,8 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		diffEnabled,
 	}
 
-	// Determine if partial reads are enabled based on maxReadFileLine setting.
-	const partialReadsEnabled = maxReadFileLine !== -1
+	// kilocode_change: allow continuation regardless of the default preview size.
+	const partialReadsEnabled = true
 
 	// Check if the model supports images for read_file tool description.
 	const supportsImages = modelInfo?.supportsImages ?? false

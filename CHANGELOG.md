@@ -1,5 +1,18 @@
 # IVOL Code Agent 5
 
+## 5.17.15
+
+- Read large files safely in resumable sections without losing access to line ranges or exceeding the shared text budget.
+- Report the actual lines returned and where to continue; ask for context compaction when no reading budget remains instead of repeatedly requesting the entire file.
+- Fix a race in streamed file reading that could fail when the input closed during token counting.
+- Include the web-search-first instructions from 5.17.14 across all supported IDE packages. Browser control remains available for interactive and authenticated workflows.
+
+## 5.17.14
+
+- Use the built-in web search first for plain information lookups instead of opening a browser. A connected browser no longer turns into the default research path.
+- The browser is still used where it is actually needed: pages behind your login, interactive steps such as forms, checking a site you are building, and whenever you ask for it directly.
+- This guides model behaviour through tool instructions; it is not a hard block on browser use.
+
 ## 5.17.13
 
 - Add a dedicated WebStorm 2026.2.3 package for build 262.10968.77 with Java 25 and the current browser adapter. Older WebStorm targets remain separate.

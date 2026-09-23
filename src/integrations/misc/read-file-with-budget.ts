@@ -1,182 +1,139 @@
+// kilocode_change - sequential, bounded file reading shared by all IDE hosts
 import { createReadStream } from "fs"
-import fs from "fs/promises"
 import { createInterface } from "readline"
 import { countTokens } from "../../utils/countTokens"
-import { Anthropic } from "@anthropic-ai/sdk"
+import { addLineNumbers } from "./extract-text"
 
 export interface ReadWithBudgetResult {
-	/** The content read up to the token budget */
 	content: string
-	/** Actual token count of returned content */
+	/** Tokens in the returned content, including line numbers when requested. */
 	tokenCount: number
-	/** Total lines in the returned content */
 	lineCount: number
-	/** Whether the entire file was read (false if truncated) */
+	/** Whether the requested range (or entire file) was read. */
 	complete: boolean
 }
 
 export interface ReadWithBudgetOptions {
-	/** Maximum tokens allowed. Required. */
 	budgetTokens: number
-	/** Number of lines to buffer before token counting (default: 256) */
 	chunkLines?: number
+	/** 1-based inclusive range. */
+	startLine?: number
+	endLine?: number
+	/** Account for the actual numbered representation returned to the model. */
+	includeLineNumbers?: boolean
 }
 
-/**
- * Reads a file while incrementally counting tokens, stopping when budget is reached.
- *
- * Unlike validateFileTokenBudget + extractTextFromFile, this is a single-pass
- * operation that returns the actual content up to the token limit.
- *
- * @param filePath - Path to the file to read
- * @param options - Budget and chunking options
- * @returns Content read, token count, and completion status
- */
+// A second bound protects against huge single lines and unusually large context windows.
+export const MAX_FILE_READ_CHARACTERS = 128_000
+
+async function measure(text: string): Promise<number> {
+	if (!text) return 0
+	try {
+		return await countTokens([{ type: "text", text }])
+	} catch (error) {
+		console.warn("[read_file] Token counting failed; using UTF-8 byte estimate", error)
+		return Buffer.byteLength(text, "utf8")
+	}
+}
+
+async function readBudgetedLines(
+	lines: AsyncIterable<string>,
+	options: ReadWithBudgetOptions,
+): Promise<ReadWithBudgetResult> {
+	const { budgetTokens, chunkLines = 64, startLine = 1, endLine, includeLineNumbers = false } = options
+	if (!Number.isFinite(budgetTokens) || budgetTokens < 0) throw new Error("Invalid file token budget")
+	if (!Number.isSafeInteger(chunkLines) || chunkLines < 1) throw new Error("Invalid chunk size")
+	if (
+		!Number.isSafeInteger(startLine) ||
+		startLine < 1 ||
+		(endLine !== undefined && (!Number.isSafeInteger(endLine) || endLine < startLine))
+	) {
+		throw new Error("Invalid line range: use positive integers with start <= end")
+	}
+	const accepted: string[] = []
+	let pending: string[] = []
+	let tokenCount = 0
+	let characters = 0
+	let pendingCharacters = 0
+	let lineNumber = 0
+	const render = (candidate: string[]) => {
+		const text = candidate.join("\n")
+		return includeLineNumbers ? addLineNumbers(candidate.length ? text + "\n" : "", startLine) : text
+	}
+	const flush = async (): Promise<boolean> => {
+		if (!pending.length) return true
+		const candidate = [...accepted, ...pending]
+		const tokens = await measure(render(candidate))
+		if (tokens <= budgetTokens) {
+			accepted.push(...pending)
+			tokenCount = tokens
+			characters += pendingCharacters
+			pending = []
+			pendingCharacters = 0
+			return true
+		}
+		let low = 0
+		let high = pending.length
+		while (low < high) {
+			const mid = Math.ceil((low + high) / 2)
+			const count = await measure(render([...accepted, ...pending.slice(0, mid)]))
+			if (count <= budgetTokens) {
+				low = mid
+				tokenCount = count
+			} else high = mid - 1
+		}
+		accepted.push(...pending.slice(0, low))
+		pending = []
+		return false
+	}
+	const result = (complete: boolean): ReadWithBudgetResult => ({
+		content: accepted.join("\n"),
+		tokenCount,
+		lineCount: accepted.length,
+		complete,
+	})
+	for await (const line of lines) {
+		lineNumber++
+		if (lineNumber < startLine) continue
+		if (endLine !== undefined && lineNumber > endLine) break
+		if (characters + pendingCharacters + line.length + 1 > MAX_FILE_READ_CHARACTERS) {
+			await flush()
+			return result(false)
+		}
+		pending.push(line)
+		pendingCharacters += line.length + 1
+		if (pending.length >= chunkLines && !(await flush())) return result(false)
+		if (lineNumber === endLine) break
+	}
+	if (lineNumber < startLine && startLine > 1) throw new RangeError(`Start line ${startLine} is beyond end of file`)
+	return result(await flush())
+}
+
+/** Read sequentially: no concurrent line/close callbacks or resume of a closed readline. */
 export async function readFileWithTokenBudget(
 	filePath: string,
 	options: ReadWithBudgetOptions,
 ): Promise<ReadWithBudgetResult> {
-	const { budgetTokens, chunkLines = 256 } = options
-
-	// Verify file exists
+	const stream = createReadStream(filePath, { encoding: "utf8" })
+	const lines = createInterface({ input: stream, crlfDelay: Infinity })
 	try {
-		await fs.access(filePath)
-	} catch {
-		throw new Error(`File not found: ${filePath}`)
+		return await readBudgetedLines(lines, options)
+	} finally {
+		lines.close()
+		stream.destroy()
 	}
+}
 
-	return new Promise((resolve, reject) => {
-		let content = ""
-		let lineCount = 0
-		let tokenCount = 0
-		let lineBuffer: string[] = []
-		let complete = true
-		let isProcessing = false
-		let shouldClose = false
-
-		const readStream = createReadStream(filePath)
-		const rl = createInterface({
-			input: readStream,
-			crlfDelay: Infinity,
-		})
-
-		const processBuffer = async (): Promise<boolean> => {
-			if (lineBuffer.length === 0) return true
-
-			const bufferText = lineBuffer.join("\n")
-			const currentBuffer = [...lineBuffer]
-			lineBuffer = []
-
-			// Count tokens for this chunk
-			let chunkTokens: number
-			try {
-				const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [{ type: "text", text: bufferText }]
-				chunkTokens = await countTokens(contentBlocks)
-			} catch {
-				// Fallback: conservative estimate (2 chars per token)
-				chunkTokens = Math.ceil(bufferText.length / 2)
-			}
-
-			// Check if adding this chunk would exceed budget
-			if (tokenCount + chunkTokens > budgetTokens) {
-				// Need to find cutoff within this chunk using binary search
-				let low = 0
-				let high = currentBuffer.length
-				let bestFit = 0
-				let bestTokens = 0
-
-				while (low < high) {
-					const mid = Math.floor((low + high + 1) / 2)
-					const testContent = currentBuffer.slice(0, mid).join("\n")
-					let testTokens: number
-					try {
-						const blocks: Anthropic.Messages.ContentBlockParam[] = [{ type: "text", text: testContent }]
-						testTokens = await countTokens(blocks)
-					} catch {
-						testTokens = Math.ceil(testContent.length / 2)
-					}
-
-					if (tokenCount + testTokens <= budgetTokens) {
-						bestFit = mid
-						bestTokens = testTokens
-						low = mid
-					} else {
-						high = mid - 1
-					}
-				}
-
-				// Add best fit lines
-				if (bestFit > 0) {
-					const fitContent = currentBuffer.slice(0, bestFit).join("\n")
-					content += (content.length > 0 ? "\n" : "") + fitContent
-					tokenCount += bestTokens
-					lineCount += bestFit
-				}
-				complete = false
-				return false
-			}
-
-			// Entire chunk fits - add it all
-			content += (content.length > 0 ? "\n" : "") + bufferText
-			tokenCount += chunkTokens
-			lineCount += currentBuffer.length
-			return true
-		}
-
-		rl.on("line", (line) => {
-			lineBuffer.push(line)
-
-			if (lineBuffer.length >= chunkLines && !isProcessing) {
-				isProcessing = true
-				rl.pause()
-
-				processBuffer()
-					.then((continueReading) => {
-						isProcessing = false
-						if (!continueReading) {
-							shouldClose = true
-							rl.close()
-							readStream.destroy()
-						} else if (!shouldClose) {
-							rl.resume()
-						}
-					})
-					.catch((err) => {
-						isProcessing = false
-						shouldClose = true
-						rl.close()
-						readStream.destroy()
-						reject(err)
-					})
-			}
-		})
-
-		rl.on("close", async () => {
-			// Wait for any ongoing processing with timeout
-			const maxWaitTime = 30000 // 30 seconds
-			const startWait = Date.now()
-			while (isProcessing) {
-				if (Date.now() - startWait > maxWaitTime) {
-					reject(new Error("Timeout waiting for buffer processing to complete"))
-					return
-				}
-				await new Promise((r) => setTimeout(r, 10))
-			}
-
-			// Process remaining buffer
-			if (!shouldClose) {
-				try {
-					await processBuffer()
-				} catch (err) {
-					reject(err)
-					return
-				}
-			}
-
-			resolve({ content, tokenCount, lineCount, complete })
-		})
-
-		rl.on("error", reject)
-		readStream.on("error", reject)
-	})
+/** Apply the same response budget to extracted documents and code definitions. */
+export async function readTextWithTokenBudget(
+	text: string,
+	options: ReadWithBudgetOptions,
+): Promise<ReadWithBudgetResult> {
+	async function* lines() {
+		if (!text) return
+		const parts = text.split(/\r?\n/)
+		if (parts[parts.length - 1] === "") parts.pop()
+		for (const line of parts) yield line
+	}
+	return readBudgetedLines(lines(), options)
 }

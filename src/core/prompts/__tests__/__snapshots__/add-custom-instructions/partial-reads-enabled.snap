@@ -83,6 +83,8 @@ Examples:
 </args>
 </read_file>
 
+Text results share a bounded response budget. Follow the returned continuation line with line_range when truncated. Never treat unread content as read. If context is exhausted, compact the conversation before retrying; do not repeatedly request the same full file.
+
 IMPORTANT: You MUST use this Efficient Reading Strategy:
 - You MUST read all related files and implementations together in a single operation (up to 5 files at once)
 - You MUST obtain all necessary context before proceeding with changes

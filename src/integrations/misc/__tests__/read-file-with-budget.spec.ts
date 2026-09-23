@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import os from "os"
-import { readFileWithTokenBudget } from "../read-file-with-budget"
+import { readFileWithTokenBudget, readTextWithTokenBudget } from "../read-file-with-budget"
 
 describe("readFileWithTokenBudget", () => {
 	let tempDir: string
@@ -16,6 +16,57 @@ describe("readFileWithTokenBudget", () => {
 		// Clean up temporary directory
 		await fs.rm(tempDir, { recursive: true, force: true })
 	})
+
+	// kilocode_change start
+	test("reads CRLF Unicode ranges without shifting line numbers", async () => {
+		const filePath = path.join(tempDir, "range.md")
+		await fs.writeFile(filePath, "first\r\nПривет\r\n世界\r\nlast\r\n")
+		const result = await readFileWithTokenBudget(filePath, {
+			budgetTokens: 1000,
+			startLine: 2,
+			endLine: 3,
+			includeLineNumbers: true,
+		})
+		expect(result).toMatchObject({ content: "Привет\n世界", lineCount: 2, complete: true })
+	})
+	test("numbered output consumes budget, including blank lines", async () => {
+		const text = Array.from({ length: 100 }, () => "").join("\n")
+		const raw = await readTextWithTokenBudget(text, { budgetTokens: 30 })
+		const numbered = await readTextWithTokenBudget(text, { budgetTokens: 30, includeLineNumbers: true })
+		expect(numbered.lineCount).toBeLessThan(raw.lineCount)
+		expect(numbered.tokenCount).toBeLessThanOrEqual(30)
+	})
+	test("handles delayed token counting at EOF without resuming a closed stream", async () => {
+		const tokens = await import("../../../utils/countTokens")
+		const spy = vi.spyOn(tokens, "countTokens").mockImplementation(async (blocks) => {
+			await new Promise((resolve) => setTimeout(resolve, 2))
+			return JSON.stringify(blocks).length
+		})
+		try {
+			const filePath = path.join(tempDir, "eof.md")
+			await fs.writeFile(filePath, Array.from({ length: 600 }, (_, i) => `line ${i}`).join("\n"))
+			const result = await readFileWithTokenBudget(filePath, { budgetTokens: 10000, chunkLines: 256 })
+			expect(result.lineCount).toBe(600)
+			expect(result.complete).toBe(true)
+		} finally {
+			spy.mockRestore()
+		}
+	})
+	test("counts the exact numbered representation and preserves blank trailing lines", async () => {
+		const { countTokens } = await import("../../../utils/countTokens")
+		const { addLineNumbers } = await import("../extract-text")
+		const result = await readTextWithTokenBudget("hello\n\n\n", { budgetTokens: 1000, includeLineNumbers: true })
+		expect(result.lineCount).toBe(3)
+		const numbered = addLineNumbers(result.content + "\n")
+		expect(numbered).toContain("3 | ")
+		expect(result.tokenCount).toBe(await countTokens([{ type: "text", text: numbered }]))
+	})
+
+	test("does not claim an oversized single line was read", async () => {
+		const result = await readTextWithTokenBudget("x".repeat(150000), { budgetTokens: 100000 })
+		expect(result).toMatchObject({ content: "", lineCount: 0, complete: false })
+	})
+	// kilocode_change end
 
 	describe("Basic functionality", () => {
 		test("reads entire small file when within budget", async () => {
@@ -197,7 +248,7 @@ describe("readFileWithTokenBudget", () => {
 				readFileWithTokenBudget(filePath, {
 					budgetTokens: 100,
 				}),
-			).rejects.toThrow("File not found")
+			).rejects.toMatchObject({ code: "ENOENT" }) // kilocode_change: preserve filesystem error code
 		})
 
 		test("handles file with no trailing newline", async () => {

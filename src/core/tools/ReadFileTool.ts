@@ -13,7 +13,6 @@ import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { getReadablePath } from "../../utils/path"
 import { countFileLines } from "../../integrations/misc/line-counter"
-import { readLines } from "../../integrations/misc/read-lines"
 import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../integrations/misc/extract-text"
 import { parseSourceCodeDefinitionsForFile } from "../../services/tree-sitter"
 import { parseXml } from "../../utils/xml"
@@ -29,6 +28,8 @@ import {
 	ImageMemoryTracker,
 } from "./helpers/imageHelpers"
 import { FILE_READ_BUDGET_PERCENT, readFileWithTokenBudget } from "./helpers/fileTokenBudget"
+// kilocode_change: extracted documents share the same response budget
+import { readTextWithTokenBudget, type ReadWithBudgetResult } from "../../integrations/misc/read-file-with-budget"
 import { truncateDefinitionsToLineLimit } from "./helpers/truncateDefinitions"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -186,7 +187,13 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 							hasRangeError = true
 							break
 						}
-						if (isNaN(range.start) || isNaN(range.end)) {
+						if (
+							!Number.isSafeInteger(range.start) ||
+							!Number.isSafeInteger(range.end) ||
+							range.start < 1 ||
+							range.end < 1
+						) {
+							// kilocode_change
 							const errorMsg = "Invalid line range values"
 							updateFileResult(relPath, {
 								status: "blocked",
@@ -357,6 +364,24 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				maxTotalImageSize = DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB,
 			} = state ?? {}
 
+			// kilocode_change start: one bounded text allowance for the entire batch
+			const { id: modelId, info } = task.api.getModel()
+			const maxOutputTokens =
+				getModelMaxOutputTokens({ modelId, model: info, settings: task.apiConfiguration }) ??
+				ANTHROPIC_DEFAULT_MAX_TOKENS
+			const available = info.contextWindow - maxOutputTokens - (task.getTokenUsage().contextTokens || 0)
+			// Reserve room for paths, notices and protocol wrappers; never bypass a full context.
+			let remainingBudget = Number.isFinite(available)
+				? Math.max(
+						0,
+						Math.min(16_000, Math.floor(available * FILE_READ_BUDGET_PERCENT)) - 512 * fileEntries.length,
+					)
+				: 0
+			const contextExhausted = remainingBudget === 0
+			const rangeHint = (start: number, end: number) =>
+				useNative ? `line_ranges: [[${start}, ${end}]]` : `<line_range>${start}-${end}</line_range>`
+			// kilocode_change end
+
 			for (const fileResult of fileResults) {
 				if (fileResult.status !== "approved") continue
 
@@ -379,6 +404,106 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 					}
 
 					const [totalLines, isBinary] = await Promise.all([countFileLines(fullPath), isBinaryFile(fullPath)])
+
+					// kilocode_change start
+					const renderText = async (extracted?: string) => {
+						const count =
+							extracted === undefined
+								? totalLines
+								: extracted
+									? extracted.replace(/\r?\n$/, "").split(/\r?\n/).length
+									: 0
+						const explicit = !!fileResult.lineRanges?.length
+						const ranges = explicit
+							? fileResult.lineRanges!
+							: [
+									{
+										start: 1,
+										end: Math.max(
+											1,
+											maxReadFileLine > 0 ? Math.min(count, maxReadFileLine) : count,
+										),
+									},
+								]
+						const xml: string[] = []
+						const native: string[] = []
+						for (let index = 0; index < ranges.length; index++) {
+							const range = ranges[index]
+							const options = {
+								budgetTokens: remainingBudget,
+								startLine: range.start,
+								endLine: range.end,
+								includeLineNumbers: true,
+							}
+							const result: ReadWithBudgetResult =
+								remainingBudget <= 0
+									? { content: "", tokenCount: 0, lineCount: 0, complete: count === 0 }
+									: extracted === undefined
+										? await readFileWithTokenBudget(fullPath, options)
+										: await readTextWithTokenBudget(extracted, options)
+							remainingBudget = Math.max(0, remainingBudget - result.tokenCount - 128)
+							const last = range.start + result.lineCount - 1
+							if (result.lineCount > 0) {
+								const numbered = addLineNumbers(result.content + "\n", range.start)
+								xml.push(`<content lines="${range.start}-${last}">\n${numbered}</content>`)
+								native.push(`Lines ${range.start}-${last}:\n${numbered}`)
+							}
+							let notice = ""
+							if (!result.complete) {
+								const next = range.start + result.lineCount
+								notice = `File truncated by the shared response budget. ${result.lineCount ? `Continue at line ${next}` : `No lines read from line ${next}`}; use ${rangeHint(next, Math.max(next, Math.min(range.end, next + 199)))}. ${ranges.length - index - 1} later requested ranges were not read. `
+								if (contextExhausted)
+									notice +=
+										"No available context budget for file reading. Compact the conversation before retrying; do not repeat the same full-file request or edit unread content."
+								else if (!result.lineCount)
+									notice +=
+										"The batch allowance is exhausted or the next single line exceeds the safe response limit. Read this range in a separate call; if it still does not fit, compact context or use targeted search. Do not assume this line was read."
+							} else if (!explicit && last < count) {
+								notice = `Showing only ${result.lineCount} of ${count} total lines. Continue with ${rangeHint(last + 1, Math.min(count, last + 200))}.`
+							} else if (count === 0) notice = "File is empty"
+							if (notice) {
+								xml.push(`<notice>${notice}</notice>`)
+								native.push(`Note: ${notice}`)
+							}
+							if (!result.complete) break
+						}
+						// Preserve the useful code outline when the configured preview omits lines.
+						if (
+							!explicit &&
+							maxReadFileLine > 0 &&
+							count > maxReadFileLine &&
+							remainingBudget > 0 &&
+							extracted === undefined
+						) {
+							try {
+								const definitions = await parseSourceCodeDefinitionsForFile(
+									fullPath,
+									task.rooIgnoreController,
+								)
+								if (definitions) {
+									const result = await readTextWithTokenBudget(
+										truncateDefinitionsToLineLimit(definitions, maxReadFileLine),
+										{ budgetTokens: remainingBudget },
+									)
+									remainingBudget = Math.max(0, remainingBudget - result.tokenCount - 128)
+									xml.push(
+										`<list_code_definition_names>${result.content}</list_code_definition_names>${result.complete ? "" : "<notice>Definitions truncated by response budget.</notice>"}`,
+									)
+									native.push(
+										`Code Definitions:\n${result.content}${result.complete ? "" : "\nNote: Definitions truncated by response budget."}`,
+									)
+								}
+							} catch (error) {
+								console.warn("[read_file] Could not extract definitions", error)
+							}
+						}
+						await task.fileContextTracker.trackFileContext(relPath, "read_tool" as RecordSource)
+						updateFileResult(relPath, {
+							xmlContent: `<file><path>${relPath}</path>\n${xml.join("\n")}\n</file>`,
+							nativeContent: `File: ${relPath}\n${native.join("\n\n")}`,
+						})
+					}
+					// kilocode_change end
 
 					if (isBinary) {
 						const fileExtension = path.extname(relPath).toLowerCase()
@@ -430,23 +555,9 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 							// Use extractTextFromFile for supported binary formats (PDF, DOCX, etc.)
 							try {
 								const content = await extractTextFromFile(fullPath)
-								const numberedContent = addLineNumbers(content)
-								const lines = content.split("\n")
-								const lineCount = lines.length
-								const lineRangeAttr = lineCount > 0 ? ` lines="1-${lineCount}"` : ""
-
-								await task.fileContextTracker.trackFileContext(relPath, "read_tool" as RecordSource)
-
-								updateFileResult(relPath, {
-									xmlContent:
-										lineCount > 0
-											? `<file><path>${relPath}</path>\n<content${lineRangeAttr}>\n${numberedContent}</content>\n</file>`
-											: `<file><path>${relPath}</path>\n<content/><notice>File is empty</notice>\n</file>`,
-									nativeContent:
-										lineCount > 0
-											? `File: ${relPath}\nLines 1-${lineCount}:\n${numberedContent}`
-											: `File: ${relPath}\nNote: File is empty`,
-								})
+								// kilocode_change start: extracted text uses the same ranges and batch budget
+								await renderText(content)
+								// kilocode_change end
 								continue
 							} catch (error) {
 								const errorMsg = error instanceof Error ? error.message : String(error)
@@ -470,157 +581,29 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 						}
 					}
 
-					if (fileResult.lineRanges && fileResult.lineRanges.length > 0) {
-						const rangeResults: string[] = []
-						const nativeRangeResults: string[] = []
-
-						for (const range of fileResult.lineRanges) {
-							const content = addLineNumbers(
-								await readLines(fullPath, range.end - 1, range.start - 1),
-								range.start,
-							)
-							const lineRangeAttr = ` lines="${range.start}-${range.end}"`
-							rangeResults.push(`<content${lineRangeAttr}>\n${content}</content>`)
-							nativeRangeResults.push(`Lines ${range.start}-${range.end}:\n${content}`)
+					// kilocode_change start: all ordinary text reads use the same bounded path
+					if (maxReadFileLine === 0 && !fileResult.lineRanges?.length) {
+						let definitions: string | undefined
+						try {
+							definitions =
+								(await parseSourceCodeDefinitionsForFile(fullPath, task.rooIgnoreController)) ??
+								undefined
+						} catch (error) {
+							console.warn("[read_file] Could not extract definitions", error)
 						}
-
+						const result = await readTextWithTokenBudget(definitions || "", {
+							budgetTokens: remainingBudget,
+						})
+						remainingBudget = Math.max(0, remainingBudget - result.tokenCount - 128)
+						const notice = `Showing only 0 of ${totalLines} total lines. ${result.complete ? "" : "Definitions truncated. "}Read file content with ${rangeHint(1, Math.max(1, Math.min(totalLines, 200)))}.${contextExhausted ? " Context budget exhausted; compact the conversation before retrying." : ""}`
 						updateFileResult(relPath, {
-							xmlContent: `<file><path>${relPath}</path>\n${rangeResults.join("\n")}\n</file>`,
-							nativeContent: `File: ${relPath}\n${nativeRangeResults.join("\n\n")}`,
+							xmlContent: `<file><path>${relPath}</path><list_code_definition_names>${result.content}</list_code_definition_names><notice>${notice}</notice></file>`,
+							nativeContent: `File: ${relPath}\nCode Definitions:\n${result.content}\n\nNote: ${notice}`,
 						})
-						continue
-					}
-
-					if (maxReadFileLine === 0) {
-						try {
-							const defResult = await parseSourceCodeDefinitionsForFile(
-								fullPath,
-								task.rooIgnoreController,
-							)
-							if (defResult) {
-								const notice = `Showing only ${maxReadFileLine} of ${totalLines} total lines. Use line_range if you need to read more lines`
-								updateFileResult(relPath, {
-									xmlContent: `<file><path>${relPath}</path>\n<list_code_definition_names>${defResult}</list_code_definition_names>\n<notice>${notice}</notice>\n</file>`,
-									nativeContent: `File: ${relPath}\nCode Definitions:\n${defResult}\n\nNote: ${notice}`,
-								})
-							}
-						} catch (error) {
-							if (error instanceof Error && error.message.startsWith("Unsupported language:")) {
-								console.warn(`[read_file] Warning: ${error.message}`)
-							} else {
-								console.error(
-									`[read_file] Unhandled error: ${error instanceof Error ? error.message : String(error)}`,
-								)
-							}
-						}
-						continue
-					}
-
-					if (maxReadFileLine > 0 && totalLines > maxReadFileLine) {
-						const content = addLineNumbers(await readLines(fullPath, maxReadFileLine - 1, 0))
-						const lineRangeAttr = ` lines="1-${maxReadFileLine}"`
-						let xmlInfo = `<content${lineRangeAttr}>\n${content}</content>\n`
-						let nativeInfo = `Lines 1-${maxReadFileLine}:\n${content}\n`
-
-						try {
-							const defResult = await parseSourceCodeDefinitionsForFile(
-								fullPath,
-								task.rooIgnoreController,
-							)
-							if (defResult) {
-								const truncatedDefs = truncateDefinitionsToLineLimit(defResult, maxReadFileLine)
-								xmlInfo += `<list_code_definition_names>${truncatedDefs}</list_code_definition_names>\n`
-								nativeInfo += `\nCode Definitions:\n${truncatedDefs}\n`
-							}
-
-							const notice = `Showing only ${maxReadFileLine} of ${totalLines} total lines. Use line_range if you need to read more lines`
-							xmlInfo += `<notice>${notice}</notice>\n`
-							nativeInfo += `\nNote: ${notice}`
-
-							updateFileResult(relPath, {
-								xmlContent: `<file><path>${relPath}</path>\n${xmlInfo}</file>`,
-								nativeContent: `File: ${relPath}\n${nativeInfo}`,
-							})
-						} catch (error) {
-							if (error instanceof Error && error.message.startsWith("Unsupported language:")) {
-								console.warn(`[read_file] Warning: ${error.message}`)
-							} else {
-								console.error(
-									`[read_file] Unhandled error: ${error instanceof Error ? error.message : String(error)}`,
-								)
-							}
-						}
-						continue
-					}
-
-					const { id: modelId, info: modelInfo } = task.api.getModel()
-					const { contextTokens } = task.getTokenUsage()
-					const contextWindow = modelInfo.contextWindow
-
-					const maxOutputTokens =
-						getModelMaxOutputTokens({
-							modelId,
-							model: modelInfo,
-							settings: task.apiConfiguration,
-						}) ?? ANTHROPIC_DEFAULT_MAX_TOKENS
-
-					// Calculate available token budget (60% of remaining context)
-					const remainingTokens = contextWindow - maxOutputTokens - (contextTokens || 0)
-					const safeReadBudget = Math.floor(remainingTokens * FILE_READ_BUDGET_PERCENT)
-
-					let content: string
-					let xmlInfo = ""
-					let nativeInfo = ""
-
-					if (safeReadBudget <= 0) {
-						// No budget available
-						content = ""
-						const notice = "No available context budget for file reading"
-						xmlInfo = `<content/>\n<notice>${notice}</notice>\n`
-						nativeInfo = `Note: ${notice}`
 					} else {
-						// Read file with incremental token counting
-						const result = await readFileWithTokenBudget(fullPath, {
-							budgetTokens: safeReadBudget,
-						})
-
-						content = addLineNumbers(result.content)
-
-						if (!result.complete) {
-							// File was truncated
-							const notice = `File truncated: showing ${result.lineCount} lines (${result.tokenCount} tokens) due to context budget. Use line_range to read specific sections.`
-							const lineRangeAttr = result.lineCount > 0 ? ` lines="1-${result.lineCount}"` : ""
-							xmlInfo =
-								result.lineCount > 0
-									? `<content${lineRangeAttr}>\n${content}</content>\n<notice>${notice}</notice>\n`
-									: `<content/>\n<notice>${notice}</notice>\n`
-							nativeInfo =
-								result.lineCount > 0
-									? `Lines 1-${result.lineCount}:\n${content}\n\nNote: ${notice}`
-									: `Note: ${notice}`
-						} else {
-							// Full file read
-							const lineRangeAttr = ` lines="1-${result.lineCount}"`
-							xmlInfo =
-								result.lineCount > 0
-									? `<content${lineRangeAttr}>\n${content}</content>\n`
-									: `<content/>`
-
-							if (result.lineCount === 0) {
-								xmlInfo += `<notice>File is empty</notice>\n`
-								nativeInfo = "Note: File is empty"
-							} else {
-								nativeInfo = `Lines 1-${result.lineCount}:\n${content}`
-							}
-						}
+						await renderText()
 					}
-
-					await task.fileContextTracker.trackFileContext(relPath, "read_tool" as RecordSource)
-
-					updateFileResult(relPath, {
-						xmlContent: `<file><path>${relPath}</path>\n${xmlInfo}</file>`,
-						nativeContent: `File: ${relPath}\n${nativeInfo}`,
-					})
+					// kilocode_change end
 				} catch (error) {
 					// kilocode_change start: a missing file is an answer, not a failure
 					if (isFileNotFoundError(error)) {

@@ -1,3 +1,4 @@
+// kilocode_change: bounded range/batch regression coverage
 // npx vitest src/core/tools/__tests__/readFileTool.spec.ts
 
 import * as path from "path"
@@ -40,7 +41,7 @@ let mockInputContent = ""
 const { addLineNumbersMock, mockReadFileWithTokenBudget } = vi.hoisted(() => {
 	const addLineNumbersMock = vi.fn().mockImplementation((text: string, startLine = 1) => {
 		if (!text) return ""
-		const lines = typeof text === "string" ? text.split("\n") : [text]
+		const lines = typeof text === "string" ? text.replace(/\n$/, "").split("\n") : [text] // kilocode_change
 		return lines.map((line: string, i: number) => `${startLine + i} | ${line}`).join("\n")
 	})
 	const mockReadFileWithTokenBudget = vi.fn()
@@ -56,7 +57,9 @@ vi.mock("../../../integrations/misc/extract-text", () => ({
 vi.mock("../../../services/tree-sitter")
 
 // Mock readFileWithTokenBudget - must be mocked to prevent actual file system access
-vi.mock("../../../integrations/misc/read-file-with-budget", () => ({
+// kilocode_change: keep the real in-memory limiter for documents/definitions.
+vi.mock("../../../integrations/misc/read-file-with-budget", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../integrations/misc/read-file-with-budget")>()),
 	readFileWithTokenBudget: (...args: any[]) => mockReadFileWithTokenBudget(...args),
 }))
 
@@ -159,7 +162,7 @@ beforeEach(() => {
 	addLineNumbersMock.mockReset()
 	addLineNumbersMock.mockImplementation((text: string, startLine = 1) => {
 		if (!text) return ""
-		const lines = typeof text === "string" ? text.split("\n") : [text]
+		const lines = typeof text === "string" ? text.replace(/\n$/, "").split("\n") : [text] // kilocode_change
 		return lines.map((line: string, i: number) => `${startLine + i} | ${line}`).join("\n")
 	})
 
@@ -167,9 +170,12 @@ beforeEach(() => {
 	mockReadFileWithTokenBudget.mockClear()
 	mockReadFileWithTokenBudget.mockImplementation(async (_filePath: string, _options: any) => {
 		// Default: return the mockInputContent with 5 lines
-		const lines = mockInputContent ? mockInputContent.split("\n") : []
+		const lines = (mockInputContent ? mockInputContent.split("\n") : []).slice(
+			(_options.startLine ?? 1) - 1,
+			_options.endLine,
+		) // kilocode_change
 		return {
-			content: mockInputContent,
+			content: lines.join("\n"),
 			tokenCount: mockInputContent.length / 4, // rough estimate
 			lineCount: lines.length,
 			complete: true,
@@ -259,7 +265,7 @@ function setImageSupport(mockCline: any, supportsImages: boolean | undefined): v
 	mockCline.api = {
 		getModel: vi.fn().mockReturnValue({
 			id: "test-model",
-			info: { supportsImages },
+			info: { ...mockCline.api.getModel().info, supportsImages }, // kilocode_change: retain context metadata
 		}),
 		countTokens: vi.fn().mockResolvedValue(100), // Mock countTokens to return a small number
 	}
@@ -479,7 +485,7 @@ describe("read_file tool with maxReadFileLine setting", () => {
 
 			// Verify - native format
 			expect(result).toContain(`File: ${testFilePath}`)
-			expect(result).toContain(`Lines 1-30:`)
+			expect(result).toContain(`Lines 1-5:`) // kilocode_change: report actual mock content, not requested end
 			expect(result).toContain(`Code Definitions:`)
 
 			// Should include foo (starts at line 10) but not bar (starts at line 50) or baz (starts at line 80)
@@ -487,7 +493,7 @@ describe("read_file tool with maxReadFileLine setting", () => {
 			expect(result).not.toContain("50--60 | function bar()")
 			expect(result).not.toContain("80--90 | function baz()")
 
-			expect(result).toContain("Note: Showing only 30 of 100 total lines")
+			expect(result).toContain("Note: Showing only 5 of 100 total lines")
 		})
 
 		it("should handle truncation when all definitions are beyond the line limit", async () => {
@@ -507,7 +513,7 @@ describe("read_file tool with maxReadFileLine setting", () => {
 
 			// Verify - native format
 			expect(result).toContain(`File: ${testFilePath}`)
-			expect(result).toContain(`Lines 1-30:`)
+			expect(result).toContain(`Lines 1-5:`) // kilocode_change: report actual mock content, not requested end
 			expect(result).toContain(`Code Definitions:`)
 			expect(result).toContain("# file.txt")
 			expect(result).not.toContain("50--60 | function foo()")
@@ -2054,3 +2060,98 @@ describe("read_file tool concurrent file reads limit", () => {
 		expect(toolResult).toContain("but the concurrent file reads limit is 5")
 	})
 })
+
+// kilocode_change start
+describe("bounded file reading", () => {
+	async function run(files: any[], contextTokens = 10000, maxReadFileLine = -1, native = true, binary = false) {
+		const { mockCline, mockProvider } = createMockCline()
+		mockProvider.getState.mockResolvedValue({ maxReadFileLine })
+		mockCline.apiConfiguration = { apiProvider: "anthropic", toolProtocol: native ? "native" : "xml" }
+		mockCline.taskToolProtocol = native ? "native" : "xml"
+		mockCline.getTokenUsage.mockReturnValue({ contextTokens })
+		fsPromises.stat.mockResolvedValue({ isDirectory: () => false })
+		vi.mocked(isBinaryFile).mockResolvedValue(binary)
+		vi.mocked(countFileLines).mockResolvedValue(1000)
+		const pushToolResult = vi.fn()
+		await readFileTool.execute({ files }, mockCline, {
+			askApproval: vi.fn(),
+			handleError: vi.fn(),
+			pushToolResult,
+			removeClosingTag: (_: any, value: any) => value,
+			toolProtocol: native ? "native" : "xml",
+		})
+		return { text: pushToolResult.mock.calls[0][0] as string, mockCline }
+	}
+	it("shares a decreasing budget across files and accounts for numbered output", async () => {
+		mockReadFileWithTokenBudget.mockResolvedValue({
+			content: "hello",
+			tokenCount: 2000,
+			lineCount: 1,
+			complete: true,
+		})
+		await run([{ path: "a.md" }, { path: "b.md" }])
+		const first = mockReadFileWithTokenBudget.mock.calls[0][1]
+		const second = mockReadFileWithTokenBudget.mock.calls[1][1]
+		expect(first.includeLineNumbers).toBe(true)
+		expect(second.budgetTokens).toBe(first.budgetTokens - 2000 - 128)
+	})
+	it.each([true, false])("reports actual range and continuation, native=%s", async (native) => {
+		mockReadFileWithTokenBudget.mockResolvedValue({
+			content: "hello\nworld",
+			tokenCount: 10,
+			lineCount: 2,
+			complete: false,
+		})
+		const { text } = await run(
+			[
+				{
+					path: "a.md",
+					lineRanges: [
+						{ start: 100, end: 200 },
+						{ start: 300, end: 400 },
+					],
+				},
+			],
+			10000,
+			-1,
+			native,
+		)
+		expect(text).toContain(native ? "Lines 100-101:" : 'lines="100-101"')
+		expect(text).toContain(native ? "line_ranges: [[102, 200]]" : "<line_range>102-200</line_range>")
+		expect(text).toContain("1 later requested ranges were not read")
+		expect(mockReadFileWithTokenBudget).toHaveBeenCalledTimes(1)
+	})
+	it("does not read when context is exhausted and asks for compaction", async () => {
+		const { text } = await run([{ path: "a.md" }], 200000)
+		expect(text).toContain("Compact the conversation before retrying")
+		expect(mockReadFileWithTokenBudget).not.toHaveBeenCalled()
+	})
+	it("applies the budget to the configured preview too", async () => {
+		mockReadFileWithTokenBudget.mockResolvedValue({
+			content: "hello",
+			tokenCount: 10,
+			lineCount: 1,
+			complete: false,
+		})
+		const { text } = await run([{ path: "a.md" }], 10000, 500)
+		expect(mockReadFileWithTokenBudget.mock.calls[0][1]).toMatchObject({ endLine: 500, includeLineNumbers: true })
+		expect(text).toContain("line_ranges: [[2, 201]]")
+	})
+	it("bounds extracted document text and honors its continuation ranges", async () => {
+		vi.mocked(extractTextFromFile).mockResolvedValue(
+			Array.from({ length: 6000 }, (_, i) => `Document line ${i + 1}`).join("\n"),
+		)
+		const { text } = await run([{ path: "a.pdf", lineRanges: [{ start: 100, end: 6000 }] }], 10000, -1, true, true)
+		expect(text).toContain("Lines 100-")
+		expect(text).toContain("Continue at line")
+		expect(text).not.toContain("Document line 6000")
+		expect(mockReadFileWithTokenBudget).not.toHaveBeenCalled()
+	})
+
+	it.each([0, -1, 1.5, Infinity, NaN])("rejects invalid range start %s", async (start) => {
+		const { text } = await run([{ path: "a.md", lineRanges: [{ start, end: 10 }] }])
+		expect(text).toContain("Invalid line range")
+		expect(mockReadFileWithTokenBudget).not.toHaveBeenCalled()
+	})
+})
+// kilocode_change end

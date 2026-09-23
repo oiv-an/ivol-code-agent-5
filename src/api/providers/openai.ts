@@ -44,7 +44,7 @@ const OPENAI_NATIVE_WEB_SEARCH_TOOL: OpenAI.Chat.ChatCompletionFunctionTool = {
 		name: OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME,
 		strict: true,
 		description:
-			"Search the live web using the provider's native OpenAI Responses web_search tool. Call this autonomously only when the request depends on current, changing, external, or otherwise unavailable information. Do not use it for facts already present in the conversation or local workspace.",
+			"Search the live web using the provider's native OpenAI Responses web_search tool. Call this autonomously whenever the request depends on current, changing, external, or otherwise unavailable information. This is the default way to look something up on the web: prefer it over opening a browser, even when a browser is already connected. Do not use it for facts already present in the conversation or local workspace.",
 		parameters: {
 			type: "object",
 			properties: {
