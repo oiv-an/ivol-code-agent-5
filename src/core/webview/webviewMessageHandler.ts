@@ -4240,8 +4240,19 @@ export const webviewMessageHandler = async (
 		 */
 
 		case "queueMessage": {
+			// kilocode_change start - bind the message to the task that was active when it was sent,
+			// not to whichever task happens to be current after the images are resolved.
+			const targetTask = provider.getCurrentTask()
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
-			provider.getCurrentTask()?.messageQueueService.addMessage(resolved.text, resolved.images)
+			if (!targetTask || targetTask.abort) {
+				provider.log("[queueMessage] No active task accepted the queued message")
+				vscode.window.showWarningMessage(
+					"The message could not be queued because the task is no longer running. Please send it again.",
+				)
+				break
+			}
+			targetTask.messageQueueService.addMessage(resolved.text, resolved.images)
+			// kilocode_change end
 			break
 		}
 		case "removeQueuedMessage": {

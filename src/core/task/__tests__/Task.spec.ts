@@ -2536,7 +2536,8 @@ describe("Queued message processing after condense", () => {
 	})
 	// kilocode_change end
 
-	it("processes queued message after condense completes", async () => {
+	// kilocode_change: queued text is no longer bounced through the webview; ask() delivers it.
+	it("keeps a queued message for the next question after condense completes", async () => {
 		const provider = createProvider()
 		const task = new Task({
 			provider,
@@ -2563,8 +2564,8 @@ describe("Queued message processing after condense", () => {
 		vi.runAllTimers()
 		vi.useRealTimers()
 
-		expect(submitSpy).toHaveBeenCalledWith("queued text", ["img1.png"])
-		expect(task.messageQueueService.isEmpty()).toBe(true)
+		expect(submitSpy).not.toHaveBeenCalled()
+		expect(task.messageQueueService.messages.map((m) => m.text)).toEqual(["queued text"])
 	})
 
 	it("does not cross-drain queues between separate tasks", async () => {
@@ -2603,18 +2604,20 @@ describe("Queued message processing after condense", () => {
 		vi.runAllTimers()
 		vi.useRealTimers()
 
-		expect(spyA).toHaveBeenCalledWith("A message", undefined)
+		expect(spyA).not.toHaveBeenCalled()
 		expect(spyB).not.toHaveBeenCalled()
-		expect(taskB.messageQueueService.isEmpty()).toBe(false)
+		expect(taskA.messageQueueService.messages.map((m) => m.text)).toEqual(["A message"])
+		expect(taskB.messageQueueService.messages.map((m) => m.text)).toEqual(["B message"])
 
-		// Now condense in task B should drain B's queue
+		// Condensing task B must leave both queues intact as well
 		vi.useFakeTimers()
 		await taskB.condenseContext()
 		vi.runAllTimers()
 		vi.useRealTimers()
 
-		expect(spyB).toHaveBeenCalledWith("B message", undefined)
-		expect(taskB.messageQueueService.isEmpty()).toBe(true)
+		expect(spyB).not.toHaveBeenCalled()
+		expect(taskA.messageQueueService.messages.map((m) => m.text)).toEqual(["A message"])
+		expect(taskB.messageQueueService.messages.map((m) => m.text)).toEqual(["B message"])
 	})
 
 	it("rolls history back when the condensed history cannot be saved", async () => {

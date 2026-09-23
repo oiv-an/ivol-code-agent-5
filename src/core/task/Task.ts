@@ -6280,19 +6280,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @param context - Context string for logging (e.g., the calling tool name)
 	 */
 	public processQueuedMessages(): void {
-		try {
-			if (!this.messageQueueService.isEmpty()) {
-				const queued = this.messageQueueService.dequeueMessage()
-				if (queued) {
-					setTimeout(() => {
-						this.submitUserMessage(queued.text, queued.images).catch((err) =>
-							console.error(`[Task] Failed to submit queued message:`, err),
-						)
-					}, 0)
-				}
-			}
-		} catch (e) {
-			console.error(`[Task] Queue processing error:`, e)
-		}
+		// kilocode_change start - queued input is delivered only by the task itself.
+		// It used to be removed from the queue and bounced through the webview, where
+		// it was re-queued, sent while no question was pending (and then wiped by the
+		// next ask), or dropped when the panel was not listening. Now it stays queued
+		// and visible until ask() removes it and hands it to the model in one step:
+		// immediately when a question that accepts text is pending (the wait loop
+		// polls the queue), otherwise at the next such question.
+		// kilocode_change end
 	}
 }

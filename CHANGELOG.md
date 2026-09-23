@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.17
+
+- Messages you send while the model is working are no longer lost. They stay visible in the queue until the model actually receives them, instead of sometimes disappearing without a trace.
+- Before context compaction, the task notes now record the goal and chosen approach, what is already done, important paths, commands, decisions and credentials you provided, and the next steps, so the model does not forget or redo work after compaction.
+
 ## 5.17.16
 
 - Keep working on the task after the context is compacted. Automatic compaction is treated as routine maintenance, so the task continues from its next step instead of stopping with a status report that had to be restarted by hand.

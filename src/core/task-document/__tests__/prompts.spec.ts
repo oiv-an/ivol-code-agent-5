@@ -11,7 +11,8 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("medium detail")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("what is done and verified, what is left")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Before the context is compacted")
-		expect(ORDINARY_TASK_INSTRUCTIONS.length).toBeLessThan(3200)
+		// Raised deliberately: the block now also records intent, state and key data.
+		expect(ORDINARY_TASK_INSTRUCTIONS.length).toBeLessThan(4600)
 	})
 
 	it("requires an ordinary permitted write before compaction while preserving unrelated content", () => {
@@ -19,7 +20,9 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Preserve other task blocks and unrelated user content")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Normal tool permissions apply")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("A read or a statement that you saved is not a write")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("do not copy code, logs, secrets, or private reasoning")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
+			"do not copy large code fragments, logs, or private reasoning",
+		)
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not continue project work")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("compact the conversation normally")
 	})
@@ -85,6 +88,26 @@ describe("ordinary task document prompts", () => {
 		)
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Compaction is routine maintenance, not the end of the task")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("continue the unfinished work from its next step")
+	})
+
+	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
+		"asks for intent, current state and key data so nothing is redone or forgotten after compaction",
+		(prompt) => {
+			expect(prompt).toContain("your only memory after compaction")
+			expect(prompt).toContain("Intent: what you are working towards")
+			expect(prompt).toContain("tried or rejected with the reason")
+			expect(prompt).toContain("marked so it is not redone")
+			expect(prompt).toContain("file and directory paths")
+			expect(prompt).toContain("credentials the user provided in the conversation, exactly as given")
+			expect(prompt).toContain("add it to .gitignore first")
+			expect(prompt).toContain("Next steps: the exact next action")
+			expect(prompt).not.toContain("secrets")
+		},
+	)
+
+	it("tells the model to trust finished steps after compaction", () => {
+		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("do not redo steps it marks as done")
+		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Record new key data as soon as the user provides it")
 	})
 
 	it.each([false, true])("keeps the native TODO schema independent (enabled=%s)", (enabled) => {
