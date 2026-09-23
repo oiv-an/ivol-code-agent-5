@@ -2487,6 +2487,35 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// kilocode_change: with the task document off, this is ordinary condensing.
 		await this.overwriteApiConversationHistory(result.messages)
+
+		// kilocode_change start: a compaction the user did not ask for must not end the task.
+		// The summary itself reads like a closing report, so the last thing the model sees
+		// has to be an explicit instruction to resume the unfinished work. A user-requested
+		// summary is left alone: they may well want to redirect the task afterwards.
+		if (trigger !== "manual" && trigger !== "tool" && this.canAppendCondenseContinuation()) {
+			await this.addToApiConversationHistory({
+				role: "user",
+				content: [{ type: "text", text: formatResponse.condenseContinuation() }],
+			})
+		}
+		// kilocode_change end
+	}
+
+	/**
+	 * kilocode_change: an outstanding tool_use must be answered by its tool_result, never by
+	 * a plain user note. Inserting text before the result would break native tool pairing,
+	 * so the reminder is skipped in that case; the prompt instructions still apply.
+	 */
+	private canAppendCondenseContinuation(): boolean {
+		const pending = new Set<string>()
+		for (const message of getEffectiveApiHistory(this.apiConversationHistory)) {
+			if (!Array.isArray(message.content)) continue
+			for (const block of message.content) {
+				if (block.type === "tool_use") pending.add(block.id)
+				else if (block.type === "tool_result") pending.delete(block.tool_use_id)
+			}
+		}
+		return pending.size === 0
 	}
 
 	async say(

@@ -145,10 +145,54 @@ describe("ordinary context preparation", () => {
 		await boundary()
 		expect(events.at(-3)).toBe("save-history")
 		expect(events.slice(-2)).toEqual(["summarize", "compact"])
-		expect(task.apiConversationHistory.at(-1)?.content).toBe("Ordinary summary")
+		// kilocode_change: the summary is preserved, and an automatic compaction now ends with an
+		// explicit instruction to resume, so the model does not read the summary as a final report.
+		expect(task.apiConversationHistory.at(-2)?.content).toBe("Ordinary summary")
+		const continuation = task.apiConversationHistory.at(-1)
+		expect(continuation?.role).toBe("user")
+		expect(JSON.stringify(continuation?.content)).toContain("Continue the unfinished task from its next step")
 		expect(vi.mocked(summarizeConversation).mock.calls[0][9]).toMatchObject({ signal: expect.any(AbortSignal) })
 		expect(task.isContextCondensationInProgress).toBe(false)
 	})
+
+	// kilocode_change start: compaction must hand unfinished work back to the model,
+	// except when the user asked for the summary themselves.
+	it("leaves a user-requested compaction without a continuation instruction", async () => {
+		const { task, boundary, write } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		await boundary()
+		write()
+		task.apiConversationHistory.push({
+			role: "user",
+			content: [{ type: "tool_result", tool_use_id: "write", content: "Saved" }],
+		})
+		await boundary()
+		expect(task.apiConversationHistory.at(-1)?.content).toBe("Ordinary summary")
+		expect(JSON.stringify(task.apiConversationHistory)).not.toContain("condense_continuation")
+	})
+
+	it("never breaks a tool call pair to insert the continuation instruction", async () => {
+		const { task } = fixture()
+		// An assistant tool call still awaiting its result must be answered by that result,
+		// never by a plain user note, or native tool pairing breaks. The preparation boundary
+		// already refuses to compact in this state; this is the second guard at commit time.
+		Object.assign(task, {
+			apiConversationHistory: [
+				{ role: "user", content: "Original task" },
+				{ role: "assistant", content: [{ type: "tool_use", id: "pending", name: "read_file", input: {} }] },
+			],
+			getContextMemoryMode: () => "standard",
+		})
+		const internal = task as unknown as { canAppendCondenseContinuation(): boolean }
+		expect(internal.canAppendCondenseContinuation()).toBe(false)
+
+		task.apiConversationHistory.push({
+			role: "user",
+			content: [{ type: "tool_result", tool_use_id: "pending", content: "Read" }],
+		})
+		expect(internal.canAppendCondenseContinuation()).toBe(true)
+	})
+	// kilocode_change end
 
 	it("does not consume turns or accept a write on recursive transport boundaries", async () => {
 		const { task, boundary, write } = fixture()

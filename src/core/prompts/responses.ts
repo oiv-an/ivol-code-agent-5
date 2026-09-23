@@ -16,8 +16,23 @@ export const formatResponse = {
 	contextTruncationNotice: () =>
 		`[NOTE] Some previous conversation history with the user has been removed to maintain optimal context window length. The initial user task and the most recent exchanges have been retained for continuity, while intermediate conversation history has been removed. Please keep this in mind as you continue assisting the user.`,
 
-	condense: () =>
-		`The user has accepted the condensed conversation summary you generated. This summary covers important details of the historical conversation with the user which has been truncated.\n<explicit_instructions type="condense_response">It's crucial that you respond by ONLY asking the user what you should work on next. You should NOT take any initiative or make any assumptions about continuing with work. For example you should NOT suggest file changes or attempt to read any files.\nWhen asking the user what you should work on next, you can reference information in the summary which was just generated. However, you should NOT reference information outside of what's contained in the summary for this response. Keep this response CONCISE.</explicit_instructions>`,
+	// Compaction of an unfinished task must not end the task. A user who explicitly
+	// asked for a summary may want to redirect the work, but routine compaction of
+	// work in progress is maintenance: the task simply continues afterwards.
+	condense: (hasUnfinishedWork = false) => {
+		if (hasUnfinishedWork) {
+			return `The conversation summary you generated has been accepted and the context has been compacted. This summary covers important details of the historical conversation with the user which has been truncated.\n<explicit_instructions type="condense_response">Compaction is routine maintenance in the middle of an unfinished task, NOT the end of it. Continue the task from the next step recorded in the summary. Do NOT report the task as complete, do NOT restate for the user what you have accomplished so far, and do NOT ask the user what to work on next merely because the context was compacted. Proceed with the next concrete step directly, using tools as usual. Stop and ask the user only if the task genuinely requires a decision from them.</explicit_instructions>`
+		}
+		return `The user has accepted the condensed conversation summary you generated. This summary covers important details of the historical conversation with the user which has been truncated.\n<explicit_instructions type="condense_response">It's crucial that you respond by ONLY asking the user what you should work on next. You should NOT take any initiative or make any assumptions about continuing with work. For example you should NOT suggest file changes or attempt to read any files.\nWhen asking the user what you should work on next, you can reference information in the summary which was just generated. However, you should NOT reference information outside of what's contained in the summary for this response. Keep this response CONCISE.</explicit_instructions>`
+	},
+
+	/**
+	 * Appended to history right after a compaction that was not requested by the
+	 * user, so the model's last instruction is to keep working rather than a
+	 * summary it can mistake for an ending.
+	 */
+	condenseContinuation: () =>
+		`[NOTE] The context has just been compacted to free up the context window. This is routine maintenance, not the end of the task.\n<explicit_instructions type="condense_continuation">Continue the unfinished task from its next step, as recorded in the summary above and in CURRENT_TASK.md. Do NOT call attempt_completion just because compaction finished, do NOT restate what you already did, and do NOT ask the user what to work on next unless the task genuinely requires a decision from them. Resume the work with your next tool call.\n(This is an automated message, so do not respond to it conversationally.)</explicit_instructions>`,
 	// kilocode_change end
 	toolDenied: (protocol?: ToolProtocol) => {
 		if (isNativeProtocol(protocol ?? TOOL_PROTOCOL.XML)) {

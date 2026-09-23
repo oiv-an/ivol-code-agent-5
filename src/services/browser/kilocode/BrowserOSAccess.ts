@@ -8,11 +8,25 @@ export type BrowserOSOperation =
 export function browserOSOperation(name: string, args?: Record<string, unknown>): BrowserOSOperation {
 	if (name === "tabs" && ["list", "active"].includes(String(args?.action))) return { kind: "discovery" }
 	if (name === "tabs" && args?.action === "new") {
-		if (args.url !== undefined && args.url !== "about:blank") {
-			const url = new URL(String(args.url))
+		// kilocode_change start: an absent, empty or malformed url must report the same
+		// clear rule instead of a bare TypeError from the URL parser.
+		const requested = args.url
+		const isBlank =
+			requested === undefined || requested === null || (typeof requested === "string" && requested.trim() === "")
+		if (!isBlank && requested !== "about:blank") {
+			if (typeof requested !== "string") {
+				throw new Error("BrowserOS new tabs require HTTP(S) or about:blank without credentials")
+			}
+			let url: URL
+			try {
+				url = new URL(requested)
+			} catch {
+				throw new Error("BrowserOS new tabs require HTTP(S) or about:blank without credentials")
+			}
 			if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
 				throw new Error("BrowserOS new tabs require HTTP(S) or about:blank without credentials")
 		}
+		// kilocode_change end
 		return { kind: "create" }
 	}
 	if (

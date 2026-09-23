@@ -72,6 +72,21 @@ describe("ordinary task document prompts", () => {
 		},
 	)
 
+	it("tells the model that compaction continues the task instead of ending it", () => {
+		// The preparation turn used to read as the last turn of the task, so the model
+		// reported completion after every automatic compaction.
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
+			"you will continue the same unfinished task from its next step",
+		)
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("not its end")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("do not report the task as finished")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
+			"do not ask the user what to do next merely because compaction happened",
+		)
+		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Compaction is routine maintenance, not the end of the task")
+		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("continue the unfinished work from its next step")
+	})
+
 	it.each([false, true])("keeps the native TODO schema independent (enabled=%s)", (enabled) => {
 		const tool = createUpdateTodoListTool(enabled)
 		if (tool.type !== "function") throw new Error("Expected a native function tool")

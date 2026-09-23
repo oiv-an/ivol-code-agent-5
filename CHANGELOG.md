@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.16
+
+- Keep working on the task after the context is compacted. Automatic compaction is treated as routine maintenance, so the task continues from its next step instead of stopping with a status report that had to be restarted by hand.
+- A summary you request yourself still hands control back to you, so you can redirect the work after compacting.
+- Explain why opening a browser tab was refused instead of showing a raw address parsing error, and open a blank tab when no address is given.
+
 ## 5.17.15
 
 - Read large files safely in resumable sections without losing access to line ranges or exceeding the shared text budget.

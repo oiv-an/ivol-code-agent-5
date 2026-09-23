@@ -85,7 +85,10 @@ export const condenseTool = async (
 					)
 				})
 				// A failed preparation must never report a successful tool result.
-				pushToolResult(formatResponse.toolResult(formatResponse.condense()))
+				// kilocode_change: an open todo list means the task is still unfinished, so
+				// compaction must hand the work back to the model instead of ending the turn.
+				const hasUnfinishedWork = !!cline.todoList?.some((todo) => todo.status !== "completed")
+				pushToolResult(formatResponse.toolResult(formatResponse.condense(hasUnfinishedWork)))
 			}
 			return
 		}
