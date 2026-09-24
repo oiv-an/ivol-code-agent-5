@@ -4,6 +4,7 @@ import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import { t } from "../../i18n"
 import type { ToolUse } from "../../shared/tools"
+import { BROWSEROS_SCRIPT_TOOLS } from "../../services/browser/kilocode/BrowserOSAccess" // kilocode_change
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -79,11 +80,44 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
 			// kilocode_change start: explicit task-scoped browser consent avoids duplicate per-call prompts.
-			const taskConsent =
-				task.providerRef
-					.deref()
-					?.getMcpHub()
-					?.canAutoApproveBrowserOSTool?.(serverName, toolName, parsedArguments, task) === true
+			const hub = task.providerRef.deref()?.getMcpHub()
+			// BrowserOS scripts (run/evaluate) can do anything in the browser: always ask the user, even in
+			// YOLO or auto-approve mode. The protected flag makes checkAutoApproval refuse to auto-approve.
+			if (hub?.isBrowserOSServer?.(serverName) && BROWSEROS_SCRIPT_TOOLS.includes(toolName)) {
+				const { response, text, images } = await task.ask(
+					"use_mcp_server",
+					completeMessage,
+					false,
+					undefined,
+					true,
+				)
+				if (response !== "yesButtonClicked") {
+					if (text) {
+						await task.say("user_feedback", text, images)
+						pushToolResult(
+							formatResponse.toolResult(
+								formatResponse.toolDeniedWithFeedback(text, toolProtocol),
+								images,
+							),
+						)
+					} else {
+						pushToolResult(formatResponse.toolDenied(toolProtocol))
+					}
+					task.didRejectTool = true
+					return
+				}
+				if (text) await task.say("user_feedback", text, images)
+				await this.executeToolAndProcessResult(
+					task,
+					serverName,
+					toolName,
+					parsedArguments,
+					executionId,
+					pushToolResult,
+				)
+				return
+			}
+			const taskConsent = hub?.canAutoApproveBrowserOSTool?.(serverName, toolName, parsedArguments, task) === true
 			if (taskConsent) await task.say("text", `BrowserOS: ${toolName} (browser control enabled)`)
 			const didApprove = taskConsent || (await askApproval("use_mcp_server", completeMessage))
 			// kilocode_change end

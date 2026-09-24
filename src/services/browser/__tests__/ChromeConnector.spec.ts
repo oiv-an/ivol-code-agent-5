@@ -231,8 +231,10 @@ it("invalidates BrowserOS page observations after interactions, empty captures a
 	await expect(access.execute(owner, connection, { kind: "interaction", page: 8 }, act)).rejects.toThrow("fresh")
 	await access.execute(owner, connection, { kind: "observation", page: 8 }, capture)
 	await access.execute(owner, connection, { kind: "interaction", page: 7 }, act)
-	for (const page of [7, 8])
-		await expect(access.execute(owner, connection, { kind: "interaction", page }, act)).rejects.toThrow("fresh")
+	// kilocode_change: acting on page 7 must not consume page 8's observation.
+	await expect(access.execute(owner, connection, { kind: "interaction", page: 7 }, act)).rejects.toThrow("fresh")
+	await access.execute(owner, connection, { kind: "interaction", page: 8 }, act)
+	await expect(access.execute(owner, connection, { kind: "interaction", page: 8 }, act)).rejects.toThrow("fresh")
 	await access.execute(owner, connection, { kind: "observation", page: 7 }, capture)
 	await access.execute(owner, connection, { kind: "observation", page: 7 }, async () => ({ content: [] }))
 	await expect(access.execute(owner, connection, { kind: "interaction", page: 7 }, act)).rejects.toThrow("fresh")
@@ -241,7 +243,7 @@ it("invalidates BrowserOS page observations after interactions, empty captures a
 	await expect(access.execute(owner, connection, { kind: "create" }, act)).rejects.toThrow("paused")
 	access.resume()
 	await expect(access.execute(owner, connection, { kind: "interaction", page: 7 }, act)).rejects.toThrow("fresh")
-	expect(act).toHaveBeenCalledTimes(2)
+	expect(act).toHaveBeenCalledTimes(3) // kilocode_change
 })
 
 const origin = `chrome-extension://${"a".repeat(32)}`

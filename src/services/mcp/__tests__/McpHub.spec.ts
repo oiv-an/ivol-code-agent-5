@@ -744,7 +744,11 @@ describe("McpHub", () => {
 				await expect(call("act", { page: 7, kind: "click" })).rejects.toThrow("fresh")
 				await call("snapshot", { page: 7 })
 				await expect(call("act", { page: 8, kind: "click" })).rejects.toThrow("fresh")
-				await expect(call("run", { code: "return 1", page: 7 })).rejects.toThrow("not supported")
+				// kilocode_change: a manually approved script runs, then invalidates every observation.
+				await call("run", { code: "return 1", page: 7 })
+				await expect(call("act", { page: 7, kind: "click" })).rejects.toThrow("fresh")
+				await call("snapshot", { page: 7 })
+				await expect(call("history", {})).rejects.toThrow("not supported")
 				await expect(call("snapshot", { page: "7" })).rejects.toThrow("target page ID")
 				await expect(call("tabs", { action: "new", url: "file:///private" })).rejects.toThrow("HTTP(S)")
 				await call("navigate", { page: 7, action: "url", url: "https://example.com" })

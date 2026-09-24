@@ -99,6 +99,10 @@ export async function checkAutoApproval({
 		if (!text) {
 			return { decision: "ask" }
 		}
+		// kilocode_change: protected MCP calls (BrowserOS scripts) always need a manual decision.
+		if (isProtected) {
+			return { decision: "ask" }
+		}
 
 		try {
 			const mcpServerUse = JSON.parse(text) as McpServerUse

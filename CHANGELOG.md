@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.18
+
+- Allow BrowserOS scripts (run and evaluate) after explicit manual approval of each call, including when automatic approval is enabled.
+- Remove unnecessary snapshot requirements for reading pages and navigating, and preserve observations of other tabs when acting on one page.
+- Keep fresh-observation checks for element interactions and reset observations after arbitrary browser scripts.
+
 ## 5.17.17
 
 - Messages you send while the model is working are no longer lost. They stay visible in the queue until the model actually receives them, instead of sometimes disappearing without a trace.

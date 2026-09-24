@@ -283,6 +283,45 @@ describe("useMcpToolTool", () => {
 			else expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
 		})
 
+		// kilocode_change: BrowserOS scripts always need a manual, protected approval — never YOLO/auto.
+		it.each([
+			["yesButtonClicked", 1],
+			["noButtonClicked", 0],
+		])("asks manually for a BrowserOS run script (%s)", async (response, calls) => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			hub.isBrowserOSServer = vi.fn().mockReturnValue(true)
+			hub.prepareBrowserOSInvocation = vi.fn().mockResolvedValue(true)
+			hub.canAutoApproveBrowserOSTool = vi.fn().mockReturnValue(true)
+			hub.getAllServers.mockReturnValue([{ name: "browseros-neo", tools: [{ name: "run" }] }])
+			hub.callTool.mockResolvedValue({ content: [{ type: "text", text: "ok" }] })
+			;(formatResponse as any).toolDenied = vi.fn(() => "denied")
+			mockTask.ask = vi.fn().mockResolvedValue({ response })
+			const args = { code: "return 1" }
+			await useMcpToolTool.execute(
+				{ server_name: "browseros-neo", tool_name: "run", arguments: args },
+				mockTask as Task,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					removeClosingTag: mockRemoveClosingTag,
+					toolProtocol: "native",
+				},
+			)
+			expect(mockHandleError).not.toHaveBeenCalled()
+			expect(mockAskApproval).not.toHaveBeenCalled()
+			expect(hub.canAutoApproveBrowserOSTool).not.toHaveBeenCalled()
+			expect(mockTask.ask).toHaveBeenCalledWith(
+				"use_mcp_server",
+				expect.stringContaining('"toolName":"run"'),
+				false,
+				undefined,
+				true,
+			)
+			expect(hub.callTool).toHaveBeenCalledTimes(calls)
+			if (!calls) expect(mockPushToolResult).toHaveBeenCalledWith("denied")
+		})
+
 		// kilocode_change: MCP browser screenshots must reach both history and the model.
 		it("preserves supported image results and omits unsupported image formats", async () => {
 			const hub = mockProviderRef.deref().getMcpHub()

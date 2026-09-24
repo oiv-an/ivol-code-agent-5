@@ -1,11 +1,15 @@
 export type BrowserOSAccessStatus = "idle" | "awaitingPermission" | "active" | "paused"
 
 export type BrowserOSOperation =
-	| { kind: "observation" | "interaction"; page: number }
-	| { kind: "discovery" | "create" | "unsupported" }
+	| { kind: "observation" | "interaction" | "readOnly" | "navigation"; page: number }
+	| { kind: "discovery" | "create" | "script" | "unsupported" } // kilocode_change: script = run/evaluate
+
+/** BrowserOS tools that execute arbitrary scripts. Always require a manual per-call approval. */
+export const BROWSEROS_SCRIPT_TOOLS = ["run", "evaluate"] // kilocode_change
 
 /** Classify only the protocol we have verified. Scripts cannot declare their own observed target. */
 export function browserOSOperation(name: string, args?: Record<string, unknown>): BrowserOSOperation {
+	if (BROWSEROS_SCRIPT_TOOLS.includes(name)) return { kind: "script" } // kilocode_change
 	if (name === "tabs" && ["list", "active"].includes(String(args?.action))) return { kind: "discovery" }
 	if (name === "tabs" && args?.action === "new") {
 		// kilocode_change start: an absent, empty or malformed url must report the same
@@ -48,7 +52,11 @@ export function browserOSOperation(name: string, args?: Record<string, unknown>)
 		const page = args?.page
 		if (typeof page !== "number" || !Number.isInteger(page) || page < 0 || page > 0xffffffff)
 			throw new Error("BrowserOS requires a valid numeric target page ID")
-		return { kind: ["snapshot", "screenshot"].includes(name) ? "observation" : "interaction", page }
+		// Reading does not need element references and must not consume an existing observation.
+		if (["snapshot", "screenshot"].includes(name)) return { kind: "observation", page }
+		if (["read", "grep", "diff", "wait", "pdf"].includes(name)) return { kind: "readOnly", page }
+		if (name === "navigate") return { kind: "navigation", page }
+		return { kind: "interaction", page }
 	}
 	return { kind: "unsupported" }
 }
@@ -210,9 +218,11 @@ export class BrowserOSAccess {
 				throw new Error("This BrowserOS operation has no verified page-scoped policy and is not supported yet")
 			if (policy.kind === "interaction" && !this.observedPages.has(policy.page))
 				throw new Error("Get a fresh BrowserOS observation of the target page before interacting with it")
-			// Every interaction may navigate or change references. Do not trust its response as a full snapshot.
-			if (policy.kind === "interaction" || policy.kind === "create") this.observedPages.clear()
-			if (policy.kind === "observation") this.observedPages.delete(policy.page)
+			// Scripts may touch any page. A page-scoped action invalidates only its own observation.
+			// New background tabs and reads preserve other observations; neither grants a fresh one.
+			if (policy.kind === "script") this.observedPages.clear()
+			if (["interaction", "navigation", "observation"].includes(policy.kind) && "page" in policy)
+				this.observedPages.delete(policy.page)
 			let result: T
 			try {
 				result = await request()
