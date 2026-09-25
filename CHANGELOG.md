@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.23
+
+- Discover project skills and MCP configuration in the shared .agents folder without symlinks, and accept remote server addresses supplied as serverUrl.
+- Send an explicit output limit for OpenAI-compatible providers, using a 64,000-token fallback when no positive model limit is available, to avoid unexpectedly truncated responses.
+
 ## 5.17.22
 
 - Save MAX, MED and MIN presets of model and reasoning level for each provider profile, and switch between them manually with three buttons next to the model selector. The active preset is highlighted in green.

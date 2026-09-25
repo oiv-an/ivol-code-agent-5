@@ -38,6 +38,9 @@ import { isOpenAiAbortError, normalizeOpenAiTransportError } from "./utils/opena
 // executed by the task pipeline only when the model actually selects it.
 export const OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME = "web_search"
 
+// Output limit sent when neither the profile nor the model defines a positive one.
+export const OPENAI_COMPATIBLE_DEFAULT_MAX_OUTPUT_TOKENS = 64_000
+
 const OPENAI_NATIVE_WEB_SEARCH_TOOL: OpenAI.Chat.ChatCompletionFunctionTool = {
 	type: "function",
 	function: {
@@ -780,12 +783,23 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			| OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
 		modelInfo: ModelInfo,
 	): void {
-		// Only add max_completion_tokens if includeMaxTokens is true
-		if (this.options.includeMaxTokens === true) {
-			// Use user-configured modelMaxTokens if available, otherwise fall back to model's default maxTokens
-			// Using max_completion_tokens as max_tokens is deprecated
-			requestOptions.max_completion_tokens = this.options.modelMaxTokens || modelInfo.maxTokens
-		}
+		// kilocode_change start
+		// Always send an explicit output limit. Without it many OpenAI-compatible proxies
+		// silently apply a small default (often 4096), which truncates long answers and
+		// tool-call arguments mid-stream and leaves tools with empty parameters.
+		// The -1 "unlimited" sentinel is never forwarded; it falls back to a generous default.
+		const isPositive = (value: unknown): value is number => typeof value === "number" && value > 0
+		const configured = this.options.includeMaxTokens === true ? this.options.modelMaxTokens : undefined
+		// Keep the fallback within half of the context window so small-context models are not rejected.
+		const fallback = isPositive(modelInfo.contextWindow)
+			? Math.min(OPENAI_COMPATIBLE_DEFAULT_MAX_OUTPUT_TOKENS, Math.floor(modelInfo.contextWindow / 2))
+			: OPENAI_COMPATIBLE_DEFAULT_MAX_OUTPUT_TOKENS
+		requestOptions.max_completion_tokens = isPositive(configured)
+			? configured
+			: isPositive(modelInfo.maxTokens)
+				? modelInfo.maxTokens
+				: fallback
+		// kilocode_change end
 	}
 }
 

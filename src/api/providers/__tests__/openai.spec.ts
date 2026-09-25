@@ -768,7 +768,8 @@ describe("OpenAiHandler", () => {
 			expect(callArgs.max_completion_tokens).toBe(4096)
 		})
 
-		it("should not include max_tokens when includeMaxTokens is false", async () => {
+		// kilocode_change: an explicit output limit is always sent so proxies cannot apply a small default
+		it("should send the model maxTokens when includeMaxTokens is false", async () => {
 			const optionsWithoutMaxTokens: ApiHandlerOptions = {
 				...mockOptions,
 				includeMaxTokens: false,
@@ -783,13 +784,30 @@ describe("OpenAiHandler", () => {
 			// Consume the stream to trigger the API call
 			for await (const _chunk of stream) {
 			}
-			// Assert the mockCreate was called without max_tokens
 			expect(mockCreate).toHaveBeenCalled()
 			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs.max_completion_tokens).toBeUndefined()
+			expect(callArgs.max_completion_tokens).toBe(4096) // kilocode_change
 		})
 
-		it("should not include max_tokens when includeMaxTokens is undefined", async () => {
+		// kilocode_change start
+		it.each([
+			[{ maxTokens: -1, contextWindow: 400_000 }, undefined, 64_000],
+			[{ maxTokens: -1, contextWindow: 400_000 }, -1, 64_000],
+			[{ maxTokens: -1, contextWindow: 32_000 }, undefined, 16_000],
+		])("should never forward the -1 sentinel (%o, modelMaxTokens=%s)", async (info, modelMaxTokens, expected) => {
+			const h = new OpenAiHandler({
+				...mockOptions,
+				includeMaxTokens: true,
+				modelMaxTokens,
+				openAiCustomModelInfo: { ...info, supportsPromptCache: false },
+			})
+			for await (const _chunk of h.createMessage(systemPrompt, messages)) {
+			}
+			expect(mockCreate.mock.calls[0][0].max_completion_tokens).toBe(expected)
+		})
+		// kilocode_change end
+
+		it("should send the model maxTokens when includeMaxTokens is undefined", async () => {
 			const optionsWithUndefinedMaxTokens: ApiHandlerOptions = {
 				...mockOptions,
 				// includeMaxTokens is not set, should not include max_tokens
@@ -804,10 +822,9 @@ describe("OpenAiHandler", () => {
 			// Consume the stream to trigger the API call
 			for await (const _chunk of stream) {
 			}
-			// Assert the mockCreate was called without max_tokens
 			expect(mockCreate).toHaveBeenCalled()
 			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs.max_completion_tokens).toBeUndefined()
+			expect(callArgs.max_completion_tokens).toBe(4096) // kilocode_change
 		})
 
 		it("should use user-configured modelMaxTokens instead of model default maxTokens", async () => {
@@ -904,6 +921,7 @@ describe("OpenAiHandler", () => {
 				{
 					model: mockOptions.openAiModelId,
 					messages: [{ role: "user", content: "Test prompt" }],
+					max_completion_tokens: 64_000, // kilocode_change
 				},
 				{},
 			)
@@ -1002,13 +1020,10 @@ describe("OpenAiHandler", () => {
 					stream: true,
 					stream_options: { include_usage: true },
 					temperature: 0,
+					max_completion_tokens: 64_000, // kilocode_change
 				},
 				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
-
-			// Verify max_tokens is NOT included when includeMaxTokens is not set
-			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs).not.toHaveProperty("max_completion_tokens")
 		})
 
 		it("should handle non-streaming responses with Azure AI Inference Service", async () => {
@@ -1048,13 +1063,10 @@ describe("OpenAiHandler", () => {
 						{ role: "system", content: systemPrompt },
 						{ role: "user", content: "Hello!" },
 					],
+					max_completion_tokens: 64_000, // kilocode_change
 				},
 				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
-
-			// Verify max_tokens is NOT included when includeMaxTokens is not set
-			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs).not.toHaveProperty("max_completion_tokens")
 		})
 
 		it("should handle completePrompt with Azure AI Inference Service", async () => {
@@ -1065,13 +1077,10 @@ describe("OpenAiHandler", () => {
 				{
 					model: azureOptions.openAiModelId,
 					messages: [{ role: "user", content: "Test prompt" }],
+					max_completion_tokens: 64_000, // kilocode_change
 				},
 				{ path: "/models/chat/completions" },
 			)
-
-			// Verify max_tokens is NOT included when includeMaxTokens is not set
-			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs).not.toHaveProperty("max_completion_tokens")
 		})
 	})
 
@@ -1348,9 +1357,9 @@ describe("OpenAiHandler", () => {
 				{ maxRetries: 0 }, // kilocode_change
 			)
 
-			// Verify max_tokens is NOT included
+			// kilocode_change: the model limit is still sent explicitly
 			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs).not.toHaveProperty("max_completion_tokens")
+			expect(callArgs.max_completion_tokens).toBe(65536)
 		})
 
 		it("should handle O3 model non-streaming with reasoning_effort and max_completion_tokens when includeMaxTokens is true", async () => {
@@ -1494,9 +1503,9 @@ describe("OpenAiHandler", () => {
 				{ path: "/models/chat/completions", maxRetries: 0 }, // kilocode_change
 			)
 
-			// Verify max_tokens is NOT included when includeMaxTokens is false
+			// kilocode_change: the model limit is still sent explicitly
 			const callArgs = mockCreate.mock.calls[0][0]
-			expect(callArgs).not.toHaveProperty("max_completion_tokens")
+			expect(callArgs.max_completion_tokens).toBe(65536)
 		})
 
 		it("should NOT include max_tokens for O3 model with Azure AI Inference Service even when includeMaxTokens is true", async () => {

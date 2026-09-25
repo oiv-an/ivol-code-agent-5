@@ -281,6 +281,13 @@ export class SkillsManager {
 			dirs.push({ dir: path.join(globalRooDir, `skills-${mode}`), source: "global", mode })
 		}
 
+		// kilocode_change start: shared cross-agent location. Scanned before .kilocode so that
+		// a .kilocode skill with the same name overwrites it (later entries replace earlier ones).
+		if (provider?.cwd) {
+			dirs.push({ dir: path.join(provider.cwd, ".agents", "skills"), source: "project" })
+		}
+		// kilocode_change end
+
 		// Project directories
 		if (projectRooDir) {
 			dirs.push({ dir: path.join(projectRooDir, "skills"), source: "project" })
@@ -334,6 +341,7 @@ export class SkillsManager {
 
 		// Watch project skills directory
 		this.watchDirectory(projectSkillsDir)
+		this.watchDirectory(path.join(provider.cwd, ".agents", "skills")) // kilocode_change
 
 		// Watch mode-specific directories for all available modes
 		const modesList = await this.getAvailableModes()

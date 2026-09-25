@@ -188,9 +188,21 @@ const createServerTypeSchema = () => {
 // Server configuration schema with automatic type inference and validation
 export const ServerConfigSchema = createServerTypeSchema()
 
+// kilocode_change start
+// Other agents (Windsurf, Antigravity) store a remote server address as `serverUrl`.
+// Accept it as `url` so a shared `.agents/mcp_config.json` works without edits.
+export function normalizeForeignServerConfig(config: unknown): unknown {
+	if (!config || typeof config !== "object" || Array.isArray(config)) return config
+	const raw = config as Record<string, unknown>
+	if (typeof raw.serverUrl !== "string" || raw.url !== undefined || raw.command !== undefined) return config
+	const { serverUrl, ...rest } = raw
+	return { ...rest, url: serverUrl, type: rest.type ?? "streamable-http" }
+}
+// kilocode_change end
+
 // Settings schema
 const McpSettingsSchema = z.object({
-	mcpServers: z.record(ServerConfigSchema),
+	mcpServers: z.record(z.preprocess(normalizeForeignServerConfig, ServerConfigSchema)), // kilocode_change
 })
 
 export class McpHub {
@@ -782,6 +794,7 @@ export class McpHub {
 	 * @throws Error if the configuration is invalid
 	 */
 	private validateServerConfig(config: any, serverName?: string): z.infer<typeof ServerConfigSchema> {
+		config = normalizeForeignServerConfig(config) // kilocode_change
 		// Detect configuration issues before validation
 		const hasStdioFields = config.command !== undefined
 		const hasUrlFields = config.url !== undefined // Covers sse and streamable-http
@@ -945,7 +958,11 @@ export class McpHub {
 		}
 
 		const workspaceFolder = this.providerRef.deref()?.cwd ?? getWorkspacePath()
-		const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".kilocode/mcp.json")
+		// kilocode_change: also watch the shared cross-agent location
+		const projectMcpPattern = new vscode.RelativePattern(
+			workspaceFolder,
+			"{.kilocode/mcp.json,.agents/mcp.json,.agents/mcp_config.json}",
+		)
 
 		// Create a file system watcher for the project MCP file pattern
 		this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
@@ -1171,6 +1188,8 @@ export class McpHub {
 	// Check alternative MCP configuration paths (for compatibility with other tools)
 	private async checkAlternativeMcpPaths(workspacePath: string): Promise<string | null> {
 		const alternativePaths = [
+			path.join(workspacePath, ".agents", "mcp.json"),
+			path.join(workspacePath, ".agents", "mcp_config.json"),
 			path.join(workspacePath, ".cursor", "mcp.json"),
 			path.join(workspacePath, ".mcp.json"),
 		]

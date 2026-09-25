@@ -199,6 +199,41 @@ Instructions here...`
 			expect(skills[0].source).toBe("project")
 		})
 
+		// kilocode_change start
+		it("should discover skills from the shared .agents/skills directory, with .kilocode winning on clashes", async () => {
+			const agentsSkillsDir = p(PROJECT_DIR, ".agents", "skills")
+			const agentsShared = p(agentsSkillsDir, "shared-skill")
+			const agentsOnly = p(agentsSkillsDir, "agents-only")
+			const kiloShared = p(projectSkillsDir, "shared-skill")
+
+			mockDirectoryExists.mockImplementation(async (dir: string) =>
+				[agentsSkillsDir, projectSkillsDir].includes(dir),
+			)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => {
+				if (dir === agentsSkillsDir) return ["shared-skill", "agents-only"]
+				if (dir === projectSkillsDir) return ["shared-skill"]
+				return []
+			})
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if ([agentsShared, agentsOnly, kiloShared].includes(pathArg)) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockResolvedValue(true)
+			mockReadFile.mockImplementation(async (file: string) => {
+				const name = path.basename(path.dirname(file))
+				return `---\nname: ${name}\ndescription: from ${file}\n---\nBody`
+			})
+
+			await skillsManager.discoverSkills()
+
+			const skills = skillsManager.getSkillsForMode("code")
+			expect(skills.map((s) => s.name).sort()).toEqual(["agents-only", "shared-skill"])
+			expect(skills.find((s) => s.name === "shared-skill")?.path).toBe(p(kiloShared, "SKILL.md"))
+			expect(skills.find((s) => s.name === "agents-only")?.source).toBe("project")
+		})
+		// kilocode_change end
+
 		it("should discover mode-specific skills", async () => {
 			const refactoringDir = p(globalSkillsCodeDir, "refactoring")
 			const refactoringMd = p(refactoringDir, "SKILL.md")
