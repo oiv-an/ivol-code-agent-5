@@ -8,6 +8,7 @@ interface ReasoningEffortSelectorProps {
 	currentApiConfigName?: string
 	apiConfiguration: ProviderSettings
 	modelInfo?: ModelInfo
+	onConfigurationChange?: (configuration: ProviderSettings) => void
 }
 
 type Effort = NonNullable<ProviderSettings["reasoningEffort"]>
@@ -17,6 +18,7 @@ export const ReasoningEffortSelector = ({
 	currentApiConfigName,
 	apiConfiguration,
 	modelInfo,
+	onConfigurationChange,
 }: ReasoningEffortSelectorProps) => {
 	const { t } = useAppTranslation()
 	const isCustomOpenAi = ["openai", "openai-responses"].includes(apiConfiguration.apiProvider ?? "")
@@ -91,6 +93,10 @@ export const ReasoningEffortSelector = ({
 				updated.openAiCustomModelInfo = info
 			}
 		}
+		if (onConfigurationChange) {
+			onConfigurationChange(updated)
+			return
+		}
 		vscode.postMessage({
 			type: "upsertApiConfiguration",
 			text: currentApiConfigName,
@@ -105,6 +111,7 @@ export const ReasoningEffortSelector = ({
 			className="min-w-0 max-w-[45%] shrink-0"
 			data-testid="reasoning-effort-selector">
 			<SelectDropdown
+				portalToBody={!!onConfigurationChange}
 				key={`${currentApiConfigName}:${apiConfiguration.apiProvider}`}
 				value={value}
 				options={available.map((effort) => ({

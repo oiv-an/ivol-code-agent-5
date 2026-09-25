@@ -1,4 +1,5 @@
 import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
+import { ModelPresetsSettings } from "../kilocode/chat/ModelPresets" // kilocode_change
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { convertHeadersToObject } from "./utils/headers"
 import { useDebounce } from "react-use"
@@ -377,6 +378,7 @@ const ApiOptions = ({
 	const onProviderChange = useCallback(
 		(value: ProviderName) => {
 			setApiConfigurationField("apiProvider", value)
+			setApiConfigurationField("modelPresets", undefined) // kilocode_change: presets belong to this provider's catalog
 
 			// It would be much easier to have a single attribute that stores
 			// the modelId, but we have a separate attribute for each of
@@ -652,6 +654,14 @@ const ApiOptions = ({
 			)}
 			{/* kilocode_change end */}
 
+			{/* kilocode_change start: edit manual presets in the profile draft, without switching the live model. */}
+			{!fromWelcomeView && (
+				<ModelPresetsSettings
+					configuration={apiConfiguration}
+					onChange={(presets) => setApiConfigurationField("modelPresets", presets)}
+				/>
+			)}
+			{/* kilocode_change end */}
 			{errorMessage && <ApiErrorMessage errorMessage={errorMessage} />}
 
 			{/* kilocode_change start */}

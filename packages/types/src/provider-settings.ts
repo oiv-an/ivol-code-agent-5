@@ -246,11 +246,31 @@ export const providerSettingsEntrySchema = z.object({
 
 export type ProviderSettingsEntry = z.infer<typeof providerSettingsEntrySchema>
 
+// kilocode_change start: manual quick-switch presets (max / med / min) of model + reasoning effort
+export const modelPresetTiers = ["max", "med", "min"] as const
+export type ModelPresetTier = (typeof modelPresetTiers)[number]
+
+export const modelPresetSchema = z.object({
+	modelId: z.string(),
+	reasoningEffort: reasoningEffortSettingSchema.optional(),
+	enableReasoningEffort: z.boolean().optional(),
+})
+export type ModelPreset = z.infer<typeof modelPresetSchema>
+
+export const modelPresetsSchema = z.object({
+	max: modelPresetSchema.optional(),
+	med: modelPresetSchema.optional(),
+	min: modelPresetSchema.optional(),
+})
+export type ModelPresets = z.infer<typeof modelPresetsSchema>
+// kilocode_change end
+
 /**
  * ProviderSettings
  */
 
 const baseProviderSettingsSchema = z.object({
+	modelPresets: modelPresetsSchema.optional(), // kilocode_change
 	profileType: profileTypeSchema.optional(), // kilocode_change - autocomplete profile type system
 	intelligentTaskEnabled: z.boolean().optional(), // kilocode_change: per-profile CURRENT_TASK.md choice; unset defaults on without persisting a value
 	allowInsecureTls: z.boolean().optional(), // kilocode_change: opt-in per-profile only; verify certificates when unset

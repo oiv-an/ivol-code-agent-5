@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.22
+
+- Save MAX, MED and MIN presets of model and reasoning level for each provider profile, and switch between them manually with three buttons next to the model selector. The active preset is highlighted in green.
+- Model and reasoning menus in preset settings now open correctly inside the settings view.
+
 ## 5.17.18
 
 - Allow BrowserOS scripts (run and evaluate) after explicit manual approval of each call, including when automatic approval is enabled.

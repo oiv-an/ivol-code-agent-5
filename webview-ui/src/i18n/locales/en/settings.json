@@ -1,5 +1,13 @@
 {
 	"back": "Back to tasks view",
+	"modelPresets": {
+		"title": "Model presets — MAX / MED / MIN",
+		"description": "Manual switching only. Each preset saves a model and reasoning setting for this provider profile.",
+		"model": "{{tier}} model",
+		"unconfigured": "Not configured",
+		"custom": "Preset",
+		"selector": "Model preset (manual)"
+	},
 	"yoloTimer": {
 		"title": "YOLO mode",
 		"minutes": "Duration (minutes)",

@@ -1,4 +1,5 @@
 import { ModelSelector } from "./chat/ModelSelector"
+import { ModelPresetSelector } from "./chat/ModelPresets"
 import { ReasoningEffortSelector } from "./chat/ReasoningEffortSelector"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useSelectedModel } from "../ui/hooks/useSelectedModel"
@@ -40,6 +41,7 @@ export const BottomApiConfig = () => {
 				apiConfiguration={apiConfiguration}
 				modelInfo={selectedModelInfo}
 			/>
+			<ModelPresetSelector configuration={apiConfiguration} profileName={currentApiConfigName} />
 		</>
 	)
 }

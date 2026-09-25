@@ -2,6 +2,8 @@ import { fireEvent, render, screen, within } from "@/utils/test-utils"
 import type { ModelInfo, ProviderSettings } from "@roo-code/types"
 import { vscode } from "@/utils/vscode"
 import { ReasoningEffortSelector } from "../ReasoningEffortSelector"
+import { applyModelPreset, ModelPresetSelector, ModelPresetsSettings } from "../ModelPresets"
+import { discriminatedProviderSettingsWithIdSchema } from "@roo-code/types"
 
 vi.mock("@/utils/vscode", () => ({ vscode: { postMessage: vi.fn() } }))
 vi.mock("@/i18n/TranslationContext", () => ({ useAppTranslation: () => ({ t: (key: string) => key }) }))
@@ -31,8 +33,127 @@ const choose = async (label: string) => {
 	fireEvent.click(option.closest('[data-testid="dropdown-item"]') ?? option)
 }
 
+vi.mock("../../hooks/useProviderModels", () => ({
+	useProviderModels: () => ({
+		providerModels: { "test-model": { contextWindow: 128000, supportsReasoningEffort: true } },
+	}),
+}))
+
 describe("ReasoningEffortSelector", () => {
 	beforeEach(() => vi.clearAllMocks())
+
+	it("shows three inline buttons and highlights the current pair in green", () => {
+		const configuration: ProviderSettings = {
+			...config,
+			modelPresets: {
+				max: { modelId: "test-model", reasoningEffort: "high", enableReasoningEffort: true },
+				med: { modelId: "test-model", reasoningEffort: "low", enableReasoningEffort: true },
+			},
+		}
+		const { rerender } = render(<ModelPresetSelector configuration={configuration} profileName="profile" />)
+		expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["MAX", "MED", "MIN"])
+		expect(screen.getByRole("button", { name: "MAX" })).toHaveAttribute("aria-pressed", "true")
+		expect(screen.getByRole("button", { name: "MAX" })).toHaveClass("text-green-400")
+		expect(screen.getByRole("button", { name: "MIN" })).toBeDisabled()
+		fireEvent.click(screen.getByRole("button", { name: "MAX" }))
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		rerender(
+			<ModelPresetSelector configuration={{ ...configuration, reasoningEffort: "low" }} profileName="profile" />,
+		)
+		expect(screen.getByRole("button", { name: "MED" })).toHaveAttribute("aria-pressed", "true")
+		expect(screen.getByRole("button", { name: "MAX" })).toHaveAttribute("aria-pressed", "false")
+	})
+
+	it("keeps preset model and reasoning menus visible when the chat portal is hidden", async () => {
+		const hiddenChat = document.createElement("div")
+		hiddenChat.id = "roo-portal"
+		hiddenChat.style.display = "none"
+		document.body.append(hiddenChat)
+		const onChange = vi.fn()
+		try {
+			const { rerender } = render(<ModelPresetsSettings configuration={config} onChange={onChange} />)
+			fireEvent.click(screen.getAllByTestId("dropdown-trigger")[0])
+			const model = await screen.findByText("test-model", { selector: '[data-testid="dropdown-item"] *' })
+			expect(model).toBeVisible()
+			expect(hiddenChat.contains(model)).toBe(false)
+			fireEvent.click(model)
+			expect(onChange).toHaveBeenCalledWith({ max: { modelId: "test-model" } })
+			rerender(
+				<ModelPresetsSettings
+					configuration={{ ...config, modelPresets: { max: { modelId: "test-model" } } }}
+					onChange={onChange}
+				/>,
+			)
+			fireEvent.click(within(screen.getByTestId("reasoning-effort-selector")).getByTestId("dropdown-trigger"))
+			const effort = await screen.findByText(effortLabel("low"), { selector: '[data-testid="dropdown-item"] *' })
+			expect(effort).toBeVisible()
+			expect(hiddenChat.contains(effort)).toBe(false)
+			fireEvent.click(effort)
+			expect(onChange).toHaveBeenLastCalledWith({
+				max: { modelId: "test-model", reasoningEffort: "low", enableReasoningEffort: true },
+			})
+			expect(vscode.postMessage).not.toHaveBeenCalled()
+		} finally {
+			hiddenChat.remove()
+		}
+	})
+
+	it("edits preset reasoning locally without changing the active profile", async () => {
+		const onConfigurationChange = vi.fn()
+		render(
+			<ReasoningEffortSelector
+				currentApiConfigName="draft"
+				apiConfiguration={config}
+				modelInfo={info}
+				onConfigurationChange={onConfigurationChange}
+			/>,
+		)
+		await choose(effortLabel("low"))
+		expect(onConfigurationChange).toHaveBeenCalledWith(
+			expect.objectContaining({ reasoningEffort: "low", enableReasoningEffort: true }),
+		)
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+	})
+
+	it("applies model and reasoning together only after a manual preset selection", async () => {
+		const configuration: ProviderSettings = {
+			...config,
+			modelPresets: { min: { modelId: "small-model", reasoningEffort: "disable", enableReasoningEffort: false } },
+		}
+		render(<ModelPresetSelector configuration={configuration} profileName="proxy-profile" />)
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: "MIN" }))
+		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "upsertApiConfiguration",
+			text: "proxy-profile",
+			apiConfiguration: expect.objectContaining({
+				openAiModelId: "small-model",
+				reasoningEffort: "disable",
+				enableReasoningEffort: false,
+				openAiApiKey: "test-key",
+				openAiBaseUrl: config.openAiBaseUrl,
+			}),
+		})
+		const message = vi.mocked(vscode.postMessage).mock.calls[0][0]
+		if (!("apiConfiguration" in message) || !message.apiConfiguration) throw new Error("Missing profile update")
+		const updated = message.apiConfiguration
+		expect(updated.openAiCustomModelInfo?.reasoningEffort).toBeUndefined()
+		expect(configuration.openAiModelId).toBe("test-model")
+		expect(discriminatedProviderSettingsWithIdSchema.parse(updated)).toMatchObject({
+			modelPresets: configuration.modelPresets,
+		})
+	})
+
+	it("does not change other settings when applying a preset", () => {
+		const updated = applyModelPreset(
+			{ ...config, modelMaxThinkingTokens: 6000 },
+			{ modelId: "other", reasoningEffort: "low", enableReasoningEffort: true },
+		)
+		expect(updated.modelMaxThinkingTokens).toBe(6000)
+		expect(updated.openAiCustomModelInfo?.reasoningEffort).toBe("low")
+		expect(updated.openAiApiKey).toBe(config.openAiApiKey)
+	})
 
 	it("reads the custom-provider setting without changing the profile on mount", () => {
 		mount()

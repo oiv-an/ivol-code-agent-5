@@ -29,6 +29,7 @@ export interface DropdownOption {
 }
 
 export interface SelectDropdownProps {
+	portalToBody?: boolean // kilocode_change: settings remain visible while the chat portal is hidden
 	value: string
 	options: DropdownOption[]
 	onChange: (value: string) => void
@@ -52,6 +53,7 @@ export const SelectDropdown = React.memo(
 		(
 			{
 				value,
+				portalToBody = false, // kilocode_change
 				options,
 				onChange,
 				disabled = false,
@@ -271,7 +273,7 @@ export const SelectDropdown = React.memo(
 					<PopoverContent
 						align={align}
 						sideOffset={sideOffset}
-						container={portalContainer}
+						container={portalToBody ? undefined : portalContainer} // kilocode_change
 						className={cn("p-0 overflow-hidden", contentClassName)}>
 						<div className="flex flex-col w-full">
 							{/* Search input */}
