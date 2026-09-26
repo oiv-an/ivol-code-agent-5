@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.27
+
+- Fix screenshots being omitted from OpenAI-compatible requests when resuming tasks or returning tool results.
+
 ## 5.17.26
 
 - Keep the auto-approval checkbox visible in the bottom toolbar before web search, with permission settings in a popover, even when the old full panel was hidden.

@@ -12,6 +12,102 @@ import {
 import { normalizeMistralToolCallId } from "../mistral-format"
 
 describe("convertToOpenAiMessages", () => {
+	// kilocode_change start: resumed tasks can attach screenshots inside tool results.
+	it.each([false, true])("preserves nested screenshots with mergeToolResultText=%s", (mergeToolResultText) => {
+		const messages: Anthropic.Messages.MessageParam[] = [
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "resume",
+						content: [
+							{ type: "image", source: { type: "base64", media_type: "image/png", data: "screenshot" } },
+						],
+					},
+				],
+			},
+		]
+		const original = JSON.stringify(messages)
+		expect(convertToOpenAiMessages(messages, { mergeToolResultText })).toEqual([
+			{ role: "tool", tool_call_id: "resume", content: "(see following user message for image)" },
+			{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,screenshot" } }] },
+		])
+		expect(JSON.stringify(messages)).toBe(original)
+	})
+
+	it.each([false, true])(
+		"keeps all tool results before mixed images without duplication (merge=%s)",
+		(mergeToolResultText) => {
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "user",
+					content: [
+						{
+							type: "tool_result",
+							tool_use_id: "first",
+							content: [
+								{ type: "text", text: "First result" },
+								{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "first" } },
+							],
+						},
+						{
+							type: "tool_result",
+							tool_use_id: "second",
+							content: [
+								{ type: "image", source: { type: "url", url: "https://example.com/second.png" } },
+							],
+						},
+						{ type: "text", text: "Compare these screenshots" },
+						{ type: "image", source: { type: "base64", media_type: "image/png", data: "direct" } },
+					],
+				},
+			]
+			const result = convertToOpenAiMessages(messages, { mergeToolResultText })
+			expect(result.map((message) => message.role)).toEqual(["tool", "tool", "user"])
+			expect(result[0]).toEqual({
+				role: "tool",
+				tool_call_id: "first",
+				content: "First result\n(see following user message for image)",
+			})
+			expect(result[1]).toEqual({
+				role: "tool",
+				tool_call_id: "second",
+				content: "(see following user message for image)",
+			})
+			expect(result[2].content).toEqual([
+				{ type: "image_url", image_url: { url: "data:image/jpeg;base64,first" } },
+				{ type: "image_url", image_url: { url: "https://example.com/second.png" } },
+				{ type: "text", text: "Compare these screenshots" },
+				{ type: "image_url", image_url: { url: "data:image/png;base64,direct" } },
+			])
+		},
+	)
+
+	it("does not merge accompanying text into a tool when its nested image needs a user message", () => {
+		const result = convertToOpenAiMessages(
+			[
+				{
+					role: "user",
+					content: [
+						{
+							type: "tool_result",
+							tool_use_id: "resume",
+							content: [{ type: "image", source: { type: "url", url: "https://example.com/image.png" } }],
+						},
+						{ type: "text", text: "Explain this" },
+					],
+				},
+			],
+			{ mergeToolResultText: true },
+		)
+		expect(result.map((message) => message.role)).toEqual(["tool", "user"])
+		expect(result[1].content).toEqual([
+			{ type: "image_url", image_url: { url: "https://example.com/image.png" } },
+			{ type: "text", text: "Explain this" },
+		])
+	})
+	// kilocode_change end
 	it("should convert simple text messages", () => {
 		const anthropicMessages: Anthropic.Messages.MessageParam[] = [
 			{
