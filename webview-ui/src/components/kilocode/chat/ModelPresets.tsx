@@ -8,7 +8,8 @@ import {
 } from "@roo-code/types"
 import { SelectDropdown } from "@/components/ui/select-dropdown"
 import { useProviderModels } from "../hooks/useProviderModels"
-import { getModelIdKey, getSelectedModelId } from "../hooks/useSelectedModel"
+import { getModelIdKey } from "../hooks/useSelectedModel"
+import { getActiveModelPreset } from "./modelPresetSelection"
 import { ReasoningEffortSelector } from "./ReasoningEffortSelector"
 import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"
@@ -109,20 +110,7 @@ export function ModelPresetSelector({
 	if (!profileName || !supportsModelPresets(configuration) || !configuration.apiProvider) return null
 	const presets = configuration.modelPresets
 	if (!presets || !modelPresetTiers.some((tier) => presets[tier]?.modelId)) return null
-	const currentId = getSelectedModelId({
-		provider: configuration.apiProvider,
-		apiConfiguration: configuration,
-		defaultModelId: "",
-	})
-	const active =
-		modelPresetTiers.find((tier) => {
-			const preset = presets[tier]
-			return (
-				preset?.modelId === currentId &&
-				preset.reasoningEffort === configuration.reasoningEffort &&
-				preset.enableReasoningEffort === configuration.enableReasoningEffort
-			)
-		}) ?? ""
+	const active = getActiveModelPreset(configuration)
 	return (
 		<div
 			role="group"
@@ -148,7 +136,10 @@ export function ModelPresetSelector({
 							vscode.postMessage({
 								type: "upsertApiConfiguration",
 								text: profileName,
-								apiConfiguration: applyModelPreset(configuration, preset),
+								apiConfiguration: {
+									...applyModelPreset(configuration, preset),
+									activeModelPreset: tier,
+								},
 							})
 						}}>
 						{tier.toUpperCase()}

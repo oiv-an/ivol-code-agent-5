@@ -38,9 +38,9 @@ describe("YOLO timer entry points", () => {
 		vi.useRealTimers()
 	})
 
-	it("shows YOLO and an enabled master checkbox with ordinary approvals off in the chat menu", () => {
-		render(<AutoApproveMenu />)
-		expect(screen.getByText("settings:yoloTimer.statusShort")).toBeVisible()
+	it.each([false, true])("keeps the master checkbox working with compact=%s", (compact) => {
+		render(<AutoApproveMenu compact={compact} />)
+		if (!compact) expect(screen.getByText("settings:yoloTimer.statusShort")).toBeVisible()
 		const master = screen.getByRole("checkbox", { name: "chat:autoApprove.toggleAriaLabel" })
 		expect(master).toBeChecked()
 		expect(master).toBeEnabled()
@@ -49,12 +49,15 @@ describe("YOLO timer entry points", () => {
 		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "autoApprovalEnabled", bool: false })
 	})
 
-	it("shows controls when the chat menu is expanded and removes its per-second countdown when collapsed", () => {
-		render(<AutoApproveMenu />)
+	it.each([false, true])("opens settings without changing permissions with compact=%s", (compact) => {
+		render(<AutoApproveMenu compact={compact} />)
+		const trigger = compact
+			? screen.getByRole("button", { name: "chat:autoApprove.title" })
+			: screen.getByText("chat:autoApprove.title")
 		expect(screen.queryByTestId("yolo-mode-controls")).not.toBeInTheDocument()
-		fireEvent.click(screen.getByText("chat:autoApprove.title"))
+		fireEvent.click(trigger)
 		expect(screen.getByTestId("yolo-mode-controls")).toBeVisible()
-		fireEvent.click(screen.getByText("chat:autoApprove.title"))
+		fireEvent.click(trigger)
 		expect(screen.queryByTestId("yolo-mode-controls")).not.toBeInTheDocument()
 		expect(vscode.postMessage).not.toHaveBeenCalled()
 	})

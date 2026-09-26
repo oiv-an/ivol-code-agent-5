@@ -44,7 +44,7 @@ import ChatRow from "./ChatRow"
 import { ChatTextArea } from "./ChatTextArea"
 // import TaskHeader from "./TaskHeader"// kilocode_change
 import KiloTaskHeader from "../kilocode/KiloTaskHeader" // kilocode_change
-import AutoApproveMenu from "./AutoApproveMenu"
+// kilocode_change: auto-approval is rendered once in BottomControls.
 import BottomControls from "../kilocode/BottomControls" // kilocode_change
 import SystemPromptWarning from "./SystemPromptWarning"
 // import ProfileViolationWarning from "./ProfileViolationWarning" kilocode_change: unused
@@ -119,7 +119,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		mode,
 		setMode,
 		alwaysAllowModeSwitch,
-		showAutoApproveMenu, // kilocode_change
 		enableCheckpoints, // kilocode_change
 		customModes,
 		hasSystemPromptOverride,
@@ -1934,27 +1933,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				</div>
 			)}
 
-			{/*
-			// Flex layout explanation:
-			// 1. Content div above uses flex: "1 1 0" to:
-			//    - Grow to fill available space (flex-grow: 1)
-			//    - Shrink when AutoApproveMenu needs space (flex-shrink: 1)
-			//    - Start from zero size (flex-basis: 0) to ensure proper distribution
-			//    minHeight: 0 allows it to shrink below its content height
-			//
-			// 2. AutoApproveMenu uses flex: "0 1 auto" to:
-			//    - Not grow beyond its content (flex-grow: 0)
-			//    - Shrink when viewport is small (flex-shrink: 1)
-			//    - Use its content size as basis (flex-basis: auto)
-			//    This ensures it takes its natural height when there's space
-			//    but becomes scrollable when the viewport is too small
-			*/}
-			{/* kilocode_change: added settings toggle for this */}
-			{!task && showAutoApproveMenu && (
-				<div className="mb-1 flex-initial min-h-0">
-					<AutoApproveMenu />
-				</div>
-			)}
+			{/* kilocode_change: auto-approval moved to the bottom toolbar before search. */}
 
 			{task && (
 				<>
@@ -1997,10 +1976,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								initialTopMostItemIndex={displayedMessages.length - 1} // kilocode_change
 							/>
 						</div>
-					</div>
-					<div className={`flex-initial min-h-0 ${!areButtonsVisible ? "mb-1" : ""}`}>
-						{/* kilocode_change: added settings toggle for this */}
-						{showAutoApproveMenu && <AutoApproveMenu />}
 					</div>
 					{areButtonsVisible && (
 						<div

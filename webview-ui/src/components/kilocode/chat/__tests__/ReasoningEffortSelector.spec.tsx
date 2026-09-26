@@ -33,6 +33,12 @@ const choose = async (label: string) => {
 	fireEvent.click(option.closest('[data-testid="dropdown-item"]') ?? option)
 }
 
+const postedConfiguration = (index = 0): ProviderSettings => {
+	const message = vi.mocked(vscode.postMessage).mock.calls[index][0]
+	if (!("apiConfiguration" in message) || !message.apiConfiguration) throw new Error("Missing profile update")
+	return message.apiConfiguration
+}
+
 vi.mock("../../hooks/useProviderModels", () => ({
 	useProviderModels: () => ({
 		providerModels: { "test-model": { contextWindow: 128000, supportsReasoningEffort: true } },
@@ -41,6 +47,96 @@ vi.mock("../../hooks/useProviderModels", () => ({
 
 describe("ReasoningEffortSelector", () => {
 	beforeEach(() => vi.clearAllMocks())
+
+	it.each(["max", "med", "min"] as const)("saves reasoning only to the explicitly selected %s slot", async (tier) => {
+		const preset = { modelId: "test-model", reasoningEffort: "high" as const, enableReasoningEffort: true }
+		const configuration: ProviderSettings = {
+			...config,
+			activeModelPreset: tier,
+			modelPresets: { max: { ...preset }, med: { ...preset }, min: { ...preset } },
+		}
+		const { unmount } = mount(configuration)
+		await choose(effortLabel("low"))
+		const updated = postedConfiguration()
+		expect(updated.openAiModelId).toBe("test-model")
+		expect(updated.activeModelPreset).toBe(tier)
+		expect(updated.reasoningEffort).toBe("low")
+		expect(updated.openAiCustomModelInfo?.reasoningEffort).toBe("low")
+		for (const slot of ["max", "med", "min"] as const) {
+			expect(updated.modelPresets?.[slot]).toEqual({ ...preset, reasoningEffort: slot === tier ? "low" : "high" })
+		}
+		expect(configuration.modelPresets?.[tier]?.reasoningEffort).toBe("high")
+		const persisted: ProviderSettings = discriminatedProviderSettingsWithIdSchema.parse(updated)
+		expect(persisted.activeModelPreset).toBe(tier)
+		unmount()
+		const { rerender } = render(<ModelPresetSelector configuration={persisted} profileName="profile" />)
+		expect(screen.getByRole("button", { name: tier.toUpperCase() })).toHaveAttribute("aria-pressed", "true")
+		const other = tier === "max" ? "min" : "max"
+		fireEvent.click(screen.getByRole("button", { name: other.toUpperCase() }))
+		const switched = postedConfiguration(1)
+		rerender(<ModelPresetSelector configuration={switched} profileName="profile" />)
+		fireEvent.click(screen.getByRole("button", { name: tier.toUpperCase() }))
+		expect(postedConfiguration(2)).toMatchObject({
+			activeModelPreset: tier,
+			openAiModelId: "test-model",
+			reasoningEffort: "low",
+		})
+	})
+
+	it("remembers MED when multiple presets have identical model and reasoning", () => {
+		const preset = { modelId: "test-model", reasoningEffort: "high" as const, enableReasoningEffort: true }
+		const configuration: ProviderSettings = { ...config, modelPresets: { max: preset, med: preset } }
+		const { rerender } = render(<ModelPresetSelector configuration={configuration} profileName="profile" />)
+		fireEvent.click(screen.getByRole("button", { name: "MED" }))
+		const updated: ProviderSettings = discriminatedProviderSettingsWithIdSchema.parse(postedConfiguration())
+		expect(updated.activeModelPreset).toBe("med")
+		rerender(<ModelPresetSelector configuration={updated} profileName="profile" />)
+		expect(screen.getByRole("button", { name: "MED" })).toHaveAttribute("aria-pressed", "true")
+		expect(screen.getByRole("button", { name: "MAX" })).toHaveAttribute("aria-pressed", "false")
+	})
+
+	it("migrates a matching legacy preset on the first reasoning edit", async () => {
+		mount({
+			...config,
+			modelPresets: { med: { modelId: "test-model", reasoningEffort: "high", enableReasoningEffort: true } },
+		})
+		await choose(effortLabel("none"))
+		expect(postedConfiguration()).toMatchObject({
+			activeModelPreset: "med",
+			modelPresets: { med: { modelId: "test-model", reasoningEffort: "disable", enableReasoningEffort: false } },
+		})
+	})
+
+	it("does not overwrite a selected preset after manually switching to another model", async () => {
+		const configuration: ProviderSettings = {
+			...config,
+			activeModelPreset: "med",
+			modelPresets: { med: { modelId: "other-model", reasoningEffort: "high" } },
+		}
+		mount(configuration)
+		await choose(effortLabel("low"))
+		expect(postedConfiguration().modelPresets).toEqual(configuration.modelPresets)
+	})
+
+	it("does not update the selected slot when editing a preset draft", async () => {
+		const configuration: ProviderSettings = {
+			...config,
+			activeModelPreset: "med",
+			modelPresets: { med: { modelId: "test-model", reasoningEffort: "high" } },
+		}
+		const onConfigurationChange = vi.fn()
+		render(
+			<ReasoningEffortSelector
+				currentApiConfigName="draft"
+				apiConfiguration={configuration}
+				modelInfo={info}
+				onConfigurationChange={onConfigurationChange}
+			/>,
+		)
+		await choose(effortLabel("low"))
+		expect(onConfigurationChange.mock.calls[0][0].modelPresets).toEqual(configuration.modelPresets)
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+	})
 
 	it("shows three inline buttons and highlights the current pair in green", () => {
 		const configuration: ProviderSettings = {

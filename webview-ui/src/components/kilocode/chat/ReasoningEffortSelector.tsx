@@ -3,6 +3,7 @@ import { reasoningEfforts, openAiModelInfoSaneDefaults, type ModelInfo, type Pro
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { SelectDropdown } from "@/components/ui/select-dropdown"
 import { vscode } from "@/utils/vscode"
+import { getActiveModelPreset } from "./modelPresetSelection"
 
 interface ReasoningEffortSelectorProps {
 	currentApiConfigName?: string
@@ -96,6 +97,19 @@ export const ReasoningEffortSelector = ({
 		if (onConfigurationChange) {
 			onConfigurationChange(updated)
 			return
+		}
+		const active = getActiveModelPreset(apiConfiguration)
+		const preset = active && apiConfiguration.modelPresets?.[active]
+		if (active && preset) {
+			updated.activeModelPreset = active
+			updated.modelPresets = {
+				...apiConfiguration.modelPresets,
+				[active]: {
+					...preset,
+					reasoningEffort: updated.reasoningEffort,
+					enableReasoningEffort: updated.enableReasoningEffort,
+				},
+			}
 		}
 		vscode.postMessage({
 			type: "upsertApiConfiguration",

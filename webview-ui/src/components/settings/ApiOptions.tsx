@@ -379,6 +379,7 @@ const ApiOptions = ({
 		(value: ProviderName) => {
 			setApiConfigurationField("apiProvider", value)
 			setApiConfigurationField("modelPresets", undefined) // kilocode_change: presets belong to this provider's catalog
+			setApiConfigurationField("activeModelPreset", undefined) // kilocode_change: selection belongs to the same catalog
 
 			// It would be much easier to have a single attribute that stores
 			// the modelId, but we have a separate attribute for each of

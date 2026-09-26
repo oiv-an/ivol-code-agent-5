@@ -271,6 +271,7 @@ export type ModelPresets = z.infer<typeof modelPresetsSchema>
 
 const baseProviderSettingsSchema = z.object({
 	modelPresets: modelPresetsSchema.optional(), // kilocode_change
+	activeModelPreset: z.enum(modelPresetTiers).optional(), // kilocode_change: persist the selected slot even when presets match
 	profileType: profileTypeSchema.optional(), // kilocode_change - autocomplete profile type system
 	intelligentTaskEnabled: z.boolean().optional(), // kilocode_change: per-profile CURRENT_TASK.md choice; unset defaults on without persisting a value
 	allowInsecureTls: z.boolean().optional(), // kilocode_change: opt-in per-profile only; verify certificates when unset

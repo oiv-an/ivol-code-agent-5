@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.26
+
+- Keep the auto-approval checkbox visible in the bottom toolbar before web search, with permission settings in a popover, even when the old full panel was hidden.
+- Remember the selected model preset and save chat reasoning changes to that preset without changing its model.
+
 ## 5.17.23
 
 - Discover project skills and MCP configuration in the shared .agents folder without symlinks, and accept remote server addresses supplied as serverUrl.

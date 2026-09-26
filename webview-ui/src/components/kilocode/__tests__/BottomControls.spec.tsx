@@ -13,6 +13,11 @@ vi.mock("../BottomApiConfig", () => ({ BottomApiConfig: () => <button>Model and 
 vi.mock("@/components/chat/StandaloneWebSearch", () => ({
 	StandaloneWebSearch: vi.fn(() => <button>Search the web</button>),
 }))
+vi.mock("@/components/chat/AutoApproveMenu", () => ({
+	default: ({ compact }: { compact?: boolean }) => (
+		<button>{compact ? "Auto approval" : "Full approval menu"}</button>
+	),
+}))
 
 describe("BottomControls standalone search", () => {
 	const apiConfiguration: ProviderSettings = { apiProvider: "openai", openAiModelId: "coding-model" }
@@ -34,12 +39,28 @@ describe("BottomControls standalone search", () => {
 		})
 	})
 
+	it.each([true, false, undefined])(
+		"keeps auto approval visible with legacy visibility=%s",
+		(showAutoApproveMenu) => {
+			vi.mocked(useExtensionState).mockReturnValue({
+				apiConfiguration,
+				showAutoApproveMenu,
+			} as ExtensionStateContextType)
+			render(<BottomControls showApiConfig />)
+			const buttons = screen.getAllByRole("button")
+			const index = buttons.indexOf(screen.getByRole("button", { name: "Auto approval" }))
+			expect(buttons[index + 1]).toHaveTextContent("Search the web")
+			expect(screen.queryByText("Full approval menu")).not.toBeInTheDocument()
+		},
+	)
+
 	it("places the compact search control before rules without removing model and reasoning controls", () => {
 		render(<BottomControls showApiConfig />)
 		const buttons = screen.getAllByRole("button")
 		expect(buttons[0]).toHaveTextContent("Model and reasoning")
-		expect(buttons[1]).toHaveTextContent("Search the web")
-		expect(buttons[2]).toHaveTextContent("Rules")
+		expect(buttons[1]).toHaveTextContent("Auto approval")
+		expect(buttons[2]).toHaveTextContent("Search the web")
+		expect(buttons[3]).toHaveTextContent("Rules")
 		expect(screen.getByRole("button", { name: "Search the web" }).parentElement?.parentElement).toHaveClass(
 			"shrink-0",
 		)

@@ -6,6 +6,7 @@ import BottomButton from "./BottomButton"
 import { BottomApiConfig } from "./BottomApiConfig" // kilocode_change
 import { StandaloneWebSearch } from "../chat/StandaloneWebSearch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import AutoApproveMenu from "../chat/AutoApproveMenu"
 
 interface BottomControlsProps {
 	showApiConfig?: boolean
@@ -26,6 +27,8 @@ const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }
 			</div>
 			<div className="flex shrink-0 flex-row justify-end w-auto">
 				<div className="flex items-center gap-1">
+					{/* The compact toolbar switch must not depend on the legacy full-panel visibility setting. */}
+					<AutoApproveMenu compact />
 					<StandaloneWebSearch
 						apiConfiguration={apiConfiguration}
 						currentApiConfigName={currentApiConfigName}
