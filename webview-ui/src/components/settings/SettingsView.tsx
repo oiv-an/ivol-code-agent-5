@@ -1172,15 +1172,18 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 						{/* kilocode_change start display section */}
 						{activeTab === "display" && (
-							<DisplaySettings
-								reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
-								showTaskTimeline={showTaskTimeline}
-								sendMessageOnEnter={sendMessageOnEnter}
-								showTimestamps={cachedState.showTimestamps} // kilocode_change
-								showDiffStats={cachedState.showDiffStats} // kilocode_change
-								hideCostBelowThreshold={hideCostBelowThreshold}
-								setCachedStateField={setCachedStateField}
-							/>
+							<>
+								<DisplaySettings
+									reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
+									showTaskTimeline={showTaskTimeline}
+									sendMessageOnEnter={sendMessageOnEnter}
+									showTimestamps={cachedState.showTimestamps} // kilocode_change
+									showDiffStats={cachedState.showDiffStats} // kilocode_change
+									hideCostBelowThreshold={hideCostBelowThreshold}
+									setCachedStateField={setCachedStateField}
+								/>
+								<ProjectTaskStorageSettings />
+							</>
 						)}
 						{activeTab === "autocomplete" && (
 							<AutocompleteServiceSettingsView
@@ -1281,8 +1284,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 									enterBehavior={enterBehavior ?? "send"}
 									setCachedStateField={setCachedStateField}
 								/>
-								{/* kilocode_change: immediate, project-scoped storage actions */}
-								<ProjectTaskStorageSettings />
 							</>
 						)}
 

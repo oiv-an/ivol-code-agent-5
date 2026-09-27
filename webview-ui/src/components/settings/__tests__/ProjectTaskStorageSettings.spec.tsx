@@ -52,6 +52,29 @@ describe("project task storage settings", () => {
 		expect(screen.getByLabelText("settings:projectTaskStorage.hide")).toBeDisabled()
 		expect(screen.getByText("settings:projectTaskStorage.copy")).toBeDisabled()
 	})
+	it("restores progress on return, keeps streaming controls locked and shows partial failure", () => {
+		const first = render(<ProjectTaskStorageSettings />)
+		respond({ enabled: true })
+		fireEvent.click(screen.getByText("settings:projectTaskStorage.copy"))
+		respond({ enabled: true, busy: true, copyProgress: { phase: "copying", copied: 1, total: 3 } })
+		expect(screen.getByRole("progressbar")).toHaveAttribute("value", "1")
+		expect(screen.getByRole("progressbar")).toHaveAttribute("max", "3")
+		expect(screen.getByText("settings:projectTaskStorage.copy")).toBeDisabled()
+		first.unmount()
+		render(<ProjectTaskStorageSettings />)
+		expect(vscode.postMessage).toHaveBeenLastCalledWith({ type: "getProjectTaskStorage" })
+		respond({ enabled: true, busy: true, copyProgress: { phase: "verifying", copied: 2, total: 3 } })
+		expect(screen.getByRole("progressbar")).toHaveAttribute("value", "2")
+		expect(screen.getByText("settings:projectTaskStorage.phases.verifying")).toBeVisible()
+		fireEvent.click(screen.getByText("settings:projectTaskStorage.copy"))
+		expect(
+			vi.mocked(vscode.postMessage).mock.calls.filter(([message]) => message.type === "copyTasksToProject"),
+		).toHaveLength(1)
+		respond({ enabled: true, error: "Disk full", copyProgress: { phase: "failed", copied: 2, total: 3 } })
+		expect(screen.getByRole("progressbar")).toHaveAttribute("value", "2")
+		expect(screen.getByRole("alert")).toHaveTextContent("Disk full")
+		expect(screen.getByText("settings:projectTaskStorage.copy")).not.toBeDisabled()
+	})
 })
 
 it("hides copy controls for empty or fully local projects", () => {

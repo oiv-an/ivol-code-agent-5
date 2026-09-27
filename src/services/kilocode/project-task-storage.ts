@@ -6,7 +6,7 @@ import { randomUUID, createHash } from "node:crypto"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import * as vscode from "vscode"
-import type { HistoryItem } from "@roo-code/types"
+import type { HistoryItem, ProjectTaskCopyProgress } from "@roo-code/types"
 import { historyItemSchema } from "@roo-code/types"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import * as lockfile from "proper-lockfile"
@@ -328,6 +328,7 @@ export async function copyTasksToProject(
 	workspace: string,
 	globalBase: string,
 	history: HistoryItem[],
+	onProgress?: (progress: ProjectTaskCopyProgress) => void,
 ): Promise<number> {
 	if (readProjectTaskStorage(workspace)?.enabled === false) throw new Error("Enable project task storage first.")
 	await prepareProjectTaskStorage(workspace)
@@ -337,15 +338,30 @@ export async function copyTasksToProject(
 		retries: 0,
 	})
 	try {
-		return await copyProjectTasksLocked(workspace, globalBase, history)
+		return await copyProjectTasksLocked(workspace, globalBase, history, onProgress)
 	} finally {
 		await release()
 	}
 }
 
-async function copyProjectTasksLocked(workspace: string, globalBase: string, history: HistoryItem[]): Promise<number> {
+async function copyProjectTasksLocked(
+	workspace: string,
+	globalBase: string,
+	history: HistoryItem[],
+	onProgress?: (progress: ProjectTaskCopyProgress) => void,
+): Promise<number> {
 	let copied = 0
-	for (const item of history.filter((entry) => entry.workspace === workspace)) {
+	const candidates = getProjectTasksToCopy(workspace, history)
+	const report = (phase: ProjectTaskCopyProgress["phase"]) => {
+		// A disconnected UI must never interrupt or roll back a verified copy.
+		try {
+			onProgress?.({ phase, copied, total: candidates.length })
+		} catch (error) {
+			console.error("Project task copy progress:", error)
+		}
+	}
+	report("preparing")
+	for (const item of candidates) {
 		validateTaskId(item.id)
 		const index = readIndex(workspace)
 		if (index.items.some((entry) => entry.id === item.id) || index.deletedIds.includes(item.id)) continue
@@ -356,10 +372,12 @@ async function copyProjectTasksLocked(workspace: string, globalBase: string, his
 		assertNotSymlink(destination)
 		if (fs.existsSync(destination))
 			throw new Error(`Destination already exists for task ${item.id}; nothing was overwritten.`)
+		report("verifying")
 		const initial = await directoryDigest(source)
 		const staging = `${destination}.copy-${randomUUID()}`
 		await fsp.mkdir(path.dirname(destination), { recursive: true })
 		try {
+			report("copying")
 			await fsp.cp(source, staging, {
 				recursive: true,
 				errorOnExist: true,
@@ -370,6 +388,7 @@ async function copyProjectTasksLocked(workspace: string, globalBase: string, his
 					return true
 				},
 			})
+			report("verifying")
 			if (initial !== (await directoryDigest(staging)) || initial !== (await directoryDigest(source))) {
 				throw new Error(`Task ${item.id} changed while copying. Close it in other IDE windows and retry.`)
 			}
@@ -384,6 +403,7 @@ async function copyProjectTasksLocked(workspace: string, globalBase: string, his
 				throw error
 			}
 			copied++
+			report("verifying")
 		} finally {
 			await fsp.rm(staging, { recursive: true, force: true })
 		}

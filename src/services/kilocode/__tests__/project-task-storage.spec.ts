@@ -1,10 +1,11 @@
 // kilocode_change - new file
 import * as fs from "node:fs/promises"
+import { writeFileSync } from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { randomUUID } from "node:crypto"
 import { execFileSync } from "node:child_process"
-import type { HistoryItem } from "@roo-code/types"
+import type { HistoryItem, ProjectTaskCopyProgress } from "@roo-code/types"
 
 import type { ExtensionContext } from "vscode"
 import { ContextProxy } from "../../../core/config/ContextProxy"
@@ -157,6 +158,50 @@ describe("portable project task storage", () => {
 		expect(mergeProjectTaskHistory([entry])).toEqual([entry])
 		expect(await copyTasksToProject(workspace, globalBase, [entry])).toBe(0)
 		expect(getProjectTasksToCopy(workspace, [entry])).toEqual([])
+	})
+	it("reports phases and counts only verified, indexed copies, preserving partial progress on failure", async () => {
+		await enable()
+		const first = item(),
+			second = item(),
+			local = item()
+		await save(local)
+		const source = path.join(globalBase, "tasks", first.id)
+		await fs.mkdir(source, { recursive: true })
+		await fs.writeFile(path.join(source, "ui_messages.json"), "[]")
+		const events: ProjectTaskCopyProgress[] = []
+		const indexed: number[] = []
+		await expect(
+			copyTasksToProject(workspace, globalBase, [local, first, second], (progress) => {
+				events.push(progress)
+				indexed.push(mergeProjectTaskHistory([]).filter((entry) => entry.id === first.id).length)
+			}),
+		).rejects.toThrow()
+		expect(events.map(({ phase, copied, total }) => [phase, copied, total])).toEqual([
+			["preparing", 0, 2],
+			["verifying", 0, 2],
+			["copying", 0, 2],
+			["verifying", 0, 2],
+			["verifying", 1, 2],
+			["verifying", 1, 2],
+		])
+		expect(indexed).toEqual([0, 0, 0, 0, 1, 1])
+		expect(await fs.readFile(path.join(source, "ui_messages.json"), "utf8")).toBe("[]")
+	})
+	it("does not count a copy when its source changes during verification", async () => {
+		await enable()
+		const entry = item()
+		const source = path.join(globalBase, "tasks", entry.id)
+		await fs.mkdir(source, { recursive: true })
+		await fs.writeFile(path.join(source, "ui_messages.json"), "[]")
+		const events: ProjectTaskCopyProgress[] = []
+		await expect(
+			copyTasksToProject(workspace, globalBase, [entry], (progress) => {
+				events.push(progress)
+				if (progress.phase === "copying") writeFileSync(path.join(source, "extra.json"), "[]")
+			}),
+		).rejects.toThrow("changed while copying")
+		expect(events.every((progress) => progress.copied === 0)).toBe(true)
+		expect(mergeProjectTaskHistory([])).toEqual([])
 	})
 	it("relocates local checkpoints and never snapshots the private task folder", async () => {
 		await enable()

@@ -10,7 +10,15 @@
 		"noWorkspace": "Open a local project folder to configure task storage.",
 		"copy": "Copy existing project tasks",
 		"copyHint": "Copies tasks associated with the current project path and verifies the files. Global originals are kept; existing local tasks are not overwritten.",
-		"copied": "Tasks copied: {{count}}"
+		"copied": "Tasks copied: {{count}}",
+		"progress": "Tasks copied and verified: {{copied}} / {{total}}",
+		"phases": {
+			"preparing": "Preparing to copy…",
+			"copying": "Copying task files…",
+			"verifying": "Verifying task files…",
+			"completed": "Copy completed",
+			"failed": "Copy stopped due to an error"
+		}
 	},
 	"modelPresets": {
 		"title": "Model presets — MAX / MED / MIN",

@@ -183,6 +183,12 @@ export interface LanguageModelChatSelector {
  * Extension -> Webview | CLI
  */
 // kilocode_change start
+export interface ProjectTaskCopyProgress {
+	phase: "preparing" | "copying" | "verifying" | "completed" | "failed"
+	copied: number
+	total: number
+}
+
 export interface ProjectTaskStorageState {
 	workspace: string
 	enabled: boolean
@@ -190,6 +196,7 @@ export interface ProjectTaskStorageState {
 	busy: boolean
 	tasksToCopy: number
 	copied?: number
+	copyProgress?: ProjectTaskCopyProgress
 	error?: string
 }
 // kilocode_change end

@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.31
+
+- Make project task storage settings accessible from the Display tab.
+- Show verified task-copy progress and retain operation status when returning to storage settings.
+
 ## 5.17.29
 
 - Store new tasks inside each project by default, with automatic Git exclusion and a hidden history folder.

@@ -1,6 +1,7 @@
 // kilocode_change - new file
 import { useEffect, useState } from "react"
 import type { ExtensionMessage, ProjectTaskStorageState } from "@roo-code/types"
+import { LoaderCircle } from "lucide-react"
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Button } from "@src/components/ui"
@@ -15,14 +16,16 @@ export function ProjectTaskStorageSettings() {
 		const listener = (event: MessageEvent<ExtensionMessage>) => {
 			if (event.data.type === "projectTaskStorage" && event.data.projectTaskStorage) {
 				setState(event.data.projectTaskStorage)
-				setPending(false)
+				if (!event.data.projectTaskStorage.busy || event.data.projectTaskStorage.error) setPending(false)
 			}
 		}
 		window.addEventListener("message", listener)
 		vscode.postMessage({ type: "getProjectTaskStorage" })
 		return () => window.removeEventListener("message", listener)
 	}, [])
-	const disabled = !state || !state.workspace || state.busy || pending
+	const progress = state?.copyProgress
+	const copying = !!progress && !["completed", "failed"].includes(progress.phase)
+	const disabled = !state || !state.workspace || state.busy || pending || copying
 	const save = (enabled: boolean, hide: boolean) => {
 		setPending(true)
 		vscode.postMessage({ type: "setProjectTaskStorage", projectTaskStorage: { enabled, hide } })
@@ -54,7 +57,22 @@ export function ProjectTaskStorageSettings() {
 						{t("settings:projectTaskStorage.hide")}
 					</label>
 					<p className="text-vscode-descriptionForeground m-0">{t("settings:projectTaskStorage.privacy")}</p>
-					{state?.busy && <p role="status">{t("settings:projectTaskStorage.busy")}</p>}
+					{state?.busy && !copying && <p role="status">{t("settings:projectTaskStorage.busy")}</p>}
+					{progress && (
+						<div className="flex flex-col gap-2" role="status" aria-live="polite">
+							<div className="flex items-center gap-2">
+								{copying && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
+								<span>{t(`settings:projectTaskStorage.phases.${progress.phase}`)}</span>
+							</div>
+							<progress
+								className="w-full"
+								aria-label={t("settings:projectTaskStorage.progress", progress)}
+								value={progress.copied}
+								max={Math.max(1, progress.total)}
+							/>
+							<span>{t("settings:projectTaskStorage.progress", progress)}</span>
+						</div>
+					)}
 					{!state?.workspace && <p>{t("settings:projectTaskStorage.noWorkspace")}</p>}
 					{(state?.tasksToCopy ?? 0) > 0 && (
 						<>
@@ -72,7 +90,7 @@ export function ProjectTaskStorageSettings() {
 							</p>
 						</>
 					)}
-					{state?.copied !== undefined && (
+					{state?.copied !== undefined && !progress && (
 						<p role="status">{t("settings:projectTaskStorage.copied", { count: state.copied })}</p>
 					)}
 					{state?.error && (

@@ -339,6 +339,14 @@ describe("SettingsView - Sound Settings", () => {
 		expect(within(content).queryByTestId("sound-volume-slider")).not.toBeInTheDocument()
 	})
 
+	// kilocode_change: test navigation, not only the isolated storage component.
+	it("exposes project task storage through the visible display tab", () => {
+		const { activateTab, getSettingsContent } = renderSettingsView()
+		activateTab("display")
+		expect(within(getSettingsContent()).getByText("settings:projectTaskStorage.title")).toBeInTheDocument()
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "getProjectTaskStorage" })
+	})
+
 	it("toggles tts setting and sends message to VSCode", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()

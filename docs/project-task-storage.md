@@ -3,7 +3,7 @@
 **Store tasks inside this project** and **Hide .ivol in the IDE project tree**
 are enabled by default for new tasks in local, trusted workspace folders. Storage
 is initialized on the first task write, not by viewing settings. Explicit opt-outs
-are respected. Change these options in **Settings → UI → Task storage** after
+are respected. Change these options in **Settings → Display (monitor icon) → Task storage** after
 closing the current task. Existing global tasks are never moved automatically.
 
 ## What moves with the project
@@ -28,6 +28,15 @@ file contents, skips existing local tasks and retains global originals. Close
 those tasks in other IDE windows before copying. The copy button appears only
 when this project has global tasks not yet copied locally, and disappears when
 none remain. Retained backup originals do not make the button reappear.
+
+During copying, settings show a progress bar for verified and indexed tasks
+(completed tasks / total tasks), with a spinner for preparation, copying or
+verification. This is not a byte counter or a time estimate: a large task can
+remain at the same count while its files are copied and checked. Returning to
+settings restores the active operation, or its final result and any error,
+including the number successfully copied before a failure. Controls stay locked
+until the operation ends. This state lives in the extension host for its current
+session; it is not shared between IDE processes or restored after a host restart.
 
 Tasks saved under an old, already moved workspace path are not automatically
 matched by folder name. This avoids copying another project's conversations.
