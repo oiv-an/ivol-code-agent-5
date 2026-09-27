@@ -182,8 +182,22 @@ export interface LanguageModelChatSelector {
  * ExtensionMessage
  * Extension -> Webview | CLI
  */
+// kilocode_change start
+export interface ProjectTaskStorageState {
+	workspace: string
+	enabled: boolean
+	hide: boolean
+	busy: boolean
+	tasksToCopy: number
+	copied?: number
+	error?: string
+}
+// kilocode_change end
+
 export interface ExtensionMessage {
+	projectTaskStorage?: ProjectTaskStorageState // kilocode_change
 	type:
+		| "projectTaskStorage" // kilocode_change
 		| "action"
 		| "state"
 		| "selectedImages"
@@ -802,7 +816,12 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 // kilocode_change end: Type-safe global state update message
 
 export interface WebviewMessage {
-	type:
+	projectTaskStorage?: { enabled: boolean; hide: boolean } // kilocode_change
+	type: // kilocode_change start
+	| "getProjectTaskStorage"
+		| "setProjectTaskStorage"
+		| "copyTasksToProject"
+		// kilocode_change end
 		| "updateTodoList"
 		| "deleteMultipleTasksWithIds"
 		| "currentApiConfigName"

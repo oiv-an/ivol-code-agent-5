@@ -21,6 +21,15 @@ import {
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { logger } from "../../utils/logging"
+// kilocode_change start
+import {
+	mergeProjectTaskHistory,
+	updateProjectTaskHistory,
+	hasProjectTaskStorage,
+	getLocalTaskIds,
+} from "../../services/kilocode/project-task-storage"
+import type { HistoryItem } from "@roo-code/types"
+// kilocode_change end
 
 // kilocode_change start: Configuration change event types
 export interface ManagedIndexerConfig {
@@ -56,6 +65,7 @@ const globalSettingsExportSchema = globalSettingsSchema.omit({
 export class ContextProxy {
 	private readonly originalContext: vscode.ExtensionContext
 
+	private taskHistorySnapshot: HistoryItem[] = [] // kilocode_change
 	private stateCache: GlobalState
 	private secretCache: SecretState
 	private _isInitialized = false
@@ -219,6 +229,13 @@ export class ContextProxy {
 	getGlobalState<K extends GlobalStateKey>(key: K): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue: GlobalState[K]): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue?: GlobalState[K]): GlobalState[K] {
+		// kilocode_change start: project indexes travel with the workspace, not the IDE profile.
+		if (key === "taskHistory" && hasProjectTaskStorage()) {
+			const history = mergeProjectTaskHistory(this.originalContext.globalState.get<HistoryItem[]>(key) ?? [])
+			this.taskHistorySnapshot = structuredClone(history)
+			return history as GlobalState[K]
+		}
+		// kilocode_change end
 		// kilocode_change start: another window's timer/stop must not be hidden by the startup cache
 		if (YOLO_STATE_KEYS.includes(key)) {
 			if (key === "yoloMode" && (this.pendingYoloWrites > 0 || this.yoloWriteFailed)) {
@@ -239,6 +256,8 @@ export class ContextProxy {
 	}
 
 	updateGlobalState<K extends GlobalStateKey>(key: K, value: GlobalState[K]) {
+		if (key === "taskHistory" && hasProjectTaskStorage())
+			return this.updateTaskStorageHistory((value ?? []) as HistoryItem[]) // kilocode_change
 		if (YOLO_STATE_KEYS.includes(key)) return this.updateYoloGlobalState(key, value) // kilocode_change
 		if (isPassThroughStateKey(key)) {
 			return this.originalContext.globalState.update(key, value)
@@ -249,6 +268,32 @@ export class ContextProxy {
 	}
 
 	// kilocode_change start
+	private async updateTaskStorageHistory(next: HistoryItem[]) {
+		const previous = this.taskHistorySnapshot
+		const globalNext = await updateProjectTaskHistory(previous, next)
+		const localIds = getLocalTaskIds()
+		const before = new Map(previous.filter((item) => !localIds.has(item.id)).map((item) => [item.id, item]))
+		const after = new Map(globalNext.map((item) => [item.id, item]))
+		const changes = [...new Set([...before.keys(), ...after.keys()])].filter(
+			(id) => JSON.stringify(before.get(id)) !== JSON.stringify(after.get(id)),
+		)
+		// Local-only saves must never rewrite an unrelated/global snapshot. Preserve backup originals.
+		if (changes.length) {
+			const latest = new Map(
+				(this.originalContext.globalState.get<HistoryItem[]>("taskHistory") ?? []).map((item) => [
+					item.id,
+					item,
+				]),
+			)
+			for (const id of changes) {
+				const item = after.get(id)
+				if (item) latest.set(id, item)
+				else latest.delete(id)
+			}
+			await this.originalContext.globalState.update("taskHistory", [...latest.values()])
+		}
+	}
+
 	private async updateYoloGlobalState<K extends GlobalStateKey>(key: K, value: GlobalState[K]) {
 		this.stateCache[key] = value
 		this.pendingYoloWrites++

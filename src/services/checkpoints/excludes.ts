@@ -4,6 +4,7 @@ import { join } from "path"
 import { fileExistsAtPath } from "../../utils/fs"
 
 const getBuildArtifactPatterns = () => [
+	".ivol/", // kilocode_change: never snapshot private history or its shadow repositories.
 	".gradle/",
 	".idea/",
 	".parcel-cache/",

@@ -531,6 +531,15 @@ export const webviewMessageHandler = async (
 	}
 
 	switch (message.type) {
+		// kilocode_change start
+		case "getProjectTaskStorage":
+		case "setProjectTaskStorage":
+		case "copyTasksToProject": {
+			const { handleProjectTaskStorage } = await import("../kilocode/webview/projectTaskStorageHandler")
+			await handleProjectTaskStorage(provider, message)
+			break
+		}
+		// kilocode_change end
 		// kilocode_change: explicit draft-only checks never enter the task or profile mutation pipeline.
 		case "startStandaloneWebSearch": // kilocode_change: independent of Task and chat input.
 			await handleStandaloneWebSearch(provider, message)

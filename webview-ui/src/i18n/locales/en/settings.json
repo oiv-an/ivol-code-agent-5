@@ -1,5 +1,17 @@
 {
 	"back": "Back to tasks view",
+	"projectTaskStorage": {
+		"title": "Task storage",
+		"description": "Applies immediately to this project. New tasks and their index are stored in .ivol/tasks and move with the project folder. Existing tasks keep their original location until copied.",
+		"enabled": "Store tasks inside this project",
+		"hide": "Hide .ivol in the IDE project tree",
+		"privacy": "The .ivol folder is automatically added to .gitignore. History is not encrypted and may contain private data. Copy hidden files when moving the project; Git clones do not include them.",
+		"busy": "Close the current task before changing storage. Close this project's tasks in other IDE windows before copying.",
+		"noWorkspace": "Open a local project folder to configure task storage.",
+		"copy": "Copy existing project tasks",
+		"copyHint": "Copies tasks associated with the current project path and verifies the files. Global originals are kept; existing local tasks are not overwritten.",
+		"copied": "Tasks copied: {{count}}"
+	},
 	"modelPresets": {
 		"title": "Model presets — MAX / MED / MIN",
 		"description": "Manual switching only. Each preset saves a model and reasoning setting for this provider profile.",

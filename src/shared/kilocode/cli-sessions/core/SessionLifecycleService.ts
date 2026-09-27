@@ -143,7 +143,9 @@ export class SessionLifecycleService {
 
 			this.logger.debug("Obtained session", LOG_SOURCES.SESSION_LIFECYCLE, { sessionId, session })
 
-			const sessionDirectoryPath = path.join(this.pathProvider.getTasksDir(), sessionId)
+			const sessionDirectoryPath = this.pathProvider.getTaskDir
+				? await this.pathProvider.getTaskDir(sessionId)
+				: path.join(this.pathProvider.getTasksDir(), sessionId)
 
 			mkdirSync(sessionDirectoryPath, { recursive: true })
 

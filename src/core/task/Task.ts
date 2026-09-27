@@ -138,6 +138,7 @@ import {
 	taskMetadata,
 } from "../task-persistence"
 import { getTaskDirectoryPath } from "../../utils/storage"
+import { resolveProjectTaskDirectory } from "../../services/kilocode/project-task-storage" // kilocode_change
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling"
 import {
@@ -634,6 +635,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			? parentTask.workspacePath
 			: (workspacePath ?? getWorkspacePath(path.join(os.homedir(), "Documents"))) // kilocode_change: use Documents instead of Desktop as default
 
+		resolveProjectTaskDirectory(this.taskId, this.workspacePath, !historyItem) // kilocode_change: pin new tasks before the first save.
 		this.instanceId = crypto.randomUUID().slice(0, 8)
 		this.taskNumber = -1
 

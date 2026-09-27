@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.29
+
+- Store new tasks inside each project by default, with automatic Git exclusion and a hidden history folder.
+- Keep task history and checkpoints available after moving a project, and offer verified copying when older tasks remain in global storage.
+
 ## 5.17.27
 
 - Fix screenshots being omitted from OpenAI-compatible requests when resuming tasks or returning tool results.

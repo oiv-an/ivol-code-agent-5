@@ -8,6 +8,7 @@ import { GLOBAL_STATE_KEYS, SECRET_STATE_KEYS, GLOBAL_SECRET_KEYS } from "@roo-c
 import { ContextProxy } from "../ContextProxy"
 
 vi.mock("vscode", () => ({
+	workspace: { workspaceFolders: [] }, // kilocode_change: no project-local storage in legacy global-state tests.
 	Uri: {
 		file: vi.fn((path) => ({ path })),
 	},

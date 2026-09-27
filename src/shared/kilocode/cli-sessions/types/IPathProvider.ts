@@ -8,6 +8,8 @@ export interface IPathProvider {
 	 * @returns The absolute path to the tasks directory
 	 */
 	getTasksDir(): string
+	/** Resolve a specific task when the host supports project-local storage. */
+	getTaskDir?(taskId: string): Promise<string>
 
 	/**
 	 * Get the path to the file that stores the local session data.

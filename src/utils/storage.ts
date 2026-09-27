@@ -6,6 +6,13 @@ import * as fsSync from "fs" // // kilocode_change
 
 import { Package } from "../shared/package"
 import { t } from "../i18n"
+// kilocode_change start
+import {
+	resolveProjectTaskDirectory,
+	prepareProjectTaskStorage,
+	assertProjectTaskWritable,
+} from "../services/kilocode/project-task-storage"
+// kilocode_change end
 
 /**
  * Gets the base storage path for conversations
@@ -77,9 +84,15 @@ export function getStorageBasePathSync(defaultPath: string): string {
  * Gets the storage directory path for a task
  */
 export async function getTaskDirectoryPath(globalStoragePath: string, taskId: string, create = true): Promise<string> {
-	// kilocode_change
-	const basePath = await getStorageBasePath(globalStoragePath)
-	const taskDir = path.join(basePath, "tasks", taskId)
+	// kilocode_change start: route only task data; credentials/settings keep their global paths.
+	const local = resolveProjectTaskDirectory(taskId)
+	if (local && create) assertProjectTaskWritable(taskId)
+	const basePath = local ? undefined : await getStorageBasePath(globalStoragePath)
+	const taskDir = local ?? path.join(basePath!, "tasks", taskId)
+	if (local && path.basename(path.dirname(path.dirname(local))) === ".ivol" && create) {
+		await prepareProjectTaskStorage(path.dirname(path.dirname(path.dirname(local))))
+	}
+	// kilocode_change end
 	if (create) await fs.mkdir(taskDir, { recursive: true }) // kilocode_change: intent reads must not create task directories
 	return taskDir
 }

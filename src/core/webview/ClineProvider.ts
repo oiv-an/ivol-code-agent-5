@@ -365,6 +365,19 @@ export class ClineProvider
 			this.log("CloudService not ready, deferring cloud profile sync")
 		}
 
+		// kilocode_change start: refresh project history written by another IDE/window.
+		if (vscode.workspace.createFileSystemWatcher) {
+			const watcher = vscode.workspace.createFileSystemWatcher("**/.ivol/{task-history,project}.json")
+			const refresh = () =>
+				this.refreshProjectTaskHistory().catch((error) => this.log(`Project history refresh failed: ${error}`))
+			this.disposables.push(
+				watcher,
+				watcher.onDidChange(refresh),
+				watcher.onDidCreate(refresh),
+				watcher.onDidDelete(refresh),
+			)
+		}
+		// kilocode_change end
 		// kilocode_change start - Initialize auto-purge scheduler
 		this.initializeAutoPurgeScheduler()
 		// kilocode_change end
@@ -3025,6 +3038,14 @@ export class ClineProvider
 			appendSystemPrompt: stateValues.appendSystemPrompt, // kilocode_change: CLI append system prompt
 		}
 	}
+
+	// kilocode_change start
+	public async refreshProjectTaskHistory() {
+		this.kiloCodeTaskHistoryVersion++
+		this.recentTasksCache = undefined
+		await this.postStateToWebview()
+	}
+	// kilocode_change end
 
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
 		// kilocode_change start - keep the memento's previous snapshot intact for delta-based storage.

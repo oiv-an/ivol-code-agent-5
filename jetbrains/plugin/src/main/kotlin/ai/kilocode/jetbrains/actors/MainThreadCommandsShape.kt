@@ -108,6 +108,15 @@ class MainThreadCommands(val project: Project) : MainThreadCommandsShape {
      * @return The execution result
      */
     override suspend fun executeCommand(id: String, args: List<Any?>): Any? {
+        if (id == "ivol.refreshProjectTaskStorage") {
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) {
+                    com.intellij.openapi.vfs.LocalFileSystem.getInstance().refresh(false)
+                    com.intellij.ide.projectView.ProjectView.getInstance(project).refresh()
+                }
+            }
+            return Unit
+        }
         logger.info("Executing command: $id ")
         registry.getCommand(id)?.let { cmd ->
             runCmd(cmd, args)
@@ -124,7 +133,7 @@ class MainThreadCommands(val project: Project) : MainThreadCommandsShape {
      */
     override fun getCommands(): List<String> {
         logger.info("Getting all commands")
-        return registry.getCommands().keys.toList()
+        return registry.getCommands().keys.toList() + "ivol.refreshProjectTaskStorage"
     }
 
     /**

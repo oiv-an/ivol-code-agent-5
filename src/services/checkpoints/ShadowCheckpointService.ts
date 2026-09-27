@@ -14,6 +14,7 @@ import { t } from "../../i18n"
 
 import { CheckpointDiff, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
+import { resolveProjectTaskDirectory, ensureProjectTaskIgnore } from "../kilocode/project-task-storage" // kilocode_change
 
 // kilocode_change start
 import { TelemetryService } from "@roo-code/telemetry"
@@ -176,9 +177,22 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 			const worktree = await this.getShadowGitConfigWorktree(git)
 
 			if (worktree !== this.workspaceDir) {
-				throw new Error(
-					`Checkpoints can only be used in the original workspace: ${worktree} !== ${this.workspaceDir}`,
-				)
+				// kilocode_change start: only explicitly project-local checkpoints may travel with a project.
+				const local = resolveProjectTaskDirectory(this.taskId)
+				if (
+					local &&
+					this.checkpointsDir === path.join(local, "checkpoints") &&
+					local === path.join(this.workspaceDir, ".ivol", "tasks", this.taskId)
+				) {
+					await ensureProjectTaskIgnore(this.workspaceDir)
+					await git.addConfig("core.worktree", this.workspaceDir)
+					this.shadowGitConfigWorktree = this.workspaceDir
+				} else {
+					throw new Error(
+						`Checkpoints can only be used in the original workspace: ${worktree} !== ${this.workspaceDir}`,
+					)
+				}
+				// kilocode_change end
 			}
 
 			await this.writeExcludeFile()
@@ -231,7 +245,15 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 
 	private async stageAll(git: SimpleGit) {
 		try {
-			await git.add([".", "--ignore-errors"])
+			// kilocode_change start: a project-local shadow repo sits inside an ignored directory.
+			// Stage from the worktree root, not from the shadow repository's relative cwd.
+			const local = resolveProjectTaskDirectory(this.taskId)
+			await git.add(
+				local && this.checkpointsDir === path.join(local, "checkpoints")
+					? ["--all", "--", ":/"]
+					: [".", "--ignore-errors"],
+			)
+			// kilocode_change end
 		} catch (error) {
 			this.log(
 				`[${this.constructor.name}#stageAll] failed to add files to git: ${error instanceof Error ? error.message : String(error)}`,
@@ -257,6 +279,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 				const normalizedPath = filePath.replace(/\\/g, "/")
 				return (
 					normalizedPath.includes(".git/HEAD") &&
+					!normalizedPath.startsWith(".ivol/") && // kilocode_change: private per-task shadow repositories.
 					!normalizedPath.startsWith(".git/") &&
 					normalizedPath !== ".git/HEAD"
 				)

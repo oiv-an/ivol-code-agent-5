@@ -85,6 +85,7 @@ import deepEqual from "fast-deep-equal" // kilocode_change
 import { AutocompleteServiceSettingsView } from "../kilocode/settings/AutocompleteServiceSettings" // kilocode_change
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { UISettings } from "./UISettings"
+import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings" // kilocode_change
 import AgentBehaviourView from "../kilocode/settings/AgentBehaviourView" // kilocode_change - new combined view
 // import ModesView from "../modes/ModesView" // kilocode_change - now used inside AgentBehaviourView
 // import McpView from "../mcp/McpView" // kilocode_change: own view
@@ -1274,11 +1275,15 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 						{/* UI Section */}
 						{renderTab === "ui" && (
-							<UISettings
-								reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
-								enterBehavior={enterBehavior ?? "send"}
-								setCachedStateField={setCachedStateField}
-							/>
+							<>
+								<UISettings
+									reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
+									enterBehavior={enterBehavior ?? "send"}
+									setCachedStateField={setCachedStateField}
+								/>
+								{/* kilocode_change: immediate, project-scoped storage actions */}
+								<ProjectTaskStorageSettings />
+							</>
 						)}
 
 						{/* Experimental Section */}
