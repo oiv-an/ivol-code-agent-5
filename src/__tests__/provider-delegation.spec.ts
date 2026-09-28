@@ -3,8 +3,70 @@
 import { describe, it, expect, vi } from "vitest"
 import { RooCodeEventName } from "@roo-code/types"
 import { ClineProvider } from "../core/webview/ClineProvider"
+import * as telegram from "../core/kilocode/webview/telegramHandler" // kilocode_change
 
 describe("ClineProvider.delegateParentAndOpenChild()", () => {
+	// kilocode_change start
+	it("begins Telegram transfer before removal and finishes after child creation", async () => {
+		const order: string[] = []
+		const child = { taskId: "child" }
+		const parent = {
+			taskId: "parent",
+			flushPendingToolResultsToHistory: async () => {
+				order.push("flush")
+			},
+		}
+		const cancel = vi.fn()
+		const hook = vi.spyOn(telegram, "beginTelegramTransfer").mockImplementation(async () => {
+			order.push("begin")
+			return {
+				finish: async (task) => {
+					expect(task).toBe(child)
+					order.push("finish")
+				},
+				cancel,
+			}
+		})
+		const provider = {
+			getCurrentTask: () => parent,
+			removeClineFromStack: async () => {
+				order.push("unfocus-abort")
+			},
+			handleModeSwitch: async () => {},
+			createTask: async () => {
+				order.push("create")
+				return child
+			},
+			getTaskWithId: async () => ({ historyItem: { id: "parent" } }),
+			updateTaskHistory: async () => {},
+			emit: () => {
+				order.push("delegated")
+			},
+			log: vi.fn(),
+		} as unknown as ClineProvider
+		try {
+			await ClineProvider.prototype.delegateParentAndOpenChild.call(provider, {
+				parentTaskId: "parent",
+				message: "child",
+				initialTodos: [],
+				mode: "code",
+			})
+			expect(order).toEqual(["flush", "begin", "unfocus-abort", "create", "finish", "delegated"])
+			provider.createTask = vi.fn().mockRejectedValue(new Error("creation failed"))
+			await expect(
+				ClineProvider.prototype.delegateParentAndOpenChild.call(provider, {
+					parentTaskId: "parent",
+					message: "child",
+					initialTodos: [],
+					mode: "code",
+				}),
+			).rejects.toThrow("creation failed")
+			expect(cancel).toHaveBeenCalledOnce()
+		} finally {
+			hook.mockRestore()
+		}
+	})
+	// kilocode_change end
 	it("persists parent delegation metadata and emits TaskDelegated", async () => {
 		const providerEmit = vi.fn()
 		const parentTask = { taskId: "parent-1", emit: vi.fn() } as any

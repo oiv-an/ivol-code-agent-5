@@ -350,58 +350,12 @@ describe("ApiOptions", () => {
 		expect(screen.queryByRole("checkbox", { name: /TLS/i })).not.toBeInTheDocument()
 	})
 	// kilocode_change end
-	// kilocode_change start: the working file is a default-on provider setting.
-	describe("task working file", () => {
-		let stateSpy: ReturnType<typeof vi.spyOn>
-		beforeEach(() => {
-			stateSpy = vi.spyOn(ExtensionStateContext, "useExtensionState").mockReturnValue({
-				taskDocumentSettings: { enabled: false, fileName: "CURRENT_TASK.md", supported: true },
-			} as any)
-		})
-		afterEach(() => stateSpy.mockRestore())
-
-		it("defaults to on without saving and stages an explicit opt-out", () => {
-			const setApiConfigurationField = vi.fn()
-			renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, setApiConfigurationField })
-			const task = screen.getByTestId("provider-intelligent-task-checkbox")
-			expect(task.querySelector("input")).toBeChecked()
-			expect(setApiConfigurationField).not.toHaveBeenCalledWith("intelligentTaskEnabled", true)
-			fireEvent.click(task.querySelector("input")!)
-			expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", false)
-		})
-
-		it.each(["anthropic", "ollama", "lmstudio", "openai-codex"] as const)(
-			"keeps the saved per-profile choice for %s",
-			(apiProvider) => {
-				const setApiConfigurationField = vi.fn()
-				renderApiOptions({
-					apiConfiguration: { apiProvider, intelligentTaskEnabled: true },
-					setApiConfigurationField,
-				})
-				const input = screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")!
-				expect(input).toBeChecked()
-				fireEvent.click(input)
-				expect(setApiConfigurationField).toHaveBeenCalledWith("intelligentTaskEnabled", false)
-			},
-		)
-
-		it.each([false, "true", 1, null])("does not enable an explicit opt-out or invalid import %s", (value) => {
-			renderApiOptions({ apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: value } as never })
-			expect(screen.getByTestId("provider-intelligent-task-checkbox").querySelector("input")).not.toBeChecked()
-		})
-
-		it.each([false, undefined])("hides the setting for unsupported or not-yet-known hosts (%s)", (supported) => {
-			stateSpy.mockReturnValue({ taskDocumentSettings: supported === undefined ? undefined : { supported } })
-			renderApiOptions({ apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: true } })
-			expect(screen.queryByTestId("provider-intelligent-task-checkbox")).not.toBeInTheDocument()
-		})
-
-		it("does not expose the setting during welcome onboarding", () => {
-			renderApiOptions({ apiConfiguration: { apiProvider: "openai" }, fromWelcomeView: true })
-			expect(screen.queryByTestId("provider-intelligent-task-checkbox")).not.toBeInTheDocument()
-		})
+	// kilocode_change: IVOL owns task memory and presets, not Providers.
+	it("does not duplicate IVOL controls in Providers", () => {
+		renderApiOptions({ apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: true } })
+		expect(screen.queryByTestId("provider-intelligent-task-checkbox")).not.toBeInTheDocument()
+		expect(screen.queryByText("settings:modelPresets.title")).not.toBeInTheDocument()
 	})
-	// kilocode_change end
 
 	it("resets model to provider default when switching to openai-codex with an invalid prior apiModelId", () => {
 		const mockSetApiConfigurationField = vi.fn()

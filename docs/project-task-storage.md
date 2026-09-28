@@ -3,7 +3,7 @@
 **Store tasks inside this project** and **Hide .ivol in the IDE project tree**
 are enabled by default for new tasks in local, trusted workspace folders. Storage
 is initialized on the first task write, not by viewing settings. Explicit opt-outs
-are respected. Change these options in **Settings → Display (monitor icon) → Task storage** after
+are respected. Change these options in **Settings → IVOL → Task storage** after
 closing the current task. Existing global tasks are never moved automatically.
 
 ## What moves with the project

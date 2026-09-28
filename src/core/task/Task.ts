@@ -467,6 +467,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private askResponseImages?: string[]
 	public lastMessageTs?: number
 	private autoApprovalTimeoutRef?: NodeJS.Timeout
+	private remotePendingAsk?: { ts: number; invocation: symbol } // kilocode_change
 
 	// Tool Use
 	consecutiveMistakeCount: number = 0
@@ -1585,12 +1586,57 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Note that `partial` has three valid states true (partial message),
 	// false (completion of partial message), undefined (individual complete
 	// message).
+	// kilocode_change start: remote approvals expire with the actual ask promise, not its visible row.
 	async ask(
 		type: ClineAsk,
 		text?: string,
 		partial?: boolean,
 		progressStatus?: ToolProgressStatus,
 		isProtected?: boolean,
+	): Promise<{ response: ClineAskResponse; text?: string; images?: string[] }> {
+		const invocation = Symbol("pendingAsk")
+		try {
+			return await this.askInternal(type, text, partial, progressStatus, isProtected, invocation)
+		} finally {
+			if (this.remotePendingAsk?.invocation === invocation) this.remotePendingAsk = undefined
+		}
+	}
+
+	public getRemotePendingAsk(): ClineMessage | undefined {
+		const pending = this.remotePendingAsk
+		if (
+			!pending ||
+			this.abort ||
+			this.abandoned ||
+			this.askResponse !== undefined ||
+			this.lastMessageTs !== pending.ts
+		)
+			return
+		const message = this.clineMessages[findLastIndex(this.clineMessages, (item) => item.ts === pending.ts)]
+		return message?.type === "ask" && !message.partial ? message : undefined
+	}
+
+	public respondToRemoteText(text: string, images?: string[]): boolean {
+		const pending = this.getRemotePendingAsk()
+		if (!pending || !["followup", "condense"].includes(pending.ask ?? "")) return false
+		this.handleWebviewAskResponse("messageResponse", text, images)
+		return true
+	}
+
+	public respondToRemoteAsk(ts: number, approved: boolean): boolean {
+		if (this.getRemotePendingAsk()?.ts !== ts) return false
+		this.handleWebviewAskResponse(approved ? "yesButtonClicked" : "noButtonClicked")
+		return true
+	}
+	// kilocode_change end
+
+	private async askInternal(
+		type: ClineAsk,
+		text: string | undefined,
+		partial: boolean | undefined,
+		progressStatus: ToolProgressStatus | undefined,
+		isProtected: boolean | undefined,
+		invocation: symbol,
 	): Promise<{ response: ClineAskResponse; text?: string; images?: string[] }> {
 		// If this Cline instance was aborted by the provider, then the only
 		// thing keeping us alive is a promise still running in the background,
@@ -1682,6 +1728,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.addToClineMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
 		}
 
+		this.remotePendingAsk = { ts: askTs, invocation } // kilocode_change
+
 		// kilocode_change start: YOLO mode auto-answer for follow-up questions
 		// Check if this is a follow-up question with suggestions in YOLO mode
 		if (type === "followup" && text && !partial && !this.ordinaryPreparationDecision) {
@@ -1755,7 +1803,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			"resume_completed_task",
 			"mistake_limit_reached",
 		].includes(type)
-		const canConsumeQueuedText = () => acceptsQueuedText && !this.ordinaryPreparationDecision
+		const canConsumeQueuedText = () =>
+			acceptsQueuedText &&
+			!this.ordinaryPreparationDecision &&
+			!(
+				this.messageQueueService.messages[0]?.source === "telegram" &&
+				["tool", "command", "browser_action_launch", "use_mcp_server"].includes(type)
+			)
 		const isMessageQueued = canConsumeQueuedText() && !this.messageQueueService.isEmpty()
 		// kilocode_change end
 		const isStatusMutable = !partial && isBlocking && !isMessageQueued && approval.decision === "ask"
@@ -1887,6 +1941,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+		this.remotePendingAsk = undefined // kilocode_change: consume remote authorization synchronously.
 		// Clear any pending auto-approval timeout when user responds
 		this.cancelAutoApprovalTimeout()
 
@@ -1952,6 +2007,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	public supersedePendingAsk(): void {
+		this.remotePendingAsk = undefined // kilocode_change
 		this.lastMessageTs = Date.now()
 	}
 

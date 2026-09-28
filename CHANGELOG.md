@@ -1,5 +1,37 @@
 # IVOL Code Agent 5
 
+## 5.17.38
+
+- Continue explicitly connected tasks in private Telegram topics with screenshot attachments, captions, one-shot approval buttons and remote stop.
+- Keep one topic across nested subtasks, with readable titles, pinned requests, formatted replies and actionable activation errors that never expose bot credentials.
+- Make Telegram connection status clearly green and allow safe disconnection while connecting or switching subtasks.
+- Bring IVOL task memory, storage, Telegram, personal browser, web search and model presets together in a dedicated settings section.
+- Show verified project task-copy progress and retain operation status when returning to storage settings.
+
+## 5.17.37
+
+- Bring IVOL task memory, storage, Telegram, personal browser, web search and model presets together in a dedicated settings section.
+
+## 5.17.36
+
+- Keep Telegram connected to one topic across nested subtasks and returns to their parents, with safe input handoffs.
+
+## 5.17.35
+
+- Format Telegram replies safely and hide internal completion suggestions.
+
+## 5.17.34
+
+- Keep Telegram topics readable with short task titles, pinned original requests, clean assistant replies and a single thinking indicator instead of internal events.
+
+## 5.17.33
+
+- Show actionable Telegram activation errors without exposing bot credentials.
+
+## 5.17.32
+
+- Continue explicitly connected tasks in private Telegram topics with conversation updates, screenshot attachments and captions, one-shot approval buttons and remote stop.
+
 ## 5.17.31
 
 - Make project task storage settings accessible from the Display tab.

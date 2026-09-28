@@ -30,6 +30,7 @@ import {
 	// Server, // kilocode_change - no longer needed, merged into agentBehaviour
 	Users2,
 	ArrowLeft,
+	Sparkles, // kilocode_change
 } from "lucide-react"
 
 // kilocode_change
@@ -85,7 +86,7 @@ import deepEqual from "fast-deep-equal" // kilocode_change
 import { AutocompleteServiceSettingsView } from "../kilocode/settings/AutocompleteServiceSettings" // kilocode_change
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { UISettings } from "./UISettings"
-import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings" // kilocode_change
+import { IvolSettings } from "./IvolSettings" // kilocode_change
 import AgentBehaviourView from "../kilocode/settings/AgentBehaviourView" // kilocode_change - new combined view
 // import ModesView from "../modes/ModesView" // kilocode_change - now used inside AgentBehaviourView
 // import McpView from "../mcp/McpView" // kilocode_change: own view
@@ -105,6 +106,7 @@ export interface SettingsViewRef {
 }
 
 export const sectionNames = [
+	"ivol", // kilocode_change
 	"providers",
 	"autoApprove",
 	"slashCommands",
@@ -751,6 +753,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 	const sections: { id: SectionName; icon: LucideIcon }[] = useMemo(
 		() => [
+			{ id: "ivol", icon: Sparkles }, // kilocode_change
 			{ id: "providers", icon: Plug },
 			{ id: "agentBehaviour", icon: Users2 }, // kilocode_change - renamed from "modes" and merged with "mcp"
 			{ id: "autoApprove", icon: CheckCheck },
@@ -964,6 +967,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 										: settingsTabTrigger,
 									"cursor-pointer focus:ring-0", // Remove the focus ring styling
 								)}
+								aria-label={id === "ivol" ? t("settings:sections.ivol") : undefined} // kilocode_change
 								data-testid={`tab-${id}`}
 								data-compact={isCompactMode}>
 								<div className={cn("flex items-center gap-2", isCompactMode && "justify-center")}>
@@ -1012,12 +1016,25 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 					})}
 				</TabList>
 
-				{/* Content area - renders only the active tab (or indexing tab during initial indexing) */}
+				{/* kilocode_change: every section uses renderTab, including the temporary indexing pass. */}
 				<TabContent
 					ref={contentRef}
 					className={cn("p-0 flex-1 overflow-auto", isIndexing && "opacity-0")}
 					data-testid="settings-content">
 					<SearchIndexProvider value={searchContextValue}>
+						{/* kilocode_change start: shared IVOL settings, same profile/global drafts. */}
+						{renderTab === "ivol" && (
+							<IvolSettings
+								apiConfiguration={apiConfiguration}
+								profileName={editingApiConfigName}
+								setApiConfigurationField={setApiConfigurationField}
+								browserMode={cachedState.browserMode}
+								browserOSAllowTaskActions={cachedState.browserOSAllowTaskActions}
+								frozenMessagesBudgetPercent={frozenMessagesBudgetPercent}
+								setCachedStateField={setCachedStateField}
+							/>
+						)}
+						{/* kilocode_change end */}
 						{/* Providers Section */}
 						{renderTab === "providers" && (
 							<div>
@@ -1108,7 +1125,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* Auto-Approve Section */}
-						{activeTab === "autoApprove" && (
+						{renderTab === "autoApprove" && (
 							<AutoApproveSettings
 								showAutoApproveMenu={showAutoApproveMenu} // kilocode_change
 								yoloGatekeeperApiConfigId={yoloGatekeeperApiConfigId} // kilocode_change: AI gatekeeper for YOLO mode
@@ -1145,13 +1162,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 								remoteBrowserHost={remoteBrowserHost}
 								remoteBrowserEnabled={remoteBrowserEnabled}
 								browserMode={cachedState.browserMode} // kilocode_change
-								browserOSAllowTaskActions={cachedState.browserOSAllowTaskActions} // kilocode_change
 								setCachedStateField={setCachedStateField}
 							/>
 						)}
 
 						{/* Checkpoints Section */}
-						{activeTab === "checkpoints" && (
+						{renderTab === "checkpoints" && (
 							<CheckpointSettings
 								enableCheckpoints={enableCheckpoints}
 								checkpointTimeout={checkpointTimeout}
@@ -1171,7 +1187,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* kilocode_change start display section */}
-						{activeTab === "display" && (
+						{renderTab === "display" && (
 							<>
 								<DisplaySettings
 									reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
@@ -1182,10 +1198,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 									hideCostBelowThreshold={hideCostBelowThreshold}
 									setCachedStateField={setCachedStateField}
 								/>
-								<ProjectTaskStorageSettings />
 							</>
 						)}
-						{activeTab === "autocomplete" && (
+						{renderTab === "autocomplete" && (
 							<AutocompleteServiceSettingsView
 								ghostServiceSettings={ghostServiceSettings}
 								onAutocompleteServiceSettingsChange={setAutocompleteServiceSettingsField}
@@ -1194,7 +1209,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						{/* kilocode_change end display section */}
 
 						{/* Notifications Section */}
-						{activeTab === "notifications" && (
+						{renderTab === "notifications" && (
 							<NotificationSettings
 								ttsEnabled={ttsEnabled}
 								ttsSpeed={ttsSpeed}
@@ -1207,11 +1222,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* Context Management Section */}
-						{activeTab === "contextManagement" && (
+						{renderTab === "contextManagement" && (
 							<ContextManagementSettings
 								autoCondenseContext={autoCondenseContext}
 								autoCondenseContextPercent={autoCondenseContextPercent}
-								frozenMessagesBudgetPercent={frozenMessagesBudgetPercent} // kilocode_change
 								listApiConfigMeta={listApiConfigMeta ?? []}
 								maxOpenTabsContext={maxOpenTabsContext}
 								maxWorkspaceFiles={maxWorkspaceFiles ?? 200}
@@ -1234,7 +1248,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* Terminal Section */}
-						{activeTab === "terminal" && (
+						{renderTab === "terminal" && (
 							<TerminalSettings
 								terminalOutputLineLimit={terminalOutputLineLimit}
 								terminalOutputCharacterLimit={terminalOutputCharacterLimit}
@@ -1253,7 +1267,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* kilocode_change: Agent Behaviour Section - kilocode_change: merged modes and mcp */}
-						{activeTab === "agentBehaviour" && <AgentBehaviourView />}
+						{renderTab === "agentBehaviour" && <AgentBehaviourView />}
 
 						{/* kilocode_change: removed: Modes Section */}
 
@@ -1267,11 +1281,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 								includeTaskHistoryInEnhance={includeTaskHistoryInEnhance}
 								setIncludeTaskHistoryInEnhance={(value) =>
 									setCachedStateField("includeTaskHistoryInEnhance", value)
-								}
-								// kilocode_change: the mode stays in the selected profile's unsaved draft.
-								intelligentTaskEnabled={apiConfiguration.intelligentTaskEnabled}
-								onIntelligentTaskEnabledChange={(enabled) =>
-									setApiConfigurationField("intelligentTaskEnabled", enabled)
 								}
 							/>
 						)}
@@ -1288,7 +1297,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 						)}
 
 						{/* Experimental Section */}
-						{activeTab === "experimental" && (
+						{renderTab === "experimental" && (
 							<ExperimentalSettings
 								setExperimentEnabled={setExperimentEnabled}
 								experiments={experiments}
@@ -1321,7 +1330,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 						{/* kilocode_change start: render About directly in the personal tab layout */}
 						{/* About Section */}
-						{activeTab === "about" && <About />}
+						{renderTab === "about" && <About />}
 						{/* kilocode_change end */}
 					</SearchIndexProvider>
 				</TabContent>

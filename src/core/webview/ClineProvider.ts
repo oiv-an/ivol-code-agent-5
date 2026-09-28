@@ -105,6 +105,7 @@ import { getEnabledRules } from "./kilorules"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
+import { disposeTelegram, beginTelegramTransfer } from "../kilocode/webview/telegramHandler" // kilocode_change
 import { getSystemPromptFilePath } from "../prompts/sections/custom-system-prompt"
 // kilocode_change start
 import {
@@ -713,6 +714,7 @@ export class ClineProvider
 	// kilocode_change end
 
 	async dispose() {
+		disposeTelegram(this) // kilocode_change: remote task access never outlives its owning provider.
 		disposeProviderConnectionTest(this) // kilocode_change: stop only this view's isolated settings check.
 		disposeStandaloneWebSearch(this) // kilocode_change: no independent search survives its owning view.
 		this.log("Disposing ClineProvider...")
@@ -4048,71 +4050,82 @@ export class ClineProvider
 			)
 		}
 
-		// 3) Enforce single-open invariant by closing/disposing the parent first
-		//    This ensures we never have >1 tasks open at any time during delegation.
-		//    Await abort completion to ensure clean disposal and prevent unhandled rejections.
+		// kilocode_change start: suspend Telegram before unfocus; capture child events at creation.
+		const telegramTransfer = await beginTelegramTransfer(this, parent)
 		try {
-			await this.removeClineFromStack()
-		} catch (error) {
-			this.log(
-				`[delegateParentAndOpenChild] Error during parent disposal (non-fatal): ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			)
-			// Non-fatal: proceed with child creation even if parent cleanup had issues
-		}
-
-		// 3) Switch provider mode to child's requested mode BEFORE creating the child task
-		//    This ensures the child's system prompt and configuration are based on the correct mode.
-		//    The mode switch must happen before createTask() because the Task constructor
-		//    initializes its mode from provider.getState() during initializeTaskMode().
-		try {
-			await this.handleModeSwitch(mode as any)
-		} catch (e) {
-			this.log(
-				`[delegateParentAndOpenChild] handleModeSwitch failed for mode '${mode}': ${
-					(e as Error)?.message ?? String(e)
-				}`,
-			)
-		}
-
-		// 4) Create child as sole active (parent reference preserved for lineage)
-		// Pass initialStatus: "active" to ensure the child task's historyItem is created
-		// with status from the start, avoiding race conditions where the task might
-		// call attempt_completion before status is persisted separately.
-		const child = await this.createTask(message, undefined, parent as any, {
-			initialTodos,
-			initialStatus: "active",
-		})
-
-		// 5) Persist parent delegation metadata
-		try {
-			const { historyItem } = await this.getTaskWithId(parentTaskId)
-			const childIds = Array.from(new Set([...(historyItem.childIds ?? []), child.taskId]))
-			const updatedHistory: typeof historyItem = {
-				...historyItem,
-				status: "delegated",
-				delegatedToId: child.taskId,
-				awaitingChildId: child.taskId,
-				childIds,
+			// kilocode_change end
+			// 3) Enforce single-open invariant by closing/disposing the parent first
+			//    This ensures we never have >1 tasks open at any time during delegation.
+			//    Await abort completion to ensure clean disposal and prevent unhandled rejections.
+			try {
+				await this.removeClineFromStack()
+			} catch (error) {
+				this.log(
+					`[delegateParentAndOpenChild] Error during parent disposal (non-fatal): ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+				// Non-fatal: proceed with child creation even if parent cleanup had issues
 			}
-			await this.updateTaskHistory(updatedHistory)
-		} catch (err) {
-			this.log(
-				`[delegateParentAndOpenChild] Failed to persist parent metadata for ${parentTaskId} -> ${child.taskId}: ${
-					(err as Error)?.message ?? String(err)
-				}`,
-			)
-		}
 
-		// 6) Emit TaskDelegated (provider-level)
-		try {
-			this.emit(RooCodeEventName.TaskDelegated, parentTaskId, child.taskId)
-		} catch {
-			// non-fatal
-		}
+			// 3) Switch provider mode to child's requested mode BEFORE creating the child task
+			//    This ensures the child's system prompt and configuration are based on the correct mode.
+			//    The mode switch must happen before createTask() because the Task constructor
+			//    initializes its mode from provider.getState() during initializeTaskMode().
+			try {
+				await this.handleModeSwitch(mode as any)
+			} catch (e) {
+				this.log(
+					`[delegateParentAndOpenChild] handleModeSwitch failed for mode '${mode}': ${
+						(e as Error)?.message ?? String(e)
+					}`,
+				)
+			}
 
-		return child
+			// 4) Create child as sole active (parent reference preserved for lineage)
+			// Pass initialStatus: "active" to ensure the child task's historyItem is created
+			// with status from the start, avoiding race conditions where the task might
+			// call attempt_completion before status is persisted separately.
+			const child = await this.createTask(message, undefined, parent as any, {
+				initialTodos,
+				initialStatus: "active",
+			})
+			await telegramTransfer?.finish(child) // kilocode_change
+
+			// 5) Persist parent delegation metadata
+			try {
+				const { historyItem } = await this.getTaskWithId(parentTaskId)
+				const childIds = Array.from(new Set([...(historyItem.childIds ?? []), child.taskId]))
+				const updatedHistory: typeof historyItem = {
+					...historyItem,
+					status: "delegated",
+					delegatedToId: child.taskId,
+					awaitingChildId: child.taskId,
+					childIds,
+				}
+				await this.updateTaskHistory(updatedHistory)
+			} catch (err) {
+				this.log(
+					`[delegateParentAndOpenChild] Failed to persist parent metadata for ${parentTaskId} -> ${child.taskId}: ${
+						(err as Error)?.message ?? String(err)
+					}`,
+				)
+			}
+
+			// 6) Emit TaskDelegated (provider-level)
+			try {
+				this.emit(RooCodeEventName.TaskDelegated, parentTaskId, child.taskId)
+			} catch {
+				// non-fatal
+			}
+
+			return child
+			// kilocode_change start
+		} catch (error) {
+			telegramTransfer?.cancel()
+			throw error
+		}
+		// kilocode_change end
 	}
 
 	/**
@@ -4275,37 +4288,51 @@ export class ClineProvider
 
 		// 6) Close child instance if still open (single-open-task invariant)
 		const current = this.getCurrentTask()
-		if (current?.taskId === childTaskId) {
-			await this.removeClineFromStack()
-		}
-
-		// 7) Reopen the parent from history as the sole active task (restores saved mode)
-		//    IMPORTANT: startTask=false to suppress resume-from-history ask scheduling
-		const parentInstance = await this.createTaskWithHistoryItem(updatedHistory, { startTask: false })
-
-		// 8) Inject restored histories into the in-memory instance before resuming
-		if (parentInstance) {
-			try {
-				await parentInstance.overwriteClineMessages(parentClineMessages)
-			} catch {
-				// non-fatal
-			}
-			try {
-				await parentInstance.overwriteApiConversationHistory(parentApiMessages as any)
-			} catch {
-				// non-fatal
-			}
-
-			// Auto-resume parent without ask("resume_task")
-			await parentInstance.resumeAfterDelegation()
-		}
-
-		// 9) Emit TaskDelegationResumed (provider-level)
+		// kilocode_change start
+		const telegramTransfer =
+			current?.taskId === childTaskId ? await beginTelegramTransfer(this, current, parentTaskId) : undefined
 		try {
-			this.emit(RooCodeEventName.TaskDelegationResumed, parentTaskId, childTaskId)
-		} catch {
-			// non-fatal
+			// kilocode_change end
+			if (current?.taskId === childTaskId) {
+				await this.removeClineFromStack()
+			}
+
+			// 7) Reopen the parent from history as the sole active task (restores saved mode)
+			//    IMPORTANT: startTask=false to suppress resume-from-history ask scheduling
+			const parentInstance = await this.createTaskWithHistoryItem(updatedHistory, { startTask: false })
+
+			// 8) Inject restored histories into the in-memory instance before resuming
+			if (parentInstance) {
+				try {
+					await parentInstance.overwriteClineMessages(parentClineMessages)
+				} catch {
+					// non-fatal
+				}
+				try {
+					await parentInstance.overwriteApiConversationHistory(parentApiMessages as any)
+				} catch {
+					// non-fatal
+				}
+
+				await telegramTransfer?.finish(parentInstance) // kilocode_change
+				// Auto-resume parent without ask("resume_task")
+				await parentInstance.resumeAfterDelegation()
+			} else {
+				telegramTransfer?.cancel() // kilocode_change
+			}
+
+			// 9) Emit TaskDelegationResumed (provider-level)
+			try {
+				this.emit(RooCodeEventName.TaskDelegationResumed, parentTaskId, childTaskId)
+			} catch {
+				// non-fatal
+			}
+			// kilocode_change start
+		} catch (error) {
+			telegramTransfer?.cancel()
+			throw error
 		}
+		// kilocode_change end
 	}
 
 	/**

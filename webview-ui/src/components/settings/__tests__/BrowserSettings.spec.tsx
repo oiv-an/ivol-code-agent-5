@@ -2,7 +2,7 @@
 import React from "react"
 import { fireEvent, render, screen, cleanup } from "@testing-library/react"
 import type { McpServer } from "@roo-code/types"
-import { BrowserSettings } from "../BrowserSettings"
+import { PersonalBrowserSettings as BrowserSettings } from "../PersonalBrowserSettings"
 
 const state = vi.hoisted(() => ({ servers: [] as McpServer[], postMessage: vi.fn() }))
 vi.mock("@/context/ExtensionStateContext", () => ({ useExtensionState: () => ({ mcpServers: state.servers }) }))

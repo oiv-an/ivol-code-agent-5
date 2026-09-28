@@ -7,6 +7,7 @@ import { BottomApiConfig } from "./BottomApiConfig" // kilocode_change
 import { StandaloneWebSearch } from "../chat/StandaloneWebSearch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import AutoApproveMenu from "../chat/AutoApproveMenu"
+import { TelegramButton } from "../chat/TelegramButton"
 
 interface BottomControlsProps {
 	showApiConfig?: boolean
@@ -29,6 +30,7 @@ const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }
 				<div className="flex items-center gap-1">
 					{/* The compact toolbar switch must not depend on the legacy full-panel visibility setting. */}
 					<AutoApproveMenu compact />
+					<TelegramButton />
 					<StandaloneWebSearch
 						apiConfiguration={apiConfiguration}
 						currentApiConfigName={currentApiConfigName}

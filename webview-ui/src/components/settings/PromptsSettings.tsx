@@ -1,4 +1,3 @@
-import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
 import { useState, useEffect, FormEvent } from "react" // kilocode_change
 import { VSCodeTextArea, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 
@@ -28,10 +27,6 @@ interface PromptsSettingsProps {
 	setCustomSupportPrompts: (prompts: Record<string, string | undefined>) => void
 	includeTaskHistoryInEnhance?: boolean
 	setIncludeTaskHistoryInEnhance?: (value: boolean) => void
-	// kilocode_change start: edit the selected provider profile, which may not be the active profile.
-	intelligentTaskEnabled?: boolean
-	onIntelligentTaskEnabledChange?: (enabled: boolean) => void
-	// kilocode_change end
 }
 
 const PromptsSettings = ({
@@ -39,10 +34,6 @@ const PromptsSettings = ({
 	setCustomSupportPrompts,
 	includeTaskHistoryInEnhance: propsIncludeTaskHistoryInEnhance,
 	setIncludeTaskHistoryInEnhance: propsSetIncludeTaskHistoryInEnhance,
-	// kilocode_change start
-	intelligentTaskEnabled: profileIntelligentTaskEnabled,
-	onIntelligentTaskEnabledChange,
-	// kilocode_change end
 }: PromptsSettingsProps) => {
 	const { t } = useAppTranslation()
 	const {
@@ -53,10 +44,6 @@ const PromptsSettings = ({
 		setCondensingApiConfigId,
 		customCondensingPrompt,
 		setCustomCondensingPrompt,
-		apiConfiguration,
-		setApiConfiguration,
-		currentApiConfigName,
-		taskDocumentSettings, // kilocode_change: supported host only, no local capability inference.
 		includeTaskHistoryInEnhance: contextIncludeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance: contextSetIncludeTaskHistoryInEnhance,
 	} = useExtensionState()
@@ -69,14 +56,6 @@ const PromptsSettings = ({
 	const [isEnhancing, setIsEnhancing] = useState(false)
 	const [activeSupportOption, setActiveSupportOption] = useState<SupportPromptType>("ENHANCE")
 	// kilocode_change start
-	const editingProfile = !!onIntelligentTaskEnabledChange
-	const intelligentTaskSupported = taskDocumentSettings?.supported === true
-	const intelligentTaskEnabled =
-		intelligentTaskSupported &&
-		isIntelligentTaskEnabled(
-			editingProfile ? profileIntelligentTaskEnabled : apiConfiguration?.intelligentTaskEnabled,
-		)
-
 	// Local state for condensing prompt to prevent flickering during typing
 	const [localCondensingPrompt, setLocalCondensingPrompt] = useState<string | undefined>(undefined)
 	// kilocode_change end
@@ -173,23 +152,6 @@ const PromptsSettings = ({
 			text: testPrompt,
 		})
 	}
-
-	// kilocode_change start: the working file is a per-profile choice, never a global setting.
-	const updateIntelligentTaskEnabled = (enabled: boolean) => {
-		if (!intelligentTaskSupported) return
-		if (editingProfile) {
-			onIntelligentTaskEnabledChange?.(enabled)
-			return
-		}
-		const updatedConfiguration = { ...apiConfiguration, intelligentTaskEnabled: enabled }
-		setApiConfiguration(updatedConfiguration)
-		vscode.postMessage({
-			type: "upsertApiConfiguration",
-			text: currentApiConfigName || "default",
-			apiConfiguration: updatedConfiguration,
-		})
-	}
-	// kilocode_change end
 
 	return (
 		<div>
@@ -334,33 +296,7 @@ const PromptsSettings = ({
 								</div>
 							</div>
 
-							{/* kilocode_change start: the working file is chosen per provider profile. */}
-							{activeSupportOption === "CONDENSE" && intelligentTaskSupported && (
-								<div className="space-y-1">
-									<VSCodeCheckbox
-										data-testid="intelligent-task-checkbox"
-										checked={intelligentTaskEnabled}
-										onChange={(e: Event | FormEvent<HTMLElement>) => {
-											const target = ("target" in e ? e.target : null) as HTMLInputElement | null
-											if (target) {
-												updateIntelligentTaskEnabled(target.checked)
-											}
-										}}>
-										<span className="font-medium">{t("settings:intelligentTask.label")}</span>
-									</VSCodeCheckbox>
-									<p className="m-0 text-sm text-vscode-descriptionForeground">
-										{t("settings:intelligentTask.description")}
-									</p>
-									<p className="m-0 text-sm text-vscode-descriptionForeground">
-										{t("settings:intelligentTask.compaction")}
-									</p>
-									<p className="m-0 text-xs text-vscode-descriptionForeground">
-										{t("settings:intelligentTask.scope")}
-									</p>
-								</div>
-							)}
-
-							{/* kilocode_change end */}
+							{/* kilocode_change: task memory lives in IVOL. */}
 							{activeSupportOption === "ENHANCE" && (
 								<>
 									<div>

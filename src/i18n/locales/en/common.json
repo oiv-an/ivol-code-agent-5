@@ -1,4 +1,24 @@
 {
+	"telegram": {
+		"notice": "🟢 Work on this task has started in IVOL Code.\nProject: {{project}}\nTask: {{task}}\nReply with text, use the decision buttons, or send /stop to stop this task. Old history is not replayed. Files and voice messages sent to the bot are not supported.",
+		"approve": "Allow",
+		"deny": "Reject",
+		"thinking": "Thinking…",
+		"confirmation": "The agent needs permission to continue. Review the action in the IDE before allowing it.",
+		"taskTitle": "Task",
+		"failed": "Telegram connection failed. Check the bot token, owner ID, private-chat topics in BotFather and that no other service uses this bot.",
+		"failure": {
+			"topics-disabled": "Telegram: enable private-chat topics for this bot in BotFather, then try again.",
+			"webhook-active": "Telegram: this bot has an active webhook. Use a dedicated bot without a webhook.",
+			"token-rejected": "Telegram rejected the bot token. Check the token saved in Telegram settings.",
+			"polling-conflict": "Telegram: another service is polling this bot. Stop the other poller or use a dedicated bot.",
+			"telegram-unreachable": "Telegram API is unreachable or timed out. Check the network and retry.",
+			"telegram-rate-limited": "Telegram API rate-limited activation. Wait a moment and retry.",
+			"telegram-rejected": "Telegram API rejected activation. Check bot permissions, owner ID and the bot chat, then retry.",
+			"local-runtime": "Telegram coordinator could not start locally. Check the IVOL Code output channel for the safe failure code.",
+			"startup-failed": "Telegram activation failed. Check the IVOL Code output channel for the safe failure code."
+		}
+	},
 	"extension": {
 		"name": "IVOL Code Agent 5",
 		"description": "Open Source AI coding agent that generates code from natural language, automates tasks, and runs terminal commands. Features inline autocomplete, browser automation, automated refactoring, and custom modes for planning, coding, and debugging. Supports 500+ AI models including Claude (Anthropic), Gemini, Grok, GPT, Codex and GLM."

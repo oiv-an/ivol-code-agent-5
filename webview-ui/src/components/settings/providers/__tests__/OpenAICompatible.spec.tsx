@@ -1,3 +1,4 @@
+import { WebSearchSettings } from "../../WebSearchSettings" // kilocode_change
 import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { OpenAICompatible } from "../OpenAICompatible"
@@ -344,10 +345,9 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 
 	it("renders the translated label and defaults web search to enabled with the GPT search model", () => {
 		render(
-			<OpenAICompatible
+			<WebSearchSettings
 				apiConfiguration={{ apiProvider: "openai" }}
 				setApiConfigurationField={mockSetApiConfigurationField}
-				organizationAllowList={mockOrganizationAllowList}
 			/>,
 		)
 
@@ -360,10 +360,9 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 
 	it("reflects the saved value and persists user changes through the profile setter", () => {
 		render(
-			<OpenAICompatible
+			<WebSearchSettings
 				apiConfiguration={{ apiProvider: "openai-responses", openAiWebSearchEnabled: true }}
 				setApiConfigurationField={mockSetApiConfigurationField}
-				organizationAllowList={mockOrganizationAllowList}
 			/>,
 		)
 
@@ -375,7 +374,7 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 
 	it("persists a dedicated web-search model from the current provider catalog", () => {
 		render(
-			<OpenAICompatible
+			<WebSearchSettings
 				apiConfiguration={{
 					apiProvider: "openai",
 					openAiModelId: "main-model",
@@ -383,7 +382,6 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 					openAiWebSearchModelId: "gpt-5.6-sol",
 				}}
 				setApiConfigurationField={mockSetApiConfigurationField}
-				organizationAllowList={mockOrganizationAllowList}
 			/>,
 		)
 
@@ -395,10 +393,9 @@ describe("OpenAICompatible Component - web search checkbox", () => {
 
 	it("hides the web-search model selector after an explicit opt-out", () => {
 		render(
-			<OpenAICompatible
+			<WebSearchSettings
 				apiConfiguration={{ apiProvider: "openai", openAiWebSearchEnabled: false }}
 				setApiConfigurationField={mockSetApiConfigurationField}
-				organizationAllowList={mockOrganizationAllowList}
 			/>,
 		)
 

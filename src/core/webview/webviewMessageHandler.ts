@@ -532,6 +532,14 @@ export const webviewMessageHandler = async (
 
 	switch (message.type) {
 		// kilocode_change start
+		case "getTelegramState":
+		case "saveTelegramSettings":
+		case "activateTelegram":
+		case "deactivateTelegram": {
+			const { handleTelegram } = await import("../kilocode/webview/telegramHandler")
+			await handleTelegram(provider, message)
+			break
+		}
 		case "getProjectTaskStorage":
 		case "setProjectTaskStorage":
 		case "copyTasksToProject": {

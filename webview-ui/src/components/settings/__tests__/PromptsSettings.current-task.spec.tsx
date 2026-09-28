@@ -2,6 +2,7 @@
 import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import PromptsSettings from "../PromptsSettings"
+import { IntelligentTaskSettings } from "../IvolSettings"
 
 const state = vi.hoisted(() => ({
 	apiConfiguration: { intelligentTaskEnabled: false },
@@ -43,9 +44,12 @@ describe("Current Task draft profile preference", () => {
 
 	function show(props = {}) {
 		const result = render(
-			<PromptsSettings customSupportPrompts={{}} setCustomSupportPrompts={vi.fn()} {...props} />,
+			<IntelligentTaskSettings
+				{...props}
+				onChange={(props as any).onIntelligentTaskEnabledChange ?? vi.fn()}
+				enabled={(props as any).intelligentTaskEnabled}
+			/>,
 		)
-		fireEvent.click(screen.getAllByText("condense")[0])
 		return result
 	}
 
@@ -65,9 +69,10 @@ describe("Current Task draft profile preference", () => {
 		expect(screen.getByTestId("intelligent-task-checkbox")).not.toBeChecked()
 	})
 
-	it("uses the active profile only when no draft editor is supplied", () => {
-		show()
-		expect(screen.getByTestId("intelligent-task-checkbox")).not.toBeChecked()
+	it("does not duplicate the preference in Prompts", () => {
+		render(<PromptsSettings customSupportPrompts={{}} setCustomSupportPrompts={vi.fn()} />)
+		fireEvent.click(screen.getAllByText("condense")[0])
+		expect(screen.queryByTestId("intelligent-task-checkbox")).not.toBeInTheDocument()
 	})
 
 	it.each([false, undefined])("does not infer support from a default preference (%s)", (supported) => {

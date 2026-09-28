@@ -1,5 +1,22 @@
 {
 	"back": "Back to tasks view",
+	"telegram": {
+		"title": "Telegram",
+		"description": "Use a dedicated bot with private-chat topics enabled in BotFather. First open your bot in Telegram and press Start (it stays silent). Save its token and your numeric user ID here, then activate a task using the button below the chat. Tasks can only be created and opened in the plugin.",
+		"token": "Bot token",
+		"tokenSaved": "Token saved — leave blank to keep it",
+		"ownerId": "Your numeric Telegram user ID",
+		"botFather": "Create a bot / enable topics",
+		"findId": "Find my ID (third-party bot)",
+		"privacy": "Activating a task sends new text, available reasoning and supported images to Telegram, not old history. Reply with text, use approval buttons or /stop. Incoming files and voice messages are not supported. The computer and IDE must remain running. Other chats and inactive topics are ignored; disconnected messages are not replayed.",
+		"save": "Save Telegram settings",
+		"saved": "Telegram settings saved",
+		"activate": "Connect Telegram",
+		"active": "Disconnect Telegram",
+		"connecting": "Connecting Telegram…",
+		"configure": "Configure Telegram in Settings → IVOL first",
+		"noTask": "Open a task in the plugin first"
+	},
 	"projectTaskStorage": {
 		"title": "Task storage",
 		"description": "Applies immediately to this project. New tasks and their index are stored in .ivol/tasks and move with the project folder. Existing tasks keep their original location until copied.",
@@ -72,7 +89,15 @@
 		"cancelButton": "Cancel",
 		"discardButton": "Discard changes"
 	},
+	"ivol": {
+		"description": "IVOL features in one place. General editor and provider connection settings remain in their usual sections.",
+		"profile": "Profile: {{name}}",
+		"profileHelp": "These settings edit the profile selected in Providers, not necessarily the active profile. Use Save to apply profile and global changes. Telegram and project storage have their own save actions.",
+		"browser": "BrowserOS and personal Chrome",
+		"memory": "Task memory"
+	},
 	"sections": {
+		"ivol": "IVOL",
 		"providers": "Providers",
 		"modes": "Modes",
 		"mcp": "MCP Servers",

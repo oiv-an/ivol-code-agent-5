@@ -33,6 +33,8 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 	}),
 }))
 
+vi.mock("../IvolSettings", () => ({ IvolSettings: vi.fn(() => <div>IVOL</div>) })) // kilocode_change
+
 // Mock UI components
 vi.mock("@src/components/ui", () => ({
 	AlertDialog: ({ children }: any) => <div>{children}</div>,
@@ -90,6 +92,8 @@ vi.mock("../ApiOptions", () => ({
 	default: vi.fn(() => <div data-testid="api-options">ApiOptions</div>),
 }))
 
+vi.mock("../DisplaySettings", () => ({ DisplaySettings: () => null })) // kilocode_change
+vi.mock("../../kilocode/settings/AutocompleteServiceSettings", () => ({ AutocompleteServiceSettingsView: () => null })) // kilocode_change
 // Mock other settings components - ensure they don't interact with props
 vi.mock("../AutoApproveSettings", () => ({
 	AutoApproveSettings: vi.fn(() => <div>AutoApproveSettings</div>),
@@ -139,7 +143,7 @@ vi.mock("../SettingsSearch", () => ({
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import ApiOptions from "../ApiOptions"
-import PromptsSettings from "../PromptsSettings" // kilocode_change
+import { IvolSettings } from "../IvolSettings" // kilocode_change
 
 describe("SettingsView - Unsaved Changes Detection", () => {
 	let queryClient: QueryClient
@@ -251,14 +255,14 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 					</div>
 				),
 			)
-			vi.mocked(PromptsSettings).mockImplementation(
-				({ intelligentTaskEnabled, onIntelligentTaskEnabledChange }) => (
-					<div data-testid="prompts-settings">
-						<span data-testid="prompt-draft-task">{String(intelligentTaskEnabled)}</span>
-						<button onClick={() => onIntelligentTaskEnabledChange?.(true)}>Enable task in prompts</button>
-					</div>
-				),
-			)
+			vi.mocked(IvolSettings).mockImplementation(({ apiConfiguration, setApiConfigurationField }) => (
+				<div data-testid="prompts-settings">
+					<span data-testid="prompt-draft-task">{String(apiConfiguration.intelligentTaskEnabled)}</span>
+					<button onClick={() => setApiConfigurationField("intelligentTaskEnabled", true)}>
+						Enable task in IVOL
+					</button>
+				</div>
+			))
 			render(
 				<QueryClientProvider client={queryClient}>
 					<SettingsView onDone={onDone} editingProfile="Second provider" />
@@ -280,9 +284,8 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 			)
 			await waitFor(() => expect(screen.getByTestId("editing-profile")).toHaveTextContent("Second provider"))
 			expect(screen.getByTestId("draft-task-enabled")).toHaveTextContent("false")
-			if (action === "save") fireEvent.click(screen.getByText("Enable task in provider"))
-			fireEvent.click(screen.getByText("settings:sections.prompts"))
-			if (action === "discard") fireEvent.click(screen.getByText("Enable task in prompts"))
+			fireEvent.click(screen.getByText("settings:sections.ivol"))
+			fireEvent.click(screen.getByText("Enable task in IVOL"))
 			expect(screen.getByTestId("prompt-draft-task")).toHaveTextContent("true")
 			expect(mockPostMessage).not.toHaveBeenCalledWith(
 				expect.objectContaining({ type: "upsertApiConfiguration" }),

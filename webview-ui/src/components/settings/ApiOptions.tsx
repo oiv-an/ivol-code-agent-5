@@ -1,5 +1,3 @@
-import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
-import { ModelPresetsSettings } from "../kilocode/chat/ModelPresets" // kilocode_change
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { convertHeadersToObject } from "./utils/headers"
 import { useDebounce } from "react-use"
@@ -188,13 +186,7 @@ const ApiOptions = ({
 		cloudIsAuthenticated,
 		claudeCodeIsAuthenticated,
 		openAiCodexIsAuthenticated,
-		taskDocumentSettings, // kilocode_change: feature support is decided by the host, not by the selected profile.
 	} = useExtensionState()
-	// kilocode_change start: the host decides support; the profile decides the opt-in.
-	const intelligentTaskSupported = taskDocumentSettings?.supported === true
-	const intelligentTaskEnabled =
-		intelligentTaskSupported && isIntelligentTaskEnabled(apiConfiguration.intelligentTaskEnabled)
-	// kilocode_change end
 
 	const [customHeaders, setCustomHeaders] = useState<[string, string][]>(() => {
 		const headers = apiConfiguration?.openAiHeaders || {}
@@ -628,41 +620,7 @@ const ApiOptions = ({
 			)}
 			{/* kilocode_change end */}
 
-			{/* kilocode_change start: the per-profile working file is a primary provider setting. */}
-			{!fromWelcomeView && intelligentTaskSupported && (
-				<div className="flex flex-col gap-1">
-					<VSCodeCheckbox
-						data-testid="provider-intelligent-task-checkbox"
-						checked={intelligentTaskEnabled}
-						onChange={(event) =>
-							setApiConfigurationField(
-								"intelligentTaskEnabled",
-								(event.target as HTMLInputElement).checked,
-							)
-						}>
-						{t("settings:intelligentTask.label")}
-					</VSCodeCheckbox>
-					<p className="m-0 text-sm text-vscode-descriptionForeground">
-						{t("settings:intelligentTask.description")}
-					</p>
-					<p className="m-0 text-sm text-vscode-descriptionForeground">
-						{t("settings:intelligentTask.compaction")}
-					</p>
-					<p className="m-0 text-xs text-vscode-descriptionForeground">
-						{t("settings:intelligentTask.scope")}
-					</p>
-				</div>
-			)}
-			{/* kilocode_change end */}
-
-			{/* kilocode_change start: edit manual presets in the profile draft, without switching the live model. */}
-			{!fromWelcomeView && (
-				<ModelPresetsSettings
-					configuration={apiConfiguration}
-					onChange={(presets) => setApiConfigurationField("modelPresets", presets)}
-				/>
-			)}
-			{/* kilocode_change end */}
+			{/* kilocode_change: task memory and model presets live in IVOL. */}
 			{errorMessage && <ApiErrorMessage errorMessage={errorMessage} />}
 
 			{/* kilocode_change start */}

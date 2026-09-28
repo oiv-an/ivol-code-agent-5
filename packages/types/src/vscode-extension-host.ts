@@ -183,6 +183,17 @@ export interface LanguageModelChatSelector {
  * Extension -> Webview | CLI
  */
 // kilocode_change start
+export interface TelegramState {
+	/** Root topic identity; taskId is the current or pending handoff target. */
+	rootTaskId?: string
+	configured: boolean
+	ownerId?: number
+	botUsername?: string
+	taskId?: string
+	status: "inactive" | "connecting" | "active" | "error"
+	error?: string
+}
+
 export interface ProjectTaskCopyProgress {
 	phase: "preparing" | "copying" | "verifying" | "completed" | "failed"
 	copied: number
@@ -203,7 +214,12 @@ export interface ProjectTaskStorageState {
 
 export interface ExtensionMessage {
 	projectTaskStorage?: ProjectTaskStorageState // kilocode_change
+	telegramState?: TelegramState // kilocode_change
+	telegramSettingsSaved?: boolean // kilocode_change
+	telegramRequestId?: string // kilocode_change
 	type:
+		| "telegramState" // kilocode_change
+		| "telegramSettingsSaved" // kilocode_change
 		| "projectTaskStorage" // kilocode_change
 		| "action"
 		| "state"
@@ -824,8 +840,14 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 
 export interface WebviewMessage {
 	projectTaskStorage?: { enabled: boolean; hide: boolean } // kilocode_change
+	telegramSettings?: { token?: string; ownerId: string; requestId: string } // kilocode_change
+	telegramTaskId?: string // kilocode_change
 	type: // kilocode_change start
-	| "getProjectTaskStorage"
+	| "getTelegramState"
+		| "saveTelegramSettings"
+		| "activateTelegram"
+		| "deactivateTelegram"
+		| "getProjectTaskStorage"
 		| "setProjectTaskStorage"
 		| "copyTasksToProject"
 		// kilocode_change end

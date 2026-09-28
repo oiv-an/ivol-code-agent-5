@@ -114,7 +114,7 @@ vi.mock("../../../components/common/Tab", () => ({
 			</div>
 		)
 	},
-	TabTrigger: ({ children, value, "data-testid": dataTestId, onClick, isSelected }: any) => {
+	TabTrigger: ({ children, value, "data-testid": dataTestId, onClick, isSelected, "aria-label": ariaLabel }: any) => {
 		// This function simulates clicking on a tab and making its content visible
 		const handleClick = () => {
 			if (onClick) onClick()
@@ -133,7 +133,12 @@ vi.mock("../../../components/common/Tab", () => ({
 		}
 
 		return (
-			<button data-testid={dataTestId} data-value={value} data-selected={isSelected} onClick={handleClick}>
+			<button
+				aria-label={ariaLabel}
+				data-testid={dataTestId}
+				data-value={value}
+				data-selected={isSelected}
+				onClick={handleClick}>
 				{children}
 			</button>
 		)
@@ -181,8 +186,17 @@ vi.mock("@/components/ui", () => ({
 		</button>
 	),
 	StandardTooltip: ({ children, content }: any) => <div title={content}>{children}</div>,
-	Input: ({ value, onChange, placeholder, "data-testid": dataTestId }: any) => (
-		<input type="text" value={value} onChange={onChange} placeholder={placeholder} data-testid={dataTestId} />
+	// kilocode_change: preserve focus/key events used by the real settings search.
+	Input: ({ value, onChange, placeholder, "data-testid": dataTestId, onFocus, onKeyDown }: any) => (
+		<input
+			type="text"
+			value={value}
+			onChange={onChange}
+			onFocus={onFocus}
+			onKeyDown={onKeyDown}
+			placeholder={placeholder}
+			data-testid={dataTestId}
+		/>
 	),
 	Select: ({ children, value, onValueChange }: any) => (
 		<div data-testid="select" data-value={value}>
@@ -340,12 +354,87 @@ describe("SettingsView - Sound Settings", () => {
 	})
 
 	// kilocode_change: test navigation, not only the isolated storage component.
-	it("exposes project task storage through the visible display tab", () => {
+	it("exposes project task storage through the visible IVOL tab", () => {
 		const { activateTab, getSettingsContent } = renderSettingsView()
-		activateTab("display")
+		activateTab("ivol")
 		expect(within(getSettingsContent()).getByText("settings:projectTaskStorage.title")).toBeInTheDocument()
 		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "getProjectTaskStorage" })
 	})
+
+	// kilocode_change start: test the real IVOL subtree, not a mocked destination.
+	it("renders IVOL controls once and removes them from legacy sections", async () => {
+		const { activateTab, getSettingsContent } = renderSettingsView({
+			apiConfiguration: { apiProvider: "openai", intelligentTaskEnabled: true },
+			taskDocumentSettings: { supported: true, enabled: true, fileName: "CURRENT_TASK.md" },
+		})
+		fireEvent.click(screen.getByTestId("tab-ivol"))
+		await screen.findByTestId("intelligent-task-checkbox")
+		const content = getSettingsContent()
+		for (const id of [
+			"telegram",
+			"project-task-storage",
+			"personal-browser",
+			"intelligent-task",
+			"model-presets",
+			"web-search",
+			"frozen-messages-budget",
+		]) {
+			expect(content.querySelectorAll(`[data-setting-id="${id}"]`)).toHaveLength(1)
+			expect(content.querySelector(`[data-setting-id="${id}"]`)).toHaveAttribute("data-setting-section", "ivol")
+		}
+		for (const tab of ["display", "agentBehaviour", "browser", "contextManagement", "providers", "prompts"]) {
+			activateTab(tab)
+			expect(getSettingsContent().querySelector('[data-setting-section="ivol"]')).toBeNull()
+			expect(screen.queryByTestId("intelligent-task-checkbox")).not.toBeInTheDocument()
+			expect(screen.queryByText("settings:projectTaskStorage.title")).not.toBeInTheDocument()
+			expect(screen.queryByText("settings:telegram.title")).not.toBeInTheDocument()
+		}
+	})
+	it("opens IVOL directly and labels its icon-only navigation", () => {
+		render(
+			<ExtensionStateContextProvider>
+				<QueryClientProvider client={new QueryClient()}>
+					<SettingsView onDone={vi.fn()} targetSection="ivol" />
+				</QueryClientProvider>
+			</ExtensionStateContextProvider>,
+		)
+		expect(screen.getByTestId("ivol-settings")).toBeInTheDocument()
+		expect(screen.getByTestId("tab-ivol")).toHaveAttribute("aria-label", "settings:sections.ivol")
+		expect(screen.getByTestId("settings-tab-list").firstElementChild).toBe(screen.getByTestId("tab-ivol"))
+	})
+	it("saves a global IVOL preference through the existing draft", () => {
+		const { activateTab } = renderSettingsView({ frozenMessagesBudgetPercent: 50 })
+		activateTab("ivol")
+		fireEvent.change(screen.getByTestId("frozen-budget-slider"), { target: { value: "65" } })
+		activateTab("providers")
+		activateTab("ivol")
+		expect(screen.getByTestId("frozen-budget-slider")).toHaveValue("65")
+		fireEvent.click(screen.getByTestId("save-button"))
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "updateSettings",
+				updatedSettings: expect.objectContaining({ frozenMessagesBudgetPercent: 65 }),
+			}),
+		)
+	})
+	it("routes an indexed Telegram search result into IVOL", async () => {
+		renderSettingsView()
+		const input = screen.getByTestId("settings-search-input")
+		fireEvent.focus(input)
+		fireEvent.change(input, { target: { value: "telegram" } })
+		const result = await waitFor(() => {
+			const node = document.getElementById("settings-search-result-telegram")
+			expect(node).not.toBeNull()
+			return node!
+		})
+		fireEvent.click(result)
+		await waitFor(() => expect(screen.getByTestId("ivol-settings")).toBeInTheDocument())
+		expect(screen.getByTestId("settings-content").querySelector('[data-setting-id="telegram"]')).toHaveAttribute(
+			"data-setting-section",
+			"ivol",
+		)
+	})
+	// kilocode_change end
 
 	it("toggles tts setting and sends message to VSCode", () => {
 		// Render once and get the activateTab helper

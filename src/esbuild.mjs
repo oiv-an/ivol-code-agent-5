@@ -205,20 +205,39 @@ async function main() {
 	}
 	// kilocode_change end
 
-	const [extensionCtx, workerCtx, agentRuntimeCtx] = await Promise.all([
+	// kilocode_change start: one standalone local Telegram coordinator shared by IDE windows.
+	const telegramCoordinatorConfig = {
+		...buildOptions,
+		entryPoints: ["services/kilocode/telegram/coordinator-process.ts"],
+		outfile: "dist/telegram-coordinator.js",
+	}
+	// kilocode_change end
+
+	const [extensionCtx, workerCtx, agentRuntimeCtx, telegramCtx] = await Promise.all([
 		// kilocode_change
 		esbuild.context(extensionConfig),
 		esbuild.context(workerConfig),
 		esbuild.context(agentRuntimeProcessConfig), // kilocode_change
+		esbuild.context(telegramCoordinatorConfig), // kilocode_change
 	])
 
 	if (watch) {
-		await Promise.all([extensionCtx.watch(), workerCtx.watch(), agentRuntimeCtx.watch()]) // kilocode_change
+		await Promise.all([extensionCtx.watch(), workerCtx.watch(), agentRuntimeCtx.watch(), telegramCtx.watch()]) // kilocode_change
 		copyLocales(srcDir, distDir)
 		setupLocaleWatcher(srcDir, distDir)
 	} else {
-		await Promise.all([extensionCtx.rebuild(), workerCtx.rebuild(), agentRuntimeCtx.rebuild()]) // kilocode_change
-		await Promise.all([extensionCtx.dispose(), workerCtx.dispose(), agentRuntimeCtx.dispose()]) // kilocode_change
+		await Promise.all([
+			extensionCtx.rebuild(),
+			workerCtx.rebuild(),
+			agentRuntimeCtx.rebuild(),
+			telegramCtx.rebuild(),
+		]) // kilocode_change
+		await Promise.all([
+			extensionCtx.dispose(),
+			workerCtx.dispose(),
+			agentRuntimeCtx.dispose(),
+			telegramCtx.dispose(),
+		]) // kilocode_change
 	}
 }
 
