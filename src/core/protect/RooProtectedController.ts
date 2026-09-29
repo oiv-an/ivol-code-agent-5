@@ -48,6 +48,17 @@ export class RooProtectedController {
 			const absolutePath = path.resolve(this.cwd, filePath)
 			const relativePath = path.relative(this.cwd, absolutePath).toPosix()
 
+			// kilocode_change start: Workspace rules do not apply to the root or external paths.
+			if (
+				!relativePath ||
+				relativePath === ".." ||
+				relativePath.startsWith("../") ||
+				path.isAbsolute(relativePath)
+			) {
+				return false
+			}
+			// kilocode_change end
+
 			// Use ignore library to check if file matches any protected pattern
 			return this.ignoreInstance.ignores(relativePath)
 		} catch (error) {

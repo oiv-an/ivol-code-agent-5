@@ -272,12 +272,12 @@ Otherwise, if you have not completed the task and do not need additional informa
 			}
 		}
 
-		// kilocode_change start: Append character count to each file in the list
+		// kilocode_change start: Report metadata only; never read file contents while listing.
 		rooIgnoreParsed = rooIgnoreParsed.map((entry) => {
 			// Extract actual path by removing prefix symbols
 			let actualPath = entry
 			if (entry.startsWith(LOCK_TEXT_SYMBOL)) {
-				actualPath = entry.slice((LOCK_TEXT_SYMBOL + " ").length)
+				return entry // Do not inspect ignored files, even when their names are visible.
 			} else if (entry.startsWith("🛡️")) {
 				actualPath = entry.slice("🛡️ ".length)
 			}
@@ -287,13 +287,13 @@ Otherwise, if you have not completed the task and do not need additional informa
 				return entry
 			}
 
-			// Read file and get character count
+			// lstat does not follow links or open FIFOs/devices/large archives.
 			try {
 				const absoluteFilePath = path.resolve(absolutePath, actualPath)
-				const content = fs.readFileSync(absoluteFilePath, "utf-8")
-				return `${entry}  # ${content.length} chars`
+				const metadata = fs.lstatSync(absoluteFilePath)
+				return metadata.isFile() ? `${entry}  # ${metadata.size} bytes` : entry
 			} catch {
-				// If reading fails, return original entry
+				// Entries may disappear or become inaccessible after directory enumeration.
 				return entry
 			}
 		})

@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.40
+
+- Prevent freezes when listing large archives by showing file sizes without reading their contents.
+- Avoid spurious protection errors when listing paths outside the workspace.
+
 ## 5.17.39
 
 - Save new tasks before they appear in history and stop interrupted or incomplete restores from overwriting saved conversations.

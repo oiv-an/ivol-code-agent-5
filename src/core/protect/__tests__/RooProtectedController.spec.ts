@@ -10,6 +10,21 @@ describe("RooProtectedController", () => {
 	})
 
 	describe("isWriteProtected", () => {
+		// kilocode_change start
+		it("handles external paths and the workspace root without logging ignore errors", () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {})
+			try {
+				for (const target of [TEST_CWD, "..", "../other/file.zip", "/Volumes/External/archive.zip"]) {
+					expect(controller.isWriteProtected(target)).toBe(false)
+				}
+				expect(controller.isWriteProtected("..notes/AGENTS.md")).toBe(true)
+				expect(error).not.toHaveBeenCalled()
+			} finally {
+				error.mockRestore()
+			}
+		})
+		// kilocode_change end
+
 		it("should protect .rooignore file", () => {
 			expect(controller.isWriteProtected(".rooignore")).toBe(true)
 		})
