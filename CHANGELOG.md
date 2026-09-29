@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.39
+
+- Save new tasks before they appear in history and stop interrupted or incomplete restores from overwriting saved conversations.
+- Preserve legacy conversation files when reading saved tasks.
+- Prevent checkpoint comparisons from freezing the editor on large or binary files while preserving checkpoint restore.
+
 ## 5.17.38
 
 - Continue explicitly connected tasks in private Telegram topics with screenshot attachments, captions, one-shot approval buttons and remote stop.

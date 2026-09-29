@@ -11,7 +11,20 @@ vi.mock("vscode", () => ({
 		showErrorMessage: vi.fn(),
 		createTextEditorDecorationType: vi.fn(() => ({})),
 		showInformationMessage: vi.fn(),
+		// kilocode_change start
+		showWarningMessage: vi.fn(),
+		withProgress: vi.fn(async (_options, action) =>
+			action(
+				{ report: vi.fn() },
+				{
+					isCancellationRequested: false,
+					onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+				},
+			),
+		),
+		// kilocode_change end
 	},
+	ProgressLocation: { Notification: 15 }, // kilocode_change
 	Uri: {
 		file: vi.fn((path: string) => ({ fsPath: path })),
 		parse: vi.fn((uri: string) => ({ with: vi.fn(() => ({})) })),
@@ -325,6 +338,7 @@ describe("Checkpoint functionality", () => {
 			expect(mockCheckpointService.getDiff).toHaveBeenCalledWith({
 				from: "commit2",
 				to: undefined,
+				signal: expect.any(AbortSignal), // kilocode_change
 			})
 			expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
 				"vscode.changes",
@@ -350,6 +364,7 @@ describe("Checkpoint functionality", () => {
 			expect(mockCheckpointService.getDiff).toHaveBeenCalledWith({
 				from: "commit1",
 				to: "commit2",
+				signal: expect.any(AbortSignal), // kilocode_change
 			})
 			expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
 				"vscode.changes",
@@ -376,6 +391,7 @@ describe("Checkpoint functionality", () => {
 			expect(mockCheckpointService.getDiff).toHaveBeenCalledWith({
 				from: "commit1", // Should find the next checkpoint
 				to: "commit2",
+				signal: expect.any(AbortSignal), // kilocode_change
 			})
 		})
 
@@ -392,7 +408,8 @@ describe("Checkpoint functionality", () => {
 			expect(vscode.commands.executeCommand).not.toHaveBeenCalled()
 		})
 
-		it("should disable checkpoints on error", async () => {
+		it("should preserve checkpoints on preview error", async () => {
+			// kilocode_change
 			mockCheckpointService.getDiff.mockRejectedValue(new Error("Diff failed"))
 
 			await checkpointDiff(mockTask, {
@@ -401,8 +418,10 @@ describe("Checkpoint functionality", () => {
 				mode: "to-current",
 			})
 
-			expect(mockTask.enableCheckpoints).toBe(false)
-			expect(mockProvider.log).toHaveBeenCalledWith("[checkpointDiff] disabling checkpoints for this task")
+			// kilocode_change start
+			expect(mockTask.enableCheckpoints).toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledWith("common:errors.checkpoint_preview_error")
+			// kilocode_change end
 		})
 	})
 

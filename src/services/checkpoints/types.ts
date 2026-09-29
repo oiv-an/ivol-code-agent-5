@@ -11,6 +11,7 @@ export type CheckpointDiff = {
 		before: string
 		after: string
 	}
+	omitted?: string // kilocode_change - explicit preview omission, not a deletion
 }
 
 export interface CheckpointServiceOptions {

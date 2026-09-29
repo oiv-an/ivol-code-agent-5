@@ -12,20 +12,27 @@ import { getTaskDirectoryPath } from "../../utils/storage"
 export type ReadTaskMessagesOptions = {
 	taskId: string
 	globalStoragePath: string
+	mustExist?: boolean // kilocode_change: resumed tasks must never replace missing history with [].
 }
 
 export async function readTaskMessages({
 	taskId,
 	globalStoragePath,
+	mustExist = false,
 }: ReadTaskMessagesOptions): Promise<ClineMessage[]> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
+	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId, false) // kilocode_change
 	const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
 	const fileExists = await fileExistsAtPath(filePath)
 
 	if (fileExists) {
-		return JSON.parse(await fs.readFile(filePath, "utf8"))
+		// kilocode_change start
+		const messages = JSON.parse(await fs.readFile(filePath, "utf8"))
+		if (!Array.isArray(messages)) throw new Error(`Invalid task messages: ${filePath}`)
+		return messages
+		// kilocode_change end
 	}
 
+	if (mustExist) throw new Error(`Task messages are missing; saved history was not modified: ${filePath}`) // kilocode_change
 	return []
 }
 

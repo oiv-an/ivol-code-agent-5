@@ -15,6 +15,7 @@ import { getApiMetrics } from "../../shared/getApiMetrics"
 import { DIFF_VIEW_URI_SCHEME } from "../../integrations/editor/DiffViewProvider"
 
 import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "../../services/checkpoints"
+import { previewCheckpointDiff } from "./previewCheckpointDiff" // kilocode_change
 
 // kilocode_change start
 import { TelemetryEventName } from "@roo-code/types"
@@ -383,7 +384,10 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	}
 
 	try {
-		const changes = await service.getDiff({ from: fromHash, to: toHash })
+		// kilocode_change start
+		const changes = await previewCheckpointDiff(service, { from: fromHash, to: toHash })
+		if (!changes) return
+		// kilocode_change end
 
 		if (!changes?.length) {
 			vscode.window.showInformationMessage(t("common:errors.checkpoint_no_changes"))

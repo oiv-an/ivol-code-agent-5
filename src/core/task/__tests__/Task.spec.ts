@@ -21,6 +21,8 @@ import { NonRetryableApiError } from "../../../api/providers/utils/non-retryable
 import { OpenAiTransportError } from "../../../api/providers/utils/openai-transport-error" // kilocode_change
 import * as assistantPresentation from "../../assistant-message/presentAssistantMessage" // kilocode_change
 import { summarizeConversation } from "../../condense"
+import { getEnvironmentDetails } from "../../environment/getEnvironmentDetails" // kilocode_change
+import * as apiPersistence from "../../task-persistence/apiMessages" // kilocode_change
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
@@ -158,6 +160,12 @@ vi.mock("../../mentions", () => ({
 
 vi.mock("../../../integrations/misc/extract-text", () => ({
 	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
+}))
+
+// kilocode_change: task lifecycle tests mock disk persistence, not partial fs internals.
+vi.mock("../../task-persistence/apiMessages", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../task-persistence/apiMessages")>()),
+	saveApiMessages: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("../../environment/getEnvironmentDetails", () => ({
@@ -2873,6 +2881,100 @@ describe("Queued message processing after condense", () => {
 			expect(task.apiConversationHistory.some((message) => message.truncationParent)).toBe(true)
 			expect(say.mock.calls.some(([type]) => type === "sliding_window_truncation")).toBe(true)
 		})
+	})
+	// kilocode_change end
+
+	// kilocode_change start
+	it("does not overwrite resumed history after cancellation during environment preparation", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "seed",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task, "say").mockResolvedValue(undefined)
+		vi.spyOn(task as any, "maybeWaitForProviderRateLimit").mockResolvedValue(undefined)
+		const save = vi.spyOn(task as any, "addToApiConversationHistory")
+		vi.mocked(getEnvironmentDetails).mockImplementationOnce(async () => {
+			;(task as any).abort = true
+			return "prepared too late"
+		})
+		await expect(task.recursivelyMakeClineRequests([{ type: "text", text: "original request" }])).resolves.toBe(
+			true,
+		)
+		expect(save).not.toHaveBeenCalled()
+	})
+
+	it("does not write UI history when resumed API history cannot be loaded", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "seed",
+			startTask: false,
+			context: provider.context,
+		})
+		vi.spyOn(task as any, "getSavedClineMessages").mockResolvedValue([
+			{ ts: 1, type: "say", say: "text", text: "saved" },
+		])
+		vi.spyOn(task as any, "getSavedApiConversationHistory").mockRejectedValue(new Error("missing API history"))
+		const write = vi.spyOn(task, "overwriteClineMessages")
+		await expect((task as any).resumeTaskFromHistory()).rejects.toThrow("missing API history")
+		expect(write).not.toHaveBeenCalled()
+	})
+
+	it("persists the original request before exposing a new task and does not duplicate it in memory", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "seed",
+			startTask: false,
+			context: provider.context,
+		})
+		const order: string[] = []
+		const save = vi.spyOn(apiPersistence, "saveApiMessages").mockImplementation(async () => {
+			order.push("persist")
+		})
+		vi.spyOn(task, "say").mockImplementation(async () => {
+			order.push("publish")
+		})
+		const loop = vi.spyOn(task as any, "initiateTaskLoop").mockResolvedValue(undefined)
+		await (task as any).startTask("original request")
+		expect(order).toEqual(["persist", "publish"])
+		expect(save).toHaveBeenCalledWith(
+			expect.objectContaining({
+				messages: [
+					expect.objectContaining({
+						role: "user",
+						content: [{ type: "text", text: "<task>\noriginal request\n</task>" }],
+					}),
+				],
+			}),
+		)
+		expect(task.apiConversationHistory).toEqual([])
+		expect(loop).toHaveBeenCalledOnce()
+		save.mockRestore()
+	})
+
+	it("does not publish a new task when its initial history cannot be saved", async () => {
+		const provider = createProvider()
+		const task = new Task({
+			provider,
+			apiConfiguration: apiConfig,
+			task: "seed",
+			startTask: false,
+			context: provider.context,
+		})
+		const save = vi.spyOn(apiPersistence, "saveApiMessages").mockRejectedValue(new Error("disk full"))
+		const say = vi.spyOn(task, "say").mockResolvedValue(undefined)
+		const loop = vi.spyOn(task as any, "initiateTaskLoop").mockResolvedValue(undefined)
+		await expect((task as any).startTask("original request")).rejects.toThrow("disk full")
+		expect(say).not.toHaveBeenCalled()
+		expect(loop).not.toHaveBeenCalled()
+		save.mockRestore()
 	})
 	// kilocode_change end
 

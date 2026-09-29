@@ -4,6 +4,7 @@ import { DIFF_VIEW_URI_SCHEME } from "../../../integrations/editor/DiffViewProvi
 import { Task } from "../../task/Task"
 import { t } from "../../../i18n"
 import * as vscode from "vscode"
+import { previewCheckpointDiff } from "../previewCheckpointDiff"
 import { CommitRange } from "@roo-code/types"
 
 function findLast<T>(array: Array<T>, predicate: (value: T, index: number, obj: T[]) => boolean): number {
@@ -68,7 +69,7 @@ export async function getCommitRangeForNewCompletion(task: Task): Promise<Commit
 		}
 
 		const result = { from: fromCommit, fromTimeStamp: fromTimeStamp, to: toCommit }
-		if ((await service.getDiff(result)).length === 0) {
+		if (!(await service.hasDiff({ from: fromCommit, to: toCommit }))) {
 			console.log(`getCommitRangeForNewCompletion: no changes in commit range '${fromCommit}' to '${toCommit}'.`)
 			return undefined
 		}
@@ -89,7 +90,8 @@ export async function seeNewChanges(task: Task, commitRange: CommitRange) {
 			return
 		}
 
-		const changes = await service.getDiff(commitRange)
+		const changes = await previewCheckpointDiff(service, commitRange)
+		if (!changes) return
 		if (changes.length === 0) {
 			vscode.window.showWarningMessage(t("kilocode:seeNewChanges.noChanges"))
 			return

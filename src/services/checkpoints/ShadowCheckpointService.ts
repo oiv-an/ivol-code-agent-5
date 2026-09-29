@@ -13,6 +13,7 @@ import { executeRipgrep } from "../../services/search/file-search"
 import { t } from "../../i18n"
 
 import { CheckpointDiff, CheckpointResult, CheckpointEventMap } from "./types"
+import { readCheckpointDiff, hasCheckpointChanges, checkpointGit } from "./boundedDiff" // kilocode_change
 import { getExcludePatterns } from "./excludes"
 import { resolveProjectTaskDirectory, ensureProjectTaskIgnore } from "../kilocode/project-task-storage" // kilocode_change
 
@@ -409,49 +410,44 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		}
 	}
 
-	public async getDiff({ from, to }: { from?: string; to?: string }): Promise<CheckpointDiff[]> {
+	// kilocode_change start
+	public async hasDiff({ from, to }: { from: string; to: string }): Promise<boolean> {
+		return hasCheckpointChanges(this.checkpointsDir, from, to)
+	}
+
+	public async getDiff({
+		from,
+		to,
+		signal,
+	}: {
+		from?: string
+		to?: string
+		signal?: AbortSignal
+	}): Promise<CheckpointDiff[]> {
 		if (!this.git) {
 			throw new Error("Shadow git repo not initialized")
 		}
-
-		const result = []
 
 		if (!from) {
 			from = (await this.git.raw(["rev-list", "--max-parents=0", "HEAD"])).trim()
 		}
 
-		// Stage all changes so that untracked files appear in diff summary.
-		await this.stageAll(this.git)
-
+		signal?.throwIfAborted()
+		// Historical comparisons must not stage or scan the current workspace.
+		if (!to) await checkpointGit(this.checkpointsDir, ["add", "--all", "--", ":/"], signal)
+		signal?.throwIfAborted()
 		this.log(`[${this.constructor.name}#getDiff] diffing ${to ? `${from}..${to}` : `${from}..HEAD`}`)
-		const { files } = to ? await this.git.diffSummary([`${from}..${to}`]) : await this.git.diffSummary([from])
 
 		const cwdPath = (await this.getShadowGitConfigWorktree(this.git)) || this.workspaceDir || ""
-
-		for (const file of files) {
-			const relPath = file.file
-			const absPath = path.join(cwdPath, relPath)
-			const before = await this.git.show([`${from}:${relPath}`]).catch((err) => {
-				reportError(`[${this.constructor.name}#getDiff:git.show:before`, err) // kilocode_change
-				return ""
-			})
-
-			const after = to
-				? await this.git.show([`${to}:${relPath}`]).catch((err) => {
-						reportError(`[${this.constructor.name}#getDiff:git.show:after`, err) // kilocode_change
-						return ""
-					})
-				: await fs.readFile(absPath, "utf8").catch((err) => {
-						reportError(`[${this.constructor.name}#getDiff:readFile`, err) // kilocode_change
-						return ""
-					})
-
-			result.push({ paths: { relative: relPath, absolute: absPath }, content: { before, after } })
+		try {
+			return await readCheckpointDiff(this.checkpointsDir, cwdPath, from, to, signal)
+		} catch (err) {
+			reportError(`[${this.constructor.name}#getDiff`, err) // kilocode_change
+			throw err
 		}
-
-		return result
 	}
 
+	// kilocode_change end
 	/**
 	 * EventEmitter
 	 */

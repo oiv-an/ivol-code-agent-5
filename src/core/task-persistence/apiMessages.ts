@@ -50,17 +50,20 @@ export type ApiMessage = Anthropic.MessageParam & {
 export async function readApiMessages({
 	taskId,
 	globalStoragePath,
+	mustExist = false,
 }: {
 	taskId: string
 	globalStoragePath: string
+	mustExist?: boolean // kilocode_change
 }): Promise<ApiMessage[]> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
+	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId, false) // kilocode_change
 	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
 
 	if (await fileExistsAtPath(filePath)) {
 		const fileContent = await fs.readFile(filePath, "utf8")
 		try {
 			const parsedData = JSON.parse(fileContent)
+			if (!Array.isArray(parsedData)) throw new Error("Invalid API history: expected an array") // kilocode_change
 			if (Array.isArray(parsedData) && parsedData.length === 0) {
 				console.error(
 					`[Roo-Debug] readApiMessages: Found API conversation history file, but it's empty (parsed as []). TaskId: ${taskId}, Path: ${filePath}`,
@@ -85,7 +88,8 @@ export async function readApiMessages({
 						`[Roo-Debug] readApiMessages: Found OLD API conversation history file (claude_messages.json), but it's empty (parsed as []). TaskId: ${taskId}, Path: ${oldPath}`,
 					)
 				}
-				await fs.unlink(oldPath)
+				// kilocode_change: reads must not delete the only surviving legacy history.
+				if (!Array.isArray(parsedData)) throw new Error("Invalid legacy API history: expected an array")
 				return parsedData
 			} catch (error) {
 				console.error(
@@ -101,6 +105,7 @@ export async function readApiMessages({
 	console.error(
 		`[Roo-Debug] readApiMessages: API conversation history file not found for taskId: ${taskId}. Expected at: ${filePath}`,
 	)
+	if (mustExist) throw new Error(`API history is missing; saved history was not modified: ${filePath}`) // kilocode_change
 	return []
 }
 

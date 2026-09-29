@@ -804,9 +804,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		if (startTask) {
 			if (task || images) {
-				this.startTask(task, images)
+				void this.startTask(task, images).catch((error) => this.reportLifecycleFailure(error)) // kilocode_change
 			} else if (historyItem) {
-				this.resumeTaskFromHistory()
+				void this.resumeTaskFromHistory().catch((error) => this.reportLifecycleFailure(error)) // kilocode_change
 			} else {
 				throw new Error("Either historyItem or task/images must be provided")
 			}
@@ -814,6 +814,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	// kilocode_change start
+	private reportLifecycleFailure(error: unknown): void {
+		if (this.abort || this.abandoned) return
+		this.abort = true
+		const message = error instanceof Error ? error.message : String(error)
+		console.error(`[Task ${this.taskId}] Could not start or resume:`, error)
+		void vscode.window.showErrorMessage(`Could not start or resume task ${this.taskId}: ${message}`)
+	}
+
 	private getContext(): vscode.ExtensionContext {
 		const context = this.context
 		if (!context) {
@@ -1123,8 +1131,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// API Messages
 
-	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
-		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+	private async getSavedApiConversationHistory(mustExist = false): Promise<ApiMessage[]> {
+		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, mustExist }) // kilocode_change
 	}
 
 	private async addToApiConversationHistory(message: Anthropic.MessageParam, reasoning?: string) {
@@ -1359,8 +1367,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// Cline Messages
 
-	private async getSavedClineMessages(): Promise<ClineMessage[]> {
-		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+	private async getSavedClineMessages(mustExist = false): Promise<ClineMessage[]> {
+		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, mustExist }) // kilocode_change
 	}
 
 	// kilocode_change start: incremental webview updates keep long tasks from repeatedly cloning the full chat
@@ -2749,6 +2757,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.clineMessages = []
 		this.apiConversationHistory = []
 
+		// kilocode_change start: persist the seed before publishing the task in history.
+		// Environment/mention preparation can take minutes or be interrupted. Keep
+		// the in-memory history empty so the normal first request enriches (rather
+		// than duplicates) this durable seed. A reopened task reads it from disk.
+		await saveApiMessages({
+			taskId: this.taskId,
+			globalStoragePath: this.globalStoragePath,
+			messages: [
+				{
+					role: "user",
+					content: [
+						{ type: "text", text: `<task>\n${task}\n</task>` },
+						...formatResponse.imageBlocks(images),
+					],
+					ts: Date.now(),
+				},
+			],
+		})
+		if (this.abort || this.abandoned) return
+		// kilocode_change end
+
 		// The todo list is already set in the constructor if initialTodos were provided
 		// No need to add any messages - the todoList property is already set
 
@@ -2799,7 +2828,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		const modifiedClineMessages = await this.getSavedClineMessages()
+		// kilocode_change: validate both histories before any resume write.
+		const modifiedClineMessages = await this.getSavedClineMessages(true)
+		const savedApiHistory = await this.getSavedApiConversationHistory(true)
 
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
@@ -2848,7 +2879,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// task, and it was because we were waiting for resume).
 		// This is important in case the user deletes messages without resuming
 		// the task first.
-		this.apiConversationHistory = await this.getSavedApiConversationHistory()
+		this.apiConversationHistory = savedApiHistory // kilocode_change: already validated before UI writes
 
 		// If we don't have a persisted tool protocol (old tasks before this feature),
 		// detect it from the API history. This ensures tasks that previously used
@@ -2908,7 +2939,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Make sure that the api conversation history can be resumed by the API,
 		// even if it goes out of sync with cline messages.
-		let existingApiConversationHistory: ApiMessage[] = await this.getSavedApiConversationHistory()
+		let existingApiConversationHistory: ApiMessage[] = await this.getSavedApiConversationHistory(true) // kilocode_change
 
 		// v2.0 xml tags refactor caveat: since we don't use tools anymore for XML protocol,
 		// we need to replace all tool use blocks with a text block since the API disallows
@@ -3532,6 +3563,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// kilocode_change end
 
 			const environmentDetails = await getEnvironmentDetails(this, currentIncludeFileDetails)
+			// kilocode_change: a replaced task must not overwrite the resumed history.
+			if (this.abort || this.abandoned) return true
 
 			// Remove any existing environment_details blocks before adding fresh ones.
 			// This prevents duplicate environment details when resuming tasks with XML tool calls,
