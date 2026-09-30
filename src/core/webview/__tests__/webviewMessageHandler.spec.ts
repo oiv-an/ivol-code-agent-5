@@ -481,12 +481,31 @@ describe("webviewMessageHandler - image mentions", () => {
 		})
 	})
 
+	// kilocode_change start: failed delivery must restore the original composer content.
+	it.each(["askResponse", "queueMessage"] as const)("restores input when %s targets a stopped task", async (type) => {
+		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({ abort: true, cwd: "/mock/workspace" } as any)
+		const images = ["data:image/png;base64,aW1hZ2U="]
+		await webviewMessageHandler(mockClineProvider, {
+			type,
+			askResponse: "messageResponse",
+			text: "Keep this",
+			images,
+		})
+		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "invoke",
+			invoke: "setChatBoxMessage",
+			text: "Keep this",
+			images,
+		})
+	})
+	// kilocode_change end
+
 	it("should resolve image mentions for askResponse payloads", async () => {
 		const mockHandleWebviewAskResponse = vi.fn()
 		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
 			cwd: "/mock/workspace",
 			rooIgnoreController: undefined,
-			handleWebviewAskResponse: mockHandleWebviewAskResponse,
+			receiveWebviewAskResponse: mockHandleWebviewAskResponse, // kilocode_change
 		} as any)
 
 		await webviewMessageHandler(mockClineProvider, {

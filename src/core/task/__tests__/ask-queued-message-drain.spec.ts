@@ -12,6 +12,58 @@ import { askFollowupQuestionTool } from "../../tools/AskFollowupQuestionTool"
 // it should be consumed and used to fulfill the ask.
 
 describe("Task.ask queued message drain", () => {
+	// kilocode_change start: late UI input must survive the next ask and rapid consecutive sends.
+	it("queues late text and images instead of storing a response that the next ask resets", async () => {
+		const task = Object.create(Task.prototype) as Task
+		Object.assign(task, {
+			abort: false,
+			clineMessages: [],
+			messageQueueService: new MessageQueueService(),
+			addToClineMessages: vi.fn(async (message) => {
+				task.clineMessages.push(message)
+			}),
+			saveClineMessages: vi.fn(async () => {}),
+			updateClineMessage: vi.fn(async () => {}),
+			cancelAutoApprovalTimeout: vi.fn(),
+			checkpointSave: vi.fn(async () => {}),
+			emit: vi.fn(),
+			providerRef: { deref: () => undefined },
+		})
+		const images = ["data:image/png;base64,aW1hZ2U="]
+		task.receiveWebviewAskResponse("messageResponse", "During thinking", images)
+		expect(task.queuedMessages).toHaveLength(1)
+		expect(await task.ask("followup", "Next?", false)).toMatchObject({ text: "During thinking", images })
+		const pending = task.ask("followup", "Another?", false)
+		await vi.waitFor(() => expect(task.getRemotePendingAsk()).toBeDefined())
+		task.receiveWebviewAskResponse("messageResponse", "First", images)
+		task.receiveWebviewAskResponse("messageResponse", "Second", images)
+		expect(await pending).toMatchObject({ text: "First", images })
+		expect(task.queuedMessages).toEqual([expect.objectContaining({ text: "Second", images })])
+	})
+
+	it("keeps queued input when an ask is already auto-approved", async () => {
+		const task = Object.create(Task.prototype) as Task
+		Object.assign(task, {
+			abort: false,
+			clineMessages: [],
+			messageQueueService: new MessageQueueService(),
+			addToClineMessages: vi.fn(async (message) => {
+				task.clineMessages.push(message)
+			}),
+			cancelAutoApprovalTimeout: vi.fn(),
+			emit: vi.fn(),
+			providerRef: {
+				deref: () => ({ getState: async () => ({ autoApprovalEnabled: true, alwaysAllowBrowser: true }) }),
+			},
+		})
+		task.messageQueueService.addMessage("Screenshot", ["image.png"])
+		expect(await task.ask("browser_action_launch", "Launch", false)).toMatchObject({
+			response: "yesButtonClicked",
+			text: undefined,
+		})
+		expect(task.queuedMessages).toEqual([expect.objectContaining({ text: "Screenshot", images: ["image.png"] })])
+	})
+	// kilocode_change end
 	// kilocode_change start - exercise the real Task response/queue and tool image formatting.
 	it.each(["screenshot caption", ""].flatMap((text) => [false, true].map((queued) => ({ text, queued }))))(
 		"passes Telegram images into chat feedback and model blocks (caption=$text, queued=$queued)",

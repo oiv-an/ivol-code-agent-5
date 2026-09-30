@@ -681,10 +681,20 @@ export const webviewMessageHandler = async (
 
 		case "askResponse":
 			{
+				// kilocode_change start: resolve media against the original task and retain late text as queued input.
+				const targetTask = provider.getCurrentTask()
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
-				provider
-					.getCurrentTask()
-					?.handleWebviewAskResponse(message.askResponse!, resolved.text, resolved.images)
+				if (targetTask && !targetTask.abort) {
+					targetTask.receiveWebviewAskResponse(message.askResponse!, resolved.text, resolved.images)
+				} else if (resolved.text || resolved.images?.length) {
+					await provider.postMessageToWebview({
+						type: "invoke",
+						invoke: "setChatBoxMessage",
+						text: message.text,
+						images: message.images,
+					})
+				}
+				// kilocode_change end
 			}
 			break
 
@@ -4270,6 +4280,12 @@ export const webviewMessageHandler = async (
 			const targetTask = provider.getCurrentTask()
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 			if (!targetTask || targetTask.abort) {
+				await provider.postMessageToWebview({
+					type: "invoke",
+					invoke: "setChatBoxMessage",
+					text: message.text,
+					images: message.images,
+				})
 				provider.log("[queueMessage] No active task accepted the queued message")
 				vscode.window.showWarningMessage(
 					"The message could not be queued because the task is no longer running. Please send it again.",

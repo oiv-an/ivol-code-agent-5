@@ -230,11 +230,12 @@ export async function presentAssistantMessage(cline: Task) {
 				)
 
 				if (response !== "yesButtonClicked") {
-					if (text) {
+					if (text || images?.length) {
+						// kilocode_change: image-only feedback is still user input.
 						await cline.say("user_feedback", text, images)
 						pushToolResult(
 							formatResponse.toolResult(
-								formatResponse.toolDeniedWithFeedback(text, toolProtocol),
+								formatResponse.toolDeniedWithFeedback(text ?? "", toolProtocol), // kilocode_change
 								images,
 							),
 						)
@@ -248,10 +249,12 @@ export async function presentAssistantMessage(cline: Task) {
 				// Store approval feedback to be merged into tool result (GitHub #10465)
 				// Don't push it as a separate tool_result here - that would create duplicates.
 				// The tool will call pushToolResult, which will merge the feedback into the actual result.
-				if (text) {
+				// kilocode_change start: preserve attachments even when no caption was supplied.
+				if (text || images?.length) {
 					await cline.say("user_feedback", text, images)
-					approvalFeedback = { text, images }
+					approvalFeedback = { text: text ?? "", images }
 				}
+				// kilocode_change end
 
 				return true
 			}
@@ -751,11 +754,12 @@ export async function presentAssistantMessage(cline: Task) {
 
 				if (response !== "yesButtonClicked") {
 					// Handle both messageResponse and noButtonClicked with text.
-					if (text) {
+					if (text || images?.length) {
+						// kilocode_change: image-only feedback is still user input.
 						await cline.say("user_feedback", text, images)
 						pushToolResult(
 							formatResponse.toolResult(
-								formatResponse.toolDeniedWithFeedback(text, toolProtocol),
+								formatResponse.toolDeniedWithFeedback(text ?? "", toolProtocol), // kilocode_change
 								images,
 							),
 						)
@@ -770,10 +774,12 @@ export async function presentAssistantMessage(cline: Task) {
 				// Store approval feedback to be merged into tool result (GitHub #10465)
 				// Don't push it as a separate tool_result here - that would create duplicates.
 				// The tool will call pushToolResult, which will merge the feedback into the actual result.
-				if (text) {
+				// kilocode_change start: preserve attachments even when no caption was supplied.
+				if (text || images?.length) {
 					await cline.say("user_feedback", text, images)
-					approvalFeedback = { text, images }
+					approvalFeedback = { text: text ?? "", images }
 				}
+				// kilocode_change end
 
 				captureAskApproval(block.name, true) // kilocode_change
 				return true

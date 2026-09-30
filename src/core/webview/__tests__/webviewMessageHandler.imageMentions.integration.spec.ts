@@ -65,7 +65,7 @@ describe("webviewMessageHandler - image mentions (integration)", () => {
 				cwd: tmpRoot,
 				getCurrentTask: vi.fn().mockReturnValue({
 					cwd: tmpRoot,
-					handleWebviewAskResponse,
+					receiveWebviewAskResponse: handleWebviewAskResponse, // kilocode_change
 				}),
 				getState: vi.fn().mockResolvedValue({
 					maxImageFileSize: 5,

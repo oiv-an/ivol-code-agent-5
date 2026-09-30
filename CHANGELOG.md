@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.61
+
+- Preserve messages and image-only feedback sent while the agent is busy, and restore unsent input when a task stops.
+
 ## 5.17.60
 
 - Keep task memory concise by clearing obsolete work and recognizing natural completion confirmations and final commit requests.

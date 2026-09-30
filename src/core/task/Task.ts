@@ -1860,7 +1860,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}, statusMutationTimeout),
 				)
 			}
-		} else if (isMessageQueued) {
+		} else if (isMessageQueued && isBlocking) {
+			// kilocode_change: never dequeue after auto-approval already answered.
 			const message = this.messageQueueService.dequeueMessage()
 
 			if (message) {
@@ -1947,6 +1948,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.emit(RooCodeEventName.TaskAskResponded)
 		return result
 	}
+
+	// kilocode_change start: UI state can lag behind the running task, especially while media is resolved.
+	public receiveWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+		if (askResponse === "messageResponse" && (text || images?.length) && !this.getRemotePendingAsk()) {
+			this.messageQueueService.addMessage(text ?? "", images)
+			return
+		}
+		this.handleWebviewAskResponse(askResponse, text, images)
+	}
+	// kilocode_change end
 
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
 		this.remotePendingAsk = undefined // kilocode_change: consume remote authorization synchronously.

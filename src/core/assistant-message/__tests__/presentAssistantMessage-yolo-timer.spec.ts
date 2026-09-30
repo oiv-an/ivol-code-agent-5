@@ -67,7 +67,9 @@ describe("presentAssistantMessage - YOLO timer approval boundary", () => {
 			recordToolError: vi.fn(),
 			checkpointSave: vi.fn().mockResolvedValue(undefined),
 			toolRepetitionDetector: { check: vi.fn().mockReturnValue({ allowExecution: true }) },
-			providerRef: { deref: () => ({ getState: async () => ({ ...state }) }) },
+			providerRef: {
+				deref: () => ({ getState: async () => ({ ...state }), context: { globalState: { get: vi.fn() } } }),
+			},
 			say: vi.fn().mockResolvedValue(undefined),
 			ask: vi.fn().mockResolvedValue({ response: "noButtonClicked" }),
 		}
@@ -79,6 +81,19 @@ describe("presentAssistantMessage - YOLO timer approval boundary", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks()
+	})
+
+	it.each(["yesButtonClicked", "noButtonClicked"])("preserves image-only feedback for %s", async (response) => {
+		state.yoloMode = false
+		const images = ["data:image/png;base64,aW1hZ2U="]
+		task.ask.mockResolvedValue({ response, images })
+		await presentAssistantMessage(task)
+		expect(task.say).toHaveBeenCalledWith("user_feedback", undefined, images)
+		expect(task.userMessageContent).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ type: "image", source: expect.objectContaining({ data: "aW1hZ2U=" }) }),
+			]),
+		)
 	})
 
 	it("continues an approved tool while the timer is still active", async () => {

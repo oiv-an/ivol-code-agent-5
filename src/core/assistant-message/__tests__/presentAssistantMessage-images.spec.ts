@@ -51,6 +51,7 @@ describe("presentAssistantMessage - Image Handling in Native Tool Calls", () => 
 			},
 			providerRef: {
 				deref: () => ({
+					context: { globalState: { get: vi.fn() } }, // kilocode_change: include browser-mode storage in the provider fixture.
 					getState: vi.fn().mockResolvedValue({
 						mode: "code",
 						customModes: [],
