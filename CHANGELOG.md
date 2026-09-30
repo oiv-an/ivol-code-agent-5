@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.60
+
+- Keep task memory concise by clearing obsolete work and recognizing natural completion confirmations and final commit requests.
+
 ## 5.17.59
 
 - Hide the Advisor toolbar lightbulb until a scan is started from settings in the current session.

@@ -4,7 +4,9 @@ IVOL Code is an open source AI coding agent for VS Code, PhpStorm, and IntelliJ 
 
 ## IVOL Fork: Supported Editions and Change Parity
 
-User instruction recorded on **2026-09-08**:
+**Current maintainer decision — 2026-09-30:** active development and ordinary releases target **VS Code only**, published to **Visual Studio Marketplace and Open VSX**. PhpStorm delivery is discontinued for now; do not build, install, or publish any JetBrains packages without a new explicit named-target request. The historical parity and release requirements below are superseded where they conflict with this decision. Preserve existing JetBrains sources, plugin identities, installations, backups, and user data; this scope change does not authorize deleting them. GitHub releases require separate authorization. Never close or restart IDEs on the maintainer's behalf.
+
+Historical user instruction recorded on **2026-09-08** (reference for explicitly requested legacy targets only):
 
 - Maintain **VS Code, PhpStorm, and IntelliJ IDEA** together. Unless the user explicitly narrows the current task, every requested feature, behavior change, and bug fix must be assessed and implemented across all three supported editions, even if it was reported in only one IDE.
 - Prefer the shared core, providers, types, and webview implementation so the same behavior reaches every edition. Do not consider a shared change complete while another supported edition still lacks it. Report any blocked implementation or unavailable verification explicitly.

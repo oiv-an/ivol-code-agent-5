@@ -11,13 +11,13 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("medium detail")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("what is done and verified, what is left")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Before the context is compacted")
-		// Raised deliberately: the block now also records intent, state and key data.
-		expect(ORDINARY_TASK_INSTRUCTIONS.length).toBeLessThan(4600)
+		// Bound the shared lifecycle policy as well as the continuation memory.
+		expect(ORDINARY_TASK_INSTRUCTIONS.length).toBeLessThan(6000)
 	})
 
 	it("requires an ordinary permitted write before compaction while preserving unrelated content", () => {
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("ordinary file tools (create it if missing)")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Preserve other task blocks and unrelated user content")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Preserve unrelated user content")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Normal tool permissions apply")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("A read or a statement that you saved is not a write")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
@@ -33,9 +33,9 @@ describe("ordinary task document prompts", () => {
 			expect(prompt).toContain("first turn in a new or resumed conversation")
 			expect(prompt).toContain("read the existing file before editing it")
 			expect(prompt).toContain("reorganize that content into the task blocks")
-			expect(prompt).toContain("Preserve unfinished requirements")
-			expect(prompt).toContain("Do not invent completion")
-			expect(prompt).toContain("If already structured, refresh only the current task's block")
+			expect(prompt).toContain("preserve the current unfinished task and its next step")
+			expect(prompt).toContain("do not invent completion")
+			expect(prompt).toContain("Before writing, reread to avoid overwriting another agent's update")
 		},
 	)
 
@@ -45,19 +45,37 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("creation and update dates")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Use [x] for completed items and [ ] for unfinished items")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("replacing your task's block")
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Preserve other task blocks")
+		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Preserve active parallel work and explicitly retained tasks")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("replace the current task's block")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not append progress logs or duplicate the block")
 	})
 
-	it("requires user confirmation for cleanup and preserves unfinished work during compaction", () => {
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("ask whether to keep them, resume one")
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Age or closing a chat alone is not permission")
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("awaiting verification, not automatic deletion")
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Once the user confirms completion")
-		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("without an archive")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not delete unfinished work")
-	})
+	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
+		"shares automatic cleanup, bounded memory and contextual completion rules",
+		(prompt) => {
+			for (const rule of [
+				"On a genuinely new task, automatically remove obsolete, abandoned or superseded task blocks",
+				"without an archive or another confirmation",
+				"Do not infer abandonment solely from age",
+				"If it exceeds 300 lines",
+				"roughly 50–100 lines",
+				"Never truncate by line number",
+				"If essential active memory still exceeds the target, retain it",
+				'"всё работает", "всё подходит", "готово"',
+				'"commit", "Comit", "коммит", "закоммить"',
+				"negations, quoted examples, questions, partial acceptance, intermediate commits",
+				"Complete requested final actions successfully before removing",
+				"a failed commit or another blocker keeps it active",
+				"does not authorize unrelated publishing, installation or deletion of other tasks",
+				"Your own completion report alone means awaiting verification",
+				"keep just the file heading and unrelated user content",
+				"compacting context is not starting a new task",
+			]) {
+				expect(prompt).toContain(rule)
+			}
+			expect(prompt).not.toContain("ask whether to keep them, resume one")
+		},
+	)
 
 	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
 		"does not advertise managed arguments, ownership markers, snapshots or byte budgets",
