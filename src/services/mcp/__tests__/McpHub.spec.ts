@@ -362,14 +362,16 @@ describe("McpHub", () => {
 			expect(hub.browserOSAccess.getStatus()).toBe(approved ? "active" : "paused")
 		})
 
-		it("auto-approves only page tools for the granted task, never file tools or another connection", async () => {
+		it("auto-approves page tools and scripts, never direct file tools or another connection", async () => {
 			const task = {} as any
 			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
 			await hub.ensureBrowserOSConnection()
 			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
 			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(true)
 			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "act", { page: 2, kind: "click" }, task)).toBe(true)
-			for (const name of ["upload", "download", "pdf", "run", "evaluate"])
+			for (const name of ["run", "evaluate"])
+				expect(hub.canAutoApproveBrowserOSTool("browseros-neo", name, { code: "return 1" }, task)).toBe(true)
+			for (const name of ["upload", "download", "pdf", "history"])
 				expect(hub.canAutoApproveBrowserOSTool("browseros-neo", name, { page: 2 }, task)).toBe(false)
 			expect(hub.canAutoApproveBrowserOSTool("other", "snapshot", { page: 2 }, task)).toBe(false)
 			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, {})).toBe(false)
@@ -379,6 +381,35 @@ describe("McpHub", () => {
 			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(true)
 			hub.browserOSAccess.revoke()
 			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "snapshot", { page: 2 }, task)).toBe(false)
+		})
+
+		// kilocode_change: script consent is bound to the live host/connection, not a tool name or chat.
+		it.each(["run", "evaluate"])("preserves consent boundaries for %s", async (toolName) => {
+			const task = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			await hub.ensureBrowserOSConnection()
+			const connection = hub.connections.find((entry) => entry.server.name === "browseros-neo")!
+			const allowed = (caller = task) =>
+				hub.canAutoApproveBrowserOSTool("browseros-neo", toolName, { code: "return 1" }, caller)
+			expect(allowed()).toBe(false)
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", false)
+			expect(allowed()).toBe(false)
+			await hub.grantBrowserOSAccess("browseros-neo", async () => true, "global", true)
+			expect(allowed()).toBe(true)
+			expect(allowed({})).toBe(false)
+			connection.server.disabled = true
+			expect(allowed()).toBe(false)
+			connection.server.disabled = false
+			hub.browserOSAccess.pause()
+			expect(allowed()).toBe(false)
+			hub.browserOSAccess.resume()
+			expect(allowed()).toBe(true)
+			hub.browserOSAccess.endTask(task)
+			const next = {} as any
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(next)
+			expect(allowed(next)).toBe(true)
+			hub.browserOSAccess.revokeConnection(connection)
+			expect(allowed(next)).toBe(false)
 		})
 
 		it("creates and connects the entry without manual editing", async () => {

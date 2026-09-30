@@ -2723,7 +2723,7 @@ export class McpHub {
 		}
 	}
 
-	// kilocode_change: task consent skips only ordinary browser prompts, never the execution guard.
+	// kilocode_change: host consent covers page actions and scripts, never bypassing the execution guard.
 	canAutoApproveBrowserOSTool(
 		serverName: string,
 		toolName: string,
@@ -2743,7 +2743,21 @@ export class McpHub {
 			!this.browserOSAccess.canApproveTaskAction(owner, connection)
 		)
 			return false
-		if (!["tabs", "snapshot", "screenshot", "navigate", "act", "diff", "read", "grep", "wait"].includes(toolName))
+		if (
+			![
+				"tabs",
+				"snapshot",
+				"screenshot",
+				"navigate",
+				"act",
+				"diff",
+				"read",
+				"grep",
+				"wait",
+				"run",
+				"evaluate",
+			].includes(toolName)
+		)
 			return false
 		try {
 			return this.isBrowserOSConnection(connection) && browserOSOperation(toolName, args).kind !== "unsupported"

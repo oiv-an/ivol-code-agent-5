@@ -532,6 +532,14 @@ export const webviewMessageHandler = async (
 
 	switch (message.type) {
 		// kilocode_change start
+		case "startAdvisorCheck":
+		case "cancelAdvisorCheck":
+		case "openAdvisorExtension":
+		case "getAdvisorState": {
+			const { handleAdvisor } = await import("../kilocode/webview/advisorHandler")
+			await handleAdvisor(provider, message)
+			break
+		}
 		case "getTelegramState":
 		case "saveTelegramSettings":
 		case "activateTelegram":

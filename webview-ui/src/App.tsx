@@ -29,8 +29,10 @@ import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonI
 import { TooltipProvider } from "./components/ui/tooltip"
 import { STANDARD_TOOLTIP_DELAY } from "./components/ui/standard-tooltip"
 import { MemoryWarningBanner } from "./kilocode/MemoryWarningBanner"
+import AdvisorView from "./components/kilocode/AdvisorView" // kilocode_change
+import { AdvisorProvider } from "./components/kilocode/AdvisorContext" // kilocode_change
 
-type Tab = "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" // kilocode_change: personal tabs
+type Tab = "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "advisor" // kilocode_change: personal tabs
 
 interface HumanRelayDialogState {
 	isOpen: boolean
@@ -339,6 +341,7 @@ const App = () => {
 		<>
 			{/* kilocode_change start */}
 			<MemoryWarningBanner />
+			{tab === "advisor" && <AdvisorView onDone={() => switchTab("chat")} />}
 			{tab === "mcp" && <McpView onDone={() => switchTab("chat")} />}
 			{/* kilocode_change end */}
 			{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
@@ -465,7 +468,10 @@ const AppWithProviders = () => (
 			<TranslationProvider>
 				<QueryClientProvider client={queryClient}>
 					<TooltipProvider delayDuration={STANDARD_TOOLTIP_DELAY}>
-						<App />
+						{/* kilocode_change: Advisor scans survive page navigation. */}
+						<AdvisorProvider>
+							<App />
+						</AdvisorProvider>
 					</TooltipProvider>
 				</QueryClientProvider>
 			</TranslationProvider>

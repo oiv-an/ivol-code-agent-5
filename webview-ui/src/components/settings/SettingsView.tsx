@@ -105,8 +105,11 @@ export interface SettingsViewRef {
 	checkUnsaveChanges: (then: () => void) => void
 }
 
+import AdvisorView from "../kilocode/AdvisorView" // kilocode_change
+
 export const sectionNames = [
 	"ivol", // kilocode_change
+	"advisor", // kilocode_change
 	"providers",
 	"autoApprove",
 	"slashCommands",
@@ -754,6 +757,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 	const sections: { id: SectionName; icon: LucideIcon }[] = useMemo(
 		() => [
 			{ id: "ivol", icon: Sparkles }, // kilocode_change
+			{ id: "advisor", icon: Sparkles }, // kilocode_change
 			{ id: "providers", icon: Plug },
 			{ id: "agentBehaviour", icon: Users2 }, // kilocode_change - renamed from "modes" and merged with "mcp"
 			{ id: "autoApprove", icon: CheckCheck },
@@ -1023,6 +1027,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 					data-testid="settings-content">
 					<SearchIndexProvider value={searchContextValue}>
 						{/* kilocode_change start: shared IVOL settings, same profile/global drafts. */}
+						{renderTab === "advisor" && !isIndexing && (
+							<AdvisorView embedded onDone={() => handleTabChange("ivol")} />
+						)}
 						{renderTab === "ivol" && (
 							<IvolSettings
 								apiConfiguration={apiConfiguration}

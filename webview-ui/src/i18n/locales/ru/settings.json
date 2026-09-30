@@ -89,6 +89,7 @@
 		"memory": "Память задач"
 	},
 	"sections": {
+		"advisor": "Советник",
 		"ivol": "IVOL",
 		"providers": "Провайдеры",
 		"modes": "Режимы",

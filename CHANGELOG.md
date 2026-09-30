@@ -1,5 +1,55 @@
 # IVOL Code Agent 5
 
+## 5.17.59
+
+- Hide the Advisor toolbar lightbulb until a scan is started from settings in the current session.
+- Add read-only AI extension recommendations using the current model, background results and notifications, exact Extensions links for manual Disable (Workspace), and saved workspace-disabled inspection on supported macOS VS Code. Legacy Advisor controls are removed without changing existing settings or stored records.
+- Reuse explicit BrowserOS control consent for browser scripts instead of asking for approval on every call.
+
+## 5.17.58
+
+- Remove legacy Advisor restrictions, recovery and protection pins; retain read-only AI recommendations, background notifications, workspace-disabled inspection and manual Disable (Workspace) through Extensions. Existing settings and stored records are left untouched.
+
+## 5.17.57
+
+- Restore previous Advisor settings in single-folder projects, retain recovery for disabled extensions, and stop presenting inherited settings as previous Advisor changes.
+
+## 5.17.56
+
+- Show all saved workspace-disabled extensions in Advisor, with refresh and exact Extensions links, using a read-only adapter for macOS VS Code 1.139.1 and an explicit unsupported state elsewhere.
+
+## 5.17.55
+
+- Keep Advisor scans running when returning to chat, preserve results across navigation, and announce completion with a notification and a highlighted lightbulb.
+
+## 5.17.54
+
+- Replace Advisor's main screen with read-only AI extension recommendations using the current model, exact links to Extensions, cancellation and usage reporting, while preserving previous workspace restrictions and separate recovery.
+
+## 5.17.53
+
+- Add project-only background-work controls for Pylance, Tailwind, Gradle, Maven and Swift; remove unrelated unsupported extensions from the Advisor action list.
+
+## 5.17.52
+
+- Keep only one action checkbox per manageable extension and move optional project protection into a separate confirmation.
+
+## 5.17.51
+
+- Keep Advisor search at the top and prevent extension rows from disappearing or reordering when settings change.
+
+## 5.17.50
+
+- Clearly distinguish applied project restrictions from selected Advisor actions, show scan results and limited extensions, and clarify protection controls.
+
+## 5.17.49
+
+- Add manual Advisor selection, persistent limited-extension visibility, selective restoration, and project protection based on configured tasks, debuggers, dependencies, and user choices.
+
+## 5.17.48
+
+- Simplify Advisor to three top-level actions: scan, disable selected project workloads, and restore previous settings.
+
 ## 5.17.40
 
 - Prevent freezes when listing large archives by showing file sizes without reading their contents.

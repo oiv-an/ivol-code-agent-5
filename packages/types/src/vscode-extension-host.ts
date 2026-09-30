@@ -212,12 +212,50 @@ export interface ProjectTaskStorageState {
 }
 // kilocode_change end
 
+// kilocode_change start
+export interface AdvisorEntry {
+	id: string
+	name: string
+	version: string
+	protected?: boolean
+	usageReasons?: { kind: "self" | "task" | "debug" | "dependency"; detail: string }[]
+	active: boolean
+}
+export interface AdvisorAIResult {
+	model: string
+	recommendations: { id: string; reason: string; loss: string }[]
+	usage: { inputTokens: number; outputTokens: number; totalCost?: number }
+	complete: boolean
+	files: number
+	inventoryCount: number
+	error?: string
+	cancelled?: boolean
+}
+export interface AdvisorState {
+	workspaceDisabled?: {
+		status: "available" | "unsupported"
+		entries: { id: string; name: string }[]
+		readAt?: string
+		reason?: string
+	}
+	ai?: AdvisorAIResult
+	workspace: string
+	platformSupported: boolean
+	canScan: boolean
+	entries: AdvisorEntry[]
+	checked?: boolean
+	error?: string
+}
+// kilocode_change end
 export interface ExtensionMessage {
+	advisorRequestId?: string // kilocode_change
+	advisorState?: AdvisorState // kilocode_change
 	projectTaskStorage?: ProjectTaskStorageState // kilocode_change
 	telegramState?: TelegramState // kilocode_change
 	telegramSettingsSaved?: boolean // kilocode_change
 	telegramRequestId?: string // kilocode_change
 	type:
+		| "advisorState" // kilocode_change
 		| "telegramState" // kilocode_change
 		| "telegramSettingsSaved" // kilocode_change
 		| "projectTaskStorage" // kilocode_change
@@ -839,11 +877,17 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 // kilocode_change end: Type-safe global state update message
 
 export interface WebviewMessage {
+	advisorRequestId?: string // kilocode_change
+	advisorExtensionId?: string // kilocode_change
 	projectTaskStorage?: { enabled: boolean; hide: boolean } // kilocode_change
 	telegramSettings?: { token?: string; ownerId: string; requestId: string } // kilocode_change
 	telegramTaskId?: string // kilocode_change
 	type: // kilocode_change start
-	| "getTelegramState"
+	| "startAdvisorCheck"
+		| "getAdvisorState"
+		| "cancelAdvisorCheck"
+		| "openAdvisorExtension"
+		| "getTelegramState"
 		| "saveTelegramSettings"
 		| "activateTelegram"
 		| "deactivateTelegram"

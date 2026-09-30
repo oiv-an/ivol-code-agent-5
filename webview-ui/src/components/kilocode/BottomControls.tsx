@@ -8,6 +8,7 @@ import { StandaloneWebSearch } from "../chat/StandaloneWebSearch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import AutoApproveMenu from "../chat/AutoApproveMenu"
 import { TelegramButton } from "../chat/TelegramButton"
+import { useAdvisor } from "./AdvisorContext"
 
 interface BottomControlsProps {
 	showApiConfig?: boolean
@@ -15,6 +16,7 @@ interface BottomControlsProps {
 
 const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }) => {
 	const { t } = useAppTranslation()
+	const { unread, checking, hasStarted } = useAdvisor()
 	const { apiConfiguration, currentApiConfigName } = useExtensionState()
 
 	const showFeedbackOptions = () => {
@@ -24,6 +26,27 @@ const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }
 	return (
 		<div className="flex flex-row w-auto items-center justify-between h-[30px] mx-3.5 mt-2.5 mb-1 gap-1">
 			<div className="flex min-w-0 flex-row items-center justify-start gap-2 grow overflow-hidden">
+				{hasStarted && (
+					<BottomButton
+						iconClass={checking ? "codicon-loading codicon-modifier-spin" : "codicon-lightbulb"}
+						highlighted={unread}
+						ariaLabel={t(
+							checking
+								? "common:advisor.aiRunning"
+								: unread
+									? "common:advisor.ready"
+									: "common:advisor.title",
+						)}
+						title={t(
+							checking
+								? "common:advisor.aiRunning"
+								: unread
+									? "common:advisor.ready"
+									: "common:advisor.title",
+						)}
+						onClick={() => window.postMessage({ type: "action", action: "switchTab", tab: "advisor" }, "*")}
+					/>
+				)}
 				{showApiConfig && <BottomApiConfig />}
 			</div>
 			<div className="flex shrink-0 flex-row justify-end w-auto">

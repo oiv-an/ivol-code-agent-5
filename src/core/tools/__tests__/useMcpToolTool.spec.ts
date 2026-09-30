@@ -283,15 +283,42 @@ describe("useMcpToolTool", () => {
 			else expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
 		})
 
-		// kilocode_change: BrowserOS scripts always need a manual, protected approval — never YOLO/auto.
-		it.each([
-			["yesButtonClicked", 1],
-			["noButtonClicked", 0],
-		])("asks manually for a BrowserOS run script (%s)", async (response, calls) => {
+		// kilocode_change: scripts reuse explicit consent, not generic MCP/YOLO approval.
+		it.each(["run", "evaluate"])("reuses browser consent for repeated %s calls", async (toolName) => {
 			const hub = mockProviderRef.deref().getMcpHub()
 			hub.isBrowserOSServer = vi.fn().mockReturnValue(true)
 			hub.prepareBrowserOSInvocation = vi.fn().mockResolvedValue(true)
 			hub.canAutoApproveBrowserOSTool = vi.fn().mockReturnValue(true)
+			hub.getAllServers.mockReturnValue([{ name: "browseros-neo", tools: [{ name: toolName }] }])
+			hub.callTool.mockResolvedValue({ content: [{ type: "text", text: "ok" }] })
+			for (let i = 0; i < 2; i++) {
+				await useMcpToolTool.execute(
+					{ server_name: "browseros-neo", tool_name: toolName, arguments: { code: "return 1" } },
+					mockTask as Task,
+					{
+						askApproval: mockAskApproval,
+						handleError: mockHandleError,
+						pushToolResult: mockPushToolResult,
+						removeClosingTag: mockRemoveClosingTag,
+						toolProtocol: "native",
+					},
+				)
+			}
+			expect(mockHandleError).not.toHaveBeenCalled()
+			expect(mockAskApproval).not.toHaveBeenCalled()
+			expect(mockTask.ask).not.toHaveBeenCalled()
+			expect(hub.callTool).toHaveBeenCalledTimes(2)
+		})
+
+		// Without automatic browser consent, retain the protected fallback.
+		it.each([
+			["yesButtonClicked", 1],
+			["noButtonClicked", 0],
+		])("asks manually for a BrowserOS run script without consent (%s)", async (response, calls) => {
+			const hub = mockProviderRef.deref().getMcpHub()
+			hub.isBrowserOSServer = vi.fn().mockReturnValue(true)
+			hub.prepareBrowserOSInvocation = vi.fn().mockResolvedValue(true)
+			hub.canAutoApproveBrowserOSTool = vi.fn().mockReturnValue(false)
 			hub.getAllServers.mockReturnValue([{ name: "browseros-neo", tools: [{ name: "run" }] }])
 			hub.callTool.mockResolvedValue({ content: [{ type: "text", text: "ok" }] })
 			;(formatResponse as any).toolDenied = vi.fn(() => "denied")
@@ -310,7 +337,7 @@ describe("useMcpToolTool", () => {
 			)
 			expect(mockHandleError).not.toHaveBeenCalled()
 			expect(mockAskApproval).not.toHaveBeenCalled()
-			expect(hub.canAutoApproveBrowserOSTool).not.toHaveBeenCalled()
+			expect(hub.canAutoApproveBrowserOSTool).toHaveBeenCalledWith("browseros-neo", "run", args, mockTask)
 			expect(mockTask.ask).toHaveBeenCalledWith(
 				"use_mcp_server",
 				expect.stringContaining('"toolName":"run"'),

@@ -1,10 +1,18 @@
-import { defineConfig } from "vitest/config"
+import { defineConfig, type UserConfig } from "vitest/config"
 import path from "path"
+import react from "@vitejs/plugin-react" // kilocode_change
 import { resolveVerbosity } from "../src/utils/vitest-verbosity"
 
 const { silent, reporters, onConsoleLog } = resolveVerbosity()
 
 export default defineConfig({
+	// kilocode_change: opt-in production compiler parity for targeted regressions.
+	plugins:
+		process.env.IVOL_TEST_REACT_COMPILER === "1"
+			? (react({
+					babel: { plugins: [["babel-plugin-react-compiler", { target: "18" }]] },
+				}) as unknown as UserConfig["plugins"])
+			: [],
 	test: {
 		globals: true,
 		setupFiles: ["./vitest.setup.ts"],

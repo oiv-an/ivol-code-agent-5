@@ -79,11 +79,11 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			} satisfies ClineAskUseMcpServer)
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
-			// kilocode_change start: explicit task-scoped browser consent avoids duplicate per-call prompts.
+			// kilocode_change start: explicit host/connection consent includes browser scripts.
 			const hub = task.providerRef.deref()?.getMcpHub()
-			// BrowserOS scripts (run/evaluate) can do anything in the browser: always ask the user, even in
-			// YOLO or auto-approve mode. The protected flag makes checkAutoApproval refuse to auto-approve.
-			if (hub?.isBrowserOSServer?.(serverName) && BROWSEROS_SCRIPT_TOOLS.includes(toolName)) {
+			const taskConsent = hub?.canAutoApproveBrowserOSTool?.(serverName, toolName, parsedArguments, task) === true
+			// Without that consent, scripts still require a protected manual decision, even in YOLO mode.
+			if (!taskConsent && hub?.isBrowserOSServer?.(serverName) && BROWSEROS_SCRIPT_TOOLS.includes(toolName)) {
 				const { response, text, images } = await task.ask(
 					"use_mcp_server",
 					completeMessage,
@@ -117,7 +117,6 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 				)
 				return
 			}
-			const taskConsent = hub?.canAutoApproveBrowserOSTool?.(serverName, toolName, parsedArguments, task) === true
 			if (taskConsent) await task.say("text", `BrowserOS: ${toolName} (browser control enabled)`)
 			const didApprove = taskConsent || (await askApproval("use_mcp_server", completeMessage))
 			// kilocode_change end

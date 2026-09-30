@@ -97,6 +97,7 @@
 		"memory": "Task memory"
 	},
 	"sections": {
+		"advisor": "Advisor",
 		"ivol": "IVOL",
 		"providers": "Providers",
 		"modes": "Modes",
@@ -793,7 +794,7 @@
 			"neoHelp": "Connect once to allow browser control across chats in this IDE window until you disconnect or restart the extension host. A lost connection requires permission again. If BrowserOS is unavailable, IVOL offers to select and launch it first. Access covers the exposed browser profile, not just a named group. Cancelling stops setup.",
 			"connectAndGrant": "Connect and allow control",
 			"allowTaskActions": "Do not ask again while browser control is enabled",
-			"allowTaskActionsHelp": "Save remembers this preference, not permission. Connect and confirm to allow page views, clicks, typing, navigation and tabs across chats in this IDE window until disconnected or restarted. File transfers and PDF exports keep their usual approval. Changing this option revokes the previous permission.",
+			"allowTaskActionsHelp": "Save remembers this preference, not permission. Connect and confirm once to allow browser actions and arbitrary scripts (run/evaluate) across chats in this IDE window until disconnected or restarted. Scripts can also transfer files and export pages without individual approval; direct file-transfer and PDF tools retain separate approval. Changing this option revokes the previous permission.",
 			"advanced": "Advanced connection settings",
 			"stages": {
 				"connecting": "Connecting to BrowserOS…",

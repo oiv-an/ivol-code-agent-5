@@ -4,7 +4,7 @@ export type BrowserOSOperation =
 	| { kind: "observation" | "interaction" | "readOnly" | "navigation"; page: number }
 	| { kind: "discovery" | "create" | "script" | "unsupported" } // kilocode_change: script = run/evaluate
 
-/** BrowserOS tools that execute arbitrary scripts. Always require a manual per-call approval. */
+/** BrowserOS tools that execute arbitrary scripts, covered by explicit host/connection consent. */
 export const BROWSEROS_SCRIPT_TOOLS = ["run", "evaluate"] // kilocode_change
 
 /** Classify only the protocol we have verified. Scripts cannot declare their own observed target. */
