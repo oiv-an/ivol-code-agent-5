@@ -43,6 +43,7 @@ import { safeWriteJson } from "../../utils/safeWriteJson"
 import { sanitizeMcpName } from "../../utils/mcp-name"
 // kilocode_change start - MCP OAuth Authorization
 import { McpOAuthService, OAuthTokens } from "./oauth"
+import { BrowserOSHeartbeat } from "../browser/kilocode/BrowserOSHeartbeat" // kilocode_change
 import {
 	BrowserOSAccess,
 	browserOSOperation,
@@ -209,6 +210,7 @@ export class McpHub {
 	private providerRef: WeakRef<ClineProvider>
 	public readonly browserOSAccess = new BrowserOSAccess() // kilocode_change
 	private readonly browserOSOrigins = new Set<string>() // kilocode_change: retain protection until host disposal.
+	private readonly browserOSHeartbeats = new Map<ConnectedMcpConnection, BrowserOSHeartbeat>() // kilocode_change
 	private browserOSSetup?: Promise<BrowserOSSetupResult> // kilocode_change: serialize automatic browser setup
 	// kilocode_change start: interactive preparation belongs to this IDE window, never to model auto-approval.
 	private browserOSPreparation?: Promise<boolean>
@@ -1592,6 +1594,29 @@ export class McpHub {
 			connection.server.status = "connected"
 			connection.server.error = ""
 			connection.server.instructions = client.getInstructions()
+			// kilocode_change start: keep the same server session alive across gaps between model calls.
+			if (configInjected.type === "streamable-http" && this.isBrowserOSConnection(connection)) {
+				const heartbeat = new BrowserOSHeartbeat(
+					() =>
+						!this.isDisposed &&
+						this.connections.includes(connection) &&
+						connection.server.status === "connected" &&
+						!connection.server.disabled,
+					() => client.ping({ timeout: 15_000 }),
+					(error) => {
+						console.error(`BrowserOS heartbeat failed for "${name}":`, error)
+						this.browserOSAccess.revokeConnection(connection)
+						connection.server.status = "disconnected"
+						this.appendErrorMessage(connection, error instanceof Error ? error.message : String(error))
+						void this.notifyWebviewOfServerChanges().catch((notificationError) =>
+							console.error("Failed to report BrowserOS heartbeat failure:", notificationError),
+						)
+						this.scheduleReconnect(name, source)
+					},
+				)
+				this.browserOSHeartbeats.set(connection, heartbeat)
+			}
+			// kilocode_change end
 			// kilocode_change - Reset reconnect attempts on successful connection
 			this.resetReconnectAttempts(name, source)
 
@@ -1874,6 +1899,8 @@ export class McpHub {
 			try {
 				if (connection.type === "connected") {
 					// kilocode_change start
+					this.browserOSHeartbeats.get(connection)?.stop()
+					this.browserOSHeartbeats.delete(connection)
 					// Fire-and-forget: don't await close() calls as they can block
 					// waiting for the subprocess to exit. The MCP SDK's transport.close()
 					// waits up to 2 seconds for the process to exit gracefully before
@@ -3147,6 +3174,10 @@ export class McpHub {
 		}
 
 		this.isDisposed = true
+		// kilocode_change start
+		for (const heartbeat of this.browserOSHeartbeats.values()) heartbeat.stop()
+		this.browserOSHeartbeats.clear()
+		// kilocode_change end
 
 		// Clear all debounce timers
 		for (const timer of this.configChangeDebounceTimers.values()) {

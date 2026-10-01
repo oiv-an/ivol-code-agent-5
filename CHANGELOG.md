@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.62
+
+- Keep BrowserOS connections alive during idle periods and avoid repeated permission prompts after recoverable browser action errors.
+
 ## 5.17.61
 
 - Preserve messages and image-only feedback sent while the agent is busy, and restore unsent input when a task stops.

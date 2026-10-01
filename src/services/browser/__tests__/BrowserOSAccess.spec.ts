@@ -139,3 +139,104 @@ describe("BrowserOS scripts (run/evaluate)", () => {
 		).rejects.toThrow("fresh BrowserOS observation")
 	})
 })
+
+// kilocode_change start: preserve consent only for verified action failures.
+describe("BrowserOS recoverable failures", () => {
+	it.each([
+		"error: Element e55 is covered by <div.bubble> at its click point; dismiss it first.",
+		"evaluate: ReferenceError: browser is not defined",
+		"error: evaluate: TypeError: Cannot read properties of null (reading 'querySelectorAll')",
+		"error: page.setViewportSize is not part of this SDK.",
+	])("preserves consent and the private handle for %s", async (text) => {
+		const access = new BrowserOSAccess()
+		const owner = {},
+			connection = {}
+		await access.acquire(owner, connection, async () => true, true)
+		await access.execute(owner, connection, { kind: "observation", page: 1 }, async () => ({
+			content: [{ type: "text", text: "tree" }],
+			_meta: { "com.browseros.neo/session": "original" },
+		}))
+		const result = await access.execute(owner, connection, { kind: "script" }, async () => ({
+			isError: true,
+			content: [{ type: "text", text }],
+			_meta: { "com.browseros.neo/session": "replacement" },
+		}))
+		expect(access.canApproveTaskAction(owner, connection)).toBe(true)
+		expect(access.toolArguments()).toEqual({ session: "original" })
+		expect(JSON.stringify(result)).not.toContain("replacement")
+		await expect(
+			access.execute(owner, connection, { kind: "interaction", page: 1 }, async () => ({})),
+		).rejects.toThrow("fresh")
+	})
+
+	it.each([
+		"BrowserOS neo session is no longer live",
+		"This browser session was stopped from the BrowserOS neo cockpit",
+		"browser session not connected",
+		"Unknown failure",
+	])("revokes consent for %s", async (text) => {
+		const access = new BrowserOSAccess()
+		const owner = {},
+			connection = {}
+		await access.acquire(owner, connection, async () => true)
+		await access.execute(owner, connection, { kind: "script" }, async () => ({
+			isError: true,
+			content: [{ type: "text", text }],
+		}))
+		expect(access.hasAccess(connection)).toBe(false)
+	})
+})
+
+import { BrowserOSHeartbeat } from "../kilocode/BrowserOSHeartbeat"
+
+describe("BrowserOS transport heartbeat", () => {
+	beforeEach(() => vi.useFakeTimers())
+	afterEach(() => vi.useRealTimers())
+
+	it("keeps the same transport alive beyond the server idle limit and stops on disposal", async () => {
+		const ping = vi.fn().mockResolvedValue({})
+		const failed = vi.fn()
+		const heartbeat = new BrowserOSHeartbeat(() => true, ping, failed)
+		await vi.advanceTimersByTimeAsync(600_000)
+		expect(ping).toHaveBeenCalledTimes(10)
+		expect(failed).not.toHaveBeenCalled()
+		heartbeat.stop()
+		await vi.advanceTimersByTimeAsync(120_000)
+		expect(ping).toHaveBeenCalledTimes(10)
+	})
+
+	it("reports a failed ping once without retrying or creating a new session", async () => {
+		const ping = vi.fn().mockRejectedValue(new Error("Session lost"))
+		const failed = vi.fn()
+		new BrowserOSHeartbeat(() => true, ping, failed)
+		await vi.advanceTimersByTimeAsync(600_000)
+		expect(ping).toHaveBeenCalledTimes(1)
+		expect(failed).toHaveBeenCalledTimes(1)
+	})
+
+	it("does not ping a replaced connection", async () => {
+		const ping = vi.fn()
+		new BrowserOSHeartbeat(() => false, ping, vi.fn())
+		await vi.advanceTimersByTimeAsync(120_000)
+		expect(ping).not.toHaveBeenCalled()
+	})
+
+	it("ignores late failure after disposal", async () => {
+		let reject!: (error: Error) => void
+		const failed = vi.fn()
+		const heartbeat = new BrowserOSHeartbeat(
+			() => true,
+			() =>
+				new Promise((_, rejectPromise) => {
+					reject = rejectPromise
+				}),
+			failed,
+		)
+		await vi.advanceTimersByTimeAsync(60_000)
+		heartbeat.stop()
+		reject(new Error("Late failure"))
+		await vi.advanceTimersByTimeAsync(60_000)
+		expect(failed).not.toHaveBeenCalled()
+	})
+})
+// kilocode_change end

@@ -628,6 +628,56 @@ describe("McpHub", () => {
 			await hub.dispose()
 		},
 	)
+	it("keeps BrowserOS connected while idle, preserves pause and revokes on heartbeat failure", async () => {
+		vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+		const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
+		const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
+		const transport = { start: vi.fn(), close: vi.fn().mockResolvedValue(undefined) } as any
+		const ping = vi.fn().mockResolvedValue({})
+		vi.mocked(StreamableHTTPClientTransport).mockImplementation(() => transport)
+		vi.mocked(Client).mockImplementation(
+			() =>
+				({
+					connect: vi.fn(),
+					close: vi.fn().mockResolvedValue(undefined),
+					ping,
+					getInstructions: vi.fn(),
+					getServerCapabilities: () => ({}),
+				}) as any,
+		)
+		const hub = new McpHub(mockProvider as ClineProvider)
+		await new Promise((resolve) => setTimeout(resolve, 100))
+		const reconnect = vi.spyOn(hub as any, "scheduleReconnect").mockImplementation(() => undefined)
+		vi.useFakeTimers()
+		try {
+			await hub["connectToServer"]("browseros-neo", {
+				type: "streamable-http",
+				url: "http://127.0.0.1:9200/mcp",
+				browserOS: true,
+				oauth: { disabled: true },
+			} as any)
+			const connection = hub.connections.find((entry) => entry.server.name === "browseros-neo")!
+			await hub.browserOSAccess.acquire({}, connection, async () => true)
+			await vi.advanceTimersByTimeAsync(360_000)
+			expect(ping).toHaveBeenCalledTimes(6)
+			expect(ping).toHaveBeenLastCalledWith({ timeout: 15_000 })
+			expect(hub.browserOSAccess.hasAccess(connection)).toBe(true)
+			hub.browserOSAccess.pause()
+			await vi.advanceTimersByTimeAsync(60_000)
+			expect(hub.browserOSAccess.getStatus()).toBe("paused")
+			hub.browserOSAccess.resume()
+			ping.mockRejectedValueOnce(new Error("Session lost"))
+			await vi.advanceTimersByTimeAsync(60_000)
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
+			expect(connection.server.status).toBe("disconnected")
+			expect(reconnect).toHaveBeenCalledTimes(1)
+			await vi.advanceTimersByTimeAsync(120_000)
+			expect(ping).toHaveBeenCalledTimes(8)
+		} finally {
+			await hub.dispose()
+			vi.useRealTimers()
+		}
+	})
 	// kilocode_change end
 
 	describe("Discriminated union type handling", () => {

@@ -78,6 +78,25 @@ export function validateBrowserOSEndpoint(value: string): string {
 	return url.href
 }
 
+/** Only known action failures preserve consent; unknown/session/transport failures stay fail-closed. */
+function isRecoverableBrowserOSFailure(result: unknown): boolean {
+	if (!result || typeof result !== "object" || !("content" in result) || !Array.isArray(result.content)) return false
+	const messages = result.content
+		.filter((block) => block?.type === "text" && typeof block.text === "string")
+		.map((block) => block.text as string)
+	if (messages.length !== 1) return false
+	const message = messages[0].trim()
+	// Never treat a stopped session as a normal action error, even in a wrapped response.
+	if (/session|disconnect|not connected|revok|permission|denied|paused|cockpit/i.test(message)) return false
+	return (
+		/^(?:(?:Error|error|act failed):\s*)*Element [^\n]+ is covered by [^\n]+ at its click point;/.test(message) ||
+		/^(?:(?:Error|error):\s*)*evaluate: (?:ReferenceError: [\w$]+ is not defined|TypeError: Cannot read properties of (?:null|undefined)\b)/.test(
+			message,
+		) ||
+		/^(?:(?:Error|error):\s*)*page\.\w+ is not part of this SDK\./.test(message)
+	)
+}
+
 /** Explicit consent for this host and connection. Never persisted or owned by a chat. */
 export class BrowserOSAccess {
 	// Used only to invalidate stale work and observations, never as the owner of consent.
@@ -232,9 +251,12 @@ export class BrowserOSAccess {
 				throw error
 			}
 			check()
-			// Tool-level failures can mean the user stopped the server session. Never silently revive it.
+			// A known action error invalidates observations, not the user's consent or private session.
+			// Unknown failures can mean the user stopped the server session. Never silently revive it.
 			if (result && typeof result === "object" && "isError" in result && result.isError === true) {
-				this.revoke(owner)
+				this.observedPages.clear()
+				if (!isRecoverableBrowserOSFailure(result)) this.revoke(owner)
+				// Error responses must not replace the established handle, even for recoverable failures.
 				return this.captureSession(result, false)
 			}
 			if (policy.kind === "observation" && this.hasObservation(result)) this.observedPages.add(policy.page)
