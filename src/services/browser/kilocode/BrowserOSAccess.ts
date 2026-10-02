@@ -2,7 +2,7 @@ export type BrowserOSAccessStatus = "idle" | "awaitingPermission" | "active" | "
 
 export type BrowserOSOperation =
 	| { kind: "observation" | "interaction" | "readOnly" | "navigation"; page: number }
-	| { kind: "discovery" | "create" | "script" | "unsupported" } // kilocode_change: script = run/evaluate
+	| { kind: "discovery" | "create" | "script" | "sessionMetadata" | "unsupported" } // kilocode_change: script = run/evaluate
 
 /** BrowserOS tools that execute arbitrary scripts, covered by explicit host/connection consent. */
 export const BROWSEROS_SCRIPT_TOOLS = ["run", "evaluate"] // kilocode_change
@@ -10,6 +10,8 @@ export const BROWSEROS_SCRIPT_TOOLS = ["run", "evaluate"] // kilocode_change
 /** Classify only the protocol we have verified. Scripts cannot declare their own observed target. */
 export function browserOSOperation(name: string, args?: Record<string, unknown>): BrowserOSOperation {
 	if (BROWSEROS_SCRIPT_TOOLS.includes(name)) return { kind: "script" } // kilocode_change
+	// Naming the current session neither interacts with a page nor grants a new observation.
+	if (name === "name_session") return { kind: "sessionMetadata" }
 	if (name === "tabs" && ["list", "active"].includes(String(args?.action))) return { kind: "discovery" }
 	if (name === "tabs" && args?.action === "new") {
 		// kilocode_change start: an absent, empty or malformed url must report the same

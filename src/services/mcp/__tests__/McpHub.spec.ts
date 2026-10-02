@@ -272,11 +272,17 @@ describe("McpHub", () => {
 			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
 			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(true)
 			expect(hub.browserOSAccess.getStatus()).toBe("active")
+			expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(t("mcp:browserOS.permissionGranted"))
+			const notices = vi.mocked(vscode.window.showInformationMessage).mock.calls.length
+			expect(
+				hub.canAutoApproveBrowserOSTool("browseros-neo", "name_session", { name: "browser check" }, caller),
+			).toBe(true)
 			const calls = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
 			const next = {} as any
 			vi.mocked(mockProvider.getCurrentTask).mockReturnValue(next)
 			await expect(hub.prepareBrowserOSInvocation("browseros-neo", next)).resolves.toBe(true)
 			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(calls)
+			expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(notices)
 		})
 
 		it("does not dispatch or repeatedly prompt after permission is declined", async () => {
@@ -384,7 +390,7 @@ describe("McpHub", () => {
 		})
 
 		// kilocode_change: script consent is bound to the live host/connection, not a tool name or chat.
-		it.each(["run", "evaluate"])("preserves consent boundaries for %s", async (toolName) => {
+		it.each(["run", "evaluate", "name_session"])("preserves consent boundaries for %s", async (toolName) => {
 			const task = {} as any
 			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
 			await hub.ensureBrowserOSConnection()

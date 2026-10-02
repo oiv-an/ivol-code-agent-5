@@ -117,6 +117,36 @@ describe("BrowserOS page-scoped observations", () => {
 	})
 })
 
+describe("BrowserOS session naming", () => {
+	it("reuses consent and the private session without consuming page observations", async () => {
+		const access = new BrowserOSAccess()
+		const owner = {},
+			connection = {}
+		const confirm = vi.fn().mockResolvedValue(true)
+		await access.acquire(owner, connection, confirm, true)
+		await access.execute(owner, connection, { kind: "observation", page: 1 }, async () => ({
+			content: [{ type: "text", text: "tree" }],
+			_meta: { "com.browseros.neo/session": "private-session" },
+		}))
+		const operation = browserOSOperation("name_session", { name: "browser check" })
+		expect(operation).toEqual({ kind: "sessionMetadata" })
+		await access.execute(owner, connection, operation, async () => {
+			expect(access.toolArguments({ name: "browser check", session: "untrusted" })).toEqual({
+				name: "browser check",
+				session: "private-session",
+			})
+			return { content: [{ type: "text", text: "named" }] }
+		})
+		await access.execute(owner, connection, { kind: "interaction", page: 1 }, async () => ({}))
+		expect(access.canApproveTaskAction(owner, connection)).toBe(true)
+		expect(confirm).toHaveBeenCalledOnce()
+		access.pause()
+		await expect(access.execute(owner, connection, operation, vi.fn())).rejects.toThrow("paused")
+		access.revoke()
+		await expect(access.execute(owner, connection, operation, vi.fn())).rejects.toThrow("not been granted")
+	})
+})
+
 describe("BrowserOS scripts (run/evaluate)", () => {
 	it.each(["run", "evaluate"])("classifies %s as a script, not as unsupported", (name) => {
 		expect(browserOSOperation(name, { code: "return 1" })).toEqual({ kind: "script" })

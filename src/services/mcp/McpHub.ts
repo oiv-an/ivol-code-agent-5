@@ -305,6 +305,7 @@ export class McpHub {
 							)
 								throw new Error("Paused browser connection changed during confirmation")
 							this.browserOSAccess.resume()
+							void vscode.window.showInformationMessage(t("mcp:browserOS.permissionGranted"))
 						}
 						return
 					}
@@ -2783,6 +2784,7 @@ export class McpHub {
 				"wait",
 				"run",
 				"evaluate",
+				"name_session",
 			].includes(toolName)
 		)
 			return false
@@ -2817,6 +2819,7 @@ export class McpHub {
 			throw new Error("This BrowserOS connection is shadowed by a project server. Use unique MCP server names.")
 		if (!provider || this.isDisposed || provider.context.globalState.get("browserMode") !== "browseros")
 			throw new Error("Select BrowserOS mode before granting access")
+		let confirmed = false
 		await this.browserOSAccess.acquire(
 			provider,
 			connection,
@@ -2829,10 +2832,12 @@ export class McpHub {
 					provider.context.globalState.get("browserMode") !== "browseros"
 				)
 					return false
+				confirmed = approved
 				return approved
 			},
 			allowTaskActions,
 		)
+		if (confirmed) void vscode.window.showInformationMessage(t("mcp:browserOS.permissionGranted"))
 	}
 	// kilocode_change end
 

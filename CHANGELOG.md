@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.63
+
+- Reuse browser control permission when naming a session and confirm when access is granted.
+
 ## 5.17.62
 
 - Keep BrowserOS connections alive during idle periods and avoid repeated permission prompts after recoverable browser action errors.
