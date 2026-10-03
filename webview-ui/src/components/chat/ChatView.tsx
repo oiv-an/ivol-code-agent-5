@@ -1506,12 +1506,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	// kilocode_change: evict per-row UI state alongside the bounded transcript.
 	useEffect(() => {
-		const ids = new Set(messages.map((row) => String(row.ts)))
+		const ids = new Set([...messages, ...(chatHistoryPage?.messages ?? [])].map((row) => String(row.ts)))
 		setExpandedRows((previous) => {
 			if (Object.keys(previous).every((id) => ids.has(id))) return previous
 			return Object.fromEntries(Object.entries(previous).filter(([id]) => ids.has(id)))
 		})
-	}, [messages])
+	}, [messages, chatHistoryPage])
 
 	const handleSetExpandedRow = useCallback(
 		(ts: number, expand?: boolean) => {
@@ -1669,67 +1669,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const itemContent = useCallback(
 		(index: number, messageOrGroup: ClineMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
-			// kilocode_change start: oversized/structured previews are read-only; never edit truncated originals.
-			if (messageOrGroup.uiTruncated || browsingHistory) {
-				return (
-					<div className="px-4 py-2 border-b border-vscode-panel-border">
-						<div className="text-xs text-vscode-descriptionForeground">
-							{messageOrGroup.ask ?? messageOrGroup.say}
-						</div>
-						<pre className="whitespace-pre-wrap break-words text-xs">
-							{(messageOrGroup.text ?? "").slice(0, 4000)}
-						</pre>
-						<Button
-							appearance="secondary"
-							onClick={() =>
-								vscode.postMessage({
-									type: "openChatMessage",
-									chatMessageRequest: { taskId: currentTaskId!, ts: messageOrGroup.ts },
-								})
-							}>
-							{t("chat:historyWindow.openFull")}
-						</Button>
-						<Button
-							appearance="secondary"
-							onClick={() =>
-								vscode.postMessage({
-									type: "togglePinnedMessage",
-									messageTs: messageOrGroup.ts,
-									pinned: !messageOrGroup.pinned,
-									chatMessageRequest: { taskId: currentTaskId!, ts: messageOrGroup.ts },
-									chatHistoryRequest: browsingHistory
-										? {
-												taskId: currentTaskId!,
-												before: (chatHistoryPage?.messages.at(-1)?.ts ?? 0) + 1,
-												pinnedOnly: chatHistoryPage?.pinnedOnly,
-											}
-										: undefined,
-								})
-							}>
-							{t(messageOrGroup.pinned ? "chat:historyWindow.unpin" : "chat:historyWindow.pin")}
-						</Button>
-						{Array.from({ length: Math.min(messageOrGroup.uiImageCount ?? 0, 20) }, (_, imageIndex) => (
-							<Button
-								key={imageIndex}
-								appearance="icon"
-								onClick={() =>
-									vscode.postMessage({
-										type: "openChatMessage",
-										chatMessageRequest: {
-											taskId: currentTaskId!,
-											ts: messageOrGroup.ts,
-											imageIndex,
-										},
-									})
-								}>
-								{t("chat:historyWindow.image", { number: imageIndex + 1 })}
-							</Button>
-						))}
-					</div>
-				)
-			}
-			// kilocode_change end
-
 			// Check if this is a browser action message
 			if (messageOrGroup.type === "say" && messageOrGroup.say === "browser_action") {
 				// Find the corresponding result message by looking for the next browser_action_result after this action's timestamp
@@ -1760,45 +1699,45 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			// regular message
 			return (
-				<ChatRow
-					key={messageOrGroup.ts}
-					message={messageOrGroup}
-					isExpanded={expandedRows[messageOrGroup.ts] || false}
-					onToggleExpand={toggleRowExpansion} // This was already stabilized
-					lastModifiedMessage={modifiedMessages.at(-1)} // Original direct access
-					isLast={index === displayedMessages.length - 1} // kilocode_change: index belongs to the displayed list
-					onHeightChange={handleRowHeightChange}
-					isStreaming={isStreaming}
-					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
-					onBatchFileResponse={handleBatchFileResponse}
-					highlighted={highlightedMessageIndex === index} // kilocode_change: add highlight prop
-					enableCheckpoints={enableCheckpoints} // kilocode_change
-					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
-					isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
-					editable={
-						messageOrGroup.type === "ask" &&
-						messageOrGroup.ask === "tool" &&
-						(() => {
-							let tool: any = {}
-							try {
-								tool = JSON.parse(messageOrGroup.text || "{}")
-							} catch (_) {
-								if (messageOrGroup.text?.includes("updateTodoList")) {
-									tool = { tool: "updateTodoList" }
+				<div>
+					<ChatRow
+						key={messageOrGroup.ts}
+						message={messageOrGroup}
+						isExpanded={expandedRows[messageOrGroup.ts] || false}
+						onToggleExpand={toggleRowExpansion} // This was already stabilized
+						lastModifiedMessage={modifiedMessages.at(-1)} // Original direct access
+						isLast={index === displayedMessages.length - 1} // kilocode_change: index belongs to the displayed list
+						onHeightChange={handleRowHeightChange}
+						isStreaming={isStreaming}
+						onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
+						onBatchFileResponse={handleBatchFileResponse}
+						highlighted={highlightedMessageIndex === index} // kilocode_change: add highlight prop
+						enableCheckpoints={enableCheckpoints} // kilocode_change
+						isFollowUpAnswered={
+							messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs
+						}
+						isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
+						editable={
+							messageOrGroup.type === "ask" &&
+							messageOrGroup.ask === "tool" &&
+							(() => {
+								let tool: any = {}
+								try {
+									tool = JSON.parse(messageOrGroup.text || "{}")
+								} catch (_) {
+									if (messageOrGroup.text?.includes("updateTodoList")) {
+										tool = { tool: "updateTodoList" }
+									}
 								}
-							}
-							return tool.tool === "updateTodoList" && enableButtons && !!primaryButtonText
-						})()
-					}
-					hasCheckpoint={hasCheckpoint}
-				/>
+								return tool.tool === "updateTodoList" && enableButtons && !!primaryButtonText
+							})()
+						}
+						hasCheckpoint={hasCheckpoint}
+					/>
+				</div>
 			)
 		},
 		[
-			browsingHistory,
-			currentTaskId,
-			chatHistoryPage,
-			t, // kilocode_change
 			expandedRows,
 			toggleRowExpansion,
 			modifiedMessages,

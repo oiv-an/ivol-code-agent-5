@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.69
+
+- Restore native history cards and complete message actions with an 80-message window.
+
+## 5.17.68
+
+- Restore normal message and context-compaction formatting when displaying memory-limited previews.
+
 ## 5.17.67
 
 - Toggle pinned messages off with a second click to return to the live conversation.

@@ -290,7 +290,7 @@ export const applyIncrementalTaskMessage = (prevState: ExtensionState, message: 
 
 	// Keep the task header and only the newest page. Historical pages have a
 	// separate replace-only store and cannot grow this live control state.
-	const bounded = clineMessages.length > 41 ? [clineMessages[0], ...clineMessages.slice(-40)] : clineMessages
+	const bounded = clineMessages.length > 81 ? [clineMessages[0], ...clineMessages.slice(-80)] : clineMessages
 	return { ...prevState, clineMessages: bounded }
 }
 // kilocode_change end

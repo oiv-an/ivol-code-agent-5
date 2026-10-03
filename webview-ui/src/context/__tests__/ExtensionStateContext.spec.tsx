@@ -75,9 +75,9 @@ describe("bounded live transcript", () => {
 				clineMessage: { ts, type: "say", text: "row" },
 			})
 		}
-		expect(state.clineMessages).toHaveLength(41)
+		expect(state.clineMessages).toHaveLength(81)
 		expect(state.clineMessages[0].ts).toBe(0)
-		expect(state.clineMessages[1].ts).toBe(961)
+		expect(state.clineMessages[1].ts).toBe(921)
 		expect(
 			applyIncrementalTaskMessage(state, {
 				type: "messageCreated",

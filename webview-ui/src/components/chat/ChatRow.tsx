@@ -252,13 +252,15 @@ export const ChatRowContent = ({
 
 	// Handle edit button click
 	const handleEditClick = useCallback(() => {
+		// kilocode_change: never overwrite an original with its bounded text or omitted attachments.
+		if (message.uiTruncated) return
 		setIsEditing(true)
 		setEditedContent(message.text || "")
 		setEditImages(message.images || [])
 		setEditMode(mode || "code")
 		// Edit mode is now handled entirely in the frontend
 		// No need to notify the backend
-	}, [message.text, message.images, mode])
+	}, [message.text, message.images, message.uiTruncated, mode])
 
 	// Handle cancel edit
 	const handleCancelEdit = useCallback(() => {
@@ -1425,13 +1427,18 @@ export const ChatRowContent = ({
 													handleEditClick()
 												}
 											}}
-											title={t("chat:queuedMessages.clickToEdit")}>
+											title={
+												message.uiTruncated ? undefined : t("chat:queuedMessages.clickToEdit")
+											}>
 											<Mention text={message.text} withShadow />
 										</div>
 										<div className="flex gap-2 pr-1">
 											<div
 												className="cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-												style={{ visibility: isStreaming ? "hidden" : "visible" }}
+												style={{
+													visibility:
+														isStreaming || message.uiTruncated ? "hidden" : "visible",
+												}} // kilocode_change
 												onClick={(e) => {
 													e.stopPropagation()
 													handleEditClick()

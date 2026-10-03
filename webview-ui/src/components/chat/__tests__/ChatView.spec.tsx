@@ -18,6 +18,8 @@ interface ClineMessage {
 	text?: string
 	partial?: boolean
 	isAnswered?: boolean // kilocode_change
+	uiTruncated?: boolean // kilocode_change
+	uiImageCount?: number // kilocode_change
 }
 
 interface ExtensionState {
@@ -355,15 +357,45 @@ describe("ChatView - bounded history", () => {
 				}),
 			),
 		)
-		await waitFor(() => expect(view.getByText("Historical message")).toBeInTheDocument())
-		fireEvent.click(view.getByText("chat:historyWindow.openFull"))
-		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "openChatMessage",
-			chatMessageRequest: { taskId: "task-a", ts: 2 },
-		})
+		await waitFor(() => expect(view.getByTestId("chat-row")).toHaveTextContent("Historical message"))
+		expect(view.queryByRole("button", { name: "chat:historyWindow.openFull" })).not.toBeInTheDocument()
 		fireEvent.click(view.getByRole("button", { name: "chat:historyWindow.pinned" }))
 		await waitFor(() => expect(view.getByTestId("chat-row")).toHaveTextContent("Live message"))
 		expect(view.queryByText("Historical message")).not.toBeInTheDocument()
+	})
+})
+// kilocode_change end
+
+// kilocode_change start: bounded payloads retain the normal user and context-management UI.
+describe("ChatView - semantic bounded previews", () => {
+	it.each([
+		"user_feedback",
+		"user_feedback_diff",
+		"text",
+		"context_handoff",
+		"condense_context",
+		"condense_context_error",
+	])("renders shortened %s through ChatRow instead of a raw technical preview", async (say) => {
+		const view = renderChatView()
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskItem: { id: "task-a", ts: 1, task: "Task" },
+			clineMessages: [
+				{ ts: 1, type: "say", say: "text", text: "Task" },
+				{
+					ts: 2,
+					type: "say",
+					say,
+					text: "Bounded content",
+					uiTruncated: true,
+					uiImageCount: say === "user_feedback" ? 1 : undefined,
+				},
+			],
+		})
+		await waitFor(() => expect(view.getByTestId("chat-row")).toHaveTextContent("Bounded content"))
+		expect(view.container.querySelector("pre")).toBeNull()
+		expect(view.queryByText("chat:historyWindow.pin")).not.toBeInTheDocument()
+		expect(view.queryByRole("button", { name: "chat:historyWindow.openFull" })).not.toBeInTheDocument()
 	})
 })
 // kilocode_change end
