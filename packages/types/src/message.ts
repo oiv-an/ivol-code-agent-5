@@ -296,6 +296,10 @@ export const clineMessageSchema = z.object({
 	say: clineSaySchema.optional(),
 	text: z.string().optional(),
 	images: z.array(z.string()).optional(),
+	// kilocode_change start: transient UI preview metadata, not model context.
+	uiTruncated: z.boolean().optional(),
+	uiImageCount: z.number().optional(),
+	// kilocode_change end
 	partial: z.boolean().optional(),
 	reasoning: z.string().optional(),
 	conversationHistoryIndex: z.number().optional(),

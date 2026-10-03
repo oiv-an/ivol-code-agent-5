@@ -1379,6 +1379,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			taskState: {
 				currentTaskTodos: this.todoList,
 				currentTaskCumulativeCost: this.getCumulativeTotalCost(),
+				currentTaskTokenUsage: this.getTokenUsage(), // kilocode_change: totals must not depend on the loaded UI page.
 				messageQueue: this.messageQueueService?.messages,
 			},
 		})

@@ -33,6 +33,7 @@ export const toolNames = [
 	"switch_mode",
 	"new_task",
 	"fetch_instructions",
+	"search_chat_history", // kilocode_change
 	"codebase_search",
 	"web_search",
 	// kilocode_change start

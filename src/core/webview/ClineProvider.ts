@@ -59,6 +59,7 @@ import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService, BridgeOrchestrator, getRooCodeApiUrl } from "@roo-code/cloud"
 
 import { Package } from "../../shared/package"
+import { projectChatMessage, projectLiveChat, projectHistoryPage } from "../../shared/kilocode/chatHistoryProjection" // kilocode_change
 import { disposeProviderConnectionTest } from "./providerConnectionTest" // kilocode_change
 import { disposeStandaloneWebSearch } from "./standaloneWebSearch" // kilocode_change
 import { findLast } from "../../shared/array"
@@ -1261,6 +1262,11 @@ export class ClineProvider
 			}
 		})
 
+		// kilocode_change start: every transcript transport path uses disposable bounded copies.
+		if ((message.type === "messageCreated" || message.type === "messageUpdated") && message.clineMessage) {
+			message = { ...message, clineMessage: projectChatMessage(message.clineMessage) }
+		}
+		// kilocode_change end
 		await this.view?.webview.postMessage(message)
 	}
 
@@ -2541,7 +2547,13 @@ export class ClineProvider
 			currentTaskItem: this.getCurrentTask()?.taskId
 				? (taskHistory || []).find((item: HistoryItem) => item.id === this.getCurrentTask()?.taskId)
 				: undefined,
-			clineMessages: this.getCurrentTask()?.clineMessages || [],
+			// kilocode_change start
+			clineMessages: projectLiveChat(this.getCurrentTask()?.clineMessages || []),
+			chatHistoryPage: this.getCurrentTask()
+				? projectHistoryPage(this.getCurrentTask()!.taskId, this.getCurrentTask()!.clineMessages)
+				: undefined,
+			currentTaskTokenUsage: this.getCurrentTask()?.getTokenUsage(),
+			// kilocode_change end
 			currentTaskTodos: this.getCurrentTask()?.todoList || [],
 			currentTaskCumulativeCost: this.getCurrentTask()?.getCumulativeTotalCost(), // kilocode_change
 			messageQueue: this.getCurrentTask()?.messageQueueService?.messages,

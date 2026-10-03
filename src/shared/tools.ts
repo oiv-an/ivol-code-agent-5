@@ -36,6 +36,8 @@ export interface TextContent {
 }
 
 export const toolParamNames = [
+	"message_ts",
+	"before", // kilocode_change
 	"command",
 	"path",
 	"content",
@@ -120,6 +122,7 @@ export type NativeToolArgs = {
 	codebase_search: { query: string; path?: string }
 	web_search: { query: string }
 	fetch_instructions: { task: string }
+	search_chat_history: { query: string; message_ts?: number; before?: number } // kilocode_change
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
@@ -298,6 +301,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	execute_command: "run commands",
 	read_file: "read files",
 	fetch_instructions: "fetch instructions",
+	search_chat_history: "search current chat history", // kilocode_change
 	write_to_file: "write files",
 	apply_diff: "apply changes",
 	// kilocode_change start
@@ -334,7 +338,14 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 // Define available tool groups.
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	read: {
-		tools: ["read_file", "fetch_instructions", "search_files", "list_files", "codebase_search"],
+		tools: [
+			"read_file",
+			"fetch_instructions",
+			"search_chat_history",
+			"search_files",
+			"list_files",
+			"codebase_search",
+		],
 	},
 	edit: {
 		tools: [

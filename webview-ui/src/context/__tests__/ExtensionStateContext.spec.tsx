@@ -64,6 +64,31 @@ const ApiConfigTestComponent = () => {
 	)
 }
 
+// kilocode_change start: a long stream cannot rebuild an unbounded live transcript.
+describe("bounded live transcript", () => {
+	it("retains the header and newest page while rejecting other tasks", () => {
+		let state = { currentTaskId: "active", clineMessages: [{ ts: 0, type: "say", text: "Task" }] } as ExtensionState
+		for (let ts = 1; ts <= 1000; ts++) {
+			state = applyIncrementalTaskMessage(state, {
+				type: "messageCreated",
+				taskId: "active",
+				clineMessage: { ts, type: "say", text: "row" },
+			})
+		}
+		expect(state.clineMessages).toHaveLength(41)
+		expect(state.clineMessages[0].ts).toBe(0)
+		expect(state.clineMessages[1].ts).toBe(961)
+		expect(
+			applyIncrementalTaskMessage(state, {
+				type: "messageCreated",
+				taskId: "other",
+				clineMessage: { ts: 1001, type: "say" },
+			}),
+		).toBe(state)
+	})
+})
+// kilocode_change end
+
 describe("ExtensionStateContext", () => {
 	it("initializes with empty allowedCommands array", () => {
 		render(

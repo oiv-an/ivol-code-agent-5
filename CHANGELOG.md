@@ -1,5 +1,21 @@
 # IVOL Code Agent 5
 
+## 5.17.67
+
+- Toggle pinned messages off with a second click to return to the live conversation.
+
+## 5.17.66
+
+- Save chat space with compact search and history icons, accessible labels, and hover hints.
+
+## 5.17.65
+
+- Search the current conversation from the chat or agent tools while keeping a smaller live message window.
+
+## 5.17.64
+
+- Reduce long-chat memory use with lightweight previews and bounded history pages while preserving original conversations.
+
 ## 5.17.63
 
 - Reuse browser control permission when naming a session and confirm when access is granted.

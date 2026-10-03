@@ -7,6 +7,19 @@ describe("NativeToolCallParser", () => {
 	})
 
 	describe("parseToolCall", () => {
+		it("parses bounded current-chat search arguments", () => {
+			// kilocode_change
+			const result = NativeToolCallParser.parseToolCall({
+				id: "history-1",
+				name: "search_chat_history",
+				arguments: JSON.stringify({ query: "deployment", message_ts: 123, before: 456 }),
+			})
+			expect(result).toMatchObject({
+				name: "search_chat_history",
+				nativeArgs: { query: "deployment", message_ts: 123, before: 456 },
+				partial: false,
+			})
+		})
 		it("parses the provider-specific web_search function call", () => {
 			const result = NativeToolCallParser.parseToolCall({
 				id: "web-search-1",

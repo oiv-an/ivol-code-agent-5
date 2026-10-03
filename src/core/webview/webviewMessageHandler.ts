@@ -60,6 +60,8 @@ import { experimentDefault } from "../../shared/experiments"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { openFile } from "../../integrations/misc/open-file"
 import { openImage, saveImage } from "../../integrations/misc/image-handler"
+import { projectHistoryPage } from "../../shared/kilocode/chatHistoryProjection" // kilocode_change
+import { searchChatHistory, chatHistoryContext } from "../../shared/kilocode/chatHistorySearch" // kilocode_change
 import { selectImages } from "../../integrations/misc/process-images"
 import { selectAnyFiles, saveDroppedFiles } from "../../integrations/misc/process-files" // kilocode_change
 import { getTheme } from "../../integrations/theme/getTheme"
@@ -652,6 +654,65 @@ export const webviewMessageHandler = async (
 
 			provider.isViewLaunched = true
 			break
+		// kilocode_change start: fetch one bounded page, or open full content outside the chat heap.
+		case "searchChatHistory": {
+			const task = provider.getCurrentTask()
+			const request = message.chatSearchRequest
+			if (
+				!task ||
+				!request ||
+				request.taskId !== task.taskId ||
+				typeof request.requestId !== "string" ||
+				request.requestId.length > 100 ||
+				typeof request.query !== "string" ||
+				request.query.length > 200
+			)
+				break
+			if ([request.before, request.messageTs].some((value) => value !== undefined && !Number.isFinite(value)))
+				break
+			const result =
+				request.messageTs !== undefined
+					? {
+							hits: [],
+							messages: chatHistoryContext(task.clineMessages, request.messageTs, request.query.trim()),
+						}
+					: searchChatHistory(task.clineMessages, request.query, request.before)
+			await provider.postMessageToWebview({
+				type: "chatSearchResult",
+				chatSearchResult: { ...result, taskId: task.taskId, requestId: request.requestId },
+			})
+			break
+		}
+		case "loadChatHistoryPage": {
+			const task = provider.getCurrentTask()
+			const request = message.chatHistoryRequest
+			if (!task || request?.taskId !== task.taskId) break
+			if ([request.before, request.after].some((value) => value !== undefined && !Number.isFinite(value))) break
+			await provider.postMessageToWebview({
+				type: "chatHistoryPage",
+				chatHistoryPage: projectHistoryPage(task.taskId, task.clineMessages, request),
+			})
+			break
+		}
+		case "openChatMessage": {
+			const task = provider.getCurrentTask()
+			const request = message.chatMessageRequest
+			if (!task || request?.taskId !== task.taskId) break
+			const row = task.clineMessages.find((item) => item.ts === request.ts)
+			if (!row) break
+			if (request.imageIndex !== undefined) {
+				const image = row.images?.[request.imageIndex]
+				if (image) await openImage(image)
+			} else {
+				const document = await vscode.workspace.openTextDocument({
+					content: row.text ?? "",
+					language: "plaintext",
+				})
+				await vscode.window.showTextDocument(document, { preview: true, preserveFocus: true })
+			}
+			break
+		}
+		// kilocode_change end
 		case "newTask":
 			// Initializing new instance of Cline will make sure that any
 			// agentically running promises in old instance don't affect our new
@@ -2735,9 +2796,20 @@ export const webviewMessageHandler = async (
 			if (!currentTask || typeof message.messageTs !== "number") {
 				break
 			}
+			if (message.chatMessageRequest && message.chatMessageRequest.taskId !== currentTask.taskId) break
 			try {
 				await currentTask.setMessagePinned(message.messageTs, message.pinned === true, "user")
 				await provider.postStateToWebview()
+				if (message.chatHistoryRequest?.taskId === currentTask.taskId) {
+					await provider.postMessageToWebview({
+						type: "chatHistoryPage",
+						chatHistoryPage: projectHistoryPage(
+							currentTask.taskId,
+							currentTask.clineMessages,
+							message.chatHistoryRequest,
+						),
+					})
+				}
 			} catch (error) {
 				await vscode.window.showErrorMessage(
 					`Could not change message freezing: ${error instanceof Error ? error.message : String(error)}`,

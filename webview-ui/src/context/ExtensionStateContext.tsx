@@ -240,6 +240,10 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Extensi
 	const customModePrompts = { ...prevCustomModePrompts, ...newCustomModePrompts }
 	const experiments = { ...prevExperiments, ...newExperiments }
 	const rest = { ...prevRest, ...newRest }
+	// kilocode_change: state refreshes must not move the historical viewport.
+	if (prevState.currentTaskId && prevState.currentTaskId === newState.currentTaskId) {
+		rest.chatHistoryPage = prevState.chatHistoryPage ?? newState.chatHistoryPage
+	}
 
 	// Note that we completely replace the previous apiConfiguration and customSupportPrompts objects
 	// with new ones since the state that is broadcast is the entire objects so merging is not necessary.
@@ -284,7 +288,10 @@ export const applyIncrementalTaskMessage = (prevState: ExtensionState, message: 
 		clineMessages.splice(insertionIndex, 0, clineMessage)
 	}
 
-	return { ...prevState, clineMessages }
+	// Keep the task header and only the newest page. Historical pages have a
+	// separate replace-only store and cannot grow this live control state.
+	const bounded = clineMessages.length > 41 ? [clineMessages[0], ...clineMessages.slice(-40)] : clineMessages
+	return { ...prevState, clineMessages: bounded }
 }
 // kilocode_change end
 
@@ -521,6 +528,17 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					setCommands(message.commands ?? [])
 					break
 				}
+				// kilocode_change start: historical pages replace, never append to, the cached page.
+				case "chatHistoryPage": {
+					const page = message.chatHistoryPage
+					setState((prev) =>
+						page && page.taskId === (prev.currentTaskId ?? prev.currentTaskItem?.id)
+							? { ...prev, chatHistoryPage: page }
+							: prev,
+					)
+					break
+				}
+				// kilocode_change end
 				// kilocode_change start: incremental messages and task totals share task-aware merge logic
 				case "messageCreated":
 				case "messageUpdated":

@@ -58,6 +58,9 @@ vi.mock("../ChatRow", () => ({
 	},
 }))
 
+// kilocode_change: the chat tests do not mount the separate Advisor provider.
+vi.mock("../../kilocode/BottomControls", () => ({ default: () => null }))
+
 vi.mock("../AutoApproveMenu", () => ({
 	default: () => null,
 }))
@@ -316,6 +319,54 @@ const renderChatView = (props: Partial<ChatViewProps> = {}, ref?: React.Ref<Chat
 		</ExtensionStateContextProvider>,
 	)
 }
+
+// kilocode_change start: bounded pages remain separate from live task controls.
+describe("ChatView - bounded history", () => {
+	beforeEach(() => vi.clearAllMocks())
+	it("requests pinned history and returns to the live transcript without replacing task state", async () => {
+		const view = renderChatView()
+		mockPostMessage({
+			currentTaskId: "task-a",
+			clineMessages: [
+				{ ts: 1, type: "say", say: "text", text: "Task" },
+				{ ts: 100, type: "say", say: "text", text: "Live message" },
+			],
+		})
+		await waitFor(() => expect(view.getByTestId("chat-row")).toHaveTextContent("Live message"))
+		fireEvent.click(view.getByRole("button", { name: "chat:historyWindow.pinned" }))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "loadChatHistoryPage",
+			chatHistoryRequest: { taskId: "task-a", before: undefined, after: undefined, pinnedOnly: true },
+		})
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "chatHistoryPage",
+						chatHistoryPage: {
+							taskId: "task-a",
+							messages: [{ ts: 2, type: "say", say: "text", text: "Historical message" }],
+							start: 0,
+							end: 1,
+							total: 100,
+							after: 2,
+						},
+					},
+				}),
+			),
+		)
+		await waitFor(() => expect(view.getByText("Historical message")).toBeInTheDocument())
+		fireEvent.click(view.getByText("chat:historyWindow.openFull"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "openChatMessage",
+			chatMessageRequest: { taskId: "task-a", ts: 2 },
+		})
+		fireEvent.click(view.getByRole("button", { name: "chat:historyWindow.pinned" }))
+		await waitFor(() => expect(view.getByTestId("chat-row")).toHaveTextContent("Live message"))
+		expect(view.queryByText("Historical message")).not.toBeInTheDocument()
+	})
+})
+// kilocode_change end
 
 // kilocode_change start: completion acknowledgments must not navigate away from the result.
 describe("ChatView - keep completed task open", () => {

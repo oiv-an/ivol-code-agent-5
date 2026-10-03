@@ -41,6 +41,8 @@ import Announcement from "./Announcement"
 import BrowserActionRow from "./BrowserActionRow"
 import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
+import ChatHistorySearch from "./ChatHistorySearch" // kilocode_change
+import HistoryIconButton from "./HistoryIconButton" // kilocode_change
 import { ChatTextArea } from "./ChatTextArea"
 // import TaskHeader from "./TaskHeader"// kilocode_change
 import KiloTaskHeader from "../kilocode/KiloTaskHeader" // kilocode_change
@@ -109,6 +111,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const {
 		clineMessages: messages,
 		currentTaskItem,
+		currentTaskId, // kilocode_change
+		chatHistoryPage, // kilocode_change
+		currentTaskTokenUsage, // kilocode_change
 		currentTaskTodos,
 		currentTaskCumulativeCost, // kilocode_change
 		taskHistoryFullLength, // kilocode_change
@@ -183,12 +188,45 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		return getLatestTodo(messages)
 	}, [messages, currentTaskTodos])
 
+	// kilocode_change start: browsing history never replaces the live messages used by approvals.
+	const [browsingHistory, setBrowsingHistory] = useState(false)
+	const [searchHistory, setSearchHistory] = useState(false) // kilocode_change
+	useEffect(() => setSearchHistory(false), [currentTaskId]) // kilocode_change
+	useEffect(() => setBrowsingHistory(false), [currentTaskId])
+	// Pending approvals must always be visible, even when the user was browsing history.
+	const latestRowTimestamp = messages.at(-1)?.ts
+	const latestRowType = messages.at(-1)?.type
+	useEffect(() => {
+		if (latestRowType === "ask") setBrowsingHistory(false)
+	}, [latestRowTimestamp, latestRowType])
+	const transcriptMessages =
+		browsingHistory && chatHistoryPage && chatHistoryPage.taskId === currentTaskId
+			? chatHistoryPage.messages
+			: messages.slice(1)
 	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
+	// Historical pages preserve every raw row: grouping across a page boundary
+	// could otherwise hide command output or orphan an API completion.
+	const transcriptRows = transcriptMessages
+	const requestHistory = (direction: "before" | "after" | "pinned") => {
+		if (!currentTaskId) return
+		const page = browsingHistory ? chatHistoryPage : undefined
+		setBrowsingHistory(true)
+		vscode.postMessage({
+			type: "loadChatHistoryPage",
+			chatHistoryRequest: {
+				taskId: currentTaskId,
+				before: direction === "before" ? (page?.before ?? messages[1]?.ts) : undefined,
+				after: direction === "after" ? page?.after : undefined,
+				pinnedOnly: direction === "pinned" || page?.pinnedOnly,
+			},
+		})
+	}
+	// kilocode_change end
 
 	// Has to be after api_req_finished are all reduced into api_req_started messages.
 	// kilocode_change start
 	const apiMetrics = useMemo(() => {
-		const metrics = getApiMetrics(modifiedMessages)
+		const metrics = currentTaskTokenUsage ?? getApiMetrics(modifiedMessages) // kilocode_change
 		// use cumulative cost from backend if available, otherwise fall back to calculated cost
 		if (currentTaskCumulativeCost !== undefined) {
 			return {
@@ -197,7 +235,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 		}
 		return metrics
-	}, [modifiedMessages, currentTaskCumulativeCost])
+	}, [modifiedMessages, currentTaskCumulativeCost, currentTaskTokenUsage])
 	// kilocode_change end
 
 	const [inputValue, setInputValue] = useState("")
@@ -390,7 +428,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setSendingDisabled(isPartial)
 							setClineAsk("tool")
 							setEnableButtons(!isPartial)
-							const tool = JSON.parse(lastMessage.text || "{}") as ClineSayTool
+							const tool = safeJsonParse<ClineSayTool>(lastMessage.text || "{}") ?? ({} as ClineSayTool) // kilocode_change: streamed previews may contain incomplete JSON.
 							switch (tool.tool) {
 								case "editedExistingFile":
 								case "appliedDiff":
@@ -1403,8 +1441,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [showFrozenOnly, frozenCount])
 
 	const displayedMessages = useMemo(
-		() => (showFrozenOnly ? groupedMessages.filter((msg) => msg.pinned) : groupedMessages),
-		[showFrozenOnly, groupedMessages],
+		() =>
+			browsingHistory
+				? transcriptRows
+				: showFrozenOnly
+					? groupedMessages.filter((msg) => msg.pinned)
+					: groupedMessages,
+		[showFrozenOnly, groupedMessages, browsingHistory, transcriptRows],
 	)
 	// kilocode_change end
 
@@ -1460,6 +1503,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 	}, [])
 	// kilocode_change end
+
+	// kilocode_change: evict per-row UI state alongside the bounded transcript.
+	useEffect(() => {
+		const ids = new Set(messages.map((row) => String(row.ts)))
+		setExpandedRows((previous) => {
+			if (Object.keys(previous).every((id) => ids.has(id))) return previous
+			return Object.fromEntries(Object.entries(previous).filter(([id]) => ids.has(id)))
+		})
+	}, [messages])
 
 	const handleSetExpandedRow = useCallback(
 		(ts: number, expand?: boolean) => {
@@ -1617,6 +1669,66 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const itemContent = useCallback(
 		(index: number, messageOrGroup: ClineMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
+			// kilocode_change start: oversized/structured previews are read-only; never edit truncated originals.
+			if (messageOrGroup.uiTruncated || browsingHistory) {
+				return (
+					<div className="px-4 py-2 border-b border-vscode-panel-border">
+						<div className="text-xs text-vscode-descriptionForeground">
+							{messageOrGroup.ask ?? messageOrGroup.say}
+						</div>
+						<pre className="whitespace-pre-wrap break-words text-xs">
+							{(messageOrGroup.text ?? "").slice(0, 4000)}
+						</pre>
+						<Button
+							appearance="secondary"
+							onClick={() =>
+								vscode.postMessage({
+									type: "openChatMessage",
+									chatMessageRequest: { taskId: currentTaskId!, ts: messageOrGroup.ts },
+								})
+							}>
+							{t("chat:historyWindow.openFull")}
+						</Button>
+						<Button
+							appearance="secondary"
+							onClick={() =>
+								vscode.postMessage({
+									type: "togglePinnedMessage",
+									messageTs: messageOrGroup.ts,
+									pinned: !messageOrGroup.pinned,
+									chatMessageRequest: { taskId: currentTaskId!, ts: messageOrGroup.ts },
+									chatHistoryRequest: browsingHistory
+										? {
+												taskId: currentTaskId!,
+												before: (chatHistoryPage?.messages.at(-1)?.ts ?? 0) + 1,
+												pinnedOnly: chatHistoryPage?.pinnedOnly,
+											}
+										: undefined,
+								})
+							}>
+							{t(messageOrGroup.pinned ? "chat:historyWindow.unpin" : "chat:historyWindow.pin")}
+						</Button>
+						{Array.from({ length: Math.min(messageOrGroup.uiImageCount ?? 0, 20) }, (_, imageIndex) => (
+							<Button
+								key={imageIndex}
+								appearance="icon"
+								onClick={() =>
+									vscode.postMessage({
+										type: "openChatMessage",
+										chatMessageRequest: {
+											taskId: currentTaskId!,
+											ts: messageOrGroup.ts,
+											imageIndex,
+										},
+									})
+								}>
+								{t("chat:historyWindow.image", { number: imageIndex + 1 })}
+							</Button>
+						))}
+					</div>
+				)
+			}
+			// kilocode_change end
 
 			// Check if this is a browser action message
 			if (messageOrGroup.type === "say" && messageOrGroup.say === "browser_action") {
@@ -1683,6 +1795,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)
 		},
 		[
+			browsingHistory,
+			currentTaskId,
+			chatHistoryPage,
+			t, // kilocode_change
 			expandedRows,
 			toggleRowExpansion,
 			modifiedMessages,
@@ -1957,23 +2073,74 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						</div>
 					)}
 					{/* kilocode_change end */}
+					{/* kilocode_change start: explicit paging keeps just one historical page resident. */}
+					<div className="flex items-center gap-1 px-4 py-0.5 shrink-0">
+						<HistoryIconButton
+							icon={searchHistory ? "close" : "search"}
+							label={t(searchHistory ? "chat:historySearch.close" : "chat:historySearch.search")}
+							aria-expanded={searchHistory}
+							onClick={() => {
+								setSearchHistory(!searchHistory)
+								setBrowsingHistory(false)
+							}}
+						/>
+						<HistoryIconButton
+							icon="pin"
+							label={t("chat:historyWindow.pinned")}
+							aria-pressed={browsingHistory}
+							onClick={() => {
+								if (browsingHistory) setBrowsingHistory(false)
+								else {
+									setSearchHistory(false)
+									requestHistory("pinned")
+								}
+							}}
+						/>
+						{browsingHistory && (
+							<>
+								<HistoryIconButton
+									icon="chevron-up"
+									label={t("chat:historyWindow.earlier")}
+									disabled={!chatHistoryPage?.before}
+									onClick={() => requestHistory("before")}
+								/>
+								<HistoryIconButton
+									icon="chevron-down"
+									label={t("chat:historyWindow.later")}
+									disabled={!chatHistoryPage?.after}
+									onClick={() => requestHistory("after")}
+								/>
+								<HistoryIconButton
+									icon="go-to-file"
+									label={t("chat:historyWindow.live")}
+									onClick={() => setBrowsingHistory(false)}
+								/>
+							</>
+						)}
+					</div>
+					{/* kilocode_change end */}
+					{searchHistory && currentTaskId && <ChatHistorySearch key={currentTaskId} taskId={currentTaskId} />}
 					<div className="grow flex flex-col min-h-0" ref={scrollContainerRef}>
 						<div className="flex-auto min-h-0">
 							<Virtuoso
 								ref={virtuosoRef}
-								key={task.ts}
+								key={`${task.ts}:${browsingHistory ? (chatHistoryPage?.messages[0]?.ts ?? "empty") : "live"}`} // kilocode_change
 								className="scrollable grow overflow-y-scroll mb-1"
 								increaseViewportBy={{ top: 400, bottom: 400 }} // kilocode_change: use more modest numbers to see if they reduce gray screen incidence
 								data={displayedMessages} // kilocode_change
 								itemContent={itemContent}
-								followOutput={(isAtBottom: boolean) => isAtBottom || stickyFollowRef.current}
+								followOutput={(isAtBottom: boolean) =>
+									!browsingHistory && (isAtBottom || stickyFollowRef.current)
+								} // kilocode_change
 								atBottomStateChange={(isAtBottom: boolean) => {
 									setIsAtBottom(isAtBottom)
 									// Only show the scroll-to-bottom button if not at bottom
 									setShowScrollToBottom(!isAtBottom)
 								}}
 								atBottomThreshold={10}
-								initialTopMostItemIndex={displayedMessages.length - 1} // kilocode_change
+								initialTopMostItemIndex={
+									browsingHistory ? 0 : Math.max(0, displayedMessages.length - 1)
+								} // kilocode_change
 							/>
 						</div>
 					</div>

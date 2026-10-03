@@ -1,5 +1,24 @@
 {
 	"greeting": "What can IVOL Code do for you?",
+	"historySearch": {
+		"search": "Search this chat",
+		"close": "Close search",
+		"query": "Find text in this chat",
+		"loading": "Searching…",
+		"timeout": "Search did not respond. Try again.",
+		"empty": "No matching messages",
+		"more": "Older matches"
+	},
+	"historyWindow": {
+		"earlier": "Earlier messages",
+		"later": "Later messages",
+		"live": "Back to live chat",
+		"pinned": "All pinned messages",
+		"openFull": "Open original message",
+		"pin": "Pin message",
+		"unpin": "Unpin message",
+		"image": "Image {{number}}"
+	},
 	"standaloneWebSearch": {
 		"button": "Search the web",
 		"title": "Web search",

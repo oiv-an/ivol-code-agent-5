@@ -6,7 +6,7 @@ import type { HistoryItem } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
-import type { ClineMessage, QueuedMessage } from "./message.js"
+import type { ClineMessage, QueuedMessage, TokenUsage } from "./message.js" // kilocode_change
 import {
 	type MarketplaceItem,
 	type InstallMarketplaceItemOptions,
@@ -247,7 +247,30 @@ export interface AdvisorState {
 	error?: string
 }
 // kilocode_change end
+// kilocode_change start: bounded transcript pages are UI projections, never persisted history.
+export interface ChatHistoryPage {
+	taskId: string
+	messages: ClineMessage[]
+	start: number
+	end: number
+	total: number
+	before?: number
+	after?: number
+	pinnedOnly?: boolean
+}
+// kilocode_change end
+
 export interface ExtensionMessage {
+	// kilocode_change start
+	chatSearchResult?: {
+		taskId: string
+		requestId: string
+		hits: { ts: number; kind: string; snippet: string }[]
+		nextBefore?: number
+		messages?: ClineMessage[]
+	}
+	// kilocode_change end
+	chatHistoryPage?: ChatHistoryPage // kilocode_change
 	advisorRequestId?: string // kilocode_change
 	advisorState?: AdvisorState // kilocode_change
 	projectTaskStorage?: ProjectTaskStorageState // kilocode_change
@@ -266,6 +289,8 @@ export interface ExtensionMessage {
 		| "theme"
 		| "workspaceUpdated"
 		| "invoke"
+		| "chatSearchResult" // kilocode_change
+		| "chatHistoryPage" // kilocode_change
 		| "messageCreated" // kilocode_change
 		| "messageUpdated"
 		| "currentTaskStateUpdated" // kilocode_change
@@ -448,6 +473,7 @@ export interface ExtensionMessage {
 	taskState?: {
 		currentTaskTodos?: TodoItem[]
 		currentTaskCumulativeCost?: number
+		currentTaskTokenUsage?: TokenUsage // kilocode_change
 		messageQueue?: QueuedMessage[]
 	}
 	// kilocode_change end
@@ -733,6 +759,10 @@ export type ExtensionState = Pick<
 > & {
 	version: string
 	clineMessages: ClineMessage[]
+	// kilocode_change start
+	chatHistoryPage?: ChatHistoryPage
+	currentTaskTokenUsage?: TokenUsage
+	// kilocode_change end
 	currentTaskId?: string // kilocode_change: stable task identity for incremental message updates
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
@@ -877,6 +907,11 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 // kilocode_change end: Type-safe global state update message
 
 export interface WebviewMessage {
+	chatSearchRequest?: { taskId: string; requestId: string; query: string; before?: number; messageTs?: number } // kilocode_change
+	// kilocode_change start
+	chatHistoryRequest?: { taskId: string; before?: number; after?: number; pinnedOnly?: boolean }
+	chatMessageRequest?: { taskId: string; ts: number; imageIndex?: number }
+	// kilocode_change end
 	advisorRequestId?: string // kilocode_change
 	advisorExtensionId?: string // kilocode_change
 	projectTaskStorage?: { enabled: boolean; hide: boolean } // kilocode_change
@@ -908,6 +943,9 @@ export interface WebviewMessage {
 		| "getListApiConfiguration"
 		| "customInstructions"
 		| "webviewDidLaunch"
+		| "searchChatHistory" // kilocode_change
+		| "loadChatHistoryPage" // kilocode_change
+		| "openChatMessage" // kilocode_change
 		| "newTask"
 		| "askResponse"
 		| "terminalOperation"

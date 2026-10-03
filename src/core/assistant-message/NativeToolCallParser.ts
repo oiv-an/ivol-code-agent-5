@@ -498,6 +498,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "search_chat_history": // kilocode_change
+				nativeArgs = {
+					query: partialArgs.query,
+					message_ts: partialArgs.message_ts,
+					before: partialArgs.before,
+				}
+				break
+
 			case "fetch_instructions":
 				if (partialArgs.task !== undefined) {
 					nativeArgs = {
@@ -804,6 +812,14 @@ export class NativeToolCallParser {
 							query: args.query,
 						} as NativeArgsFor<TName>
 					}
+					break
+
+				case "search_chat_history": // kilocode_change
+					nativeArgs = {
+						query: args.query,
+						message_ts: args.message_ts,
+						before: args.before,
+					} as NativeArgsFor<TName>
 					break
 
 				case "fetch_instructions":

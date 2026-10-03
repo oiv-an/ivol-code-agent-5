@@ -16,6 +16,7 @@ import { experiments, EXPERIMENT_IDS } from "../../shared/experiments"
 import { AskIgnoredError } from "../task/AskIgnoredError"
 import { Task } from "../task/Task"
 
+import { searchChatHistoryTool } from "../tools/kilocode/SearchChatHistoryTool" // kilocode_change
 import { fetchInstructionsTool } from "../tools/FetchInstructionsTool"
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"
@@ -426,6 +427,8 @@ export async function presentAssistantMessage(cline: Task) {
 							return readFileTool.getReadFileToolDescription(block.name, block.nativeArgs)
 						}
 						return readFileTool.getReadFileToolDescription(block.name, block.params)
+					case "search_chat_history": // kilocode_change
+						return `[search_chat_history for '${block.params.query ?? ""}']`
 					case "fetch_instructions":
 						return `[${block.name} for '${block.params.task}']`
 					case "write_to_file":
@@ -1099,6 +1102,15 @@ export async function presentAssistantMessage(cline: Task) {
 				case "read_file":
 					// Type assertion is safe here because we're in the "read_file" case
 					await readFileTool.handle(cline, block as ToolUse<"read_file">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						removeClosingTag,
+						toolProtocol,
+					})
+					break
+				case "search_chat_history": // kilocode_change
+					await searchChatHistoryTool.handle(cline, block as ToolUse<"search_chat_history">, {
 						askApproval,
 						handleError,
 						pushToolResult,
