@@ -17,6 +17,7 @@ const CONFIG = "project.json"
 const INDEX = "task-history.json"
 const taskLocations = new Map<string, string>()
 const preparations = new Map<string, Promise<void>>()
+const ignoreUpdates = new Map<string, Promise<void>>()
 
 export interface ProjectTaskStorageConfig {
 	version: 1
@@ -209,26 +210,50 @@ export async function updateProjectTaskHistory(previous: HistoryItem[], next: Hi
 	return next.filter((item) => !localWorkspaceForTask(item.id))
 }
 
-/** Protect history before writing it, including projects that are not Git repositories yet. */
+/** Protect history inside its own directory; never edit a project's shared .gitignore. */
 export async function ensureProjectTaskIgnore(workspace: string): Promise<void> {
-	const ignore = path.join(workspace, ".gitignore")
-	assertNotSymlink(ignore)
-	let existing = ""
-	try {
-		existing = await fsp.readFile(ignore, "utf8")
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+	let pending = ignoreUpdates.get(workspace)
+	if (!pending) {
+		pending = updateProjectTaskIgnore(workspace)
+		ignoreUpdates.set(workspace, pending)
 	}
-	// Keep the final effective rule authoritative even after a user's later negation rule.
-	const rules = existing
-		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.filter((line) => line && !line.startsWith("#"))
-	if (rules.at(-1) !== "/.ivol/") {
-		await fsp.appendFile(
-			ignore,
-			`${existing && !existing.endsWith("\n") ? "\n" : ""}\n# Private IVOL task history\n/.ivol/\n`,
-		)
+	try {
+		await pending
+	} finally {
+		if (ignoreUpdates.get(workspace) === pending) ignoreUpdates.delete(workspace)
+	}
+}
+
+async function updateProjectTaskIgnore(workspace: string): Promise<void> {
+	const root = projectStorageRoot(workspace)
+	await fsp.mkdir(root, { recursive: true, mode: 0o700 })
+	const file = path.join(root, ".gitignore")
+	assertNotSymlink(file)
+	// A nested ignore takes precedence over parent negations, also before git init
+	// and when the workspace is a subdirectory of a repository. It ignores itself.
+	// Serialize creation/repair across extension hosts without touching editor buffers.
+	const release = await lockfile.lock(root, {
+		lockfilePath: path.join(root, ".gitignore.lock"),
+		realpath: false,
+		retries: { retries: 10, minTimeout: 20, maxTimeout: 200 },
+	})
+	try {
+		let existing = ""
+		try {
+			existing = await fsp.readFile(file, "utf8")
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+		}
+		if (existing.trimEnd().split(/\r?\n/).at(-1) !== "*") {
+			const eol = existing.includes("\r\n") ? "\r\n" : "\n"
+			await fsp.appendFile(
+				file,
+				`${existing && !existing.endsWith("\n") ? eol : ""}# Private IVOL task history${eol}*${eol}`,
+				{ mode: 0o600 },
+			)
+		}
+	} finally {
+		await release()
 	}
 	try {
 		const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")))

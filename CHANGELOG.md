@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.71
+
+- Keep private task-history exclusions inside their own folder instead of changing project ignore files, preventing background save conflicts across windows.
+
+## 5.17.70
+
+- Prevent task-history protection from conflicting with file saves and preserve unsaved edits when saving fails.
+
 ## 5.17.69
 
 - Restore native history cards and complete message actions with an 80-message window.

@@ -46,6 +46,21 @@ export class DiffViewProvider {
 		this.taskRef = new WeakRef(task)
 	}
 
+	// kilocode_change start: a failed save must never become a successful tool result or an automatic revert.
+	private async saveDocument(document: vscode.TextDocument): Promise<void> {
+		try {
+			if (!(await document.save()) || document.isDirty) {
+				throw new Error(
+					`Could not save ${document.uri.fsPath}. The unsaved changes remain in the editor; resolve the save conflict before retrying.`,
+				)
+			}
+		} catch (error) {
+			this.isEditing = false
+			throw error
+		}
+	}
+	// kilocode_change end
+
 	async open(relPath: string): Promise<void> {
 		this.relPath = relPath
 		const fileExists = this.editType === "modify"
@@ -60,7 +75,7 @@ export class DiffViewProvider {
 			)
 
 			if (existingDocument && existingDocument.isDirty) {
-				await existingDocument.save()
+				await this.saveDocument(existingDocument) // kilocode_change
 			}
 		}
 
@@ -235,7 +250,7 @@ export class DiffViewProvider {
 		const editedContent = updatedDocument.getText()
 
 		if (updatedDocument.isDirty) {
-			await updatedDocument.save()
+			await this.saveDocument(updatedDocument) // kilocode_change
 		}
 
 		await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), { preview: false, preserveFocus: true })
@@ -435,7 +450,7 @@ export class DiffViewProvider {
 
 		if (!fileExists) {
 			if (updatedDocument.isDirty) {
-				await updatedDocument.save()
+				await this.saveDocument(updatedDocument) // kilocode_change
 			}
 
 			await this.closeAllDiffViews()
@@ -460,7 +475,7 @@ export class DiffViewProvider {
 			// this won't show in local history unless of course the user made
 			// changes and saved during the edit.
 			await vscode.workspace.applyEdit(edit)
-			await updatedDocument.save()
+			await this.saveDocument(updatedDocument) // kilocode_change
 
 			if (this.documentWasOpen) {
 				await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
@@ -721,34 +736,35 @@ export class DiffViewProvider {
 		// Get diagnostics before editing the file
 		this.preDiagnostics = vscode.languages.getDiagnostics()
 
-		// Write the content directly to the file
 		await createDirectoriesForFile(absolutePath)
-		await fs.writeFile(absolutePath, content, "utf-8")
-
-		// Open the document to ensure diagnostics are loaded
-		// When openFile is false (PREVENT_FOCUS_DISRUPTION enabled), we only open in memory
-		// kilocode_change start: Skip document opening in CLI mode
-		if (!skipVscodeOps) {
-			// kilocode_change end
+		// kilocode_change start: background edits must use the same buffer and save participants as visible edits.
+		if (skipVscodeOps) {
+			await fs.writeFile(absolutePath, content, "utf-8")
+		} else {
+			const uri = vscode.Uri.file(absolutePath)
+			const create = new vscode.WorkspaceEdit()
+			create.createFile(uri, { ignoreIfExists: true })
+			if (!(await vscode.workspace.applyEdit(create))) throw new Error(`Could not open ${relPath} for editing.`)
+			const document = await vscode.workspace.openTextDocument(uri)
+			if (document.isDirty) {
+				throw new Error(`Save the pending changes to ${relPath} before retrying; no edits were overwritten.`)
+			}
+			const edit = new vscode.WorkspaceEdit()
+			edit.replace(
+				uri,
+				new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+				content,
+			)
+			if (!(await vscode.workspace.applyEdit(edit))) throw new Error(`Could not apply changes to ${relPath}.`)
+			await this.saveDocument(document)
+			content = document.getText()
 			if (openFile) {
-				// Show the document in the editor
-				await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-					preview: false,
-					preserveFocus: true,
-				})
+				await vscode.window.showTextDocument(uri, { preview: false, preserveFocus: true })
 			} else {
-				// Just open the document in memory to trigger diagnostics without showing it
-				const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath))
-
-				// Save the document to ensure VSCode recognizes it as saved and triggers diagnostics
-				if (doc.isDirty) {
-					await doc.save()
-				}
-
-				// Force a small delay to ensure diagnostics are triggered
 				await new Promise((resolve) => setTimeout(resolve, 100))
 			}
 		}
+		// kilocode_change end
 
 		let newProblemsMessage = ""
 

@@ -48,9 +48,16 @@ are deleted by the settings toggle.
 
 ## Git and visibility
 
-Before writing project history, the extension adds `/.ivol/` to the root
-`.gitignore`. Already tracked history causes an error rather than a silent privacy
-failure. Git exclusions do not prevent deliberate force-add operations.
+Before writing project history, the extension creates `.ivol/.gitignore` with a
+`*` rule that excludes all contents, including the ignore file itself. It never
+creates, edits or saves the project's root `.gitignore`, so background history
+updates cannot conflict with that document in any editor window. Existing root
+exclusions from older versions are left unchanged. Protection also works for
+nested workspaces and folders initialized as Git repositories later.
+
+Already tracked history causes an error rather than a silent privacy failure.
+Git exclusions do not prevent deliberate force-add operations or manual changes
+to ignore rules inside the private storage directory.
 
 **Hide .ivol in the IDE project tree** uses a workspace-folder file exclusion in
 VS Code and a project tree provider in JetBrains. Hiding does not delete files or

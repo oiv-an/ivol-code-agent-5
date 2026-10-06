@@ -104,7 +104,7 @@ vi.mock("../DecorationController", () => ({
 describe("DiffViewProvider", () => {
 	let diffViewProvider: DiffViewProvider
 	const mockCwd = "/mock/cwd"
-	let mockWorkspaceEdit: { replace: any; delete: any }
+	let mockWorkspaceEdit: { replace: any; delete: any; createFile: any } // kilocode_change
 	let mockTask: any
 
 	beforeEach(() => {
@@ -112,6 +112,7 @@ describe("DiffViewProvider", () => {
 		mockWorkspaceEdit = {
 			replace: vi.fn(),
 			delete: vi.fn(),
+			createFile: vi.fn(), // kilocode_change
 		}
 		vi.mocked(vscode.WorkspaceEdit).mockImplementation(() => mockWorkspaceEdit as any)
 
@@ -366,6 +367,25 @@ describe("DiffViewProvider", () => {
 			// Mock vscode functions
 			vi.mocked(vscode.window.showTextDocument).mockResolvedValue({} as any)
 			vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([])
+			// kilocode_change start: model an editor save instead of a direct disk write.
+			let content = "original"
+			const document = {
+				uri: { fsPath: `${mockCwd}/test.ts` },
+				isDirty: false,
+				getText: () => content,
+				positionAt: (offset: number) => offset,
+				save: vi.fn(async () => {
+					document.isDirty = false
+					return true
+				}),
+			}
+			mockWorkspaceEdit.replace.mockImplementation((_uri: unknown, _range: unknown, text: string) => {
+				content = text
+				document.isDirty = true
+			})
+			vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(true)
+			vi.mocked(vscode.workspace.openTextDocument).mockResolvedValue(document as any)
+			// kilocode_change end
 		})
 
 		afterEach(() => {
@@ -383,9 +403,10 @@ describe("DiffViewProvider", () => {
 
 			const result = await diffViewProvider.saveDirectly("test.ts", "new content", true, true, 2000)
 
-			// Verify file was written
+			// kilocode_change: writes go through the editor, not behind its buffer.
 			const fs = await import("fs/promises")
-			expect(fs.writeFile).toHaveBeenCalledWith(`${mockCwd}/test.ts`, "new content", "utf-8")
+			expect(fs.writeFile).not.toHaveBeenCalled()
+			expect(mockWorkspaceEdit.replace).toHaveBeenCalledWith(expect.anything(), expect.anything(), "new content")
 
 			// Verify file was opened without focus
 			expect(vscode.window.showTextDocument).toHaveBeenCalledWith(
@@ -406,9 +427,10 @@ describe("DiffViewProvider", () => {
 		it("should not open file when openWithoutFocus is false", async () => {
 			await diffViewProvider.saveDirectly("test.ts", "new content", false, true, 1000)
 
-			// Verify file was written
+			// kilocode_change: background writes also use the editor buffer.
 			const fs = await import("fs/promises")
-			expect(fs.writeFile).toHaveBeenCalledWith(`${mockCwd}/test.ts`, "new content", "utf-8")
+			expect(fs.writeFile).not.toHaveBeenCalled()
+			expect(mockWorkspaceEdit.replace).toHaveBeenCalledWith(expect.anything(), expect.anything(), "new content")
 
 			// Verify file was NOT opened
 			expect(vscode.window.showTextDocument).not.toHaveBeenCalled()
@@ -421,9 +443,10 @@ describe("DiffViewProvider", () => {
 
 			await diffViewProvider.saveDirectly("test.ts", "new content", true, false, 1000)
 
-			// Verify file was written
+			// kilocode_change: diagnostics do not change the safe write path.
 			const fs = await import("fs/promises")
-			expect(fs.writeFile).toHaveBeenCalledWith(`${mockCwd}/test.ts`, "new content", "utf-8")
+			expect(fs.writeFile).not.toHaveBeenCalled()
+			expect(mockWorkspaceEdit.replace).toHaveBeenCalledWith(expect.anything(), expect.anything(), "new content")
 
 			// Verify delay was NOT called
 			expect(mockDelay).not.toHaveBeenCalled()
@@ -441,6 +464,24 @@ describe("DiffViewProvider", () => {
 			expect(mockDelay).toHaveBeenCalledWith(0)
 		})
 
+		// kilocode_change start
+		it("keeps pending user changes untouched", async () => {
+			vi.mocked(vscode.workspace.openTextDocument).mockResolvedValueOnce({ isDirty: true } as any)
+			await expect(diffViewProvider.saveDirectly("test.ts", "new content", false, false)).rejects.toThrow(
+				"pending changes",
+			)
+			expect(mockWorkspaceEdit.replace).not.toHaveBeenCalled()
+			const fs = await import("fs/promises")
+			expect(fs.writeFile).not.toHaveBeenCalled()
+		})
+		it("keeps standalone CLI writes independent of the editor", async () => {
+			process.env.KILO_CLI_MODE = "true"
+			await diffViewProvider.saveDirectly("test.ts", "new content", false, false)
+			const fs = await import("fs/promises")
+			expect(fs.writeFile).toHaveBeenCalledWith(`${mockCwd}/test.ts`, "new content", "utf-8")
+			expect(vscode.workspace.applyEdit).not.toHaveBeenCalled()
+		})
+		// kilocode_change end
 		it("should store results for formatFileWriteResponse", async () => {
 			await diffViewProvider.saveDirectly("test.ts", "new content", true, true, 1000)
 
@@ -471,6 +512,21 @@ describe("DiffViewProvider", () => {
 			vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([])
 		})
 
+		// kilocode_change start
+		it("reports a rejected save without closing or reverting the dirty document", async () => {
+			const document = (diffViewProvider as any).activeDiffEditor.document
+			document.uri = { fsPath: `${mockCwd}/test.ts` }
+			document.isDirty = true
+			document.save.mockResolvedValue(false)
+			diffViewProvider.isEditing = true
+			const close = vi.spyOn(diffViewProvider as any, "closeAllDiffViews")
+			await expect(diffViewProvider.saveChanges(false)).rejects.toThrow("unsaved changes remain")
+			expect(close).not.toHaveBeenCalled()
+			expect(vscode.window.showTextDocument).not.toHaveBeenCalled()
+			expect(document.getText()).toBe("new content")
+			expect(diffViewProvider.isEditing).toBe(false)
+		})
+		// kilocode_change end
 		it("should apply diagnostic delay when diagnosticsEnabled is true", async () => {
 			const mockDelay = vi.mocked(delay)
 			mockDelay.mockClear()

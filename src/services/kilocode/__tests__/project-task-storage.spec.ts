@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import type { HistoryItem, ProjectTaskCopyProgress } from "@roo-code/types"
 
-import type { ExtensionContext } from "vscode"
+import type { ExtensionContext, TextDocumentWillSaveEvent } from "vscode"
 import { ContextProxy } from "../../../core/config/ContextProxy"
 import { RepoPerTaskCheckpointService } from "../../checkpoints/RepoPerTaskCheckpointService"
 vi.mock("../../search/file-search", () => ({ executeRipgrep: vi.fn(async () => []) }))
@@ -16,11 +16,86 @@ vi.mock("@roo-code/telemetry", () => ({ TelemetryService: { instance: { captureE
 const environment = vi.hoisted(() => ({
 	workspaceFolders: [] as { uri: { scheme: string; fsPath: string } }[],
 	isTrusted: true,
+	dirty: false,
+	saveSucceeds: true,
+	beforeSave: undefined as ((event: TextDocumentWillSaveEvent) => void) | undefined,
 }))
-vi.mock("vscode", () => ({
-	workspace: environment,
-	commands: { getCommands: async () => ["ivol.refreshProjectTaskStorage"], executeCommand: vi.fn() },
-}))
+vi.mock("vscode", async () => {
+	const fs = await import("node:fs/promises")
+	type Uri = { scheme: string; fsPath: string }
+	const documents = new Map<string, ReturnType<typeof makeDocument>>()
+	function makeDocument(uri: Uri, content: string) {
+		return {
+			uri,
+			content,
+			isDirty: environment.dirty,
+			getText() {
+				return this.content
+			},
+			positionAt(offset: number) {
+				return offset
+			},
+			async save() {
+				if (!environment.saveSucceeds) return false
+				await fs.writeFile(uri.fsPath, this.content)
+				this.isDirty = false
+				return true
+			},
+		}
+	}
+	class WorkspaceEdit {
+		operations: { uri: Uri; text?: string }[] = []
+		createFile(uri: Uri) {
+			this.operations.push({ uri })
+		}
+		insert(uri: Uri, _position: number, text: string) {
+			this.operations.push({ uri, text })
+		}
+	}
+	return {
+		workspace: {
+			get workspaceFolders() {
+				return environment.workspaceFolders
+			},
+			get isTrusted() {
+				return environment.isTrusted
+			},
+			onWillSaveTextDocument(callback: (event: TextDocumentWillSaveEvent) => void) {
+				environment.beforeSave = callback
+				return {
+					dispose() {
+						environment.beforeSave = undefined
+					},
+				}
+			},
+			async openTextDocument(uri: Uri) {
+				const document = makeDocument(uri, await fs.readFile(uri.fsPath, "utf8"))
+				documents.set(uri.fsPath, document)
+				return document
+			},
+			async applyEdit(edit: WorkspaceEdit) {
+				for (const { uri, text } of edit.operations) {
+					if (text === undefined) {
+						try {
+							await fs.writeFile(uri.fsPath, "", { flag: "wx" })
+						} catch (error) {
+							if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+						}
+					} else {
+						const document = documents.get(uri.fsPath)!
+						document.content += text
+						document.isDirty = true
+					}
+				}
+				return true
+			},
+		},
+		Uri: { file: (fsPath: string) => ({ scheme: "file", fsPath }) },
+		WorkspaceEdit,
+		TextEdit: { insert: (position: number, newText: string) => ({ position, newText }) },
+		commands: { getCommands: async () => ["ivol.refreshProjectTaskStorage"], executeCommand: vi.fn() },
+	}
+})
 import {
 	configureProjectTaskStorage,
 	readProjectTaskStorage,
@@ -31,6 +106,7 @@ import {
 	assertProjectTaskWritable,
 	prepareProjectTaskStorage,
 	getProjectTasksToCopy,
+	ensureProjectTaskIgnore,
 } from "../project-task-storage"
 
 let root: string
@@ -53,6 +129,8 @@ beforeEach(async () => {
 	await fs.mkdir(workspace)
 	environment.workspaceFolders = [{ uri: { scheme: "file", fsPath: workspace } }]
 	environment.isTrusted = true
+	environment.dirty = false
+	environment.saveSucceeds = true
 })
 afterEach(async () => {
 	environment.workspaceFolders = []
@@ -88,12 +166,73 @@ describe("portable project task storage", () => {
 		await configureProjectTaskStorage(workspace, true, false)
 		expect(readProjectTaskStorage(workspace)).toMatchObject({ projectId: id, hide: false })
 		const ignore = await fs.readFile(path.join(workspace, ".gitignore"), "utf8")
-		expect(ignore.startsWith("node_modules/\n")).toBe(true)
-		expect(ignore.match(/\/\.ivol\//g)).toHaveLength(1)
+		expect(ignore).toBe("node_modules/")
+		const privateIgnore = await fs.readFile(path.join(workspace, ".ivol/.gitignore"), "utf8")
+		expect(privateIgnore).toBe("# Private IVOL task history\n*\n")
 		execFileSync("git", ["init", "-q"], { cwd: workspace })
 		expect(execFileSync("git", ["check-ignore", ".ivol/project.json"], { cwd: workspace }).toString().trim()).toBe(
 			".ivol/project.json",
 		)
+	})
+	it("does not rewrite an effective exclusion followed by unrelated rules while the editor is dirty", async () => {
+		const content = "/.ivol/\n/CURRENT_TASK.md\n/vendor/\n"
+		await fs.writeFile(path.join(workspace, ".gitignore"), content)
+		environment.dirty = true
+		await Promise.all([ensureProjectTaskIgnore(workspace), ensureProjectTaskIgnore(workspace)])
+		expect(await fs.readFile(path.join(workspace, ".gitignore"), "utf8")).toBe(content)
+	})
+	it("saves history without touching a dirty or unsaveable root ignore document", async () => {
+		const file = path.join(workspace, ".gitignore")
+		const content = "vendor/\r\n!/.ivol/\r\n!/.ivol/**\r\n"
+		await fs.writeFile(file, content)
+		const before = await fs.stat(file)
+		environment.dirty = true
+		environment.saveSucceeds = false
+		await enable()
+		await save(item())
+		await Promise.all(Array.from({ length: 10 }, () => ensureProjectTaskIgnore(workspace)))
+		expect(await fs.readFile(file, "utf8")).toBe(content)
+		expect((await fs.stat(file)).mtimeMs).toBe(before.mtimeMs)
+	})
+	it("never creates a root ignore and protects history after git init", async () => {
+		await enable()
+		await save(item())
+		await expect(fs.stat(path.join(workspace, ".gitignore"))).rejects.toMatchObject({ code: "ENOENT" })
+		execFileSync("git", ["init", "-q"], { cwd: workspace })
+		expect(
+			execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: workspace }).toString(),
+		).toBe("")
+	})
+	it("protects a nested workspace without editing the repository ignore", async () => {
+		execFileSync("git", ["init", "-q"], { cwd: root })
+		await fs.writeFile(path.join(root, ".gitignore"), "!**/.ivol/**\n")
+		await enable()
+		await save(item())
+		expect(
+			execFileSync("git", ["check-ignore", "project/.ivol/project.json", "project/.ivol/.gitignore"], {
+				cwd: root,
+			})
+				.toString()
+				.trim()
+				.split("\n"),
+		).toHaveLength(2)
+		expect(await fs.readFile(path.join(root, ".gitignore"), "utf8")).toBe("!**/.ivol/**\n")
+		await expect(fs.stat(path.join(workspace, ".gitignore"))).rejects.toMatchObject({ code: "ENOENT" })
+	})
+	it("repairs private protection idempotently and refuses a symlinked private ignore", async () => {
+		await enable()
+		const file = path.join(workspace, ".ivol/.gitignore")
+		await fs.writeFile(file, "# existing\r\n*\r\n!project.json\r\n")
+		await ensureProjectTaskIgnore(workspace)
+		const repaired = await fs.readFile(file, "utf8")
+		expect(repaired).toBe("# existing\r\n*\r\n!project.json\r\n# Private IVOL task history\r\n*\r\n")
+		await ensureProjectTaskIgnore(workspace)
+		expect(await fs.readFile(file, "utf8")).toBe(repaired)
+		await fs.unlink(file)
+		await fs.writeFile(path.join(root, "outside"), "unchanged")
+		await fs.symlink(path.join(root, "outside"), file)
+		await expect(ensureProjectTaskIgnore(workspace)).rejects.toThrow("symbolic")
+		expect(await fs.readFile(path.join(root, "outside"), "utf8")).toBe("unchanged")
 	})
 	it("rehydrates a moved project's index with its new root and reads the same files", async () => {
 		await enable()
@@ -259,7 +398,7 @@ describe("portable project task storage", () => {
 		expect(global).toEqual([entry, unrelated])
 		expect(proxy.getGlobalState("taskHistory")).toEqual([unrelated])
 	})
-	it("repairs a later Git negation without removing unrelated rules", async () => {
+	it("protects history despite parent Git negations without modifying them", async () => {
 		await enable()
 		execFileSync("git", ["init", "-q"], { cwd: workspace })
 		await fs.appendFile(path.join(workspace, ".gitignore"), "!/.ivol/\n!/.ivol/**\n")
