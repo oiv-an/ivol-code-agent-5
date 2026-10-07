@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.72
+
+- Wait for diff editors and overlapping saves to finish, avoiding false save conflicts without overwriting unsaved changes.
+
 ## 5.17.71
 
 - Keep private task-history exclusions inside their own folder instead of changing project ignore files, preventing background save conflicts across windows.

@@ -152,6 +152,75 @@ describe("DiffViewProvider", () => {
 		}
 	})
 
+	// kilocode_change start: overlapping saves must never require an out-of-band write.
+	describe("save coordination", () => {
+		afterEach(() => vi.useRealTimers())
+
+		it("waits for an overlapping save instead of reporting a conflict or saving again", async () => {
+			vi.useFakeTimers()
+			const document = { uri: { fsPath: "/test.md" }, isDirty: true, save: vi.fn().mockResolvedValue(false) }
+			const saving = (diffViewProvider as any).saveDocument(document)
+			setTimeout(() => {
+				document.isDirty = false
+			}, 200)
+			await vi.advanceTimersByTimeAsync(250)
+			await expect(saving).resolves.toBeUndefined()
+			expect(document.save).toHaveBeenCalledTimes(1)
+		})
+
+		it("preserves a document that remains dirty and does not retry or revert it", async () => {
+			vi.useFakeTimers()
+			const document = { uri: { fsPath: "/test.md" }, isDirty: true, save: vi.fn().mockResolvedValue(true) }
+			const result = expect((diffViewProvider as any).saveDocument(document)).rejects.toThrow(
+				"changed during or after saving",
+			)
+			await vi.advanceTimersByTimeAsync(3100)
+			await result
+			expect(document.isDirty).toBe(true)
+			expect(document.save).toHaveBeenCalledTimes(1)
+			expect(vscode.workspace.applyEdit).not.toHaveBeenCalled()
+		})
+
+		it("accepts a clean document even when a redundant save returned false", async () => {
+			const document = { uri: { fsPath: "/test.md" }, isDirty: false, save: vi.fn().mockResolvedValue(false) }
+			await expect((diffViewProvider as any).saveDocument(document)).resolves.toBeUndefined()
+		})
+
+		it("does not return the preliminary editor while the diff command is pending", async () => {
+			const preliminary = { document: { uri: { scheme: "file", fsPath: `${mockCwd}/test.txt` } } }
+			const finalEditor = { document: preliminary.document }
+			let onVisible: (editors: any[]) => void = () => undefined
+			vi.mocked(vscode.window.onDidChangeVisibleTextEditors).mockImplementationOnce((listener: any) => {
+				onVisible = listener
+				return { dispose: vi.fn() }
+			})
+			vi.mocked(vscode.window.showTextDocument).mockImplementationOnce(async () => {
+				onVisible([preliminary])
+				return preliminary as any
+			})
+			let finish!: () => void
+			vi.mocked(vscode.commands.executeCommand).mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve) => {
+						finish = resolve
+					}) as any,
+			)
+			let resolved = false
+			const opening = (diffViewProvider as any).openDiffEditor().then((editor: any) => {
+				resolved = true
+				return editor
+			})
+			await Promise.resolve()
+			await Promise.resolve()
+			expect(resolved).toBe(false)
+			;(vscode.window as any).visibleTextEditors = [finalEditor]
+			finish()
+			await expect(opening).resolves.toBe(finalEditor)
+			;(vscode.window as any).visibleTextEditors = []
+		})
+	})
+	// kilocode_change end
+
 	describe("update method", () => {
 		it("should preserve empty last line when original content has one", async () => {
 			;(diffViewProvider as any).originalContent = "Original content\n"

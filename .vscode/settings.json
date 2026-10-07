@@ -1,10 +1,11 @@
 // Place your settings in this file to overwrite default and user settings.
 {
 	"files.exclude": {
-		"out": false, // set this to true to hide the "out" folder with the compiled JS files
-		"dist": false, // set this to true to hide the "dist" folder with the compiled JS files
+		"out": false,
+		"dist": false,
 		"deps/vscode/**": true,
-		"jetbrains/host/deps/**": true
+		"jetbrains/host/deps/**": true,
+		".ivol": true
 	},
 	"search.exclude": {
 		"out": true, // set this to false to include "out" folder in search results
@@ -24,5 +25,6 @@
 	"markdown.copyFiles.destination": {
 		"**/*": "/static/img/${documentBaseName}/${documentBaseName}.${fileName/(.*)\\.(.*)/$2/}"
 	},
-	"java.configuration.updateBuildConfiguration": "interactive"
+	"java.configuration.updateBuildConfiguration": "interactive",
+	"java.compile.nullAnalysis.mode": "automatic"
 }

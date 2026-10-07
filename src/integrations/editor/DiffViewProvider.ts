@@ -46,12 +46,26 @@ export class DiffViewProvider {
 		this.taskRef = new WeakRef(task)
 	}
 
-	// kilocode_change start: a failed save must never become a successful tool result or an automatic revert.
+	// kilocode_change start: join an overlapping editor save without forcing or repeating writes.
 	private async saveDocument(document: vscode.TextDocument): Promise<void> {
 		try {
-			if (!(await document.save()) || document.isDirty) {
+			const saved = await document.save()
+			// VS Code can return false while an earlier save is still running its participants.
+			// Observe completion only: another save could persist concurrent user edits.
+			if (document.isDirty && !document.isClosed) {
+				const deadline = Date.now() + 3000
+				while (document.isDirty && !document.isClosed && Date.now() < deadline) {
+					await new Promise<void>((resolve) => setTimeout(resolve, 50))
+				}
+			}
+			if (document.isClosed || document.isDirty) {
 				throw new Error(
-					`Could not save ${document.uri.fsPath}. The unsaved changes remain in the editor; resolve the save conflict before retrying.`,
+					`Could not confirm saving ${document.uri.fsPath}. ` +
+						(saved
+							? "The document changed during or after saving. "
+							: "VS Code did not confirm the save; another save may still be pending, cancelled, or blocked. ") +
+						"Any unsaved changes remain in the editor. Compare the editor with disk before retrying. " +
+						"Do not overwrite, revert, or use terminal/file-system writes to bypass this condition.",
 				)
 			}
 		} catch (error) {
@@ -247,11 +261,10 @@ export class DiffViewProvider {
 
 		const absolutePath = path.resolve(this.cwd, this.relPath)
 		const updatedDocument = this.activeDiffEditor.document
-		const editedContent = updatedDocument.getText()
-
 		if (updatedDocument.isDirty) {
 			await this.saveDocument(updatedDocument) // kilocode_change
 		}
+		const editedContent = updatedDocument.getText() // kilocode_change: include completed save participants.
 
 		await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), { preview: false, preserveFocus: true })
 		await this.closeAllDiffViews()
@@ -559,6 +572,8 @@ export class DiffViewProvider {
 
 			let timeoutId: NodeJS.Timeout | undefined
 			const disposables: vscode.Disposable[] = []
+			// kilocode_change: the preliminary text editor is not the finished diff editor.
+			let diffOpened = false
 
 			const cleanup = () => {
 				if (timeoutId) {
@@ -592,7 +607,8 @@ export class DiffViewProvider {
 							(e) => e.document.uri.scheme === "file" && arePathsEqual(e.document.uri.fsPath, uri.fsPath),
 						)
 
-						if (editor) {
+						if (diffOpened && editor) {
+							// kilocode_change
 							cleanup()
 							resolve(editor)
 						}
@@ -608,7 +624,8 @@ export class DiffViewProvider {
 						const pathMatches = arePathsEqual(e.document.uri.fsPath, uri.fsPath)
 						return isFileScheme && pathMatches
 					})
-					if (editor) {
+					if (diffOpened && editor) {
+						// kilocode_change
 						cleanup()
 						resolve(editor)
 					}
@@ -633,7 +650,18 @@ export class DiffViewProvider {
 				})
 				.then(
 					() => {
-						// Command executed successfully, now wait for the editor to appear
+						// kilocode_change start: reacquire after the diff command, never return the disposed preliminary editor.
+						diffOpened = true
+						const editor = vscode.window.visibleTextEditors.find(
+							(candidate) =>
+								candidate.document.uri.scheme === "file" &&
+								arePathsEqual(candidate.document.uri.fsPath, uri.fsPath),
+						)
+						if (editor) {
+							cleanup()
+							resolve(editor)
+						}
+						// kilocode_change end
 					},
 					(err: any) => {
 						cleanup()
