@@ -3,10 +3,22 @@ import * as vscode from "vscode"
 import { AutocompleteServiceManager } from "./AutocompleteServiceManager"
 import { ClineProvider } from "../../core/webview/ClineProvider"
 import { registerAutocompleteJetbrainsBridge } from "./AutocompleteJetbrainsBridge"
+import { RooCodeEventName } from "@roo-code/types"
 
 export const registerAutocompleteProvider = (context: vscode.ExtensionContext, cline: ClineProvider) => {
 	const autocompleteManager = new AutocompleteServiceManager(context, cline)
 	context.subscriptions.push(autocompleteManager)
+	const reloadProfile = () => {
+		void autocompleteManager
+			.loadIfProfileChanged()
+			.catch((error) => console.error("Failed to switch autocomplete profile:", error))
+	}
+	cline.on(RooCodeEventName.ProviderProfileChanged, reloadProfile)
+	context.subscriptions.push({
+		dispose: () => {
+			cline.off(RooCodeEventName.ProviderProfileChanged, reloadProfile)
+		},
+	})
 
 	// Register JetBrains Bridge if applicable
 	registerAutocompleteJetbrainsBridge(context, cline, autocompleteManager)

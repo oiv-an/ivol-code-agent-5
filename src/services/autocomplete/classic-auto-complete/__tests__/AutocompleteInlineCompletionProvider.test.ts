@@ -65,6 +65,7 @@ vi.mock("vscode", async () => {
 		commands: {
 			...actual.commands,
 			registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
+			executeCommand: vi.fn().mockResolvedValue(undefined),
 		},
 	}
 })
@@ -767,7 +768,7 @@ describe("AutocompleteInlineCompletionProvider", () => {
 	let mockToken: vscode.CancellationToken
 	let mockModel: AutocompleteModel
 	let mockCostTrackingCallback: CostTrackingCallback
-	let mockSettings: { enableAutoTrigger: boolean } | null
+	let mockSettings: { enableAutoTrigger: boolean; fullBlock?: boolean } | null
 	let mockExtensionContext: vscode.ExtensionContext
 	let mockClineProvider: { cwd: string }
 	let mockTelemetry: AutocompleteTelemetry
@@ -904,6 +905,32 @@ describe("AutocompleteInlineCompletionProvider", () => {
 			expect(result).toHaveLength(0)
 		})
 
+		it.each(["console", "myFunction(first,"])("requests automatic completion after %s", async (prefix) => {
+			const document = new MockTextDocument(vscode.Uri.file("/test.ts"), prefix)
+			const context = { ...mockContext, triggerKind: vscode.InlineCompletionTriggerKind.Automatic }
+			await provideWithDebounce(document, new vscode.Position(0, prefix.length), context, mockToken)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(1)
+		})
+
+		it("manual invocation bypasses the automatic end-of-statement filter", async () => {
+			const document = new MockTextDocument(vscode.Uri.file("/test.ts"), "call();")
+			const position = new vscode.Position(0, 7)
+			await provideWithDebounce(
+				document,
+				position,
+				{ ...mockContext, triggerKind: vscode.InlineCompletionTriggerKind.Automatic },
+				mockToken,
+			)
+			expect(mockModel.generateResponse).not.toHaveBeenCalled()
+			await provideWithDebounce(
+				document,
+				position,
+				{ ...mockContext, triggerKind: vscode.InlineCompletionTriggerKind.Invoke },
+				mockToken,
+			)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(1)
+		})
+
 		it("should return inline completion item when FIM content is available and prefix/suffix match", async () => {
 			const fimContent = {
 				text: "console.log('Hello, World!');",
@@ -929,7 +956,7 @@ describe("AutocompleteInlineCompletionProvider", () => {
 			})
 		})
 
-		it("should truncate cached multi-line suggestions to first line when cursor is mid-line", async () => {
+		it("shows full cached blocks by default and supports opting back into first-line suggestions", async () => {
 			provider.updateSuggestions({
 				text: "line1\nline2\nline3",
 				prefix: "const x = 1",
@@ -944,7 +971,17 @@ describe("AutocompleteInlineCompletionProvider", () => {
 			)) as vscode.InlineCompletionItem[]
 
 			expect(result).toHaveLength(1)
-			expect(result[0].insertText).toBe("line1")
+			expect(result[0].insertText).toBe("line1\nline2\nline3")
+			mockSettings = { enableAutoTrigger: true, fullBlock: false }
+			const singleLine = (await provideWithDebounce(
+				mockDocument,
+				mockPosition,
+				mockContext,
+				mockToken,
+			)) as vscode.InlineCompletionItem[]
+			expect(singleLine[0].insertText).toBe("line1")
+			provider.resetModelCache()
+			expect(provider.suggestionsHistory).toEqual([])
 		})
 
 		it("should return empty array when prefix does not match", async () => {
@@ -1954,6 +1991,163 @@ describe("AutocompleteInlineCompletionProvider", () => {
 			// Should return the completion because untitled documents are always allowed
 			expect(result).toHaveLength(1)
 			expect(result[0].insertText).toBe("console.log('test');")
+		})
+	})
+
+	describe("request lifecycle regressions", () => {
+		it("uses the selected IntelliSense range only for a compatible extension", () => {
+			const doc = new MockTextDocument(vscode.Uri.file("/test.ts"), "l")
+			const pos = new vscode.Position(0, 1)
+			const selected = { range: new vscode.Range(new vscode.Position(0, 0), pos), text: "let" }
+			const items = stringToInlineCompletions("et value = 1", pos, doc, selected)
+			expect(items[0].insertText).toBe("let value = 1")
+			expect(items[0].range).toEqual(selected.range)
+			expect(stringToInlineCompletions("og()", pos, doc, selected)).toEqual([])
+		})
+
+		it.each(["cancel", "version", "model", "dispose"])(
+			"discards a late response after %s without forcing a retrigger",
+			async (change) => {
+				let finish!: () => void
+				vi.mocked(mockModel.generateResponse).mockImplementation(async (_system, _user, onChunk) => {
+					await new Promise<void>((resolve) => {
+						finish = resolve
+					})
+					onChunk?.({ type: "text", text: "<COMPLETION> + 10</COMPLETION>" })
+					return { cost: 0, inputTokens: 1, outputTokens: 1, cacheWriteTokens: 0, cacheReadTokens: 0 }
+				})
+				const token = { isCancellationRequested: false } as vscode.CancellationToken
+				const result = provider.provideInlineCompletionItems(mockDocument, mockPosition, mockContext, token)
+				await vi.advanceTimersByTimeAsync(50)
+				if (change === "cancel") (token as { isCancellationRequested: boolean }).isCancellationRequested = true
+				if (change === "version") Object.defineProperty(mockDocument, "version", { value: 99 })
+				if (change === "model") provider.resetModelCache()
+				if (change === "dispose") provider.dispose()
+				const commands = vi.mocked(vscode.commands.executeCommand).mock.calls.length
+				finish()
+				expect(await result).toEqual([])
+				expect(vi.mocked(vscode.commands.executeCommand).mock.calls.length).toBe(commands)
+				if (change === "model" || change === "dispose") expect(provider.suggestionsHistory).toEqual([])
+			},
+		)
+
+		it("rejects a moved cursor even if the editor has not cancelled its token yet", async () => {
+			let finish!: () => void
+			const editor = { document: mockDocument, selection: { active: mockPosition } }
+			Object.defineProperty(vscode.window, "activeTextEditor", { configurable: true, value: editor })
+			try {
+				vi.mocked(mockModel.generateResponse).mockImplementation(async (_system, _user, onChunk) => {
+					await new Promise<void>((resolve) => {
+						finish = resolve
+					})
+					onChunk?.({ type: "text", text: "<COMPLETION> + 10</COMPLETION>" })
+					return { cost: 0, inputTokens: 1, outputTokens: 1, cacheWriteTokens: 0, cacheReadTokens: 0 }
+				})
+				const result = provider.provideInlineCompletionItems(mockDocument, mockPosition, mockContext, mockToken)
+				await vi.advanceTimersByTimeAsync(50)
+				editor.selection.active = new vscode.Position(0, 0)
+				finish()
+				expect(await result).toEqual([])
+			} finally {
+				Object.defineProperty(vscode.window, "activeTextEditor", { configurable: true, value: null })
+			}
+		})
+
+		it("keeps generated cache entries scoped to their document", async () => {
+			vi.mocked(mockModel.generateResponse).mockImplementation(async (_system, _user, onChunk) => {
+				onChunk?.({ type: "text", text: "<COMPLETION> + 10</COMPLETION>" })
+				return { cost: 0, inputTokens: 1, outputTokens: 1, cacheWriteTokens: 0, cacheReadTokens: 0 }
+			})
+			await provideWithDebounce(mockDocument, mockPosition, mockContext, mockToken)
+			const other = new MockTextDocument(vscode.Uri.file("/other.ts"), mockDocument.getText())
+			await provideWithDebounce(other, mockPosition, mockContext, mockToken)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(2)
+			await provideWithDebounce(mockDocument, mockPosition, mockContext, mockToken)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(2)
+		})
+
+		it("serializes unrelated slow requests and retains only the latest queued request", async () => {
+			let finish!: () => void
+			vi.mocked(mockModel.generateResponse).mockImplementation(async () => {
+				await new Promise<void>((resolve) => {
+					finish = resolve
+				})
+				return { cost: 0, inputTokens: 1, outputTokens: 1, cacheWriteTokens: 0, cacheReadTokens: 0 }
+			})
+			const first = provider.provideInlineCompletionItems(mockDocument, mockPosition, mockContext, mockToken)
+			await vi.advanceTimersByTimeAsync(50)
+			const second = provider.provideInlineCompletionItems(
+				new MockTextDocument(vscode.Uri.file("/b.ts"), "const b = 2"),
+				mockPosition,
+				mockContext,
+				mockToken,
+			)
+			await vi.advanceTimersByTimeAsync(400)
+			const third = provider.provideInlineCompletionItems(
+				new MockTextDocument(vscode.Uri.file("/c.ts"), "const c = 3"),
+				mockPosition,
+				mockContext,
+				mockToken,
+			)
+			await vi.advanceTimersByTimeAsync(400)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(1)
+			finish()
+			await first
+			await second
+			await vi.advanceTimersByTimeAsync(0)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(2)
+			finish()
+			await third
+		})
+
+		it("shares a slow leading request with the replacement editor request", async () => {
+			let finish!: () => void
+			vi.mocked(mockModel.generateResponse).mockImplementation(async (_system, _user, onChunk) => {
+				await new Promise<void>((resolve) => {
+					finish = resolve
+				})
+				onChunk?.({ type: "text", text: "<COMPLETION> + 10</COMPLETION>" })
+				return { cost: 0, inputTokens: 1, outputTokens: 1, cacheWriteTokens: 0, cacheReadTokens: 0 }
+			})
+			const oldToken = { isCancellationRequested: false } as vscode.CancellationToken
+			const old = provider.provideInlineCompletionItems(mockDocument, mockPosition, mockContext, oldToken)
+			await vi.advanceTimersByTimeAsync(50)
+			;(oldToken as { isCancellationRequested: boolean }).isCancellationRequested = true
+			const current = provider.provideInlineCompletionItems(mockDocument, mockPosition, mockContext, mockToken)
+			await vi.advanceTimersByTimeAsync(1000)
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(1)
+			finish()
+			expect(await old).toEqual([])
+			const items = (await current) as vscode.InlineCompletionItem[]
+			expect(items[0]?.insertText).toBe(" + 10")
+		})
+
+		it("settles a replaced debounce waiter instead of leaking it", async () => {
+			await provideWithDebounce(mockDocument, mockPosition, mockContext, mockToken)
+			let settled = false
+			const other = new MockTextDocument(vscode.Uri.file("/other.ts"), "const a = 1")
+			const abandoned = provider.provideInlineCompletionItems(other, mockPosition, mockContext, mockToken)
+			void abandoned.then(() => {
+				settled = true
+			})
+			await vi.advanceTimersByTimeAsync(100)
+			const latest = new MockTextDocument(vscode.Uri.file("/latest.ts"), "const b = 2")
+			const current = provider.provideInlineCompletionItems(latest, mockPosition, mockContext, mockToken)
+			await vi.advanceTimersByTimeAsync(1000)
+			expect(settled).toBe(true)
+			await Promise.all([abandoned, current])
+		})
+
+		it("does not send a queued request cancelled before its debounce expires", async () => {
+			await provideWithDebounce(mockDocument, mockPosition, mockContext, mockToken)
+			const token = { isCancellationRequested: false } as vscode.CancellationToken
+			const other = new MockTextDocument(vscode.Uri.file("/other.ts"), "const a = 1")
+			const pending = provider.provideInlineCompletionItems(other, mockPosition, mockContext, token)
+			await vi.advanceTimersByTimeAsync(100)
+			;(token as { isCancellationRequested: boolean }).isCancellationRequested = true
+			await vi.advanceTimersByTimeAsync(1000)
+			await pending
+			expect(mockModel.generateResponse).toHaveBeenCalledTimes(1)
 		})
 	})
 

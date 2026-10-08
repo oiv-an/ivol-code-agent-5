@@ -57,6 +57,33 @@ describe("HoleFiller", () => {
 		holeFiller = new HoleFiller(mockContextProvider)
 	})
 
+	it("requests a short finished block while preserving the XML parser contract", () => {
+		const prompt = holeFiller.getSystemInstructions()
+		expect(prompt).toContain("smallest useful coherent code block")
+		expect(prompt).toContain("within 256 tokens, including the closing </COMPLETION> tag")
+		expect(prompt).toContain("without Markdown fences or explanations")
+		expect(parseAutocompleteResponse("<COMPLETION>if (ready) {\n\trun()\n}</COMPLETION>", "", "").text).toBe(
+			"if (ready) {\n\trun()\n}",
+		)
+	})
+
+	it("reports response stages without logging source or reasoning content", async () => {
+		const diagnostic = vi.fn()
+		const model = {
+			generateResponse: vi.fn(async (_system, _user, onChunk) => {
+				onChunk({ type: "reasoning", text: "private reasoning" })
+				onChunk({ type: "text", text: "<COMPLETION>private source</COMPLETION>" })
+				return { cost: 0, inputTokens: 10, outputTokens: 5, cacheWriteTokens: 0, cacheReadTokens: 0 }
+			}),
+		}
+		const prompt = await holeFiller.getPrompts(createAutocompleteInput(), "typescript")
+		await holeFiller.getFromChat(model as any, prompt, () => ({ text: "", prefix: "", suffix: "" }), diagnostic)
+		expect(diagnostic).toHaveBeenCalledWith(
+			"Response format: text=39, reasoning=17, tagged=true, fenced=false, parsed=14, filtered=0",
+		)
+		expect(JSON.stringify(diagnostic.mock.calls)).not.toContain("private")
+	})
+
 	describe("getPrompts", () => {
 		it("should generate prompts with QUERY/FILL_HERE format", async () => {
 			const { systemPrompt, userPrompt } = await holeFiller.getPrompts(

@@ -54,11 +54,27 @@ vi.mock("@/hooks/useKeybindings", () => ({
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
 		kiloCodeWrapperProperties: undefined,
+		apiConfiguration: { apiProvider: "openai", openAiModelId: "chat-model" },
+		currentApiConfigName: "Proxy",
+		listApiConfigMeta: [{ id: "proxy", name: "Proxy", apiProvider: "openai" }],
 	}),
+}))
+
+vi.mock("../../hooks/useOpenAiModels", () => ({
+	useOpenAiModels: () => ({ data: { luna: {}, "chat-model": {} }, refetch: vi.fn() }),
+}))
+vi.mock("@/components/ui/hooks/useRouterModels", () => ({
+	useRouterModels: () => ({ data: {}, refetch: vi.fn() }),
 }))
 
 // Mock VSCode webview-ui-toolkit components for testing
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
+	VSCodeTextField: ({ value, onInput, children, disabled }: any) => (
+		<label>
+			{children}
+			<input value={value} onInput={onInput} onChange={() => {}} disabled={disabled} />
+		</label>
+	),
 	VSCodeCheckbox: ({ checked, onChange, children }: any) => (
 		<label>
 			<input
@@ -84,6 +100,16 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 
 // Mock the UI components
 vi.mock("@src/components/ui", () => ({
+	SearchableSelect: ({ value, onValueChange, options }: any) => (
+		<select aria-label="autocomplete-model" value={value} onChange={(event) => onValueChange(event.target.value)}>
+			<option value="">Choose</option>
+			{options.map((option: any) => (
+				<option key={option.value} value={option.value}>
+					{option.label}
+				</option>
+			))}
+		</select>
+	),
 	Slider: ({ value, onValueChange, disabled }: any) => (
 		<input
 			type="range"
@@ -144,6 +170,24 @@ const renderComponentWithSearch = (
 }
 
 describe("AutocompleteServiceSettingsView", () => {
+	it("selects a provider model independently and preserves other profile selections", () => {
+		const onChange = vi.fn()
+		renderComponent({
+			ghostServiceSettings: {
+				useCurrentProvider: true,
+				currentProviderModels: { other: { provider: "openai", modelId: "other-model" } },
+			},
+			onAutocompleteServiceSettingsChange: onChange,
+		})
+		fireEvent.change(screen.getByLabelText("autocomplete-model"), { target: { value: "luna" } })
+		expect(onChange).toHaveBeenCalledWith("currentProviderModels", {
+			other: { provider: "openai", modelId: "other-model" },
+			proxy: { provider: "openai", modelId: "luna" },
+		})
+		expect(
+			screen.queryByText("kilocode:autocomplete.settings.noModelConfigured.description"),
+		).not.toBeInTheDocument()
+	})
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()

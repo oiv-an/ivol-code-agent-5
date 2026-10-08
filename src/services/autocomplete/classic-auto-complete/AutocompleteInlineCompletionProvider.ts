@@ -150,8 +150,9 @@ export function findMatchingSuggestion(
 export function applyFirstLineOnly(
 	result: MatchingSuggestionWithFillIn | null,
 	prefix: string,
+	fullBlock = false,
 ): MatchingSuggestionWithFillIn | null {
-	if (result === null || result.text === "") {
+	if (fullBlock || result === null || result.text === "") {
 		return result
 	}
 	if (shouldShowOnlyFirstLine(prefix, result.text)) {
@@ -243,12 +244,34 @@ export function getFirstLine(text: string): string {
 	return text.split(/\r?\n/, 1)[0]
 }
 
-export function stringToInlineCompletions(text: string, position: vscode.Position): vscode.InlineCompletionItem[] {
+export function stringToInlineCompletions(
+	text: string,
+	position: vscode.Position,
+	document?: vscode.TextDocument,
+	selected?: vscode.SelectedCompletionInfo,
+): vscode.InlineCompletionItem[] {
 	if (text === "") {
 		return []
 	}
 
-	const item = new vscode.InlineCompletionItem(text, new vscode.Range(position, position), {
+	let range = new vscode.Range(position, position)
+	if (selected && document) {
+		// VS Code only previews an extension of the selected IntelliSense item with the same range.
+		// Never manufacture a different completion just to make an incompatible item visible.
+		if (
+			selected.range.start.line !== position.line ||
+			selected.range.end.line !== position.line ||
+			selected.range.start.character > position.character ||
+			selected.range.end.character < position.character
+		)
+			return []
+		const before = document.getText(new vscode.Range(selected.range.start, position))
+		const after = document.getText(new vscode.Range(position, selected.range.end))
+		text = before + text + after
+		if (!text.startsWith(selected.text)) return []
+		range = selected.range
+	}
+	const item = new vscode.InlineCompletionItem(text, range, {
 		command: INLINE_COMPLETION_ACCEPTED_COMMAND,
 		title: "Autocomplete Accepted",
 	})
@@ -258,7 +281,18 @@ export function stringToInlineCompletions(text: string, position: vscode.Positio
 export class AutocompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
 	public suggestionsHistory: FillInAtCursorSuggestion[] = []
 	/** Tracks all pending/in-flight requests */
-	private pendingRequests: PendingRequest[] = []
+	private pendingRequests: (PendingRequest & { scope: string; waiters: (() => boolean)[] })[] = []
+	private cancelDebounce: (() => void) | null = null
+	private activeFetch: Promise<void> | null = null
+	private suggestionScopes = new WeakMap<FillInAtCursorSuggestion, string>()
+
+	private suggestionsForDocument(scope: string): FillInAtCursorSuggestion[] {
+		return this.suggestionsHistory.filter((suggestion) => {
+			const owner = this.suggestionScopes.get(suggestion)
+			return owner === undefined || owner === scope
+		})
+	}
+	private disposed = false
 	public holeFiller: HoleFiller // publicly exposed for Jetbrains autocomplete code
 	public fimPromptBuilder: FimPromptBuilder // publicly exposed for Jetbrains autocomplete code
 	private model: AutocompleteModel
@@ -275,6 +309,17 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 	private telemetry: AutocompleteTelemetry | null
 	/** Information about the last suggestion shown to the user */
 	private lastSuggestion: LastSuggestionInfo | null = null
+	private diagnosticLog: (message: string) => void = () => {}
+	private lastDiagnostic = ""
+	private lastDiagnosticTime = 0
+
+	private trace(message: string): void {
+		// No source text, paths, credentials or raw provider errors in diagnostic output.
+		if (message === this.lastDiagnostic && Date.now() - this.lastDiagnosticTime < 2000) return
+		this.lastDiagnostic = message
+		this.lastDiagnosticTime = Date.now()
+		this.diagnosticLog(`[Autocomplete] ${message}`)
+	}
 
 	constructor(
 		context: vscode.ExtensionContext,
@@ -284,6 +329,7 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		cline: ClineProvider,
 		telemetry: AutocompleteTelemetry | null = null,
 	) {
+		this.diagnosticLog = (message) => cline.log?.(message)
 		this.telemetry = telemetry
 		this.model = model
 		this.costTrackingCallback = costTrackingCallback
@@ -315,12 +361,24 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		)
 	}
 
+	private configurationGeneration = 0
+
+	public resetModelCache(): void {
+		this.configurationGeneration++
+		this.suggestionsHistory = []
+		this.cancelDebounce?.()
+		this.pendingRequests = []
+		this.lastSuggestion = null
+		this.telemetry?.cancelVisibilityTracking()
+	}
+
 	public updateSuggestions(fillInAtCursor: FillInAtCursorSuggestion): void {
 		const isDuplicate = this.suggestionsHistory.some(
 			(existing) =>
 				existing.text === fillInAtCursor.text &&
 				existing.prefix === fillInAtCursor.prefix &&
-				existing.suffix === fillInAtCursor.suffix,
+				existing.suffix === fillInAtCursor.suffix &&
+				this.suggestionScopes.get(existing) === this.suggestionScopes.get(fillInAtCursor),
 		)
 
 		if (isDuplicate) {
@@ -428,10 +486,8 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 	}
 
 	public dispose(): void {
-		if (this.debounceTimer !== null) {
-			clearTimeout(this.debounceTimer)
-			this.debounceTimer = null
-		}
+		this.disposed = true
+		this.resetModelCache()
 		this.telemetry?.dispose()
 		this.recentlyVisitedRangesService.dispose()
 		this.recentlyEditedTracker.dispose()
@@ -448,10 +504,12 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		_context: vscode.InlineCompletionContext,
 		_token: vscode.CancellationToken,
 	): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList> {
+		this.trace("Editor requested inline completion")
 		const settings = this.getSettings()
 		const isAutoTriggerEnabled = settings?.enableAutoTrigger ?? false
 
 		if (!isAutoTriggerEnabled) {
+			this.trace("Skipped: editor autocomplete disabled")
 			return []
 		}
 
@@ -464,6 +522,23 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		_context: vscode.InlineCompletionContext,
 		_token: vscode.CancellationToken,
 	): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList> {
+		if (!document?.uri?.fsPath) return []
+		const version = document.version
+		const generation = this.configurationGeneration
+		const scope = document.uri.toString()
+		const editor = vscode.window.activeTextEditor
+		const tracksEditor = editor?.document === document
+		const isCurrent = () =>
+			!this.disposed &&
+			!_token.isCancellationRequested &&
+			generation === this.configurationGeneration &&
+			document.version === version &&
+			!document.isClosed &&
+			(!tracksEditor ||
+				(vscode.window.activeTextEditor === editor &&
+					editor.selection.active.line === position.line &&
+					editor.selection.active.character === position.character))
+		if (!isCurrent()) return []
 		// Build telemetry context
 		const telemetryContext: AutocompleteContext = {
 			languageId: document.languageId,
@@ -474,6 +549,7 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		this.telemetry?.captureSuggestionRequested(telemetryContext)
 
 		if (!this.model || !this.model.hasValidCredentials()) {
+			this.trace("Skipped: no configured autocomplete model")
 			// bail if no model is available or no valid API credentials configured
 			// this prevents errors when autocomplete is enabled but no provider is set up
 			return []
@@ -495,12 +571,14 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 					])
 
 					if (!controller) {
+						this.trace("Skipped: file access check not ready")
 						// If promise hasn't resolved yet, assume file is ignored
 						return []
 					}
 
 					const isAccessible = controller.validateAccess(document.fileName)
 					if (!isAccessible) {
+						this.trace("Skipped: file excluded by ignore rules")
 						return []
 					}
 				} catch (error) {
@@ -510,12 +588,14 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 				}
 			}
 
+			if (!isCurrent()) return []
 			const { prefix, suffix } = extractPrefixSuffix(document, position)
 
 			// Check cache first - allow mid-word lookups from cache
 			const matchingResult = applyFirstLineOnly(
-				findMatchingSuggestion(prefix, suffix, this.suggestionsHistory),
+				findMatchingSuggestion(prefix, suffix, this.suggestionsForDocument(scope)),
 				prefix,
+				this.getSettings()?.fullBlock ?? true,
 			)
 
 			if (matchingResult !== null) {
@@ -525,27 +605,50 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 				}
 				this.telemetry?.captureCacheHit(matchingResult.matchType, telemetryContext, matchingResult.text.length)
 				this.telemetry?.startVisibilityTracking(matchingResult.fillInAtCursor, "cache", telemetryContext)
-				return stringToInlineCompletions(matchingResult.text, position)
+				return stringToInlineCompletions(
+					matchingResult.text,
+					position,
+					document,
+					_context.selectedCompletionInfo,
+				)
 			}
 
 			this.telemetry?.cancelVisibilityTracking() // No suggestion to show - cancel any pending visibility tracking
 
 			// Only skip new LLM requests during mid-word typing or at end of statement
 			// Cache lookups above are still allowed
-			if (shouldSkipAutocomplete(prefix, suffix, document.languageId)) {
+			if (
+				_context.triggerKind !== vscode.InlineCompletionTriggerKind.Invoke &&
+				shouldSkipAutocomplete(prefix, suffix, document.languageId)
+			) {
+				this.trace("Skipped: automatic context filter (manual invocation can bypass it)")
 				return []
 			}
 
+			this.trace("Preparing code context")
 			const { prompt, prefix: promptPrefix, suffix: promptSuffix } = await this.getPrompt(document, position)
+			if (!isCurrent() || promptPrefix !== prefix || promptSuffix !== suffix) return []
 
 			// Update context with strategy now that we know it
 			telemetryContext.strategy = prompt.strategy
 
-			await this.debouncedFetchAndCacheSuggestion(prompt, promptPrefix, promptSuffix, document.languageId)
+			await this.debouncedFetchAndCacheSuggestion(
+				prompt,
+				promptPrefix,
+				promptSuffix,
+				document.languageId,
+				scope,
+				isCurrent,
+			)
+			if (!isCurrent()) {
+				this.trace("Discarded: editor cancelled request, document or model changed")
+				return []
+			}
 
 			const cachedResult = applyFirstLineOnly(
-				findMatchingSuggestion(prefix, suffix, this.suggestionsHistory),
+				findMatchingSuggestion(prefix, suffix, this.suggestionsForDocument(scope)),
 				prefix,
+				this.getSettings()?.fullBlock ?? true,
 			)
 			if (cachedResult) {
 				this.lastSuggestion = {
@@ -558,10 +661,20 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 				this.telemetry?.cancelVisibilityTracking() // No suggestion to show - cancel any pending visibility tracking
 			}
 
-			return stringToInlineCompletions(cachedResult?.text ?? "", position)
+			const items = stringToInlineCompletions(
+				cachedResult?.text ?? "",
+				position,
+				document,
+				_context.selectedCompletionInfo,
+			)
+			this.trace(
+				items.length ? "Completion ready for editor" : "No compatible completion for current editor context",
+			)
+			return items
 		} catch (error) {
 			// only big catch at the top of the call-chain, if anything goes wrong at a lower level
 			// do not catch, just let the error cascade
+			this.trace("Failed before displaying completion (context preparation or editor integration)")
 			console.error("[AutocompleteInlineCompletionProvider] Error providing inline completion:", error)
 			return []
 		}
@@ -576,10 +689,10 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 	 *
 	 * @returns The covering pending request, or null if none found
 	 */
-	private findCoveringPendingRequest(prefix: string, suffix: string): PendingRequest | null {
+	private findCoveringPendingRequest(prefix: string, suffix: string, scope: string) {
 		for (const pendingRequest of this.pendingRequests) {
 			// Suffix must match exactly (text after cursor unchanged)
-			if (suffix !== pendingRequest.suffix) {
+			if (scope !== pendingRequest.scope || suffix !== pendingRequest.suffix) {
 				continue
 			}
 
@@ -596,7 +709,7 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 	 * Remove a pending request from the list when it completes.
 	 */
 	private removePendingRequest(request: PendingRequest): void {
-		const index = this.pendingRequests.indexOf(request)
+		const index = this.pendingRequests.findIndex((pending) => pending === request)
 		if (index !== -1) {
 			this.pendingRequests.splice(index, 1)
 		}
@@ -613,50 +726,67 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		prefix: string,
 		suffix: string,
 		languageId: string,
+		scope: string,
+		isCurrent: () => boolean,
 	): Promise<void> {
-		// Check if any existing pending request covers this one
-		const coveringRequest = this.findCoveringPendingRequest(prefix, suffix)
+		const generation = this.configurationGeneration
+		const coveringRequest = this.findCoveringPendingRequest(prefix, suffix, scope)
 		if (coveringRequest) {
-			// Wait for the existing request to complete - no need to start a new one
+			coveringRequest.waiters.push(isCurrent)
 			return coveringRequest.promise
 		}
 
-		// If this is the first call (no pending debounce), execute immediately
-		if (this.isFirstCall && this.debounceTimer === null) {
-			this.isFirstCall = false
-			return this.fetchAndCacheSuggestion(prompt, prefix, suffix, languageId)
-		}
-
-		// Clear any existing timer (reset the debounce)
-		if (this.debounceTimer !== null) {
-			clearTimeout(this.debounceTimer)
-		}
-
-		// Create the pending request object first so we can reference it in the cleanup
-		const pendingRequest: PendingRequest = {
+		const leading = this.isFirstCall && !this.activeFetch
+		this.cancelDebounce?.()
+		this.isFirstCall = false
+		let resolve!: () => void
+		let reject!: (error: unknown) => void
+		const pendingRequest = {
 			prefix,
 			suffix,
-			promise: null!, // Will be set immediately below
+			scope,
+			waiters: [isCurrent],
+			promise: new Promise<void>((res, rej) => {
+				resolve = res
+				reject = rej
+			}),
 		}
-
-		const requestPromise = new Promise<void>((resolve) => {
-			this.debounceTimer = setTimeout(async () => {
-				this.debounceTimer = null
-				this.isFirstCall = true // Reset for next sequence
-				await this.fetchAndCacheSuggestion(prompt, prefix, suffix, languageId)
-				// Remove this request from pending when done
-				this.removePendingRequest(pendingRequest)
-				resolve()
-			}, this.debounceDelayMs)
-		})
-
-		// Complete the pending request object
-		pendingRequest.promise = requestPromise
-
-		// Add to the list of pending requests
 		this.pendingRequests.push(pendingRequest)
-
-		return requestPromise
+		let cancelled = false
+		const cancel = () => {
+			cancelled = true
+			if (this.debounceTimer) clearTimeout(this.debounceTimer)
+			this.debounceTimer = null
+			this.cancelDebounce = null
+			this.removePendingRequest(pendingRequest)
+			resolve()
+		}
+		this.cancelDebounce = cancel
+		const run = async () => {
+			this.debounceTimer = null
+			// Keep at most one network request active, plus one replaceable trailing request.
+			if (this.activeFetch) await this.activeFetch
+			if (cancelled) return
+			this.cancelDebounce = null
+			if (!leading) this.isFirstCall = true
+			if (generation !== this.configurationGeneration || !pendingRequest.waiters.some((current) => current()))
+				return
+			const fetch = this.fetchAndCacheSuggestion(prompt, prefix, suffix, languageId, scope)
+			this.activeFetch = fetch
+			try {
+				await fetch
+			} finally {
+				if (this.activeFetch === fetch) this.activeFetch = null
+			}
+		}
+		const start = () => {
+			void run()
+				.then(resolve, reject)
+				.finally(() => this.removePendingRequest(pendingRequest))
+		}
+		if (leading) start()
+		else this.debounceTimer = setTimeout(start, this.debounceDelayMs)
+		return pendingRequest.promise
 	}
 
 	public async fetchAndCacheSuggestion(
@@ -664,8 +794,10 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 		prefix: string,
 		suffix: string,
 		languageId: string,
+		scope?: string,
 	): Promise<void> {
 		const startTime = performance.now()
+		const generation = this.configurationGeneration
 
 		// Build telemetry context for this request
 		const telemetryContext: AutocompleteContext = {
@@ -687,12 +819,18 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 			const curriedProcessSuggestion = (text: string) =>
 				this.processSuggestion(text, prefix, suffix, this.model, telemetryContext, languageId)
 
+			this.trace(`Request started: strategy=${prompt.strategy}`)
 			const result =
 				prompt.strategy === "fim"
 					? await this.fimPromptBuilder.getFromFIM(this.model, prompt, curriedProcessSuggestion)
-					: await this.holeFiller.getFromChat(this.model, prompt, curriedProcessSuggestion)
+					: await this.holeFiller.getFromChat(this.model, prompt, curriedProcessSuggestion, (message) =>
+							this.trace(message),
+						)
 
 			const latencyMs = performance.now() - startTime
+			this.trace(
+				`Request finished: ${Math.round(latencyMs)}ms, suggestion=${result.suggestion.text.length} characters, output=${result.outputTokens} tokens`,
+			)
 
 			this.telemetry?.captureLlmRequestCompleted(
 				{
@@ -710,8 +848,12 @@ export class AutocompleteInlineCompletionProvider implements vscode.InlineComple
 			this.costTrackingCallback(result.cost, result.inputTokens, result.outputTokens)
 
 			// Always update suggestions, even if text is empty (for caching)
-			this.updateSuggestions(result.suggestion)
+			if (generation === this.configurationGeneration) {
+				if (scope !== undefined) this.suggestionScopes.set(result.suggestion, scope)
+				this.updateSuggestions(result.suggestion)
+			}
 		} catch (error) {
+			this.trace("Request failed; no suggestion returned")
 			const latencyMs = performance.now() - startTime
 			this.telemetry?.captureLlmRequestFailed(
 				{

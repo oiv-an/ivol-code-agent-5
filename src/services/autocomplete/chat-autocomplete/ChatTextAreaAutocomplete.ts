@@ -6,6 +6,8 @@ import { removePrefixOverlap } from "../continuedev/core/autocomplete/postproces
 import { AutocompleteTelemetry } from "../classic-auto-complete/AutocompleteTelemetry"
 import { postprocessAutocompleteSuggestion } from "../classic-auto-complete/uselessSuggestionFilter"
 
+import { ContextProxy } from "../../../core/config/ContextProxy"
+
 export class ChatTextAreaAutocomplete {
 	private model: AutocompleteModel
 	private providerSettingsManager: ProviderSettingsManager
@@ -18,7 +20,11 @@ export class ChatTextAreaAutocomplete {
 	}
 
 	async initialize(): Promise<boolean> {
-		return this.model.reload(this.providerSettingsManager)
+		const settings = ContextProxy.instance.getGlobalState("ghostServiceSettings")
+		const name = ContextProxy.instance.getGlobalState("currentApiConfigName")
+		const profile =
+			settings?.useCurrentProvider && name ? await this.providerSettingsManager.getProfile({ name }) : undefined
+		return this.model.reload(this.providerSettingsManager, settings, profile)
 	}
 
 	async getCompletion(userText: string, visibleCodeContext?: VisibleCodeContext): Promise<{ suggestion: string }> {

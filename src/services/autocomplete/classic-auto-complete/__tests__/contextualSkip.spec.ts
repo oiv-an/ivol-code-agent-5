@@ -106,9 +106,8 @@ describe("shouldSkipAutocomplete - end of statement detection", () => {
 			expect(shouldSkipAutocomplete("<br />", "\n", languageId)).toBe(false)
 		})
 
-		it("should skip when cursor is mid-word in incomplete tag", () => {
-			// Mid-word typing is blocked (word length > 2)
-			expect(shouldSkipAutocomplete("<div", "\n", languageId)).toBe(true)
+		it("allows completion at the end of an incomplete tag", () => {
+			expect(shouldSkipAutocomplete("<div", "\n", languageId)).toBe(false)
 		})
 
 		it("should NOT skip when cursor is after equals in attribute", () => {
@@ -147,9 +146,8 @@ describe("shouldSkipAutocomplete - end of statement detection", () => {
 			expect(shouldSkipAutocomplete("SELECT * FROM users;", "\n", languageId)).toBe(true)
 		})
 
-		it("should skip when cursor is mid-word in incomplete statement", () => {
-			// "FROM" is mid-word typing (word length > 2)
-			expect(shouldSkipAutocomplete("SELECT * FROM", "\n", languageId)).toBe(true)
+		it("allows completion after an incomplete SQL statement", () => {
+			expect(shouldSkipAutocomplete("SELECT * FROM", "\n", languageId)).toBe(false)
 		})
 
 		it("should NOT skip when cursor is after space in incomplete statement", () => {
@@ -290,10 +288,10 @@ describe("shouldSkipAutocomplete - end of statement detection", () => {
 })
 
 describe("shouldSkipAutocomplete - mid-word typing", () => {
-	it("should skip when typing in the middle of a long word", () => {
-		expect(shouldSkipAutocomplete("myVaria", "\n", "typescript")).toBe(true)
-		expect(shouldSkipAutocomplete("functionN", "\n", "typescript")).toBe(true)
-		expect(shouldSkipAutocomplete("console", "\n", "typescript")).toBe(true)
+	it("allows completion after three or more identifier characters", () => {
+		expect(shouldSkipAutocomplete("myVaria", "\n", "typescript")).toBe(false)
+		expect(shouldSkipAutocomplete("functionN", "\n", "typescript")).toBe(false)
+		expect(shouldSkipAutocomplete("console", "\n", "typescript")).toBe(false)
 	})
 
 	it("should NOT skip for short words (1-2 chars)", () => {

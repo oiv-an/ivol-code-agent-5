@@ -25,7 +25,7 @@ interface UseChatAutocompleteTextReturn {
  */
 export function useChatAutocompleteText({
 	textAreaRef,
-	enableChatAutocomplete = true,
+	enableChatAutocomplete = false, // kilocode_change: require explicit opt-in
 }: UseChatAutocompleteTextOptions): UseChatAutocompleteTextReturn {
 	const [autocompleteText, setAutocompleteText] = useState<string>("")
 	const isFocusedRef = useRef<boolean>(false)

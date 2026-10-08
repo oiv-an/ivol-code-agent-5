@@ -18,6 +18,7 @@ import { VSCodeCheckbox, VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vsc
 import { useKeybindings } from "@/hooks/useKeybindings"
 import { useExtensionState } from "../../../context/ExtensionStateContext"
 import { isPersonalProvider, PROVIDERS } from "../../settings/constants"
+import { AutocompleteModelPicker } from "./AutocompleteModelPicker"
 
 type AutocompleteServiceSettingsViewProps = HTMLAttributes<HTMLDivElement> & {
 	ghostServiceSettings: AutocompleteServiceSettings
@@ -259,43 +260,65 @@ export const AutocompleteServiceSettingsView = ({
 							</div>
 						</div>
 
-						<div className="text-sm">
-							{provider && model && isPersonalProvider(provider) ? (
-								<>
-									<div className="text-vscode-descriptionForeground">
-										<span className="font-medium">
-											{t("kilocode:autocomplete.settings.provider")}:
-										</span>{" "}
-										{provider}
+						<VSCodeCheckbox
+							checked={ghostServiceSettings?.useCurrentProvider ?? false}
+							onChange={(event: any) =>
+								onAutocompleteServiceSettingsChange("useCurrentProvider", event.target.checked)
+							}>
+							{t("kilocode:autocomplete.settings.useCurrentProvider")}
+						</VSCodeCheckbox>
+						{ghostServiceSettings?.useCurrentProvider && (
+							<AutocompleteModelPicker
+								settings={ghostServiceSettings}
+								onChange={onAutocompleteServiceSettingsChange}
+							/>
+						)}
+						<VSCodeCheckbox
+							checked={ghostServiceSettings?.fullBlock ?? true}
+							onChange={(event: any) =>
+								onAutocompleteServiceSettingsChange("fullBlock", event.target.checked)
+							}>
+							{t("kilocode:autocomplete.settings.fullBlock")}
+						</VSCodeCheckbox>
+						{!ghostServiceSettings?.useCurrentProvider && (
+							<div className="text-sm">
+								{provider && model && isPersonalProvider(provider) ? (
+									<>
+										<div className="text-vscode-descriptionForeground">
+											<span className="font-medium">
+												{t("kilocode:autocomplete.settings.provider")}:
+											</span>{" "}
+											{provider}
+										</div>
+										<div className="text-vscode-descriptionForeground">
+											<span className="font-medium">
+												{t("kilocode:autocomplete.settings.model")}:
+											</span>{" "}
+											{model}
+										</div>
+									</>
+								) : (
+									<div className="flex flex-col gap-2">
+										<div className="text-vscode-errorForeground font-medium">
+											{t("kilocode:autocomplete.settings.noModelConfigured.title")}
+										</div>
+										<div className="text-vscode-descriptionForeground">
+											{t("kilocode:autocomplete.settings.noModelConfigured.description")}
+										</div>
+										<ul className="text-vscode-descriptionForeground list-disc list-inside ml-2">
+											{supportedProviderNames.map((name) => (
+												<li key={name}>{name}</li>
+											))}
+										</ul>
 									</div>
-									<div className="text-vscode-descriptionForeground">
-										<span className="font-medium">
-											{t("kilocode:autocomplete.settings.model")}:
-										</span>{" "}
-										{model}
+								)}
+								{MODEL_SELECTION_ENABLED && (
+									<div className="text-vscode-descriptionForeground mt-2">
+										{t("kilocode:autocomplete.settings.configureAutocompleteProfile")}
 									</div>
-								</>
-							) : (
-								<div className="flex flex-col gap-2">
-									<div className="text-vscode-errorForeground font-medium">
-										{t("kilocode:autocomplete.settings.noModelConfigured.title")}
-									</div>
-									<div className="text-vscode-descriptionForeground">
-										{t("kilocode:autocomplete.settings.noModelConfigured.description")}
-									</div>
-									<ul className="text-vscode-descriptionForeground list-disc list-inside ml-2">
-										{supportedProviderNames.map((name) => (
-											<li key={name}>{name}</li>
-										))}
-									</ul>
-								</div>
-							)}
-							{MODEL_SELECTION_ENABLED && (
-								<div className="text-vscode-descriptionForeground mt-2">
-									{t("kilocode:autocomplete.settings.configureAutocompleteProfile")}
-								</div>
-							)}
-						</div>
+								)}
+							</div>
+						)}
 					</SearchableSetting>
 				</div>
 			</Section>

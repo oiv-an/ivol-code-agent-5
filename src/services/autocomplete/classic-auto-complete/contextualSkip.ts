@@ -125,10 +125,9 @@ function isMidWordTyping(prefix: string, suffix: string): boolean {
 
 	const suffixStartsWithWordChar = /^[a-zA-Z0-9_]/.test(suffix)
 
-	const wordMatch = prefix.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/)
-	const lengthOfWordAtEndOfPrefix = wordMatch ? wordMatch[1].length : 0
-
-	return lengthOfWordAtEndOfPrefix > 2 || suffixStartsWithWordChar
+	// A long identifier before the cursor is precisely what completion should finish.
+	// Only avoid inserting in front of an existing word; debounce handles active typing.
+	return suffixStartsWithWordChar
 }
 
 export function shouldSkipAutocomplete(prefix: string, suffix: string, languageId?: string): boolean {

@@ -285,6 +285,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
+			this.applyAutocompletePolicy(requestOptions, metadata) // kilocode_change
 
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const stream = await this.createChatCompletionWithCacheFallback(
@@ -355,6 +356,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
+			this.applyAutocompletePolicy(requestOptions, metadata) // kilocode_change
 
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const response = await this.createChatCompletionWithCacheFallback(
@@ -409,6 +411,27 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				usage?.cache_creation_input_tokens || usage?.prompt_tokens_details?.cache_write_tokens || undefined,
 			cacheReadTokens: usage?.cache_read_input_tokens || usage?.prompt_tokens_details?.cached_tokens || undefined,
 		}
+	}
+	// kilocode_change end
+
+	// kilocode_change start: only the explicitly selected Luna autocomplete route
+	// opts into this wire contract. Never mutate model/profile settings or apply
+	// OpenAI reasoning fields to unrelated compatible APIs. Server acceptance is
+	// not inferred locally; do not silently retry with thinking enabled.
+	private applyAutocompletePolicy(
+		request: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+		metadata?: ApiHandlerCreateMessageMetadata,
+	): void {
+		if (metadata?.feature !== "autocomplete" || request.model !== "1-gpt-luna") return
+		const baseUrl = this.options.openAiBaseUrl
+		if (!baseUrl || !URL.canParse(baseUrl) || this.options.openAiUseAzure) return
+		const url = new URL(baseUrl)
+		if (url.origin !== "https://prox.ivol.pro" || url.username || url.password) return
+
+		// The pinned SDK's effort union predates `none`; like getOpenAiReasoning,
+		// preserve the explicit wire value instead of substituting `minimal`.
+		request.reasoning_effort = "none" as OpenAI.Chat.Completions.ChatCompletionCreateParams["reasoning_effort"]
+		request.max_completion_tokens = 256
 	}
 	// kilocode_change end
 

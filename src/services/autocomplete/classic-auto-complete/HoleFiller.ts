@@ -60,6 +60,10 @@ export class HoleFiller {
 - NEVER repeat or duplicate content that appears immediately before {{FILL_HERE}}
 - If {{FILL_HERE}} is at the end of a comment line, start your completion with a newline and new code
 - Maintain proper indentation matching the surrounding code
+- Complete only the smallest useful coherent code block, including its body and closing delimiters when needed; do not stop after the first line
+- Keep the entire response within 256 tokens, including the closing </COMPLETION> tag; prefer a shorter finished block over a long unfinished one
+- Do not repeat code after {{FILL_HERE}}; fit the completion between the existing prefix and suffix
+- Return only <COMPLETION>code to insert</COMPLETION>, without Markdown fences or explanations
 
 ## Context Format
 <LANGUAGE>: file language
@@ -149,7 +153,7 @@ function hypothenuse(a, b) {
 <COMPLETION>a ** 2 + </COMPLETION>
 
 Task: Auto-Completion
-Provide a subtle, non-intrusive completion after a typing pause.
+Provide a short, complete, context-appropriate continuation after a typing pause. Prefer the smallest useful complete block over an unfinished stub; do not invent unrelated functionality or add explanations.
 
 `
 	}
@@ -186,31 +190,30 @@ Return the COMPLETION tags`
 		model: AutocompleteModel,
 		prompt: HoleFillerAutocompletePrompt,
 		processSuggestion: (text: string) => FillInAtCursorSuggestion,
+		diagnosticLog?: (message: string) => void,
 	): Promise<ChatCompletionResult> {
 		const { systemPrompt, userPrompt } = prompt
 		let response = ""
+		let reasoningCharacters = 0
 
 		const onChunk = (chunk: ApiStreamChunk) => {
 			if (chunk.type === "text") {
 				response += chunk.text
+			} else if (chunk.type === "reasoning") {
+				reasoningCharacters += chunk.text.length
 			}
 		}
 
-		console.log("[HoleFiller] userPrompt:", userPrompt)
-
 		const usageInfo = await model.generateResponse(systemPrompt, userPrompt, onChunk)
-
-		console.log("response", response)
 
 		// Extract just the text from the response - prefix/suffix are handled by the caller
 		const completionMatch = response.match(/<COMPLETION>([\s\S]*?)<\/COMPLETION>/i)
 		const suggestionText = completionMatch ? (completionMatch[1] || "").replace(/<\/?COMPLETION>/gi, "") : ""
 
 		const fillInAtCursorSuggestion = processSuggestion(suggestionText)
-
-		if (fillInAtCursorSuggestion.text) {
-			console.info("Final suggestion:", fillInAtCursorSuggestion)
-		}
+		diagnosticLog?.(
+			`Response format: text=${response.length}, reasoning=${reasoningCharacters}, tagged=${Boolean(completionMatch)}, fenced=${response.includes("```")}, parsed=${suggestionText.length}, filtered=${fillInAtCursorSuggestion.text.length}`,
+		)
 
 		return {
 			suggestion: fillInAtCursorSuggestion,

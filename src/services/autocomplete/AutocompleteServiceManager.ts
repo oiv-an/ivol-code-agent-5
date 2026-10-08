@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import { isDeepStrictEqual } from "node:util"
 import * as vscode from "vscode"
 import { t } from "../../i18n"
 import { AutocompleteModel } from "./AutocompleteModel"
@@ -69,15 +70,55 @@ export class AutocompleteServiceManager {
 		return AutocompleteServiceManager._instance
 	}
 
-	public async load() {
-		await this.cline.providerSettingsManager.initialize() // avoid race condition with settings migrations
-		await this.model.reload(this.cline.providerSettingsManager)
+	private loadQueue: Promise<void> = Promise.resolve()
+	private loadGeneration = 0
+	private loadedCurrentProfile: unknown
 
-		this.settings = ContextProxy.instance.getGlobalState("ghostServiceSettings") ?? {
-			enableSmartInlineTaskKeybinding: true,
-			enableAutoTrigger: false,
-			enableChatAutocomplete: false,
+	public async loadIfProfileChanged(): Promise<void> {
+		await this.loadQueue
+		if (!this.settings?.useCurrentProvider) return
+		const generation = this.loadGeneration
+		const name = ContextProxy.instance.getGlobalState("currentApiConfigName")
+		const profile = name ? await this.cline.providerSettingsManager.getProfile({ name }) : undefined
+		if (generation !== this.loadGeneration) return this.loadIfProfileChanged()
+		// Task restoration activates the same profile too; do not cancel pending editor requests.
+		if (isDeepStrictEqual(profile, this.loadedCurrentProfile)) return
+		await this.load()
+	}
+
+	public load(): Promise<void> {
+		const generation = ++this.loadGeneration
+		this.model.invalidate()
+		this.inlineCompletionProvider.resetModelCache()
+		const next = this.loadQueue.then(() => this.loadConfiguration(generation))
+		this.loadQueue = next.catch((error) => console.error("Failed to reload autocomplete configuration:", error))
+		return next
+	}
+
+	private async loadConfiguration(generation: number) {
+		if (generation !== this.loadGeneration) return
+		await this.cline.providerSettingsManager.initialize() // avoid race condition with settings migrations
+		const storedSettings = ContextProxy.instance.getGlobalState("ghostServiceSettings")
+		this.settings = {
+			...(storedSettings ?? {
+				enableSmartInlineTaskKeybinding: true,
+				enableAutoTrigger: false,
+				enableChatAutocomplete: false,
+			}),
 		}
+		const currentProfileName = ContextProxy.instance.getGlobalState("currentApiConfigName")
+		const currentProfile =
+			this.settings.useCurrentProvider && currentProfileName
+				? await this.cline.providerSettingsManager.getProfile({ name: currentProfileName })
+				: undefined
+		await this.model.reload(this.cline.providerSettingsManager, this.settings, currentProfile)
+		if (generation !== this.loadGeneration) {
+			this.model.invalidate()
+			return
+		}
+
+		this.loadedCurrentProfile = structuredClone(currentProfile)
+
 		// Personal builds require an explicit opt-in before background autocomplete.
 		if (this.settings.enableAutoTrigger == undefined) {
 			this.settings.enableAutoTrigger = false
@@ -98,12 +139,22 @@ export class AutocompleteServiceManager {
 			model: this.getCurrentModelName(),
 			hasKilocodeProfileWithNoBalance: this.model.hasKilocodeProfileWithNoBalance,
 		}
+		// A settings Save can happen during any await above, before its reload command arrives.
+		// Never publish the old snapshot over that newer user selection.
+		if (
+			generation !== this.loadGeneration ||
+			ContextProxy.instance.getGlobalState("ghostServiceSettings") !== storedSettings
+		)
+			return
 		await ContextProxy.instance.setValues({ ghostServiceSettings: settingsWithModelInfo })
 		await this.cline.postStateToWebview()
 	}
 
 	private async updateInlineCompletionProviderRegistration() {
 		const shouldBeRegistered = (this.settings?.enableAutoTrigger ?? false) && !this.isSnoozed()
+		this.cline.log?.(
+			`[Autocomplete] editor=${shouldBeRegistered ? "enabled" : "disabled"}, model=${this.model.hasValidCredentials() ? "configured" : "missing"}, inlineSuggest=${vscode.workspace.getConfiguration("editor").get("inlineSuggest.enabled", true)}`,
+		)
 
 		// First, dispose any existing registration
 		if (this.inlineCompletionProviderDisposable) {
@@ -251,6 +302,7 @@ export class AutocompleteServiceManager {
 
 		// Call the inline completion provider directly with manual trigger context
 		const position = editor.selection.active
+		const documentVersion = document.version
 		const context: vscode.InlineCompletionContext = {
 			triggerKind: vscode.InlineCompletionTriggerKind.Invoke,
 			selectedCompletionInfo: undefined,
@@ -264,6 +316,15 @@ export class AutocompleteServiceManager {
 				context,
 				tokenSource.token,
 			)
+
+			// Remote models can be slow: never insert a block into a document or cursor that has changed.
+			if (
+				vscode.window.activeTextEditor !== editor ||
+				document.version !== documentVersion ||
+				editor.selection.active.line !== position.line ||
+				editor.selection.active.character !== position.character
+			)
+				return
 
 			// If we got completions, directly insert the first one
 			if (completions && (Array.isArray(completions) ? completions.length > 0 : completions.items.length > 0)) {

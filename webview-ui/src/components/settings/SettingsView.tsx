@@ -166,6 +166,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 	const confirmDialogHandler = useRef<() => void>()
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
+	// kilocode_change: retain the submitted autocomplete draft until the host echoes persisted values.
+	const pendingAutocompleteSave = useRef<ExtensionStateContextType["ghostServiceSettings"]>()
 
 	// kilocode_change begin
 	useEffect(() => {
@@ -279,6 +281,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 			return
 		}
 
+		pendingAutocompleteSave.current = undefined // kilocode_change: a profile switch abandons the old draft.
 		setCachedState((prevCachedState) => ({ ...prevCachedState, ...extensionState }))
 		prevApiConfigName.current = currentApiConfigName
 		setChangeDetected(false)
@@ -347,6 +350,19 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		// This prevents overwriting user changes that haven't been saved yet
 		// Also skip if we're loading a profile for editing
 		if (!isChangeDetected && !isLoadingProfileForEditing.current) {
+			// kilocode_change start: unrelated Save messages can publish older snapshots first.
+			const pending = pendingAutocompleteSave.current
+			if (pending) {
+				const persisted = extensionState.ghostServiceSettings
+				const acknowledged = Object.entries(pending).every(
+					([key, value]) =>
+						["provider", "model", "hasKilocodeProfileWithNoBalance"].includes(key) ||
+						deepEqual(value, persisted?.[key as keyof NonNullable<typeof persisted>]),
+				)
+				if (!acknowledged) return
+				pendingAutocompleteSave.current = undefined
+			}
+			// kilocode_change end
 			// When editing a different profile than the active one,
 			// don't overwrite apiConfiguration from extensionState since it contains
 			// the active profile's config, not the editing profile's config
@@ -524,6 +540,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 
 	const handleSubmit = () => {
 		if (isSettingValid) {
+			pendingAutocompleteSave.current = ghostServiceSettings // kilocode_change
 			vscode.postMessage({
 				type: "updateSettings",
 				updatedSettings: {
@@ -646,20 +663,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 			// kilocode_change end - Auto-purge settings
 			vscode.postMessage({ type: "debugSetting", bool: cachedState.debug })
 
-			// kilocode_change: After saving, sync cachedState to extensionState without clobbering
-			// the editing profile's apiConfiguration when editing a non-active profile.
-			if (editingApiConfigName !== currentApiConfigName) {
-				// Only sync non-apiConfiguration fields from extensionState
-				const { apiConfiguration: _, ...restOfExtensionState } = extensionState
-				setCachedState((prevState) => ({
-					...prevState,
-					...restOfExtensionState,
-				}))
-			} else {
-				// When editing the active profile, sync everything including apiConfiguration
-				setCachedState((prevState) => ({ ...prevState, ...extensionState }))
-			}
-			// kilocode_change end
+			// kilocode_change: the submitted draft stays visible until persisted state arrives.
 			setChangeDetected(false)
 		}
 	}
@@ -683,6 +687,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		(confirm: boolean) => {
 			if (confirm) {
 				// Discard changes: Reset state and flag
+				pendingAutocompleteSave.current = undefined // kilocode_change
 				setCachedState(extensionState) // Revert to original state
 				setChangeDetected(false) // Reset change flag
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)

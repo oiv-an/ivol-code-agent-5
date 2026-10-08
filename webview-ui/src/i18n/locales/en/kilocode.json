@@ -309,7 +309,14 @@
 				"description": "Your IVOL Code account has no credits. To use autocomplete, please add credits to your account.",
 				"buyCredits": "Buy credits →"
 			},
-			"configureAutocompleteProfile": "Use any model by going to profiles and configuring a Profile of the Profile Type Autocomplete."
+			"configureAutocompleteProfile": "Use any model by going to profiles and configuring a Profile of the Profile Type Autocomplete.",
+			"useCurrentProvider": "Choose a separate model from the current provider",
+			"currentProviderDescription": "Uses the current profile's connection and credentials without changing its chat model. The autocomplete model is saved separately for each profile. Cloud suggestions consume tokens. Save settings to apply.",
+			"chooseModel": "Search autocomplete models",
+			"modelListEmpty": "No models available. Refresh the list or enter a model ID manually.",
+			"manualModelId": "Autocomplete model ID (manual entry)",
+			"refreshModels": "Refresh models",
+			"fullBlock": "Show complete multi-line code blocks"
 		}
 	},
 	"virtualProvider": {

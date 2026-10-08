@@ -1,5 +1,11 @@
 // kilocode_change new file
-import { modelIdKeysByProvider, ProviderName } from "@roo-code/types"
+import {
+	modelIdKeysByProvider,
+	ProviderName,
+	ProviderSettings,
+	AutocompleteServiceSettings,
+	isPersonalProvider,
+} from "@roo-code/types"
 import { ApiHandler, buildApiHandler, FimHandler } from "../../api"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { OpenRouterHandler } from "../../api/providers"
@@ -46,7 +52,7 @@ export class AutocompleteModel {
 			this.loaded = true
 		}
 	}
-	private cleanup(): void {
+	public invalidate(): void {
 		this.apiHandler = null
 		this.profileName = null
 		this.profileType = null
@@ -55,10 +61,44 @@ export class AutocompleteModel {
 		this.hasKilocodeProfileWithNoBalance = false
 	}
 
-	public async reload(providerSettingsManager: ProviderSettingsManager): Promise<boolean> {
+	public async reload(
+		providerSettingsManager: ProviderSettingsManager,
+		settings?: AutocompleteServiceSettings,
+		currentProfile?: ProviderSettings & { id?: string; name?: string },
+	): Promise<boolean> {
+		this.invalidate()
 		const profiles = await providerSettingsManager.listConfig()
 
-		this.cleanup()
+		if (settings?.useCurrentProvider) {
+			const provider = currentProfile?.apiProvider
+			const selection = currentProfile?.id ? settings.currentProviderModels?.[currentProfile.id] : undefined
+			// Explicit selection is required for each profile; never fall back to a paid chat model.
+			if (
+				!currentProfile ||
+				!isPersonalProvider(provider) ||
+				selection?.provider !== provider ||
+				!selection.modelId.trim()
+			) {
+				this.loaded = true
+				return false
+			}
+			const profile = {
+				...currentProfile,
+				[provider === "openai" ? "openAiModelId" : modelIdKeysByProvider[provider]]: selection.modelId.trim(),
+			}
+			// Do not carry the chat model's custom metadata or reasoning budget to a different model.
+			if (provider === "openai" && selection.modelId.trim() !== currentProfile.openAiModelId) {
+				profile.openAiCustomModelInfo = undefined
+				profile.reasoningEffort = undefined
+				profile.modelTemperature = undefined
+			}
+			this.profileName = currentProfile.name ?? null
+			this.profileType = "autocomplete"
+			this.currentProvider = provider
+			this.apiHandler = buildApiHandler(profile)
+			this.loaded = true
+			return true
+		}
 
 		const selectedProfile = profiles.find(
 			(x) => x.profileType === "autocomplete" && isPersonalAutocompleteProvider(x.apiProvider),
@@ -162,11 +202,12 @@ export class AutocompleteModel {
 
 		console.log("USED MODEL", this.apiHandler.getModel())
 
-		// kilocode_change: pass feature metadata for microdollar usage tracking
+		// Autocomplete consumes text only and has no tool executor. Do not inherit
+		// provider-added chat tools (such as web search) from the selected profile.
 		const stream = this.apiHandler.createMessage(
 			systemPrompt,
 			[{ role: "user", content: [{ type: "text", text: userPrompt }] }],
-			{ taskId: "autocomplete", feature: "autocomplete" },
+			{ taskId: "autocomplete", feature: "autocomplete", tool_choice: "none" },
 		)
 
 		let cost = 0

@@ -79,6 +79,20 @@ describe("useChatAutocompleteText", () => {
 		vi.useRealTimers()
 	})
 
+	// kilocode_change start
+	it.each([undefined, false, true])("requests completion only with explicit opt-in: %s", (enabled) => {
+		const { result } = renderHook(() =>
+			useChatAutocompleteText({ textAreaRef, enableChatAutocomplete: enabled }),
+		)
+		act(() => result.current.handleFocus())
+		act(() => {
+			result.current.handleInputChange({ target: mockTextArea } as React.ChangeEvent<HTMLTextAreaElement>)
+			vi.advanceTimersByTime(300)
+		})
+		expect(vscode.postMessage).toHaveBeenCalledTimes(enabled === true ? 1 : 0)
+	})
+	// kilocode_change end
+
 	describe("Tab key acceptance", () => {
 		it("should accept full autocomplete text on Tab key", () => {
 			const { result } = renderHook(() =>

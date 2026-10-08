@@ -1,5 +1,46 @@
 # IVOL Code Agent 5
 
+## 5.17.81
+
+- Choose a separate autocomplete model from your current provider, with searchable model selection and complete multi-line code suggestions, without changing the chat model.
+- Keep editor and chat autocomplete off by default, while preserving existing explicit opt-in and local-model support.
+- Save autocomplete settings reliably and keep pending suggestions when reopening tasks with the same provider profile.
+- Improve typing suggestions and IntelliSense compatibility, reuse pending requests, and discard stale results safely when the editor or model changes.
+- Keep completion requests text-only and make Luna completions on the IVOL proxy shorter and faster, without changing chat reasoning or output limits.
+- Add completion diagnostics without recording source code, credentials, or reasoning content.
+
+## 5.17.80
+
+- Request short, finished autocomplete blocks and explicitly disable reasoning with a 256-token output limit for Luna on the IVOL proxy, without changing chat settings.
+
+## 5.17.79
+
+- Preserve pending autocomplete suggestions when task restoration reactivates an unchanged provider profile, while still invalidating completions when the configuration changes.
+
+## 5.17.78
+
+- Reuse slow autocomplete requests without duplicate generation, settle cancelled debounce waits, and align compatible inline suggestions with IntelliSense while respecting editor cancellation.
+
+## 5.17.77
+
+- Keep autocomplete requests text-only instead of advertising chat tools that cannot run during code completion.
+
+## 5.17.76
+
+- Diagnose empty autocomplete responses by reporting parsing and filtering counts without logging source code or reasoning content.
+
+## 5.17.75
+
+- Allow autocomplete after longer identifiers, honor manual completion requests, and report completion stages in the output log without source code or credentials.
+
+## 5.17.74
+
+- Preserve the selected autocomplete model and chat completion settings when saving, even while the provider reloads.
+
+## 5.17.73
+
+- Choose a separate autocomplete model from the current provider and receive complete multi-line code blocks without changing the chat model.
+
 ## 5.17.72
 
 - Wait for diff editors and overlapping saves to finish, avoiding false save conflicts without overwriting unsaved changes.

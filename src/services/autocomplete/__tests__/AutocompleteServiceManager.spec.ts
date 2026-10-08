@@ -66,6 +66,10 @@ vi.mock("../AutocompleteModel", () => {
 		public loaded = false
 		public profileName = "test-profile"
 
+		public invalidate(): void {
+			this.loaded = false
+		}
+
 		public async reload(): Promise<void> {
 			this.loaded = true
 		}
@@ -106,6 +110,7 @@ vi.mock("../AutocompleteCodeActionProvider", () => {
 
 vi.mock("../classic-auto-complete/AutocompleteInlineCompletionProvider", () => {
 	class AutocompleteInlineCompletionProvider {
+		public resetModelCache = vi.fn()
 		public provideInlineCompletionItems_Internal = vi.fn()
 		public dispose = vi.fn()
 
@@ -197,7 +202,78 @@ describe("AutocompleteServiceManager (less mocked logic)", () => {
 		;(vscode.window as any).activeTextEditor = null
 	})
 
+	it("preserves pending completions when the same provider profile is activated again", async () => {
+		const manager = await createManager()
+		const { __setState } = (await import("../../../core/config/ContextProxy")) as any
+		const profile = { id: "proxy", name: "Proxy", apiProvider: "openai", openAiModelId: "chat" }
+		const getProfile = vi.fn().mockImplementation(async () => ({ ...profile }))
+		;(manager as any).cline.providerSettingsManager.getProfile = getProfile
+		__setState({ currentApiConfigName: "Proxy", ghostServiceSettings: { useCurrentProvider: true } })
+		await manager.load()
+		vi.mocked(manager.inlineCompletionProvider.resetModelCache).mockClear()
+		const reload = vi.spyOn((manager as any).model, "reload")
+
+		await manager.loadIfProfileChanged()
+		expect(manager.inlineCompletionProvider.resetModelCache).not.toHaveBeenCalled()
+		expect(reload).not.toHaveBeenCalled()
+
+		getProfile.mockResolvedValue({ ...profile, openAiBaseUrl: "https://changed.invalid" })
+		await manager.loadIfProfileChanged()
+		expect(manager.inlineCompletionProvider.resetModelCache).toHaveBeenCalledTimes(1)
+		expect(reload).toHaveBeenCalledTimes(1)
+	})
+
+	it("ignores chat profile activation for a dedicated autocomplete model but keeps explicit reload", async () => {
+		const manager = await createManager()
+		vi.mocked(manager.inlineCompletionProvider.resetModelCache).mockClear()
+		await manager.loadIfProfileChanged()
+		expect(manager.inlineCompletionProvider.resetModelCache).not.toHaveBeenCalled()
+		await manager.load()
+		expect(manager.inlineCompletionProvider.resetModelCache).toHaveBeenCalledTimes(1)
+	})
+
+	it("reloads when the active profile is removed", async () => {
+		const manager = await createManager()
+		const { __setState } = (await import("../../../core/config/ContextProxy")) as any
+		;(manager as any).cline.providerSettingsManager.getProfile = vi.fn().mockResolvedValue({ id: "proxy" })
+		__setState({ currentApiConfigName: "Proxy", ghostServiceSettings: { useCurrentProvider: true } })
+		await manager.load()
+		vi.mocked(manager.inlineCompletionProvider.resetModelCache).mockClear()
+		__setState({ currentApiConfigName: undefined })
+		await manager.loadIfProfileChanged()
+		expect(manager.inlineCompletionProvider.resetModelCache).toHaveBeenCalledTimes(1)
+	})
+
+	it("does not overwrite settings saved while model reload is publishing its status", async () => {
+		const manager = await createManager()
+		const { ContextProxy, __setState } = (await import("../../../core/config/ContextProxy")) as any
+		const saved = {
+			useCurrentProvider: true,
+			enableChatAutocomplete: true,
+			currentProviderModels: { proxy: { provider: "openai", modelId: "luna" } },
+		}
+		vi.mocked(vscode.commands.executeCommand).mockImplementationOnce(async () => {
+			__setState({ ghostServiceSettings: saved })
+		})
+		await manager.load()
+		expect(ContextProxy.instance.getGlobalState("ghostServiceSettings")).toEqual(saved)
+	})
+
 	describe("personal defaults", () => {
+		it.each([{}, { enableAutoTrigger: true, enableChatAutocomplete: true }])(
+			"defaults missing flags to false and preserves explicit opt-in: %j",
+			async (saved) => {
+				const manager = await createManager()
+				const { ContextProxy, __setState } = (await import("../../../core/config/ContextProxy")) as any
+				__setState({ ghostServiceSettings: saved })
+				await manager.load()
+				expect(ContextProxy.instance.getGlobalState("ghostServiceSettings")).toMatchObject({
+					enableAutoTrigger: saved.enableAutoTrigger ?? false,
+					enableChatAutocomplete: saved.enableChatAutocomplete ?? false,
+				})
+			},
+		)
+
 		it("keeps editor and chat autocomplete disabled until explicit opt-in", async () => {
 			const context = { subscriptions: [] } as unknown as vscode.ExtensionContext
 			const cline: TestCline = {

@@ -1,6 +1,6 @@
 // pnpm --filter @roo-code/vscode-webview test src/components/settings/__tests__/SettingsView.spec.tsx
 
-import { render, screen, fireEvent, within, waitFor } from "@/utils/test-utils"
+import { render, screen, fireEvent, within, waitFor, act } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { vscode } from "@/utils/vscode"
@@ -30,6 +30,19 @@ vi.mock("../ApiConfigManager", () => ({
 				Create profile
 			</button>
 		</div>
+	),
+}))
+
+// kilocode_change: exercise the real settings draft and Save button without a live catalog.
+vi.mock("../../kilocode/settings/AutocompleteModelPicker", () => ({
+	AutocompleteModelPicker: ({ settings, onChange }: any) => (
+		<input
+			data-testid="autocomplete-test-model"
+			value={settings.currentProviderModels?.proxy?.modelId ?? ""}
+			onChange={(event) =>
+				onChange("currentProviderModels", { proxy: { provider: "openai", modelId: event.target.value } })
+			}
+		/>
 	),
 }))
 
@@ -402,6 +415,83 @@ describe("SettingsView - Sound Settings", () => {
 		expect(screen.getByTestId("tab-ivol")).toHaveAttribute("aria-label", "settings:sections.ivol")
 		expect(screen.getByTestId("settings-tab-list").firstElementChild).toBe(screen.getByTestId("tab-ivol"))
 	})
+	// kilocode_change: previously Save immediately restored the old extension snapshot.
+	it("keeps the autocomplete model and chat toggle after Save and intermediate stale state messages", async () => {
+		const oldSettings = {
+			useCurrentProvider: true,
+			enableChatAutocomplete: false,
+			currentProviderModels: { proxy: { provider: "openai", modelId: "old-model" } },
+		}
+		const initialState = {
+			currentApiConfigName: "Proxy",
+			ghostServiceSettings: oldSettings,
+			apiConfiguration: { apiProvider: "openai", openAiModelId: "chat-model" },
+		}
+		const { activateTab, getSettingsContent } = renderSettingsView(initialState)
+		activateTab("autocomplete")
+		await waitFor(() => expect(screen.getByTestId("autocomplete-test-model")).toHaveValue("old-model"))
+		fireEvent.change(screen.getByTestId("autocomplete-test-model"), { target: { value: "luna" } })
+		const chatToggle = () =>
+			within(getSettingsContent()).getByRole("checkbox", {
+				name: "kilocode:autocomplete.settings.enableChatAutocomplete.label",
+			})
+		fireEvent.click(chatToggle())
+		fireEvent.click(screen.getByTestId("save-button"))
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "ghostServiceSettings",
+				values: expect.objectContaining({
+					enableChatAutocomplete: true,
+					currentProviderModels: { proxy: { provider: "openai", modelId: "luna" } },
+				}),
+			}),
+		)
+		expect(screen.getByTestId("autocomplete-test-model")).toHaveValue("luna")
+		expect(chatToggle()).toBeChecked()
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "state",
+						state: { ...initialState, soundVolume: 0.6 },
+					},
+				}),
+			),
+		)
+		expect(screen.getByTestId("autocomplete-test-model")).toHaveValue("luna")
+		expect(chatToggle()).toBeChecked()
+		const savedSettings = {
+			...oldSettings,
+			enableChatAutocomplete: true,
+			currentProviderModels: { proxy: { provider: "openai", modelId: "luna" } },
+		}
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "state",
+						state: { ...initialState, ghostServiceSettings: savedSettings },
+					},
+				}),
+			),
+		)
+		// After acknowledgment, subsequent real host changes must no longer be blocked.
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "state",
+						state: { ...initialState, ghostServiceSettings: { ...savedSettings, fullBlock: false } },
+					},
+				}),
+			),
+		)
+		expect(
+			within(getSettingsContent()).getByRole("checkbox", { name: "kilocode:autocomplete.settings.fullBlock" }),
+		).not.toBeChecked()
+		expect(screen.getByTestId("autocomplete-test-model")).toHaveValue("luna")
+	})
+
 	it("saves a global IVOL preference through the existing draft", () => {
 		const { activateTab } = renderSettingsView({ frozenMessagesBudgetPercent: 50 })
 		activateTab("ivol")
