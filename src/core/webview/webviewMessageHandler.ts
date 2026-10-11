@@ -1742,6 +1742,30 @@ export const webviewMessageHandler = async (
 			break
 		}
 		// kilocode_change end
+		// kilocode_change start: server-level auto-approval is an explicit, source-scoped opt-in.
+		case "toggleServerAlwaysAllow": {
+			if (
+				!message.serverName ||
+				(message.source !== "global" && message.source !== "project") ||
+				typeof message.alwaysAllow !== "boolean"
+			)
+				break
+			try {
+				await provider
+					.getMcpHub()
+					?.toggleServerAlwaysAllow(message.serverName, message.source, message.alwaysAllow)
+				await provider.postStateToWebview()
+			} catch (error) {
+				provider.log(
+					`Failed to update MCP server auto-approval: ${error instanceof Error ? error.message : String(error)}`,
+				)
+				vscode.window.showErrorMessage(
+					`Failed to save MCP auto-approval: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+			break
+		}
+		// kilocode_change end
 		case "toggleToolAlwaysAllow": {
 			try {
 				await provider

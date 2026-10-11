@@ -32,6 +32,7 @@ interface McpExecutionProps {
 			alwaysAllow?: boolean
 		}>
 		source?: "global" | "project"
+		alwaysAllowAll?: boolean // kilocode_change
 	}
 	useMcpServer?: ClineAskUseMcpServer
 	alwaysAllowMcp?: boolean
@@ -262,7 +263,7 @@ export const McpExecution = ({
 							}}
 							serverName={useMcpServer.serverName}
 							serverSource={server?.source}
-							alwaysAllowMcp={alwaysAllowMcp}
+							alwaysAllowMcp={alwaysAllowMcp && !server?.alwaysAllowAll} // kilocode_change
 							isInChatContext={true}
 						/>
 					</div>

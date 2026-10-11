@@ -10,7 +10,7 @@ import {
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 
 import { isWriteToolAction, isReadOnlyToolAction } from "./tools"
-import { isMcpToolAlwaysAllowed } from "./mcp"
+import { isMcpToolAlwaysAllowed, isMcpServerAlwaysAllowed } from "./mcp" // kilocode_change
 import { getCommandDecision } from "./commands"
 
 // We have 11 different actions that can be auto-approved. // kilocode_change
@@ -107,6 +107,14 @@ export async function checkAutoApproval({
 		try {
 			const mcpServerUse = JSON.parse(text) as McpServerUse
 
+			// kilocode_change start: explicit server trust needs only the master switch, checked above.
+			if (
+				(mcpServerUse.type === "use_mcp_tool" && mcpServerUse.toolName) ||
+				(mcpServerUse.type === "access_mcp_resource" && mcpServerUse.uri)
+			) {
+				if (isMcpServerAlwaysAllowed(mcpServerUse, state.mcpServers)) return { decision: "approve" }
+			}
+			// kilocode_change end
 			if (mcpServerUse.type === "use_mcp_tool") {
 				return state.alwaysAllowMcp === true && isMcpToolAlwaysAllowed(mcpServerUse, state.mcpServers)
 					? { decision: "approve" }

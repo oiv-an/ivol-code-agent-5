@@ -4,6 +4,8 @@ import { render, fireEvent, screen } from "@/utils/test-utils"
 import { vscode } from "@src/utils/vscode"
 
 import McpToolRow from "../McpToolRow"
+import McpView from "../McpView" // kilocode_change
+import { ExtensionStateContext } from "@src/context/ExtensionStateContext" // kilocode_change
 
 vi.mock("@src/i18n/TranslationContext", () => ({
 	useAppTranslation: () => ({
@@ -26,6 +28,7 @@ vi.mock("@src/utils/vscode", () => ({
 }))
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
+	VSCodeLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>, // kilocode_change
 	VSCodeCheckbox: function MockVSCodeCheckbox({
 		children,
 		checked,
@@ -43,6 +46,46 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 		)
 	},
 }))
+
+// kilocode_change start: exercise the server checkbox in the real MCP view.
+describe("MCP server approval", () => {
+	it("sends source-scoped approval and reflects the saved state and master pause", () => {
+		const state = {
+			mcpServers: [
+				{ name: "trusted", source: "project", status: "disconnected", config: "{}", alwaysAllowAll: false },
+			],
+			autoApprovalEnabled: false,
+			mcpEnabled: true,
+		}
+		const view = () => (
+			<ExtensionStateContext.Provider value={state as any}>
+				<McpView onDone={() => {}} />
+			</ExtensionStateContext.Provider>
+		)
+		const { rerender } = render(view())
+		const checkbox = screen.getByRole("checkbox", { name: "mcp:serverApproval.label" })
+		expect(checkbox).not.toBeChecked()
+		fireEvent.click(checkbox)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "toggleServerAlwaysAllow",
+			serverName: "trusted",
+			source: "project",
+			alwaysAllow: true,
+		})
+		state.mcpServers[0].alwaysAllowAll = true
+		rerender(view())
+		expect(screen.getByRole("checkbox", { name: "mcp:serverApproval.label" })).toBeChecked()
+		expect(screen.getByText("mcp:serverApproval.paused")).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("checkbox", { name: "mcp:serverApproval.label" }))
+		expect(vscode.postMessage).toHaveBeenLastCalledWith({
+			type: "toggleServerAlwaysAllow",
+			serverName: "trusted",
+			source: "project",
+			alwaysAllow: false,
+		})
+	})
+})
+// kilocode_change end
 
 describe("McpToolRow", () => {
 	const mockTool = {

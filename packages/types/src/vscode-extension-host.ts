@@ -999,6 +999,7 @@ export interface WebviewMessage {
 		| "restartMcpServer"
 		| "refreshAllMcpServers"
 		| "toggleToolAlwaysAllow"
+		| "toggleServerAlwaysAllow" // kilocode_change
 		| "toggleToolEnabledForPrompt"
 		| "toggleMcpServer"
 		| "updateMcpTimeout"

@@ -9,6 +9,8 @@ import type { ClineProvider } from "../../../core/webview/ClineProvider"
 
 import type { McpHub as McpHubType, McpConnection, ConnectedMcpConnection, DisconnectedMcpConnection } from "../McpHub"
 import { ServerConfigSchema, McpHub } from "../McpHub"
+import { checkAutoApproval } from "../../../core/auto-approval" // kilocode_change
+import type { ExtensionState, McpServer } from "@roo-code/types" // kilocode_change
 
 // Mock fs/promises before importing anything that uses it
 vi.mock("fs/promises", () => ({
@@ -208,6 +210,114 @@ describe("McpHub", () => {
 			Object.defineProperty(process, "platform", originalPlatform)
 		}
 	})
+
+	// kilocode_change start: persistent server approval and the real approval gate.
+	describe("server-wide auto-approval", () => {
+		const server = (overrides: Partial<McpServer> = {}): McpServer => ({
+			name: "test-server",
+			config: "{}",
+			status: "connected",
+			source: "global",
+			alwaysAllowAll: true,
+			tools: [],
+			...overrides,
+		})
+		const decide = (servers: McpServer[], overrides: Partial<ExtensionState> = {}, isProtected = false) =>
+			checkAutoApproval({
+				state: {
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: false,
+					mcpServers: servers,
+					...overrides,
+				} as ExtensionState,
+				ask: "use_mcp_server",
+				text: JSON.stringify({ type: "use_mcp_tool", serverName: "test-server", toolName: "future-tool" }),
+				isProtected,
+			})
+
+		it("retains explicit trust in validated settings, defaulting to no trust", () => {
+			expect(ServerConfigSchema.parse({ command: "node", alwaysAllowAll: true }).alwaysAllowAll).toBe(true)
+			expect(ServerConfigSchema.parse({ command: "node" }).alwaysAllowAll).toBeUndefined()
+			expect(ServerConfigSchema.safeParse({ command: "node", alwaysAllowAll: "true" }).success).toBe(false)
+		})
+
+		it("approves future tools without enabling approval for every MCP server", async () => {
+			expect(await decide([server()])).toEqual({ decision: "approve" })
+			expect(await decide([server({ name: "other-server" })])).toEqual({ decision: "ask" })
+		})
+
+		it("keeps the master switch, protected calls, disabled servers and revocation authoritative", async () => {
+			expect(await decide([server()], { autoApprovalEnabled: false })).toEqual({ decision: "ask" })
+			expect(await decide([server()], {}, true)).toEqual({ decision: "ask" })
+			expect(await decide([server({ disabled: true })])).toEqual({ decision: "ask" })
+			expect(await decide([server({ alwaysAllowAll: false })])).toEqual({ decision: "ask" })
+		})
+
+		it("does not inherit global trust when a project server shadows it", async () => {
+			expect(await decide([server(), server({ source: "project", alwaysAllowAll: false })])).toEqual({
+				decision: "ask",
+			})
+			expect(await decide([server({ alwaysAllowAll: false }), server({ source: "project" })])).toEqual({
+				decision: "approve",
+			})
+		})
+
+		it("preserves individual permissions when server trust is disabled", async () => {
+			expect(
+				await decide([server({ alwaysAllowAll: false, tools: [{ name: "future-tool", alwaysAllow: true }] })], {
+					alwaysAllowMcp: true,
+				}),
+			).toEqual({ decision: "approve" })
+		})
+
+		it.each(["global", "project"] as const)("persists and revokes only the selected %s server", async (source) => {
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			const selected = { type: "disconnected", server: server({ source, alwaysAllowAll: false }) }
+			const other = {
+				type: "disconnected",
+				server: server({ source: source === "global" ? "project" : "global", alwaysAllowAll: false }),
+			}
+			mcpHub.connections = [selected, other] as DisconnectedMcpConnection[]
+			vi.spyOn(mcpHub as any, "getProjectMcpPath").mockResolvedValue("/project/.kilocode/mcp.json")
+			vi.spyOn(mcpHub as any, "notifyWebviewOfServerChanges").mockResolvedValue(undefined)
+			const original = {
+				extra: "preserved",
+				mcpServers: {
+					"test-server": { command: "node", alwaysAllow: ["one"], disabledTools: ["two"] },
+					other: { command: "other" },
+				},
+			}
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(original))
+			vi.mocked(safeWriteJson).mockClear()
+			vi.mocked(fs.access).mockResolvedValue(undefined)
+			await mcpHub.toggleServerAlwaysAllow("test-server", source, true)
+			const [path, saved] = vi.mocked(safeWriteJson).mock.calls[0]
+			expect(String(path)).toContain(source === "project" ? "/project/" : "/mock/settings/")
+			expect(saved).toEqual({
+				...original,
+				mcpServers: {
+					...original.mcpServers,
+					"test-server": { ...original.mcpServers["test-server"], alwaysAllowAll: true },
+				},
+			})
+			expect(selected.server.alwaysAllowAll).toBe(true)
+			expect(other.server.alwaysAllowAll).toBe(false)
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(saved))
+			await mcpHub.toggleServerAlwaysAllow("test-server", source, false)
+			expect(selected.server.alwaysAllowAll).toBe(false)
+			expect(JSON.parse(selected.server.config).alwaysAllowAll).toBe(false)
+		})
+
+		it("does not grant trust when persistence fails", async () => {
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			const selected = { type: "disconnected", server: server({ alwaysAllowAll: false }) }
+			mcpHub.connections = [selected] as DisconnectedMcpConnection[]
+			vi.spyOn(mcpHub as any, "updateServerConfig").mockRejectedValueOnce(new Error("write failed"))
+			await expect(mcpHub.toggleServerAlwaysAllow("test-server", "global", true)).rejects.toThrow("write failed")
+			expect(selected.server.alwaysAllowAll).toBe(false)
+		})
+	})
+	// kilocode_change end
 
 	// kilocode_change start: automatic setup of the built-in browser server
 	describe("automatic BrowserOS connection", () => {

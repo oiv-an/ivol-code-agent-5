@@ -113,6 +113,7 @@ const BaseConfigSchema = z.object({
 	browserOS: z.boolean().optional(), // kilocode_change: explicit browser permission policy
 	timeout: z.number().min(1).max(3600).optional().default(60),
 	alwaysAllow: z.array(z.string()).default([]),
+	alwaysAllowAll: z.boolean().optional(), // kilocode_change: persistent server-wide opt-in
 	watchPaths: z.array(z.string()).optional(), // paths to watch for changes and restart server
 	disabledTools: z.array(z.string()).default([]),
 })
@@ -1260,6 +1261,7 @@ export class McpHub {
 				config: JSON.stringify(config),
 				status: "disconnected",
 				disabled: reason === DisableReason.SERVER_DISABLED ? true : config.disabled,
+				alwaysAllowAll: config.alwaysAllowAll === true, // kilocode_change
 				source,
 				projectPath: source === "project" ? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath : undefined,
 				errorHistory: [],
@@ -1578,6 +1580,7 @@ export class McpHub {
 					config: JSON.stringify(configInjected),
 					status: "connecting",
 					disabled: configInjected.disabled,
+					alwaysAllowAll: configInjected.alwaysAllowAll === true, // kilocode_change
 					source,
 					projectPath: source === "project" ? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath : undefined,
 					errorHistory: [],
@@ -3083,6 +3086,27 @@ export class McpHub {
 			await this.notifyWebviewOfServerChanges()
 		}
 	}
+
+	// kilocode_change start: persist trust without restarting the connection or changing individual permissions.
+	async toggleServerAlwaysAllow(
+		serverName: string,
+		source: "global" | "project",
+		shouldAllow: boolean,
+	): Promise<void> {
+		const connection = this.findConnection(serverName, source)
+		if (!connection) throw new Error("MCP server not found")
+
+		await this.updateServerConfig(serverName, { alwaysAllowAll: shouldAllow }, source, (entry) => {
+			if (!entry || typeof entry !== "object") throw new Error("MCP server configuration no longer exists")
+		})
+		connection.server.alwaysAllowAll = shouldAllow
+		connection.server.config = JSON.stringify({
+			...JSON.parse(connection.server.config),
+			alwaysAllowAll: shouldAllow,
+		})
+		await this.notifyWebviewOfServerChanges()
+	}
+	// kilocode_change end
 
 	async toggleToolAlwaysAllow(
 		serverName: string,

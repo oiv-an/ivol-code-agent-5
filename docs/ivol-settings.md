@@ -23,6 +23,20 @@ Older conversations without a saved selection use provider defaults on first res
 previous model choices cannot be reconstructed retroactively. The project selection introduced
 in 5.17.82 is no longer used.
 
+## MCP server approval (5.17.84)
+
+Each MCP server card has an **Auto-approve all tools** checkbox. It saves an explicit
+`alwaysAllowAll` preference in that server's global or project MCP configuration and covers
+future tools and resource reads. It does not enable approval for other servers or require the
+MCP category toggle. The main auto-approval switch must remain on; the card shows a paused
+notice when it is off. Project servers do not inherit trust from same-named global servers.
+
+Turning the checkbox off restores the existing per-tool approval policy; individual tool
+permissions are not erased. Disabled tools stay disabled. Browser access consent, pause/revoke,
+and protected operations retain their separate safeguards. A normal one-time approval in chat
+does not silently enable persistent trust. English and Russian labels are provided; other
+locales use the English fallback.
+
 ## Adding features
 
 Put new IVOL-specific settings in `webview-ui/src/components/settings/IvolSettings.tsx`, grouped by function. Extract reusable controls from mixed upstream sections rather than duplicating them. Keep persisted keys and profile/global save semantics unchanged. Register searchable controls with `SearchableSetting`, a stable setting ID, and `section="ivol"`. Programmatic settings navigation uses `values: { section: "ivol" }` / `targetSection="ivol"`; do not redirect entire mixed legacy sections.

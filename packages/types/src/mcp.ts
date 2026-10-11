@@ -93,6 +93,7 @@ export type McpServer = {
 	resources?: McpResource[]
 	resourceTemplates?: McpResourceTemplate[]
 	disabled?: boolean
+	alwaysAllowAll?: boolean // kilocode_change: trust current and future server tools
 	timeout?: number
 	source?: "global" | "project"
 	projectPath?: string

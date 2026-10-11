@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.84
+
+- Remember approval for all current and future tools of a selected MCP server with one checkbox, while preserving the main auto-approval switch and separate browser safeguards.
+
 ## 5.17.83
 
 - Start new conversations with provider defaults and restore each conversation's own model, reasoning level and MAX/MED/MIN selection without changing other windows.

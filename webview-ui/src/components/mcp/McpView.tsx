@@ -203,6 +203,7 @@ const McpView = ({ onDone, hideHeader = false }: McpViewProps) => {
 
 const ServerRow = ({ server, alwaysAllowMcp }: { server: McpServer; alwaysAllowMcp?: boolean }) => {
 	const { t } = useAppTranslation()
+	const { autoApprovalEnabled } = useExtensionState() // kilocode_change
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 	const [timeoutValue, setTimeoutValue] = useState(() => {
@@ -367,6 +368,28 @@ const ServerRow = ({ server, alwaysAllowMcp }: { server: McpServer; alwaysAllowM
 				</div>
 			</div>
 
+			{/* kilocode_change start: persistent approval for this server, independent of per-tool lists. */}
+			<div className="px-2 py-2 text-xs" onClick={(event) => event.stopPropagation()}>
+				<VSCodeCheckbox
+					checked={server.alwaysAllowAll === true}
+					aria-label={`${t("mcp:serverApproval.label")} — ${server.name}`}
+					onChange={() =>
+						vscode.postMessage({
+							type: "toggleServerAlwaysAllow",
+							serverName: server.name,
+							source: server.source || "global",
+							alwaysAllow: server.alwaysAllowAll !== true,
+						})
+					}>
+					{t("mcp:serverApproval.label")}
+				</VSCodeCheckbox>
+				<div className="mt-1 text-vscode-descriptionForeground">{t("mcp:serverApproval.description")}</div>
+				{server.alwaysAllowAll && !autoApprovalEnabled && (
+					<div className="mt-1 text-vscode-descriptionForeground">{t("mcp:serverApproval.paused")}</div>
+				)}
+			</div>
+			{/* kilocode_change end */}
+
 			{isExpandable
 				? isExpanded && (
 						<div
@@ -418,7 +441,7 @@ const ServerRow = ({ server, alwaysAllowMcp }: { server: McpServer; alwaysAllowM
 													tool={tool}
 													serverName={server.name}
 													serverSource={server.source || "global"}
-													alwaysAllowMcp={alwaysAllowMcp}
+													alwaysAllowMcp={alwaysAllowMcp && !server.alwaysAllowAll} // kilocode_change
 												/>
 											))}
 										</div>
