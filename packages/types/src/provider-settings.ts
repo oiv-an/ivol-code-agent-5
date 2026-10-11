@@ -849,6 +849,31 @@ export const modelIdKeys = [
 	"aihubmixModelId", // kilocode_change
 ] as const satisfies readonly (keyof ProviderSettings)[]
 
+// kilocode_change start: only these non-secret fields may travel with task history.
+export const taskModelSelectionKeys = [
+	...modelIdKeys,
+	"modelPresets",
+	"activeModelPreset",
+	"reasoningEffort",
+	"enableReasoningEffort",
+	"modelMaxThinkingTokens",
+	"modelMaxTokens",
+	"includeMaxTokens",
+	"modelTemperature",
+	"verbosity",
+	"openRouterSpecificProvider",
+	"openAiCustomModelInfo",
+] as const satisfies readonly (keyof ProviderSettings)[]
+export const taskModelSelectionSchema = providerSettingsSchema.pick({
+	apiProvider: true,
+	...(Object.fromEntries(taskModelSelectionKeys.map((key) => [key, true as const])) as Record<
+		(typeof taskModelSelectionKeys)[number],
+		true
+	>),
+})
+export type TaskModelSelection = z.infer<typeof taskModelSelectionSchema>
+// kilocode_change end
+
 export type ModelIdKey = (typeof modelIdKeys)[number]
 
 export const getModelId = (settings: ProviderSettings): string | undefined => {

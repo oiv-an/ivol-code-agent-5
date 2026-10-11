@@ -1,5 +1,14 @@
 # IVOL Code Agent 5
 
+## 5.17.83
+
+- Start new conversations with provider defaults and restore each conversation's own model, reasoning level and MAX/MED/MIN selection without changing other windows.
+- Keep provider settings separate from conversation model choices, including when saving unrelated preferences.
+
+## 5.17.82
+
+- Keep the chat model, reasoning level and MAX/MED/MIN preset choice per project, so switching them in one window no longer changes other open projects.
+
 ## 5.17.81
 
 - Choose a separate autocomplete model from your current provider, with searchable model selection and complete multi-line code suggestions, without changing the chat model.

@@ -1,4 +1,5 @@
-import { isIntelligentTaskEnabled } from "@roo-code/types" // kilocode_change
+import { isIntelligentTaskEnabled, historyItemSchema } from "@roo-code/types" // kilocode_change
+import { pickModelSelection, applyModelSelection } from "../kilocode/taskModelSelection" // kilocode_change
 // npx vitest core/config/__tests__/ContextProxy.spec.ts
 
 import * as vscode from "vscode"
@@ -58,6 +59,65 @@ describe("ContextProxy", () => {
 		proxy = new ContextProxy(mockContext)
 		await proxy.initialize()
 	})
+
+	// kilocode_change start: conversation selections must never be persisted as shared defaults.
+	it("round-trips model snapshots without secrets and preserves unset reasoning", () => {
+		const selection = pickModelSelection({ apiProvider: "openai", openAiModelId: "task", openAiApiKey: "secret" })
+		const item = historyItemSchema.parse(
+			JSON.parse(
+				JSON.stringify({
+					id: "task",
+					number: 1,
+					ts: 1,
+					task: "task",
+					tokensIn: 0,
+					tokensOut: 0,
+					totalCost: 0,
+					modelSelection: { ...selection, openAiApiKey: "injected-secret" },
+				}),
+			),
+		)
+		expect(item.modelSelection).not.toHaveProperty("openAiApiKey")
+		const restored = applyModelSelection(
+			{ apiProvider: "openai", openAiModelId: "default", reasoningEffort: "high", openAiApiKey: "current-key" },
+			item.modelSelection,
+		)
+		expect(restored.openAiModelId).toBe("task")
+		expect(restored.reasoningEffort).toBeUndefined()
+		expect(restored.openAiApiKey).toBe("current-key")
+	})
+	it("isolates runtime model and credentials between windows without shared writes", async () => {
+		await proxy.setProviderSettings({
+			apiProvider: "openai",
+			openAiModelId: "default",
+			openAiApiKey: "default-key",
+		})
+		const other = new ContextProxy(mockContext)
+		await other.initialize()
+		await other.setProviderSettings({ apiProvider: "openai", openAiModelId: "other", openAiApiKey: "other-key" })
+		mockGlobalState.update.mockClear()
+		mockSecrets.store.mockClear()
+		mockSecrets.delete.mockClear()
+		proxy.setRuntimeProviderSettings("task-profile", {
+			apiProvider: "openai",
+			openAiModelId: "task-model",
+			openAiApiKey: "task-key",
+			modelTemperature: null,
+		})
+		expect(proxy.getProviderSettings()).toMatchObject({
+			openAiModelId: "task-model",
+			openAiApiKey: "task-key",
+			modelTemperature: null,
+		})
+		expect(proxy.getValue("currentApiConfigName")).toBe("task-profile")
+		expect(other.getProviderSettings()).toMatchObject({ openAiModelId: "other", openAiApiKey: "other-key" })
+		expect(mockGlobalState.update).not.toHaveBeenCalled()
+		expect(mockSecrets.store).not.toHaveBeenCalled()
+		expect(mockSecrets.delete).not.toHaveBeenCalled()
+		proxy.clearRuntimeProviderSettings()
+		expect(proxy.getProviderSettings().openAiModelId).toBe("default")
+	})
+	// kilocode_change end
 
 	describe("read-only pass-through properties", () => {
 		it("should return extension properties from the original context", () => {

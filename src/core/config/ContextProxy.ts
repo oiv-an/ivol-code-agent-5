@@ -69,6 +69,8 @@ export class ContextProxy {
 	private stateCache: GlobalState
 	private secretCache: SecretState
 	private _isInitialized = false
+	// kilocode_change: active conversation settings are process-local, never global defaults.
+	private runtimeProviderSettings?: { name: string; settings: ProviderSettings }
 	// kilocode_change start: permissions read through the host storage; failed writes stay locally disabled
 	private pendingYoloWrites = 0
 	private yoloWriteFailed = false
@@ -229,6 +231,15 @@ export class ContextProxy {
 	getGlobalState<K extends GlobalStateKey>(key: K): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue: GlobalState[K]): GlobalState[K]
 	getGlobalState<K extends GlobalStateKey>(key: K, defaultValue?: GlobalState[K]): GlobalState[K] {
+		// kilocode_change start
+		if (this.runtimeProviderSettings) {
+			if (key === "currentApiConfigName") return this.runtimeProviderSettings.name as GlobalState[K]
+			if (PROVIDER_SETTINGS_KEYS.includes(key as keyof ProviderSettings)) {
+				const value = this.runtimeProviderSettings.settings[key as keyof ProviderSettings]
+				return (value === undefined ? defaultValue : value) as GlobalState[K]
+			}
+		}
+		// kilocode_change end
 		// kilocode_change start: project indexes travel with the workspace, not the IDE profile.
 		if (key === "taskHistory" && hasProjectTaskStorage()) {
 			const history = mergeProjectTaskHistory(this.originalContext.globalState.get<HistoryItem[]>(key) ?? [])
@@ -320,6 +331,10 @@ export class ContextProxy {
 	 */
 
 	getSecret(key: SecretStateKey) {
+		// kilocode_change: read the selected conversation's credentials without rewriting shared storage.
+		if (this.runtimeProviderSettings && PROVIDER_SETTINGS_KEYS.includes(key as keyof ProviderSettings)) {
+			return this.runtimeProviderSettings.settings[key as keyof ProviderSettings] as string | undefined
+		}
 		return this.secretCache[key]
 	}
 
@@ -453,7 +468,18 @@ export class ContextProxy {
 		return sanitizedValues
 	}
 
+	// kilocode_change start
+	public setRuntimeProviderSettings(name: string, settings: ProviderSettings): void {
+		this.runtimeProviderSettings = { name, settings: structuredClone(settings) }
+	}
+
+	public clearRuntimeProviderSettings(): void {
+		this.runtimeProviderSettings = undefined
+	}
+	// kilocode_change end
+
 	public async setProviderSettings(values: ProviderSettings) {
+		this.runtimeProviderSettings = undefined // kilocode_change: explicit persisted configuration replaces the runtime view.
 		// kilocode_change start: Capture old values for change detection
 		const oldToken = this.secretCache.kilocodeToken
 		const oldOrgId = this.stateCache.kilocodeOrganizationId

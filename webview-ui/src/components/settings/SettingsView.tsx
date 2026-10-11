@@ -144,7 +144,16 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 	// kilocode_change end - editingProfile
 	const { t } = useAppTranslation()
 
-	const extensionState = useExtensionState()
+	// kilocode_change start: never save a conversation's model choice into provider defaults.
+	const liveExtensionState = useExtensionState()
+	const extensionState = useMemo(
+		() => ({
+			...liveExtensionState,
+			apiConfiguration: liveExtensionState.providerDefaultConfiguration ?? liveExtensionState.apiConfiguration,
+		}),
+		[liveExtensionState],
+	)
+	// kilocode_change end
 	const { currentApiConfigName, listApiConfigMeta, uriScheme } = extensionState
 
 	const [isDiscardDialogShow, setDiscardDialogShow] = useState(false)

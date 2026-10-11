@@ -540,6 +540,73 @@ describe("ClineProvider", () => {
 	)
 	// kilocode_change end
 
+	// kilocode_change start: model choices survive task restoration without changing defaults.
+	test("restores a task model while new conversations use the provider defaults", async () => {
+		const defaults = {
+			name: "current-config",
+			id: "profile-id",
+			apiProvider: "openai" as const,
+			openAiModelId: "default-model",
+		}
+		const manager = {
+			ensurePersonalActiveProfile: vi.fn().mockResolvedValue(defaults),
+			getProfile: vi.fn().mockResolvedValue(defaults),
+			listConfig: vi.fn().mockResolvedValue([defaults]),
+			saveConfig: vi.fn(),
+			activateProfile: vi.fn(),
+		}
+		;(provider as any).providerSettingsManager = manager
+		vi.spyOn(provider, "addClineToStack").mockImplementation(async (task) => {
+			;(provider as any).clineStack = [task]
+		})
+		vi.spyOn(provider, "postStateToWebview").mockResolvedValue(undefined)
+		await provider.contextProxy.initialize()
+		const item = {
+			id: "conversation-a",
+			number: 1,
+			ts: 1,
+			task: "A",
+			tokensIn: 0,
+			tokensOut: 0,
+			totalCost: 0,
+			apiConfigName: defaults.name,
+		}
+		await provider.updateTaskHistory(item)
+		const active: any = {
+			taskId: item.id,
+			taskApiConfigName: defaults.name,
+			apiConfiguration: defaults,
+			setTaskModelSelection: vi.fn((value) => {
+				active.taskModelSelection = value
+			}),
+			setTaskApiConfigName: vi.fn(),
+			updateApiConfiguration: vi.fn(),
+			emit: vi.fn(),
+			abortTask: vi.fn(),
+		}
+		;(provider as any).clineStack = [active]
+		await provider.setTaskModelSelection(defaults.name, {
+			...defaults,
+			openAiModelId: "task-model",
+			reasoningEffort: "low",
+		})
+		const saved = (mockContext.globalState.get("taskHistory") as any[])[0]
+		expect(saved.modelSelection).toMatchObject({ openAiModelId: "task-model", reasoningEffort: "low" })
+		await provider.clearTask()
+		expect(provider.contextProxy.getProviderSettings().openAiModelId).toBe("default-model")
+		await provider.createTask("B")
+		expect(vi.mocked(Task).mock.calls.at(-1)?.[0].apiConfiguration.openAiModelId).toBe("default-model")
+		await provider.createTaskWithHistoryItem(saved, { startTask: false })
+		expect(vi.mocked(Task).mock.calls.at(-1)?.[0].apiConfiguration).toMatchObject({
+			openAiModelId: "task-model",
+			reasoningEffort: "low",
+		})
+		expect(provider.contextProxy.getProviderSettings().openAiModelId).toBe("task-model")
+		expect(manager.saveConfig).not.toHaveBeenCalled()
+		expect(manager.activateProfile).not.toHaveBeenCalled()
+	})
+	// kilocode_change end
+
 	test("constructor initializes correctly", () => {
 		expect(provider).toBeInstanceOf(ClineProvider)
 		// Since getVisibleInstance returns the last instance where view.visible is true
@@ -1310,8 +1377,11 @@ describe("ClineProvider", () => {
 
 		// Should load the saved config for architect mode
 		expect(provider.providerSettingsManager.getModeConfigId).toHaveBeenCalledWith("architect")
-		expect(provider.providerSettingsManager.activateProfile).toHaveBeenCalledWith({ name: "test-config" })
-		expect(mockContext.globalState.update).toHaveBeenCalledWith("currentApiConfigName", "test-config")
+		// kilocode_change: activation is local to this conversation.
+		expect(provider.providerSettingsManager.getProfile).toHaveBeenCalledWith({ name: "test-config" })
+		expect(provider.providerSettingsManager.activateProfile).not.toHaveBeenCalled()
+		expect(provider.contextProxy.getValue("currentApiConfigName")).toBe("test-config")
+		expect(mockContext.globalState.update).not.toHaveBeenCalledWith("currentApiConfigName", "test-config")
 	})
 
 	it("saves current config when switching to mode without config", async () => {
@@ -1332,7 +1402,7 @@ describe("ClineProvider", () => {
 		await messageHandler({ type: "mode", text: "architect" })
 
 		// Should save current config as default for architect mode
-		expect(provider.providerSettingsManager.setModeConfig).toHaveBeenCalledWith("architect", "current-id")
+		expect(provider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled() // kilocode_change
 	})
 
 	it("saves config as default for current mode when loading config", async () => {
@@ -1342,6 +1412,7 @@ describe("ClineProvider", () => {
 		const profile: ProviderSettingsEntry = { apiProvider: "anthropic", id: "new-id", name: "new-config" }
 
 		;(provider as any).providerSettingsManager = {
+			getProfile: vi.fn().mockResolvedValue(profile), // kilocode_change
 			activateProfile: vi.fn().mockResolvedValue(profile),
 			listConfig: vi.fn().mockResolvedValue([profile]),
 			setModeConfig: vi.fn(),
@@ -1355,7 +1426,7 @@ describe("ClineProvider", () => {
 		await messageHandler({ type: "loadApiConfiguration", text: "new-config" })
 
 		// Should save new config as default for architect mode
-		expect(provider.providerSettingsManager.setModeConfig).toHaveBeenCalledWith("architect", "new-id")
+		expect(provider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled() // kilocode_change
 	})
 
 	it("load API configuration by ID works and updates mode config", async () => {
@@ -1369,6 +1440,7 @@ describe("ClineProvider", () => {
 		}
 
 		;(provider as any).providerSettingsManager = {
+			getProfile: vi.fn().mockResolvedValue(profile), // kilocode_change
 			activateProfile: vi.fn().mockResolvedValue(profile),
 			listConfig: vi.fn().mockResolvedValue([profile]),
 			setModeConfig: vi.fn(),
@@ -1382,10 +1454,11 @@ describe("ClineProvider", () => {
 		await messageHandler({ type: "loadApiConfigurationById", text: "config-id-123" })
 
 		// Should save new config as default for architect mode
-		expect(provider.providerSettingsManager.setModeConfig).toHaveBeenCalledWith("architect", "config-id-123")
+		expect(provider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled() // kilocode_change
 
 		// Ensure the `activateProfile` method was called with the correct ID
-		expect(provider.providerSettingsManager.activateProfile).toHaveBeenCalledWith({ id: "config-id-123" })
+		expect(provider.providerSettingsManager.getProfile).toHaveBeenCalledWith({ id: "config-id-123" }) // kilocode_change
+		expect(provider.providerSettingsManager.activateProfile).not.toHaveBeenCalled() // kilocode_change
 	})
 
 	test("handles browserToolEnabled setting", async () => {
@@ -2044,8 +2117,10 @@ describe("ClineProvider", () => {
 
 			// Verify saved config was loaded
 			expect(provider.providerSettingsManager.getModeConfigId).toHaveBeenCalledWith("architect")
-			expect(provider.providerSettingsManager.activateProfile).toHaveBeenCalledWith({ name: "saved-config" })
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("currentApiConfigName", "saved-config")
+			// kilocode_change: a mode switch reads the profile without changing shared defaults.
+			expect(provider.providerSettingsManager.getProfile).toHaveBeenCalledWith({ name: "saved-config" })
+			expect(provider.providerSettingsManager.activateProfile).not.toHaveBeenCalled()
+			expect(provider.contextProxy.getValue("currentApiConfigName")).toBe("saved-config")
 
 			// Verify state was posted to webview
 			expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state" }))
@@ -2075,7 +2150,7 @@ describe("ClineProvider", () => {
 			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
 
 			// Verify current config was saved as default for new mode
-			expect(provider.providerSettingsManager.setModeConfig).toHaveBeenCalledWith("architect", "current-id")
+			expect(provider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled() // kilocode_change
 
 			// Verify state was posted to webview
 			expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state" }))
@@ -2147,6 +2222,9 @@ describe("ClineProvider", () => {
 
 			// Mock provider settings manager
 			;(provider as any).providerSettingsManager = {
+				ensurePersonalActiveProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "current-config", apiProvider: "openai" }), // kilocode_change
 				getModeConfigId: vi.fn().mockResolvedValue(undefined),
 				listConfig: vi.fn().mockResolvedValue([]),
 			}
@@ -2211,6 +2289,12 @@ describe("ClineProvider", () => {
 
 			// Mock provider settings manager
 			;(provider as any).providerSettingsManager = {
+				ensurePersonalActiveProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "current-config", apiProvider: "openai" }), // kilocode_change
+				getProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "test-config", id: "config-id", apiProvider: "anthropic" }), // kilocode_change
 				getModeConfigId: vi.fn().mockResolvedValue("config-id"),
 				listConfig: vi
 					.fn()
@@ -2271,6 +2355,9 @@ describe("ClineProvider", () => {
 
 			// Mock provider settings manager
 			;(provider as any).providerSettingsManager = {
+				ensurePersonalActiveProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "current-config", apiProvider: "openai" }), // kilocode_change
 				getModeConfigId: vi.fn().mockResolvedValue(undefined),
 				listConfig: vi.fn().mockResolvedValue([]),
 			}
@@ -2302,6 +2389,9 @@ describe("ClineProvider", () => {
 
 			// Mock provider settings manager
 			;(provider as any).providerSettingsManager = {
+				ensurePersonalActiveProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "current-config", apiProvider: "openai" }), // kilocode_change
 				getModeConfigId: vi.fn().mockResolvedValue(undefined),
 				listConfig: vi.fn().mockResolvedValue([]),
 			}
@@ -2346,6 +2436,10 @@ describe("ClineProvider", () => {
 
 			// Mock provider settings manager to throw error
 			;(provider as any).providerSettingsManager = {
+				ensurePersonalActiveProfile: vi
+					.fn()
+					.mockResolvedValue({ name: "current-config", apiProvider: "openai" }), // kilocode_change
+				getProfile: vi.fn().mockRejectedValue(new Error("Failed to load config")), // kilocode_change
 				getModeConfigId: vi.fn().mockResolvedValue("config-id"),
 				listConfig: vi
 					.fn()

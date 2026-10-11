@@ -115,7 +115,7 @@ describe("ModelSelector", () => {
 
 		expect(vscode.postMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
-				type: "upsertApiConfiguration",
+				type: "setTaskModelSelection", // kilocode_change
 				text: "test-profile",
 				apiConfiguration: expect.objectContaining({
 					openAiBaseUrl: "https://provider.example/v1",
@@ -178,7 +178,7 @@ describe("ModelSelector", () => {
 
 		expect(vscode.postMessage).toHaveBeenCalledWith(
 			expect.objectContaining({
-				type: "upsertApiConfiguration",
+				type: "setTaskModelSelection", // kilocode_change
 				apiConfiguration: expect.objectContaining({ apiModelId: "model-2" }),
 			}),
 		)

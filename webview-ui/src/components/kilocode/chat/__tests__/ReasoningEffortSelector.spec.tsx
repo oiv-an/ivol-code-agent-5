@@ -221,7 +221,7 @@ describe("ReasoningEffortSelector", () => {
 		fireEvent.click(screen.getByRole("button", { name: "MIN" }))
 		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
 		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change
 			text: "proxy-profile",
 			apiConfiguration: expect.objectContaining({
 				openAiModelId: "small-model",
@@ -265,7 +265,7 @@ describe("ReasoningEffortSelector", () => {
 			await choose(effortLabel("max"))
 			expect(vscode.postMessage).toHaveBeenCalledTimes(1)
 			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "upsertApiConfiguration",
+				type: "setTaskModelSelection", // kilocode_change
 				text: "proxy-profile",
 				apiConfiguration: {
 					...initial,

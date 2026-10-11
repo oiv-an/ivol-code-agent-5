@@ -415,6 +415,29 @@ describe("SettingsView - Sound Settings", () => {
 		expect(screen.getByTestId("tab-ivol")).toHaveAttribute("aria-label", "settings:sections.ivol")
 		expect(screen.getByTestId("settings-tab-list").firstElementChild).toBe(screen.getByTestId("tab-ivol"))
 	})
+	// kilocode_change: saving unrelated preferences must not promote a task model to global defaults.
+	it("saves provider defaults instead of the active conversation model", async () => {
+		const { activateTab, getSettingsContent } = renderSettingsView({
+			currentApiConfigName: "Proxy",
+			apiConfiguration: { apiProvider: "openai", openAiModelId: "task-model", reasoningEffort: "low" },
+			providerDefaultConfiguration: {
+				apiProvider: "openai",
+				openAiModelId: "default-model",
+				reasoningEffort: "high",
+			},
+		})
+		await waitFor(() => expect(screen.getByTestId("api-config-management")).toHaveTextContent("Proxy"))
+		activateTab("notifications")
+		fireEvent.click(within(getSettingsContent()).getByTestId("sound-enabled-checkbox"))
+		fireEvent.click(screen.getByTestId("save-button"))
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "upsertApiConfiguration",
+				apiConfiguration: expect.objectContaining({ openAiModelId: "default-model", reasoningEffort: "high" }),
+			}),
+		)
+	})
+
 	// kilocode_change: previously Save immediately restored the old extension snapshot.
 	it("keeps the autocomplete model and chat toggle after Save and intermediate stale state messages", async () => {
 		const oldSettings = {

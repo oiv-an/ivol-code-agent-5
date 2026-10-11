@@ -16,6 +16,7 @@ import {
 } from "./kilocode/OrdinaryContextPreparation"
 // kilocode_change end
 import { resolveContextMemoryMode } from "../task-document/settings" // kilocode_change
+import { pickModelSelection } from "../config/kilocode/taskModelSelection" // kilocode_change
 import { redactPotentialSecrets } from "../context-management/redact-secrets" // kilocode_change
 
 import { Anthropic } from "@anthropic-ai/sdk"
@@ -385,6 +386,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private _taskApiConfigName: string | undefined
 
+	// kilocode_change: chat-footer model/reasoning/preset choice that belongs to this task only
+	private _taskModelSelection: HistoryItem["modelSelection"]
+
 	/**
 	 * Promise that resolves when the task API config name has been initialized.
 	 * This ensures async API config name initialization completes before the task is used.
@@ -708,6 +712,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (historyItem) {
 			this._taskMode = historyItem.mode || defaultModeSlug
 			this._taskApiConfigName = historyItem.apiConfigName
+			this._taskModelSelection = pickModelSelection(apiConfiguration) // kilocode_change: includes restored choices or legacy defaults.
 			this.taskModeReady = Promise.resolve()
 			this.taskApiConfigReady = Promise.resolve()
 			TelemetryService.instance.captureTaskRestarted(this.taskId)
@@ -719,6 +724,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// For new tasks, don't set the mode/apiConfigName yet - wait for async initialization.
 			this._taskMode = undefined
 			this._taskApiConfigName = undefined
+			this._taskModelSelection = pickModelSelection(apiConfiguration) // kilocode_change: freeze before the first request.
 			this.taskModeReady = this.initializeTaskMode(provider)
 			this.taskApiConfigReady = this.initializeTaskApiConfigName(provider)
 			TelemetryService.instance.captureTaskCreated(this.taskId)
@@ -942,6 +948,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.providerProfileChangeListener = async () => {
 			try {
 				const newState = await provider.getState()
+				if (provider.getCurrentTask() !== this) return // kilocode_change: another task's profile is not ours.
 				if (newState?.apiConfiguration) {
 					this.updateApiConfiguration(newState.apiConfiguration)
 				}
@@ -1112,6 +1119,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public setTaskApiConfigName(apiConfigName: string | undefined): void {
 		this._taskApiConfigName = apiConfigName
 	}
+
+	// kilocode_change start: task-scoped model selection
+	public get taskModelSelection(): HistoryItem["modelSelection"] {
+		return this._taskModelSelection
+	}
+
+	public setTaskModelSelection(selection: HistoryItem["modelSelection"]): void {
+		this._taskModelSelection = selection ? pickModelSelection(selection) : undefined
+	}
+	// kilocode_change end
 
 	static create(options: TaskOptions): [Task, Promise<void>] {
 		const instance = new Task({ ...options, startTask: false })
@@ -1557,6 +1574,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				initialStatus: this.initialStatus,
 				toolProtocol: this._taskToolProtocol, // Persist the locked tool protocol.
 				cumulativeTotalCost: this.getCumulativeTotalCost(), // kilocode_change: include deleted message costs.
+				modelSelection: this._taskModelSelection, // kilocode_change
 			})
 
 			// Emit token/tool usage updates using debounced function
@@ -1566,6 +1584,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// - Final state is emitted when updates stop (trailing: true)
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
+			// kilocode_change: metadata calculation awaits disk work; retain the latest footer selection.
+			historyItem.modelSelection = this._taskModelSelection
+			historyItem.apiConfigName = this._taskApiConfigName
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
 		} catch (error) {
 			console.error("Failed to save messages:", error)

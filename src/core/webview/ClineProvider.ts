@@ -104,6 +104,7 @@ import { VirtualQuotaFallbackHandler } from "../../api/providers/virtual-quota-f
 import { ContextProxy } from "../config/ContextProxy"
 import { getEnabledRules } from "./kilorules"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
+import { applyModelSelection, pickModelSelection } from "../config/kilocode/taskModelSelection" // kilocode_change
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
 import { disposeTelegram, beginTelegramTransfer } from "../kilocode/webview/telegramHandler" // kilocode_change
@@ -1031,6 +1032,7 @@ export class ClineProvider
 			await this.removeClineFromStack()
 		}
 
+		await this.resetConversationModel() // kilocode_change: old tasks without a snapshot use provider defaults.
 		// If the history item has a saved mode, restore it and its associated API configuration.
 		if (historyItem.mode) {
 			// Validate that the mode still exists
@@ -1072,7 +1074,10 @@ export class ClineProvider
 
 							// kilocode_change start: do not restore a hidden mode profile
 							if (hasActualSettings && isPersonalProvider(fullProfile.apiProvider)) {
-								await this.activateProviderProfile({ name: profile.name })
+								await this.activateProviderProfile(
+									{ name: profile.name },
+									{ persistModeConfig: false, persistTaskHistory: false },
+								) // kilocode_change
 							} else {
 								// The task will continue with the current/default configuration.
 							}
@@ -1132,7 +1137,7 @@ export class ClineProvider
 		}
 
 		const {
-			apiConfiguration,
+			apiConfiguration: profileConfiguration,
 			diffEnabled: enableDiff,
 			enableCheckpoints,
 			checkpointTimeout,
@@ -1141,6 +1146,14 @@ export class ClineProvider
 			cloudUserInfo,
 			taskSyncEnabled,
 		} = await this.getState()
+		// kilocode_change start: never apply a missing profile's model to a fallback connection.
+		const restoredProfileName = this.getGlobalState("currentApiConfigName") ?? "default"
+		const apiConfiguration = applyModelSelection(
+			profileConfiguration,
+			historyItem.apiConfigName === restoredProfileName ? historyItem.modelSelection : undefined,
+		)
+		this.contextProxy.setRuntimeProviderSettings(restoredProfileName, apiConfiguration)
+		// kilocode_change end
 
 		const task = new Task({
 			context: this.context, // kilocode_change
@@ -1557,18 +1570,8 @@ export class ClineProvider
 			} else {
 				// The task will continue with the current/default configuration.
 			}
-		} else {
-			// If no saved config for this mode, save current config as default.
-			const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
-
-			if (currentApiConfigNameAfter) {
-				const config = listApiConfig.find((c) => c.name === currentApiConfigNameAfter)
-
-				if (config?.id) {
-					await this.providerSettingsManager.setModeConfig(newMode, config.id)
-				}
-			}
 		}
+		// kilocode_change: without a mode default keep the local selection; never write shared defaults.
 
 		await this.postStateToWebview()
 
@@ -1704,15 +1707,15 @@ export class ClineProvider
 					this.contextProxy.setProviderSettings(providerSettings),
 				])
 
-				// Change the provider for the current task.
-				// TODO: We should rename `buildApiHandler` for clarity (e.g. `getProviderClient`).
+				// kilocode_change start: Settings saves defaults, not the active conversation's snapshot.
 				const task = this.getCurrentTask()
-
-				if (task) {
-					task.api = buildApiHandler(providerSettings)
-				}
-
-				this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true })
+				const effective =
+					task?.taskApiConfigName === name
+						? applyModelSelection(providerSettings, task.taskModelSelection)
+						: providerSettings
+				this.contextProxy.setRuntimeProviderSettings(name, effective)
+				this.updateTaskApiHandlerIfNeeded(effective, { forceRebuild: true })
+				// kilocode_change end
 
 				// Keep the current task's sticky provider profile in sync with the newly-activated profile.
 				await this.persistStickyProviderProfileToCurrentTask(name)
@@ -1764,6 +1767,38 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	// kilocode_change start: footer edits change the conversation, never the shared profile.
+	private async resetConversationModel(): Promise<void> {
+		const { name, id: _id, ...settings } = await this.providerSettingsManager.ensurePersonalActiveProfile()
+		this.contextProxy.setRuntimeProviderSettings(name, settings)
+	}
+
+	async setTaskModelSelection(name: string, settings: ProviderSettings): Promise<void> {
+		const task = this.getCurrentTask()
+		const { name: _name, id: _id, ...profile } = await this.providerSettingsManager.getProfile({ name })
+		if (task !== this.getCurrentTask() || name !== this.getGlobalState("currentApiConfigName")) {
+			throw new Error("The active conversation changed before the model selection was applied")
+		}
+		if (!isPersonalProvider(profile.apiProvider) || settings.apiProvider !== profile.apiProvider) {
+			throw new Error("Model selection belongs to an unavailable or different provider")
+		}
+		const selection = pickModelSelection(settings)
+		const effective = applyModelSelection(profile, selection)
+		if (task) {
+			task.setTaskModelSelection(selection)
+			task.setTaskApiConfigName(name)
+			const history = this.getGlobalState("taskHistory") ?? []
+			const item = history.find((entry) => entry.id === task.taskId)
+			if (item) await this.updateTaskHistory({ ...item, modelSelection: selection })
+		}
+		if (task !== this.getCurrentTask()) return
+		// With no conversation yet this is a window-local draft, never a new global default.
+		this.contextProxy.setRuntimeProviderSettings(name, effective)
+		this.updateTaskApiHandlerIfNeeded(effective, { forceRebuild: true })
+		await this.postStateToWebview()
+	}
+	// kilocode_change end
+
 	private async persistStickyProviderProfileToCurrentTask(apiConfigName: string): Promise<void> {
 		const task = this.getCurrentTask()
 		if (!task) {
@@ -1779,7 +1814,11 @@ export class ClineProvider
 			const taskHistoryItem = history.find((item) => item.id === task.taskId)
 
 			if (taskHistoryItem) {
-				await this.updateTaskHistory({ ...taskHistoryItem, apiConfigName })
+				await this.updateTaskHistory({
+					...taskHistoryItem,
+					apiConfigName,
+					modelSelection: task.taskModelSelection,
+				}) // kilocode_change
 			}
 		} catch (error) {
 			// If persistence fails, log the error but don't fail the profile switch.
@@ -1795,23 +1834,23 @@ export class ClineProvider
 		args: { name: string } | { id: string },
 		options?: { persistModeConfig?: boolean; persistTaskHistory?: boolean },
 	) {
-		const { name, id, ...providerSettings } = await this.providerSettingsManager.activateProfile(args)
+		// kilocode_change start: activating a conversation profile must not change other windows' defaults.
+		const { name, id: _id, ...profileSettings } = await this.providerSettingsManager.getProfile(args)
+		if (!isPersonalProvider(profileSettings.apiProvider)) throw new Error("Unavailable provider")
+		const currentTask = this.getCurrentTask()
+		const providerSettings =
+			options?.persistTaskHistory !== false && currentTask?.taskApiConfigName === name
+				? applyModelSelection(profileSettings, currentTask.taskModelSelection as ProviderSettings | undefined)
+				: profileSettings
+		// kilocode_change end
 
-		const persistModeConfig = options?.persistModeConfig ?? true
 		const persistTaskHistory = options?.persistTaskHistory ?? true
 
 		// See `upsertProviderProfile` for a description of what this is doing.
-		await Promise.all([
-			this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
-			this.contextProxy.setValue("currentApiConfigName", name),
-			this.contextProxy.setProviderSettings(providerSettings),
-		])
+		await this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig())
+		this.contextProxy.setRuntimeProviderSettings(name, providerSettings) // kilocode_change
 
-		const { mode } = await this.getState()
-
-		if (id && persistModeConfig) {
-			await this.providerSettingsManager.setModeConfig(mode, id)
-		}
+		// kilocode_change: mode associations are defaults edited explicitly, not by task restoration.
 
 		// Change the provider for the current task.
 		this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true })
@@ -1819,6 +1858,8 @@ export class ClineProvider
 		// Update the current task's sticky provider profile, unless this activation is
 		// being used purely as a non-persisting restoration (e.g., reopening a task from history).
 		if (persistTaskHistory) {
+			// kilocode_change: remember the new profile's model before publishing the history update.
+			currentTask?.setTaskModelSelection(pickModelSelection(providerSettings))
 			await this.persistStickyProviderProfileToCurrentTask(name)
 		}
 
@@ -2510,7 +2551,25 @@ export class ClineProvider
 		this.kiloCodeTaskHistorySizeForTelemetryOnly = taskHistory.length
 		// kilocode_change end
 
+		// kilocode_change start: expose the stored profile separately from the conversation selection.
+		let providerDefaultConfiguration: ProviderSettings | undefined
+		if (currentApiConfigName) {
+			try {
+				const {
+					name: _name,
+					id: _id,
+					...defaults
+				} = await this.providerSettingsManager.getProfile({ name: currentApiConfigName })
+				providerDefaultConfiguration = defaults
+			} catch (error) {
+				this.log(
+					`Unable to load provider defaults for Settings: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+		// kilocode_change end
 		return {
+			providerDefaultConfiguration, // kilocode_change
 			version: this.context.extension?.packageJSON?.version ?? "",
 			// kilocode_change start
 			taskDocumentSettings: this.getTaskDocumentSettings(apiConfiguration),
@@ -3375,6 +3434,8 @@ export class ClineProvider
 		options: CreateTaskOptions = {},
 		configuration: RooCodeSettings = {},
 	): Promise<Task> {
+		// kilocode_change: a new conversation never inherits another task's model choice.
+		await this.resetConversationModel()
 		if (configuration) {
 			// kilocode_change start: public task API cannot reactivate a hidden provider
 			if (configuration.apiProvider && !isPersonalProvider(configuration.apiProvider)) {
@@ -3556,6 +3617,7 @@ export class ClineProvider
 			console.log(`[clearTask] clearing task ${task.taskId}.${task.instanceId}`)
 			await this.removeClineFromStack()
 		}
+		await this.resetConversationModel() // kilocode_change
 	}
 
 	public resumeTask(taskId: string): void {
@@ -3996,10 +4058,13 @@ export class ClineProvider
 	 * Only this one preference is written; models, providers and every other setting stay as they are.
 	 */
 	public async enableIntelligentTaskForCurrentProfile(): Promise<void> {
-		const { currentApiConfigName, apiConfiguration } = await this.getState()
+		const { currentApiConfigName } = await this.getState()
 		if (!currentApiConfigName) throw new Error("No provider profile is selected")
+		const { name: _name, ...defaults } = await this.providerSettingsManager.getProfile({
+			name: currentApiConfigName,
+		}) // kilocode_change
 		await this.upsertProviderProfile(currentApiConfigName, {
-			...apiConfiguration,
+			...defaults,
 			intelligentTaskEnabled: true,
 		})
 		const task = this.getCurrentTask()

@@ -76,7 +76,7 @@ export const InvalidModelWarning = ({ message, isLast }: { message: ClineMessage
 							setWasContinueClicked(true)
 							if (canChangeToDefaultModel) {
 								vscode.postMessage({
-									type: "upsertApiConfiguration",
+									type: "setTaskModelSelection", // kilocode_change: recovery must not rewrite provider defaults.
 									text: currentApiConfigName,
 									apiConfiguration: {
 										...apiConfiguration,

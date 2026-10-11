@@ -62,7 +62,7 @@ export const LowCreditWarning = ({ message }: LowCreditWarningProps) => {
 			return
 		}
 		vscode.postMessage({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change: fallback model belongs to this conversation.
 			text: currentApiConfigName,
 			apiConfiguration: {
 				...apiConfiguration,

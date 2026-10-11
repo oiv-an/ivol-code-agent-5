@@ -768,6 +768,7 @@ export type ExtensionState = Pick<
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	currentTaskCumulativeCost?: number // kilocode_change: cumulative cost including deleted messages
 	apiConfiguration: ProviderSettings
+	providerDefaultConfiguration?: ProviderSettings // kilocode_change: Settings edits defaults, not the task snapshot.
 	uriScheme?: string
 	uiKind?: string // kilocode_change
 
@@ -935,6 +936,7 @@ export interface WebviewMessage {
 		| "currentApiConfigName"
 		| "saveApiConfiguration"
 		| "upsertApiConfiguration"
+		| "setTaskModelSelection" // kilocode_change: chat-footer model choice scoped to the current task
 		| "deleteApiConfiguration"
 		| "loadApiConfiguration"
 		| "loadApiConfigurationById"

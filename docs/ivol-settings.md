@@ -12,6 +12,17 @@ Open **Settings → IVOL** (the first item, with a sparkles icon). The same webv
 
 Provider URLs, credentials, model selection, transport settings, terminal, auto-approval, standard isolated-browser controls, display preferences, autocomplete and upstream experiments remain in their existing sections. A fork-specific implementation improvement does not by itself make a standard setting an IVOL feature.
 
+## Conversation model choices (5.17.83)
+
+New conversations and newly opened windows start from the saved provider defaults. Model,
+reasoning and MAX/MED/MIN changes in the chat footer belong to the current conversation;
+reopening it restores its last selection. These choices do not update the shared profile or
+another window. The history stores validated model fields only, never provider credentials.
+Settings continues to edit the stored profile defaults, not the active conversation snapshot.
+Older conversations without a saved selection use provider defaults on first restoration;
+previous model choices cannot be reconstructed retroactively. The project selection introduced
+in 5.17.82 is no longer used.
+
 ## Adding features
 
 Put new IVOL-specific settings in `webview-ui/src/components/settings/IvolSettings.tsx`, grouped by function. Extract reusable controls from mixed upstream sections rather than duplicating them. Keep persisted keys and profile/global save semantics unchanged. Register searchable controls with `SearchableSetting`, a stable setting ID, and `section="ivol"`. Programmatic settings navigation uses `values: { section: "ivol" }` / `targetSection="ivol"`; do not redirect entire mixed legacy sections.

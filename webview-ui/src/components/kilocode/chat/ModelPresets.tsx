@@ -134,7 +134,7 @@ export function ModelPresetSelector({
 						onClick={() => {
 							if (!preset?.modelId || selected) return
 							vscode.postMessage({
-								type: "upsertApiConfiguration",
+								type: "setTaskModelSelection", // kilocode_change: preset choice stays in this task
 								text: profileName,
 								apiConfiguration: {
 									...applyModelPreset(configuration, preset),

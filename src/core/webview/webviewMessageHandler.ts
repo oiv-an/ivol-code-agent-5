@@ -2665,6 +2665,21 @@ export const webviewMessageHandler = async (
 			}
 			// kilocode_change end: check for kilocodeToken change to remove organizationId and fetch organization modes
 			break
+		// kilocode_change start: chat-footer model/reasoning/preset choice stays in this task
+		case "setTaskModelSelection":
+			if (message.text && message.apiConfiguration) {
+				try {
+					await provider.setTaskModelSelection(message.text, message.apiConfiguration)
+					vscode.commands.executeCommand("ivol-code-agent-5.autocomplete.reload")
+				} catch (error) {
+					provider.log(
+						`Error setting task model selection: ${error instanceof Error ? error.message : String(error)}`,
+					)
+					vscode.window.showErrorMessage(t("common:errors.save_api_config"))
+				}
+			}
+			break
+		// kilocode_change end
 		case "renameApiConfiguration":
 			if (message.values && message.apiConfiguration) {
 				try {

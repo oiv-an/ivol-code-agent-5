@@ -112,7 +112,7 @@ export const ReasoningEffortSelector = ({
 			}
 		}
 		vscode.postMessage({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change: reasoning choice stays in this task
 			text: currentApiConfigName,
 			apiConfiguration: updated,
 		})

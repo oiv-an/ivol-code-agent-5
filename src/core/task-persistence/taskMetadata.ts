@@ -36,6 +36,8 @@ export type TaskMetadataOptions = {
 	 * if provided, this overrides the calculated totalCost from messages.
 	 */
 	cumulativeTotalCost?: number
+	/** Chat-footer model/reasoning/preset choice made inside this task. */
+	modelSelection?: HistoryItem["modelSelection"]
 	// kilocode_change end
 }
 
@@ -52,6 +54,7 @@ export async function taskMetadata({
 	initialStatus,
 	toolProtocol,
 	cumulativeTotalCost, // kilocode_change
+	modelSelection, // kilocode_change
 }: TaskMetadataOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, id)
 
@@ -128,6 +131,7 @@ export async function taskMetadata({
 		mode,
 		...(toolProtocol && { toolProtocol }),
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
+		...(modelSelection && Object.keys(modelSelection).length > 0 ? { modelSelection } : {}), // kilocode_change
 		...(initialStatus && { status: initialStatus }),
 	}
 

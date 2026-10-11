@@ -115,7 +115,7 @@ export const ModelSelector = ({
 		if (selectedModelId === target || !providerModels[target]) return
 
 		vscode.postMessage({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change: model choice stays in this task
 			text: currentApiConfigName,
 			apiConfiguration: {
 				...apiConfiguration,
@@ -151,7 +151,7 @@ export const ModelSelector = ({
 			}
 		}
 		vscode.postMessage({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change: model choice stays in this task
 			text: currentApiConfigName,
 			apiConfiguration: {
 				...apiConfiguration,
@@ -168,7 +168,7 @@ export const ModelSelector = ({
 			return
 		}
 		vscode.postMessage({
-			type: "upsertApiConfiguration",
+			type: "setTaskModelSelection", // kilocode_change: model choice stays in this task
 			text: currentApiConfigName,
 			apiConfiguration: {
 				...apiConfiguration,

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { taskModelSelectionSchema } from "./provider-settings.js" // kilocode_change
 
 /**
  * HistoryItem
@@ -31,6 +32,8 @@ export const historyItemSchema = z.object({
 	 */
 	toolProtocol: z.enum(["xml", "native"]).optional(),
 	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
+	// kilocode_change: chat-footer model/reasoning/preset choice made inside this task (no credentials)
+	modelSelection: taskModelSelectionSchema.optional(),
 	status: z.enum(["active", "completed", "delegated"]).optional(),
 	delegatedToId: z.string().optional(), // Last child this parent delegated to
 	childIds: z.array(z.string()).optional(), // All children spawned by this task
