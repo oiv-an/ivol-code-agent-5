@@ -731,7 +731,9 @@ describe("read_file tool output structure", () => {
 			const result = await executeReadFileTool()
 
 			// Verify native format
-			expect(result).toBe(`File: ${testFilePath}\nLines 1-5:\n${numberedContent}`)
+			expect(result).toBe(
+				`File: ${testFilePath}\nLines 1-5:\n${numberedContent}\n\nNote: End of file (5 total lines). No further lines exist.`,
+			) // kilocode_change
 		})
 
 		it("should follow the correct native structure format", async () => {
@@ -2063,7 +2065,14 @@ describe("read_file tool concurrent file reads limit", () => {
 
 // kilocode_change start
 describe("bounded file reading", () => {
-	async function run(files: any[], contextTokens = 10000, maxReadFileLine = -1, native = true, binary = false) {
+	async function run(
+		files: any[],
+		contextTokens = 10000,
+		maxReadFileLine = -1,
+		native = true,
+		binary = false,
+		totalLines = 1000,
+	) {
 		const { mockCline, mockProvider } = createMockCline()
 		mockProvider.getState.mockResolvedValue({ maxReadFileLine })
 		mockCline.apiConfiguration = { apiProvider: "anthropic", toolProtocol: native ? "native" : "xml" }
@@ -2071,7 +2080,7 @@ describe("bounded file reading", () => {
 		mockCline.getTokenUsage.mockReturnValue({ contextTokens })
 		fsPromises.stat.mockResolvedValue({ isDirectory: () => false })
 		vi.mocked(isBinaryFile).mockResolvedValue(binary)
-		vi.mocked(countFileLines).mockResolvedValue(1000)
+		vi.mocked(countFileLines).mockResolvedValue(totalLines)
 		const pushToolResult = vi.fn()
 		await readFileTool.execute({ files }, mockCline, {
 			askApproval: vi.fn(),
@@ -2082,6 +2091,32 @@ describe("bounded file reading", () => {
 		})
 		return { text: pushToolResult.mock.calls[0][0] as string, mockCline }
 	}
+	it.each([true, false])("reports EOF without suggesting a nonexistent continuation, native=%s", async (native) => {
+		mockReadFileWithTokenBudget.mockResolvedValue({ content: "last", tokenCount: 2, lineCount: 1, complete: true })
+		const { text } = await run(
+			[{ path: "AI_INSTRUCTIONS.md", lineRanges: [{ start: 475, end: 500 }] }],
+			10000,
+			-1,
+			native,
+			false,
+			475,
+		)
+		expect(text).toContain("End of file (475 total lines)")
+		expect(text).not.toContain("Continue")
+	})
+	it.each([true, false])("handles a stale line 501 request without an error retry, native=%s", async (native) => {
+		const { text } = await run(
+			[{ path: "AI_INSTRUCTIONS.md", lineRanges: [{ start: 501, end: 700 }] }],
+			10000,
+			-1,
+			native,
+			false,
+			475,
+		)
+		expect(text).toContain("beyond end of file (475 total lines)")
+		expect(text).toContain("Do not retry this range")
+		expect(mockReadFileWithTokenBudget).not.toHaveBeenCalled()
+	})
 	it("shares a decreasing budget across files and accounts for numbered output", async () => {
 		mockReadFileWithTokenBudget.mockResolvedValue({
 			content: "hello",

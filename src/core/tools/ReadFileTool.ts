@@ -369,7 +369,10 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 			const maxOutputTokens =
 				getModelMaxOutputTokens({ modelId, model: info, settings: task.apiConfiguration }) ??
 				ANTHROPIC_DEFAULT_MAX_TOKENS
-			const available = info.contextWindow - maxOutputTokens - (task.getTokenUsage().contextTokens || 0)
+			const available =
+				(task.api.contextWindow ?? info.contextWindow) -
+				(task.api.contextManagementMaxOutputTokens ?? maxOutputTokens) -
+				(task.getTokenUsage().contextTokens || 0)
 			// Reserve room for paths, notices and protocol wrappers; never bypass a full context.
 			let remainingBudget = Number.isFinite(available)
 				? Math.max(
@@ -429,6 +432,12 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 						const native: string[] = []
 						for (let index = 0; index < ranges.length; index++) {
 							const range = ranges[index]
+							if (range.start > count && range.start > 1) {
+								const notice = `Requested start line ${range.start} is beyond end of file (${count} total lines). No content was read for this range. Do not retry this range; use only lines 1-${count} if earlier content is still needed.`
+								xml.push(`<notice>${notice}</notice>`)
+								native.push(`Note: ${notice}`)
+								continue
+							}
 							const options = {
 								budgetTokens: remainingBudget,
 								startLine: range.start,
@@ -461,6 +470,8 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 							} else if (!explicit && last < count) {
 								notice = `Showing only ${result.lineCount} of ${count} total lines. Continue with ${rangeHint(last + 1, Math.min(count, last + 200))}.`
 							} else if (count === 0) notice = "File is empty"
+							else if (last >= count)
+								notice = `End of file (${count} total lines). No further lines exist.`
 							if (notice) {
 								xml.push(`<notice>${notice}</notice>`)
 								native.push(`Note: ${notice}`)

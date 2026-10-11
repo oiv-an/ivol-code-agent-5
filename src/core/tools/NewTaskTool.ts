@@ -33,6 +33,16 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const { askApproval, handleError, pushToolResult, toolProtocol, toolCallId } = callbacks
 
 		try {
+			// kilocode_change start: delegation recreates the parent and loses write evidence.
+			if (task.isContextCondensationInProgress) {
+				pushToolResult(
+					formatResponse.toolError(
+						"Context preparation cannot be delegated. Update root CURRENT_TASK.md with file tools in this task; the plugin will then compact it. If reading is blocked by the context budget, stop instead of creating a subtask.",
+					),
+				)
+				return
+			}
+			// kilocode_change end
 			// Validate required parameters.
 			if (!mode) {
 				task.consecutiveMistakeCount++

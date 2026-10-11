@@ -133,6 +133,25 @@ describe("newTaskTool", () => {
 		} as any)
 	})
 
+	// kilocode_change start
+	it("does not delegate context preparation or reset its bounded turn counter", async () => {
+		await newTaskTool.execute(
+			{ mode: "code", message: "Update CURRENT_TASK.md" },
+			{ ...mockCline, isContextCondensationInProgress: true } as any,
+			{
+				askApproval: mockAskApproval,
+				handleError: mockHandleError,
+				pushToolResult: mockPushToolResult,
+				removeClosingTag: mockRemoveClosingTag,
+				toolProtocol: "native",
+			},
+		)
+		expect(mockDelegateParentAndOpenChild).not.toHaveBeenCalled()
+		expect(mockAskApproval).not.toHaveBeenCalled()
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("cannot be delegated"))
+	})
+	// kilocode_change end
+
 	it("should correctly un-escape \\\\@ to \\@ in the message passed to the new task", async () => {
 		const block: ToolUse = {
 			type: "tool_use", // Add required 'type' property

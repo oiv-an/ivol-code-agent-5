@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.85
+
+- Prevent repeated memory-maintenance subtasks, restore interrupted context preparation, and reserve room for compaction before conversations overflow. Stop oversized preparations without deleting history or repeating model requests.
+- Report the end of a file clearly and explain out-of-range reads without encouraging repeated requests for nonexistent lines.
+
 ## 5.17.84
 
 - Remember approval for all current and future tools of a selected MCP server with one checkbox, while preserving the main auto-approval switch and separate browser safeguards.

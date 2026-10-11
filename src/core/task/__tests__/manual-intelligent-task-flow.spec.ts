@@ -19,6 +19,15 @@ import { Task } from "../Task"
 // Only model transport and IDE-facing services are isolated.
 vi.mock("vscode", async (original) => ({
 	...(await original<typeof import("vscode")>()),
+	WorkspaceEdit: class {
+		operations: { uri: vscode.Uri; content?: string }[] = []
+		createFile(uri: vscode.Uri) {
+			this.operations.push({ uri })
+		}
+		replace(uri: vscode.Uri, _range: vscode.Range, content: string) {
+			this.operations.push({ uri, content })
+		}
+	}, // kilocode_change: model the real editor write/save boundary
 	RelativePattern: class {
 		constructor(
 			public base: string,
@@ -97,9 +106,55 @@ async function fixture({
 } = {}) {
 	const workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ivol-ordinary-flow-")))
 	const storage = path.join(workspace, "storage")
+	// kilocode_change: keep this global-storage fixture explicit after local storage became the default.
+	await fs.mkdir(path.join(workspace, ".ivol"))
+	await fs.writeFile(
+		path.join(workspace, ".ivol", "project.json"),
+		JSON.stringify({
+			version: 1,
+			projectId: "integration",
+			enabled: false,
+			hide: false,
+		}),
+	)
+	const documents = new Map<string, { content: string; isDirty: boolean }>()
 	Object.assign(vscode.workspace, {
 		workspaceFolders: [{ uri: vscode.Uri.file(workspace), name: "integration", index: 0 }],
-		openTextDocument: async () => ({ isDirty: false }),
+		openTextDocument: async (uri: vscode.Uri) => {
+			let document = documents.get(uri.fsPath)
+			if (!document) {
+				document = { content: await fs.readFile(uri.fsPath, "utf8"), isDirty: false }
+				documents.set(uri.fsPath, document)
+			}
+			const buffer = document
+			return {
+				uri,
+				get isDirty() {
+					return buffer.isDirty
+				},
+				isClosed: false,
+				getText: () => buffer.content,
+				positionAt: () => new vscode.Position(0, 0),
+				save: async () => {
+					await fs.writeFile(uri.fsPath, buffer.content)
+					buffer.isDirty = false
+					return true
+				},
+			}
+		},
+		applyEdit: async (edit: { operations: { uri: vscode.Uri; content?: string }[] }) => {
+			for (const { uri, content } of edit.operations) {
+				if (content === undefined) {
+					const handle = await fs.open(uri.fsPath, "a")
+					await handle.close()
+				} else {
+					const document = documents.get(uri.fsPath)!
+					document.content = content
+					document.isDirty = true
+				}
+			}
+			return true
+		},
 	})
 	Object.assign(vscode.window, {
 		showTextDocument: vi.fn(async () => ({})),
@@ -291,6 +346,29 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 		vi.restoreAllMocks()
 	})
 
+	it("restores interrupted preparation on the real delegation resume route before starting the loop", async () => {
+		const f = await create()
+		await f.task.queueOrdinaryContextPreparation("automatic")
+		// Simulate recreation without carrying instance-local authorization across delegation.
+		;(f.task as any).ordinaryContextPreparation = undefined
+		const loop = vi.spyOn(f.task as any, "initiateTaskLoop").mockResolvedValue(undefined)
+		await f.task.resumeAfterDelegation()
+		expect((f.task as any).ordinaryContextPreparation.phase).toBe("waiting")
+		expect(loop).toHaveBeenCalledOnce()
+		expect(f.createMessage).not.toHaveBeenCalled()
+	})
+
+	it("stops an already oversized manual preparation before transport and preserves history", async () => {
+		const f = await create()
+		Object.assign(f.task, { getTokenUsage: () => ({ contextTokens: 930_804, totalCost: 0 }) })
+		const history = structuredClone(f.task.apiConversationHistory)
+		await f.provider.condenseTaskContext(f.task.taskId, "task")
+		expect(f.createMessage).not.toHaveBeenCalled()
+		expect(f.task.apiConversationHistory).toEqual(history)
+		expect(f.events).not.toContain("summarize")
+		expect(f.task.clineMessages.some((m) => m.text?.includes("insufficient room"))).toBe(true)
+	})
+
 	it.each([2, 3])(
 		"idle manual startup compacts %i messages only after actual read/edit results are durable",
 		async (messageCount) => {
@@ -309,7 +387,7 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 			const prompt = await f.task.getSystemPrompt()
 			expect(prompt).toContain(ORDINARY_TASK_INSTRUCTIONS)
 			expect(prompt).not.toContain(generatedBody)
-			expect(await fs.readdir(f.workspace)).toEqual(["CURRENT_TASK.md", "storage"])
+			expect(await fs.readdir(f.workspace)).toEqual([".ivol", "CURRENT_TASK.md", "storage"])
 			expect(await readOrdinaryPreparation(f.storage, f.task.taskId)).toBeUndefined()
 		},
 	)

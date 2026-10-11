@@ -3,7 +3,11 @@ import { OrdinaryContextPreparation } from "../kilocode/OrdinaryContextPreparati
 import { Task } from "../Task"
 import { summarizeConversation } from "../../condense"
 
-vi.mock("../kilocode/ordinaryPreparationStorage", () => ({ saveOrdinaryPreparation: vi.fn() }))
+import { readOrdinaryPreparation } from "../kilocode/ordinaryPreparationStorage"
+vi.mock("../kilocode/ordinaryPreparationStorage", () => ({
+	saveOrdinaryPreparation: vi.fn(),
+	readOrdinaryPreparation: vi.fn(),
+}))
 
 vi.mock("../../condense", async (original) => ({
 	...(await original<typeof import("../../condense")>()),
@@ -20,7 +24,11 @@ function fixture() {
 		postMessageToWebview: vi.fn(),
 	}
 	Object.assign(task, {
-		api: { contextWindow: 400_000 },
+		api: {
+			contextWindow: 400_000,
+			contextManagementMaxOutputTokens: 64_000,
+			getModel: () => ({ id: "test", info: { contextWindow: 400_000 } }),
+		},
 		apiConfiguration: { intelligentTaskEnabled: true },
 		providerRef: new WeakRef(provider),
 		workspacePath: "/project",
@@ -78,6 +86,39 @@ function fixture() {
 }
 
 describe("ordinary context preparation", () => {
+	it("stops an oversized preparation without a model request or history changes", async () => {
+		const { task, boundary } = fixture()
+		Object.assign(task, { getTokenUsage: () => ({ contextTokens: 930_804 }) })
+		const history = structuredClone(task.apiConversationHistory)
+		await task.queueOrdinaryContextPreparation("automatic")
+		await expect(boundary(false)).rejects.toThrow("insufficient room")
+		expect(task.apiConversationHistory).toEqual(history)
+		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
+		expect(summarizeConversation).not.toHaveBeenCalled()
+		expect(task.ask).not.toHaveBeenCalled()
+	})
+
+	it("starts with a file-maintenance reserve below the hard input ceiling", () => {
+		const { task } = fixture()
+		const budget = (task as any).getContextPreparationBudget()
+		expect(budget).toEqual({ startAt: 304_000, stopAt: 327_808 })
+		expect(budget.startAt).toBeLessThan(400_000 * 0.9)
+	})
+
+	it("restores pending delegation as a decision, never as a fresh editing turn", async () => {
+		const { task } = fixture()
+		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce("automatic")
+		const internal = task as any
+		await internal.restoreOrdinaryContextPreparation()
+		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
+		expect(internal.ordinaryContextPreparation.failure).toContain("interrupted")
+		const restored = internal.ordinaryContextPreparation
+		await internal.restoreOrdinaryContextPreparation()
+		expect(internal.ordinaryContextPreparation).toBe(restored)
+		expect(readOrdinaryPreparation).toHaveBeenCalledOnce()
+		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
+	})
+
 	it("offers enabling instead of a retry that cannot work, and that choice proceeds", async () => {
 		const { task, boundary, write, provider } = fixture()
 		await task.queueOrdinaryContextPreparation("automatic")
