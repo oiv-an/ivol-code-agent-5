@@ -31,6 +31,12 @@ describe("getApiMetrics - context indicator regression tests", () => {
 	})
 
 	describe("placeholder message handling", () => {
+		it("preserves context after a locally failed request with zero usage", () => {
+			const failed = createCompleteApiReqMessage(0, 0, 2000)
+			failed.text = JSON.stringify({ tokensIn: 0, tokensOut: 0, cancelReason: "streaming_failed" })
+			expect(getApiMetrics([createCompleteApiReqMessage(332_552, 218), failed]).contextTokens).toBe(332_770)
+		})
+
 		it("should return 0 contextTokens when only a placeholder message exists", () => {
 			// This is the initial state when a new task starts
 			const messages: ClineMessage[] = [createPlaceholderApiReqMessage(1000)]

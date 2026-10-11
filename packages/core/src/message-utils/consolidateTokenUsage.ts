@@ -20,6 +20,7 @@ export type ParsedApiReqStartedTextType = {
 	cacheReads: number
 	cost?: number // Only present if consolidateApiRequests has been called
 	apiProtocol?: "anthropic" | "openai"
+	cancelReason?: string // kilocode_change: failed requests can carry placeholder zero usage.
 }
 
 /**
@@ -108,6 +109,9 @@ export function consolidateTokenUsage(messages: ClineMessage[]): TokenUsage {
 			try {
 				const parsedText: ParsedApiReqStartedTextType = JSON.parse(message.text)
 				const { tokensIn, tokensOut } = parsedText
+				// kilocode_change: a request rejected before transport must not erase the
+				// preceding context estimate when the conversation is resumed.
+				if (parsedText.cancelReason && !tokensIn && !tokensOut) continue
 				const hasTokenData = typeof tokensIn === "number" || typeof tokensOut === "number"
 
 				if (hasTokenData) {

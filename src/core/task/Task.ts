@@ -2261,25 +2261,50 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.ordinaryContextPreparation?.phase === "waiting" && !this.ordinaryRequestLoopActive && !this.abort
 	}
 
-	// kilocode_change start: reserve space for file maintenance before the hard input limit.
+	// kilocode_change start: match the declared-window policy used by willManageContext.
 	private getContextPreparationBudget() {
-		const { id, info } = this.api.getModel()
-		const contextWindow = this.api.contextWindow ?? info.contextWindow
-		const outputTokens =
-			this.api.contextManagementMaxOutputTokens ??
-			getModelMaxOutputTokens({ modelId: id, model: info, settings: this.apiConfiguration }) ??
-			0
-		const inputLimit = Math.max(0, contextWindow - outputTokens)
-		return {
-			startAt: Math.max(0, inputLimit - Math.min(32_000, contextWindow * 0.2)),
-			stopAt: Math.max(0, inputLimit - Math.min(8_192, contextWindow * 0.05)),
-		}
+		const contextWindow = this.api.contextWindow ?? this.api.getModel().info.contextWindow
+		return { stopAt: Math.max(0, contextWindow - Math.min(8_192, contextWindow * 0.05)) }
 	}
 
 	private async restoreOrdinaryContextPreparation(): Promise<void> {
 		if (this.ordinaryContextPreparation) return
 		const pending = await readOrdinaryPreparation(this.globalStoragePath, this.taskId)
 		if (!pending) return
+		// Version 5.17.85 could persist automatic intent below the configured threshold,
+		// then fail before starting any maintenance. Clear only that unstarted intent.
+		// Actual interrupted preparation (including unknown tool outcomes) still needs a decision.
+		const effectiveHistory = getEffectiveApiHistory(this.apiConversationHistory)
+		const hasPreparationPrompt = effectiveHistory.some((message) =>
+			typeof message.content === "string"
+				? message.content.includes(ORDINARY_CONTEXT_PREPARATION_PROMPT)
+				: message.content.some(
+						(block) => block.type === "text" && block.text.includes(ORDINARY_CONTEXT_PREPARATION_PROMPT),
+					),
+		)
+		if (pending === "automatic" && !hasPreparationPrompt) {
+			const state = await this.providerRef.deref()?.getState()
+			const lastContent = effectiveHistory.at(-1)?.content
+			const lastMessageTokens = lastContent
+				? await this.api.countTokens(
+						Array.isArray(lastContent) ? lastContent : [{ type: "text", text: lastContent }],
+					)
+				: 0
+			if (
+				!willManageContext({
+					totalTokens: this.getTokenUsage().contextTokens ?? 0,
+					contextWindow: this.api.contextWindow ?? this.api.getModel().info.contextWindow,
+					autoCondenseContext: state?.autoCondenseContext ?? true,
+					autoCondenseContextPercent: state?.autoCondenseContextPercent ?? 90,
+					profileThresholds: state?.profileThresholds ?? {},
+					currentProfileId: this.getCurrentProfileId(state),
+					lastMessageTokens,
+				})
+			) {
+				await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, null)
+				return
+			}
+		}
 		this.ordinaryContextPreparation = new OrdinaryContextPreparation(pending, this.apiConfiguration)
 		this.ordinaryContextPreparation.fail(
 			"The previous preparation was interrupted. Review saved tool outcomes before retrying.",
@@ -2885,8 +2910,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async resumeTaskFromHistory() {
-		// kilocode_change: restore intent, never persisted write/bypass authorization.
-		await this.restoreOrdinaryContextPreparation()
 		if (this.enableBridge) {
 			try {
 				await BridgeOrchestrator.subscribeToTask(this)
@@ -2949,6 +2972,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// This is important in case the user deletes messages without resuming
 		// the task first.
 		this.apiConversationHistory = savedApiHistory // kilocode_change: already validated before UI writes
+		// kilocode_change: recovery needs loaded history and usage, never empty constructor state.
+		await this.restoreOrdinaryContextPreparation()
 
 		// If we don't have a persisted tool protocol (old tasks before this feature),
 		// detect it from the API history. This ensures tasks that previously used
@@ -5543,19 +5568,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					: await this.api.countTokens([{ type: "text", text: lastMessageContent as string }])
 			}
 
-			const contextManagementWillRun =
-				(taskDocumentEnabled &&
-					contextTokens + lastMessageTokens >= this.getContextPreparationBudget().startAt) ||
-				willManageContext({
-					totalTokens: contextTokens,
-					contextWindow,
-					maxTokens,
-					autoCondenseContext,
-					autoCondenseContextPercent,
-					profileThresholds,
-					currentProfileId,
-					lastMessageTokens,
-				})
+			// kilocode_change: use one threshold; task memory must not force early condensation.
+			const contextManagementWillRun = willManageContext({
+				totalTokens: contextTokens,
+				contextWindow,
+				maxTokens,
+				autoCondenseContext,
+				autoCondenseContextPercent,
+				profileThresholds,
+				currentProfileId,
+				lastMessageTokens,
+			})
 
 			// Send condenseTaskContextStarted BEFORE manageContext to show in-progress indicator
 			// This notification must be sent here (not earlier) because the early check uses stale token count

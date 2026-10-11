@@ -28,6 +28,7 @@ function fixture() {
 			contextWindow: 400_000,
 			contextManagementMaxOutputTokens: 64_000,
 			getModel: () => ({ id: "test", info: { contextWindow: 400_000 } }),
+			countTokens: vi.fn(async () => 100),
 		},
 		apiConfiguration: { intelligentTaskEnabled: true },
 		providerRef: new WeakRef(provider),
@@ -98,16 +99,26 @@ describe("ordinary context preparation", () => {
 		expect(task.ask).not.toHaveBeenCalled()
 	})
 
-	it("starts with a file-maintenance reserve below the hard input ceiling", () => {
+	it("keeps the preparation ceiling above the normal condensation threshold", async () => {
+		const { task, boundary } = fixture()
+		expect((task as any).getContextPreparationBudget()).toEqual({ stopAt: 391_808 })
+		Object.assign(task, { getTokenUsage: () => ({ contextTokens: 360_000 }) })
+		await task.queueOrdinaryContextPreparation("automatic")
+		await boundary(false)
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+	})
+
+	it.each(["manual", "forced", "automatic"] as const)("preserves necessary %s intent on restore", async (trigger) => {
 		const { task } = fixture()
-		const budget = (task as any).getContextPreparationBudget()
-		expect(budget).toEqual({ startAt: 304_000, stopAt: 327_808 })
-		expect(budget.startAt).toBeLessThan(400_000 * 0.9)
+		Object.assign(task, { getTokenUsage: () => ({ contextTokens: 360_000 }) })
+		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce(trigger)
+		await (task as any).restoreOrdinaryContextPreparation()
+		expect((task as any).ordinaryContextPreparation.phase).toBe("waiting")
 	})
 
 	it("restores pending delegation as a decision, never as a fresh editing turn", async () => {
 		const { task } = fixture()
-		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce("automatic")
+		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce("manual")
 		const internal = task as any
 		await internal.restoreOrdinaryContextPreparation()
 		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")

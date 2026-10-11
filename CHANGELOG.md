@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.86
+
+- Restore normal conversation continuation below the configured context threshold, recover premature automatic preparation after reopening a task, and retain context usage after failed requests.
+
 ## 5.17.85
 
 - Prevent repeated memory-maintenance subtasks, restore interrupted context preparation, and reserve room for compaction before conversations overflow. Stop oversized preparations without deleting history or repeating model requests.

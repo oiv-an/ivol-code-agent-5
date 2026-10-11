@@ -346,9 +346,32 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 		vi.restoreAllMocks()
 	})
 
+	it.each([false, true])("continues below the configured threshold with restored intent=%s", async (restored) => {
+		const f = await create({ turns: [[complete()]], expectWrite: false, expectedIds: [] })
+		Object.assign(f.task, {
+			apiConfiguration: f.saved,
+			getTokenUsage: () => ({ contextTokens: 332_770, totalCost: 0 }),
+		})
+		Object.assign(f.task.api, { contextWindow: 400_000, contextManagementMaxOutputTokens: 64_000 })
+		if (restored) {
+			await f.task.queueOrdinaryContextPreparation("automatic")
+			;(f.task as any).ordinaryContextPreparation = undefined
+			await (f.task as any).restoreOrdinaryContextPreparation()
+		}
+		const history = structuredClone(f.task.apiConversationHistory)
+		for await (const _chunk of f.task.attemptApiRequest()) {
+			/* consume mocked transport */
+		}
+		expect(f.createMessage).toHaveBeenCalledOnce()
+		expect(f.events).not.toContain("summarize")
+		expect(f.ask).not.toHaveBeenCalled()
+		expect(f.task.apiConversationHistory).toEqual(history)
+		expect(await readOrdinaryPreparation(f.storage, f.task.taskId)).toBeUndefined()
+	})
+
 	it("restores interrupted preparation on the real delegation resume route before starting the loop", async () => {
 		const f = await create()
-		await f.task.queueOrdinaryContextPreparation("automatic")
+		await f.task.queueOrdinaryContextPreparation("manual")
 		// Simulate recreation without carrying instance-local authorization across delegation.
 		;(f.task as any).ordinaryContextPreparation = undefined
 		const loop = vi.spyOn(f.task as any, "initiateTaskLoop").mockResolvedValue(undefined)
