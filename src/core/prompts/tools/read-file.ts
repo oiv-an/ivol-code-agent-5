@@ -80,7 +80,7 @@ ${isMultipleReadsEnabled ? "3. " : "2. "}Reading an entire file:
 </args>
 </read_file>
 
-Text results share a bounded response budget. Follow the returned continuation line with line_range when truncated. Never treat unread content as read. If context is exhausted, compact the conversation before retrying; do not repeatedly request the same full file.
+Large files are returned in pages. Follow the returned continuation line with line_range when truncated. Never treat unread content as read. Each call gets a fresh page allowance, independent of conversation usage.
 
 IMPORTANT: You MUST use this Efficient Reading Strategy:
 - ${isMultipleReadsEnabled ? `You MUST read all related files and implementations together in a single operation (up to ${maxConcurrentReads} files at once)` : "You MUST read files one at a time, as multiple file reads are currently disabled"}

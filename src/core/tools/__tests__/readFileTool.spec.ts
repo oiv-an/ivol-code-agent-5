@@ -2156,10 +2156,18 @@ describe("bounded file reading", () => {
 		expect(text).toContain("1 later requested ranges were not read")
 		expect(mockReadFileWithTokenBudget).toHaveBeenCalledTimes(1)
 	})
-	it("does not read when context is exhausted and asks for compaction", async () => {
-		const { text } = await run([{ path: "a.md" }], 200000)
-		expect(text).toContain("Compact the conversation before retrying")
-		expect(mockReadFileWithTokenBudget).not.toHaveBeenCalled()
+	it.each([0, 180000, 200000, 930804])("reads task memory regardless of the context estimate %s", async (tokens) => {
+		mockReadFileWithTokenBudget.mockResolvedValue({
+			content: "Current task",
+			tokenCount: 10,
+			lineCount: 1,
+			complete: true,
+		})
+		const { text } = await run([{ path: "CURRENT_TASK.md" }], tokens)
+		expect(text).toContain("Current task")
+		expect(text).not.toContain("Compact the conversation")
+		expect(mockReadFileWithTokenBudget).toHaveBeenCalledOnce()
+		expect(mockReadFileWithTokenBudget.mock.calls[0][1].budgetTokens).toBe(16000)
 	})
 	it("applies the budget to the configured preview too", async () => {
 		mockReadFileWithTokenBudget.mockResolvedValue({

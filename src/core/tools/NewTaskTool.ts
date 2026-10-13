@@ -37,7 +37,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			if (task.isContextCondensationInProgress) {
 				pushToolResult(
 					formatResponse.toolError(
-						"Context preparation cannot be delegated. Update root CURRENT_TASK.md with file tools in this task; the plugin will then compact it. If reading is blocked by the context budget, stop instead of creating a subtask.",
+						"Context preparation cannot be delegated. Read and update root CURRENT_TASK.md with file tools in this task; the plugin will then compact it.",
 					),
 				)
 				return

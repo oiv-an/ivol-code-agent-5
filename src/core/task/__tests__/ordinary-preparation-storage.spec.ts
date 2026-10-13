@@ -26,7 +26,7 @@ describe("durable ordinary preparation intent", () => {
 		restored.fail("Interrupted")
 		expect(restored.phase).toBe("waiting")
 		expect(restored.continuedWithoutUpdate).toBe(false)
-		expect(restored.turns).toBe(0)
+		expect(restored.completedTurn).toBe(false)
 	})
 
 	it("isolates task identities and clears only a finished operation", async () => {

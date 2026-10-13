@@ -13,7 +13,6 @@ export interface WriteObservation {
 /** Transitions are driven only at ordinary request boundaries, after durable tool results. */
 export class OrdinaryContextPreparation {
 	phase: "queued" | "editing" | "waiting" | "ready" = "queued"
-	turns = 0
 	completedTurn = false
 	failure?: string
 	continuedWithoutUpdate = false
@@ -51,8 +50,6 @@ export class OrdinaryContextPreparation {
 		if (this.observation?.wasWritten()) {
 			this.phase = "ready"
 			this.dispose()
-		} else if (++this.turns >= 4) {
-			this.fail("The model did not successfully update root CURRENT_TASK.md in four preparation turns")
 		}
 	}
 

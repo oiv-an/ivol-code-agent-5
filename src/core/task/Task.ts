@@ -272,9 +272,6 @@ type UserContent = Array<Anthropic.ContentBlockParam> // kilocode_change
 // kilocode_change: why a summary-based context reduction was started.
 export type ContextPreparationTrigger = "automatic" | "manual" | "tool" | "extended-thinking" | "forced"
 
-// kilocode_change: distinguish a local safety stop from an interrupted model stream.
-class ContextPreparationBudgetError extends NonRetryableApiError {}
-
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private context: vscode.ExtensionContext // kilocode_change
 
@@ -2261,11 +2258,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.ordinaryContextPreparation?.phase === "waiting" && !this.ordinaryRequestLoopActive && !this.abort
 	}
 
-	// kilocode_change start: match the declared-window policy used by willManageContext.
-	private getContextPreparationBudget() {
-		const contextWindow = this.api.contextWindow ?? this.api.getModel().info.contextWindow
-		return { stopAt: Math.max(0, contextWindow - Math.min(8_192, contextWindow * 0.05)) }
-	}
+	// kilocode_change start: the configured condensation threshold owns preparation timing.
 
 	private async restoreOrdinaryContextPreparation(): Promise<void> {
 		if (this.ordinaryContextPreparation) return
@@ -2327,13 +2320,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private async ordinaryPreparationBoundary(): Promise<void> {
 		let preparation = this.ordinaryContextPreparation
 		if (!preparation) return
-		// kilocode_change: never send another oversized preparation or summary request.
-		if ((this.getTokenUsage().contextTokens || 0) >= this.getContextPreparationBudget().stopAt) {
-			const message =
-				"Context preparation stopped: insufficient room to update memory or summarize safely. History was preserved. Start a new independent task using CURRENT_TASK.md and saved artifacts; do not retry this oversized conversation or delegate its preparation."
-			preparation.fail(message)
-			throw new ContextPreparationBudgetError(message)
-		}
 		// kilocode_change: a file save cannot authorize dropping an outstanding native result.
 		const pendingToolCalls = new Set<string>()
 		for (const message of getEffectiveApiHistory(this.apiConversationHistory)) {
@@ -2450,12 +2436,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return
 			}
 			try {
-				// kilocode_change: reject before appending another manual preparation prompt.
-				if ((this.getTokenUsage().contextTokens || 0) >= this.getContextPreparationBudget().stopAt) {
-					throw new ContextPreparationBudgetError(
-						"Context preparation stopped: insufficient room to update memory or summarize safely. History was preserved. Start a new independent task using CURRENT_TASK.md and saved artifacts.",
-					)
-				}
 				await this.queueOrdinaryContextPreparation("manual")
 				// Wake only conversational waits, never approve a pending tool on the user's behalf.
 				const last = this.clineMessages.at(-1)
@@ -2654,14 +2634,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// kilocode_change: with the task document off, this is ordinary condensing.
 		await this.overwriteApiConversationHistory(result.messages)
 
-		// kilocode_change start: a compaction the user did not ask for must not end the task.
-		// The summary itself reads like a closing report, so the last thing the model sees
-		// has to be an explicit instruction to resume the unfinished work. A user-requested
-		// summary is left alone: they may well want to redirect the task afterwards.
-		if (trigger !== "manual" && trigger !== "tool" && this.canAppendCondenseContinuation()) {
+		// kilocode_change start: task memory must be reread after every compaction.
+		// Standard-mode manual summaries retain their existing hand-back behavior.
+		const rereadTaskMemory = this.getContextMemoryMode() === "task"
+		if (
+			(rereadTaskMemory || (trigger !== "manual" && trigger !== "tool")) &&
+			this.canAppendCondenseContinuation()
+		) {
 			await this.addToApiConversationHistory({
 				role: "user",
-				content: [{ type: "text", text: formatResponse.condenseContinuation() }],
+				content: [{ type: "text", text: formatResponse.condenseContinuation(rereadTaskMemory) }],
 			})
 		}
 		// kilocode_change end
@@ -4519,12 +4501,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Cline instance to finish aborting (error is thrown here when
 					// any function in the for loop throws due to this.abort).
 					if (!this.abandoned) {
-						// kilocode_change: no model stream started; do not invent transport history or retry.
-						if (error instanceof ContextPreparationBudgetError) {
-							await abortStream("streaming_failed", error.message)
-							await this.say("condense_context_error", error.message)
-							return true
-						}
 						// kilocode_change start: freeze queued tool presentation
 						// before even the first asynchronous cleanup/storage operation.
 						const stopInterruptedOpenAiRequest =

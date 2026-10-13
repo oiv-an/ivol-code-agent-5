@@ -31,8 +31,8 @@ export const formatResponse = {
 	 * user, so the model's last instruction is to keep working rather than a
 	 * summary it can mistake for an ending.
 	 */
-	condenseContinuation: () =>
-		`[NOTE] The context has just been compacted to free up the context window. This is routine maintenance, not the end of the task.\n<explicit_instructions type="condense_continuation">Continue the unfinished task from its next step, as recorded in the summary above and in CURRENT_TASK.md. Do NOT call attempt_completion just because compaction finished, do NOT restate what you already did, and do NOT ask the user what to work on next unless the task genuinely requires a decision from them. Resume the work with your next tool call.\n(This is an automated message, so do not respond to it conversationally.)</explicit_instructions>`,
+	condenseContinuation: (rereadTaskMemory = false) =>
+		`[NOTE] The context has just been compacted to free up the context window. This is routine maintenance, not the end of the task.\n<explicit_instructions type="condense_continuation">${rereadTaskMemory ? "First, reread CURRENT_TASK.md in the project root with read_file. Then continue the unfinished task from the next step recorded there; do not repeat completed work. " : "Continue the unfinished task from its next step, as recorded in the summary above. "}Do NOT call attempt_completion just because compaction finished, do NOT restate what you already did, and do NOT ask the user what to work on next unless the task genuinely requires a decision from them. Resume the work with your next tool call.\n(This is an automated message, so do not respond to it conversationally.)</explicit_instructions>`,
 	// kilocode_change end
 	toolDenied: (protocol?: ToolProtocol) => {
 		if (isNativeProtocol(protocol ?? TOOL_PROTOCOL.XML)) {

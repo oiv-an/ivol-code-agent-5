@@ -3,11 +3,10 @@ import * as fs from "fs/promises"
 import { isBinaryFile } from "isbinaryfile"
 
 import type { FileEntry, LineRange } from "@roo-code/types"
-import { type ClineSayTool, isNativeProtocol, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@roo-code/types"
+import { type ClineSayTool, isNativeProtocol } from "@roo-code/types" // kilocode_change
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
-import { getModelMaxOutputTokens } from "../../shared/api"
 import { t } from "../../i18n"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
@@ -27,7 +26,7 @@ import {
 	processImageFile,
 	ImageMemoryTracker,
 } from "./helpers/imageHelpers"
-import { FILE_READ_BUDGET_PERCENT, readFileWithTokenBudget } from "./helpers/fileTokenBudget"
+import { readFileWithTokenBudget } from "./helpers/fileTokenBudget" // kilocode_change
 // kilocode_change: extracted documents share the same response budget
 import { readTextWithTokenBudget, type ReadWithBudgetResult } from "../../integrations/misc/read-file-with-budget"
 import { truncateDefinitionsToLineLimit } from "./helpers/truncateDefinitions"
@@ -364,23 +363,10 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				maxTotalImageSize = DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB,
 			} = state ?? {}
 
-			// kilocode_change start: one bounded text allowance for the entire batch
-			const { id: modelId, info } = task.api.getModel()
-			const maxOutputTokens =
-				getModelMaxOutputTokens({ modelId, model: info, settings: task.apiConfiguration }) ??
-				ANTHROPIC_DEFAULT_MAX_TOKENS
-			const available =
-				(task.api.contextWindow ?? info.contextWindow) -
-				(task.api.contextManagementMaxOutputTokens ?? maxOutputTokens) -
-				(task.getTokenUsage().contextTokens || 0)
-			// Reserve room for paths, notices and protocol wrappers; never bypass a full context.
-			let remainingBudget = Number.isFinite(available)
-				? Math.max(
-						0,
-						Math.min(16_000, Math.floor(available * FILE_READ_BUDGET_PERCENT)) - 512 * fileEntries.length,
-					)
-				: 0
-			const contextExhausted = remainingBudget === 0
+			// kilocode_change start: paginate file output independently of conversation usage.
+			// A previous request's usage or output limit must never prevent reading memory
+			// before compaction. This allowance bounds one result, not permission to read.
+			let remainingBudget = 16_000
 			const rangeHint = (start: number, end: number) =>
 				useNative ? `line_ranges: [[${start}, ${end}]]` : `<line_range>${start}-${end}</line_range>`
 			// kilocode_change end
@@ -461,12 +447,9 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 							if (!result.complete) {
 								const next = range.start + result.lineCount
 								notice = `File truncated by the shared response budget. ${result.lineCount ? `Continue at line ${next}` : `No lines read from line ${next}`}; use ${rangeHint(next, Math.max(next, Math.min(range.end, next + 199)))}. ${ranges.length - index - 1} later requested ranges were not read. `
-								if (contextExhausted)
+								if (!result.lineCount)
 									notice +=
-										"No available context budget for file reading. Compact the conversation before retrying; do not repeat the same full-file request or edit unread content."
-								else if (!result.lineCount)
-									notice +=
-										"The batch allowance is exhausted or the next single line exceeds the safe response limit. Read this range in a separate call; if it still does not fit, compact context or use targeted search. Do not assume this line was read."
+										"The batch allowance is exhausted or the next single line exceeds the response page size. Read this range in a separate call; use targeted search for an oversized single line. Do not assume this line was read."
 							} else if (!explicit && last < count) {
 								notice = `Showing only ${result.lineCount} of ${count} total lines. Continue with ${rangeHint(last + 1, Math.min(count, last + 200))}.`
 							} else if (count === 0) notice = "File is empty"
@@ -606,7 +589,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 							budgetTokens: remainingBudget,
 						})
 						remainingBudget = Math.max(0, remainingBudget - result.tokenCount - 128)
-						const notice = `Showing only 0 of ${totalLines} total lines. ${result.complete ? "" : "Definitions truncated. "}Read file content with ${rangeHint(1, Math.max(1, Math.min(totalLines, 200)))}.${contextExhausted ? " Context budget exhausted; compact the conversation before retrying." : ""}`
+						const notice = `Showing only 0 of ${totalLines} total lines. ${result.complete ? "" : "Definitions truncated. "}Read file content with ${rangeHint(1, Math.max(1, Math.min(totalLines, 200)))}.`
 						updateFileResult(relPath, {
 							xmlContent: `<file><path>${relPath}</path><list_code_definition_names>${result.content}</list_code_definition_names><notice>${notice}</notice></file>`,
 							nativeContent: `File: ${relPath}\nCode Definitions:\n${result.content}\n\nNote: ${notice}`,

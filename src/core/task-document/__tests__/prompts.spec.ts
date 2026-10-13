@@ -15,16 +15,16 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS.length).toBeLessThan(6000)
 	})
 
-	it("requires an ordinary permitted write before compaction while preserving unrelated content", () => {
+	it("sends the full memory policy before compaction and requests rereading afterwards", () => {
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("ordinary file tools (create it if missing)")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Preserve unrelated user content")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Normal tool permissions apply")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("A read or a statement that you saved is not a write")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
-			"do not copy large code fragments, logs, or private reasoning",
-		)
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("creation and update dates, status, goal and constraints")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not append progress logs or duplicate the block")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not continue project work")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("compact the conversation normally")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("First reread CURRENT_TASK.md after compaction")
 	})
 
 	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
@@ -47,7 +47,6 @@ describe("ordinary task document prompts", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("replacing your task's block")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Preserve active parallel work and explicitly retained tasks")
 		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("replace the current task's block")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("Do not append progress logs or duplicate the block")
 	})
 
 	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
@@ -96,14 +95,8 @@ describe("ordinary task document prompts", () => {
 	it("tells the model that compaction continues the task instead of ending it", () => {
 		// The preparation turn used to read as the last turn of the task, so the model
 		// reported completion after every automatic compaction.
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
-			"you will continue the same unfinished task from its next step",
-		)
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("not its end")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("do not report the task as finished")
-		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain(
-			"do not ask the user what to do next merely because compaction happened",
-		)
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("continue the same unfinished task from its next step")
+		expect(ORDINARY_CONTEXT_PREPARATION_PROMPT).toContain("or call attempt_completion during this preparation")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Compaction is routine maintenance, not the end of the task")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("continue the unfinished work from its next step")
 	})

@@ -49,7 +49,7 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 		" }] }. " +
 		"The 'path' is required and relative to workspace. " +
 		// kilocode_change: explain bounded reading and recovery
-		"Text results share a bounded response budget. Large files may be partial; follow the returned continuation line using line_ranges, and never treat unread content as read. If context is exhausted, compact the conversation before retrying instead of repeating the same full-file request. "
+		"Large files are returned in pages. Follow the returned continuation line using line_ranges, and never treat unread content as read. Each call gets a fresh page allowance, independent of conversation usage. "
 
 	const optionalRangesDescription = partialReadsEnabled
 		? "The 'line_ranges' is optional for reading specific sections. Each range is a [start, end] tuple (1-based inclusive). "

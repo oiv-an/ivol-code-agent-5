@@ -38,6 +38,12 @@ describe("condense responses", () => {
 		})
 	})
 
+	it("requests memory rereading only when task memory is enabled", () => {
+		expect(formatResponse.condenseContinuation(true)).toContain("First, reread CURRENT_TASK.md")
+		expect(formatResponse.condenseContinuation(true)).toContain("with read_file")
+		expect(formatResponse.condenseContinuation(false)).not.toContain("CURRENT_TASK.md")
+	})
+
 	describe("the note appended after an automatic compaction", () => {
 		const note = formatResponse.condenseContinuation()
 

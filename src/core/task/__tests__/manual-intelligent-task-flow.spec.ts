@@ -381,15 +381,15 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 		expect(f.createMessage).not.toHaveBeenCalled()
 	})
 
-	it("stops an already oversized manual preparation before transport and preserves history", async () => {
+	it("reads and saves memory before manual compaction despite an oversized usage estimate", async () => {
 		const f = await create()
 		Object.assign(f.task, { getTokenUsage: () => ({ contextTokens: 930_804, totalCost: 0 }) })
-		const history = structuredClone(f.task.apiConversationHistory)
 		await f.provider.condenseTaskContext(f.task.taskId, "task")
-		expect(f.createMessage).not.toHaveBeenCalled()
-		expect(f.task.apiConversationHistory).toEqual(history)
-		expect(f.events).not.toContain("summarize")
-		expect(f.task.clineMessages.some((m) => m.text?.includes("insufficient room"))).toBe(true)
+		expect(f.events).toContain("summarize")
+		expect(f.events).toContain("commit")
+		expect(await fs.readFile(f.currentPath, "utf8")).toBe(generatedBody)
+		expect(JSON.stringify(await f.durableHistory())).toContain("reread CURRENT_TASK.md")
+		expect(f.task.clineMessages.some((m) => m.text?.includes("insufficient room"))).toBe(false)
 	})
 
 	it.each([2, 3])(

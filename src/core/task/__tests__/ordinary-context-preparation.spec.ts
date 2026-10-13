@@ -87,21 +87,25 @@ function fixture() {
 }
 
 describe("ordinary context preparation", () => {
-	it("stops an oversized preparation without a model request or history changes", async () => {
-		const { task, boundary } = fixture()
-		Object.assign(task, { getTokenUsage: () => ({ contextTokens: 930_804 }) })
-		const history = structuredClone(task.apiConversationHistory)
-		await task.queueOrdinaryContextPreparation("automatic")
-		await expect(boundary(false)).rejects.toThrow("insufficient room")
-		expect(task.apiConversationHistory).toEqual(history)
-		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
-		expect(summarizeConversation).not.toHaveBeenCalled()
-		expect(task.ask).not.toHaveBeenCalled()
-	})
+	it.each(["automatic", "manual", "forced"] as const)(
+		"allows %s memory preparation without a second context ceiling",
+		async (trigger) => {
+			const { task, boundary, write, events } = fixture()
+			Object.assign(task, { getTokenUsage: () => ({ contextTokens: 930_804 }) })
+			await task.queueOrdinaryContextPreparation(trigger)
+			await boundary(false)
+			expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+			expect(summarizeConversation).not.toHaveBeenCalled()
+			expect(task.ask).not.toHaveBeenCalled()
+			write()
+			await boundary()
+			expect(events).toContain("compact")
+			expect(JSON.stringify(task.apiConversationHistory.at(-1)?.content)).toContain("reread CURRENT_TASK.md")
+		},
+	)
 
-	it("keeps the preparation ceiling above the normal condensation threshold", async () => {
+	it("starts preparation at the configured condensation threshold", async () => {
 		const { task, boundary } = fixture()
-		expect((task as any).getContextPreparationBudget()).toEqual({ stopAt: 391_808 })
 		Object.assign(task, { getTokenUsage: () => ({ contextTokens: 360_000 }) })
 		await task.queueOrdinaryContextPreparation("automatic")
 		await boundary(false)
@@ -202,14 +206,14 @@ describe("ordinary context preparation", () => {
 		expect(task.apiConversationHistory.at(-2)?.content).toBe("Ordinary summary")
 		const continuation = task.apiConversationHistory.at(-1)
 		expect(continuation?.role).toBe("user")
-		expect(JSON.stringify(continuation?.content)).toContain("Continue the unfinished task from its next step")
+		expect(JSON.stringify(continuation?.content)).toContain("reread CURRENT_TASK.md")
 		expect(vi.mocked(summarizeConversation).mock.calls[0][9]).toMatchObject({ signal: expect.any(AbortSignal) })
 		expect(task.isContextCondensationInProgress).toBe(false)
 	})
 
 	// kilocode_change start: compaction must hand unfinished work back to the model,
 	// except when the user asked for the summary themselves.
-	it("leaves a user-requested compaction without a continuation instruction", async () => {
+	it("requests a fresh memory read after user-requested task compaction too", async () => {
 		const { task, boundary, write } = fixture()
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary()
@@ -219,8 +223,8 @@ describe("ordinary context preparation", () => {
 			content: [{ type: "tool_result", tool_use_id: "write", content: "Saved" }],
 		})
 		await boundary()
-		expect(task.apiConversationHistory.at(-1)?.content).toBe("Ordinary summary")
-		expect(JSON.stringify(task.apiConversationHistory)).not.toContain("condense_continuation")
+		expect(task.apiConversationHistory.at(-2)?.content).toBe("Ordinary summary")
+		expect(JSON.stringify(task.apiConversationHistory.at(-1)?.content)).toContain("reread CURRENT_TASK.md")
 	})
 
 	it("never breaks a tool call pair to insert the continuation instruction", async () => {
@@ -268,15 +272,16 @@ describe("ordinary context preparation", () => {
 		expect(summarizeConversation).not.toHaveBeenCalled()
 	})
 
-	it("requires an explicit continue decision when no write is observed", async () => {
-		const { task, boundary, provider } = fixture()
-		Object.assign(task, { ask: vi.fn(async () => ({ text: "Continue without updating" })) })
+	it("allows multiple file pages without a four-turn preparation limit", async () => {
+		const { task, boundary, write } = fixture()
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary()
-		for (let i = 0; i < 4; i++) await boundary()
-		expect(task.ask).toHaveBeenCalledOnce()
+		for (let i = 0; i < 8; i++) await boundary()
+		expect(task.ask).not.toHaveBeenCalled()
+		expect(summarizeConversation).not.toHaveBeenCalled()
+		write()
+		await boundary()
 		expect(summarizeConversation).toHaveBeenCalledOnce()
-		expect(provider.postMessageToWebview).toHaveBeenCalledWith({ type: "condenseTaskContextStarted", text: "task" })
 	})
 
 	it("never compacts with an outstanding native tool result", async () => {

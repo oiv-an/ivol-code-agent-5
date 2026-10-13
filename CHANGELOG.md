@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.88
+
+- Restore the full task-memory instructions before compaction while keeping unrestricted preparation and the memory reread afterwards.
+
+## 5.17.87
+
+- Allow task memory to be read and updated before context compaction without output-token reserves or extra preparation limits, then request a fresh memory read before continuing. Keep the existing compaction behavior.
+
 ## 5.17.86
 
 - Restore normal conversation continuation below the configured context threshold, recover premature automatic preparation after reopening a task, and retain context usage after failed requests.
