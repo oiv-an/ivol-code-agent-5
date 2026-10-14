@@ -67,6 +67,10 @@ describe("useMcpToolTool", () => {
 
 		mockTask = {
 			consecutiveMistakeCount: 0,
+			toolAbortController: new AbortController(), // kilocode_change
+			setCurrentOperation: vi.fn(async (operation) => {
+				mockTask.currentOperation = operation
+			}), // kilocode_change
 			recordToolError: vi.fn(),
 			sayAndCreateMissingParamError: vi.fn(),
 			say: vi.fn(),
@@ -226,6 +230,47 @@ describe("useMcpToolTool", () => {
 		})
 	})
 
+	// kilocode_change start: the real BaseTool wrapper must retain pending scripts and discard late results.
+	it.each([false, true])("tracks a pending MCP script and clears it (cancelled=%s)", async (cancelled) => {
+		const hub = mockProviderRef.deref().getMcpHub()
+		hub.getAllServers.mockReturnValue([{ name: "server", tools: [{ name: "run" }] }])
+		mockAskApproval.mockResolvedValue(true)
+		let finish!: (value: unknown) => void
+		hub.callTool.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve
+			}),
+		)
+		const running = useMcpToolTool.handle(
+			mockTask as Task,
+			{
+				type: "tool_use",
+				name: "use_mcp_tool",
+				partial: false,
+				params: { server_name: "server", tool_name: "run", arguments: '{"code":"sleep(600)"}' },
+			},
+			{
+				askApproval: mockAskApproval,
+				handleError: mockHandleError,
+				pushToolResult: mockPushToolResult,
+				removeClosingTag: mockRemoveClosingTag,
+				toolProtocol: "native",
+			},
+		)
+		await vi.waitFor(() => expect(hub.callTool).toHaveBeenCalled())
+		expect(mockTask.currentOperation?.details).toContain("sleep(600)")
+		expect(mockTask.currentOperation?.name).toBe("server / run")
+		if (cancelled) {
+			mockTask.abort = true
+			mockTask.toolAbortController?.abort()
+		}
+		finish({ content: [{ type: "text", text: "Finished" }] })
+		await running
+		expect(mockTask.currentOperation).toBeNull()
+		expect(mockPushToolResult).toHaveBeenCalledTimes(cancelled ? 0 : 1)
+	})
+	// kilocode_change end
+
 	describe("successful execution", () => {
 		// kilocode_change: task-scoped browser consent does not bypass the actual MCP execution guard.
 		it.each([true, false])("uses explicit browser task consent only when present (%s)", async (consent) => {
@@ -247,7 +292,14 @@ describe("useMcpToolTool", () => {
 			)
 			expect(mockHandleError).not.toHaveBeenCalled()
 			expect(mockAskApproval).toHaveBeenCalledTimes(consent ? 0 : 1)
-			expect(hub.callTool).toHaveBeenCalledWith("browser", "snapshot", { page: 2 }, undefined, mockTask)
+			expect(hub.callTool).toHaveBeenCalledWith(
+				"browser",
+				"snapshot",
+				{ page: 2 },
+				undefined,
+				mockTask,
+				mockTask.toolAbortController?.signal,
+			)
 			if (consent)
 				expect(mockTask.say).toHaveBeenCalledWith("text", expect.stringContaining("browser control enabled"))
 		})
@@ -279,7 +331,15 @@ describe("useMcpToolTool", () => {
 			expect(mockAskApproval).not.toHaveBeenCalled()
 			expect(mockHandleError).not.toHaveBeenCalled()
 			expect(hub.callTool).toHaveBeenCalledTimes(allowed ? 1 : 0)
-			if (allowed) expect(hub.callTool).toHaveBeenCalledWith("browseros-neo", "tabs", args, undefined, mockTask)
+			if (allowed)
+				expect(hub.callTool).toHaveBeenCalledWith(
+					"browseros-neo",
+					"tabs",
+					args,
+					undefined,
+					mockTask,
+					mockTask.toolAbortController?.signal,
+				)
 			else {
 				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
 				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("browser settings"))
@@ -374,7 +434,14 @@ describe("useMcpToolTool", () => {
 			})
 			expect(mockHandleError).not.toHaveBeenCalled()
 			// kilocode_change: grant ownership must use the calling instance, including native tool execution.
-			expect(hub.callTool).toHaveBeenCalledWith("browser", "screenshot", undefined, undefined, mockTask)
+			expect(hub.callTool).toHaveBeenCalledWith(
+				"browser",
+				"screenshot",
+				undefined,
+				undefined,
+				mockTask,
+				mockTask.toolAbortController?.signal,
+			)
 			expect(mockTask.say).toHaveBeenCalledWith("mcp_server_response", expect.stringContaining("omitted"), [
 				"data:image/png;base64,YQ==",
 			])

@@ -103,6 +103,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 				commandExecutionTimeout,
 			}
 
+			if (task.abort || task.abandoned) return // kilocode_change: cancelled approval must not launch a process.
 			try {
 				const [rejected, result] = await executeCommandInTerminal(task, options)
 
@@ -112,6 +113,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 
 				pushToolResult(result)
 			} catch (error: unknown) {
+				if (task.abort || task.abandoned) return // kilocode_change: never retry a stopped command.
 				const status: CommandExecutionStatus = { executionId, status: "fallback" }
 				provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 				await task.say("shell_integration_warning")
@@ -261,6 +263,7 @@ export async function executeCommandInTerminal(
 	}
 
 	const terminal = await TerminalRegistry.getOrCreateTerminal(workingDir, task.taskId, terminalProvider)
+	if (task.abort || task.abandoned) return [false, "Command cancelled before launch."] // kilocode_change
 
 	if (terminal instanceof Terminal) {
 		terminal.terminal.show(true)

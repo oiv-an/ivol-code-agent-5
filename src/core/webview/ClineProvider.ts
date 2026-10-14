@@ -2613,6 +2613,7 @@ export class ClineProvider
 				? projectHistoryPage(this.getCurrentTask()!.taskId, this.getCurrentTask()!.clineMessages)
 				: undefined,
 			currentTaskTokenUsage: this.getCurrentTask()?.getTokenUsage(),
+			currentTaskOperation: this.getCurrentTask()?.currentOperation ?? null,
 			// kilocode_change end
 			currentTaskTodos: this.getCurrentTask()?.todoList || [],
 			currentTaskCumulativeCost: this.getCurrentTask()?.getCumulativeTotalCost(), // kilocode_change

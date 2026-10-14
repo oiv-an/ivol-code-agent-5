@@ -443,6 +443,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	fileContextTracker: FileContextTracker
 	urlContentFetcher: UrlContentFetcher
 	terminalProcess?: RooTerminalProcess
+	// kilocode_change start: live operation state is transient, never restored from history.
+	public currentOperation: { name: string; details: string; startedAt: number } | null = null
+	public readonly toolAbortController = new AbortController()
+
+	public async setCurrentOperation(operation: typeof this.currentOperation): Promise<void> {
+		if (this.abort || this.abandoned) return
+		this.currentOperation = operation
+		await this.providerRef.deref()?.postMessageToWebview({
+			type: "currentTaskStateUpdated",
+			taskId: this.taskId,
+			taskState: { currentTaskOperation: operation },
+		})
+	}
+	// kilocode_change end
 
 	// Computer User
 	browserSession: BrowserSession
@@ -3287,6 +3301,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public dispose(): void {
 		console.log(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
 		this.providerRef.deref()?.getMcpHub?.()?.browserOSAccess?.endTask(this) // kilocode_change: cancel stale work, retain host consent
+
+		// kilocode_change start: stop waiting for tools without disconnecting shared MCP servers.
+		this.toolAbortController.abort()
+		this.currentOperation = null
+		try {
+			const process = this.terminalProcess
+			this.terminalProcess = undefined
+			process?.abort()
+		} catch (error) {
+			console.error("Error stopping task terminal process:", error)
+		}
+		// kilocode_change end
 
 		// Cancel any in-progress HTTP request
 		try {

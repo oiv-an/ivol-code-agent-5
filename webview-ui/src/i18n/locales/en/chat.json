@@ -1,5 +1,12 @@
 {
 	"greeting": "What can IVOL Code do for you?",
+	"activeOperation": {
+		"working": "Agent is working",
+		"stop": "Stop",
+		"stopping": "Stopping…",
+		"details": "Command / script / arguments",
+		"notice": "Stop interrupts the agent and requests cancellation. Remote or detached processes may continue; completed changes are not undone."
+	},
 	"historySearch": {
 		"search": "Search this chat",
 		"close": "Close search",

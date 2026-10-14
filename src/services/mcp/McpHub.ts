@@ -2944,7 +2944,9 @@ export class McpHub {
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
 		caller?: object, // kilocode_change: task identity is never supplied by the model.
+		signal?: AbortSignal, // kilocode_change: cancel this request, not the shared connection.
 	): Promise<McpToolCallResponse> {
+		signal?.throwIfAborted() // kilocode_change
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
 			throw new Error(
@@ -2989,6 +2991,7 @@ export class McpHub {
 					CallToolResultSchema,
 					{
 						timeout,
+						signal, // kilocode_change
 					},
 				),
 			caller,

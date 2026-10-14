@@ -2167,7 +2167,8 @@ describe("McpHub", () => {
 
 			mcpHub.connections = [mockConnection]
 
-			await mcpHub.callTool("test-server", "some-tool", {})
+			const controller = new AbortController() // kilocode_change
+			await mcpHub.callTool("test-server", "some-tool", {}, undefined, undefined, controller.signal)
 
 			// Verify the request was made with correct parameters
 			expect(mockConnection.client!.request).toHaveBeenCalledWith(
@@ -2179,8 +2180,14 @@ describe("McpHub", () => {
 					},
 				},
 				expect.any(Object),
-				expect.objectContaining({ timeout: 60000 }), // Default 60 second timeout
+				expect.objectContaining({ timeout: 60000, signal: controller.signal }), // kilocode_change
 			)
+			// kilocode_change: an already cancelled request must not dispatch to the server.
+			controller.abort()
+			await expect(
+				mcpHub.callTool("test-server", "some-tool", {}, undefined, undefined, controller.signal),
+			).rejects.toThrow()
+			expect(mockConnection.client!.request).toHaveBeenCalledTimes(1)
 		})
 
 		it("should throw error if server not found", async () => {

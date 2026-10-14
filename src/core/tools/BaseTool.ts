@@ -208,7 +208,37 @@ export abstract class BaseTool<TName extends ToolName> {
 			return
 		}
 
-		// Execute with typed parameters
-		await this.execute(params, task, callbacks)
+		// kilocode_change start: keep tool work visible after the model stream has finished.
+		if (task.abort || task.abandoned) return
+		// These tools wait for user input or transfer ownership rather than run a background operation.
+		if (["ask_followup_question", "attempt_completion", "new_task", "switch_mode"].includes(this.name)) {
+			await this.execute(params, task, callbacks)
+			return
+		}
+		const values = params as Record<string, unknown>
+		let argumentsValue = values.arguments
+		if (typeof argumentsValue === "string") {
+			try {
+				argumentsValue = JSON.parse(argumentsValue)
+			} catch {
+				argumentsValue = values.arguments
+			}
+		}
+		const scriptArgs =
+			argumentsValue && typeof argumentsValue === "object" ? (argumentsValue as Record<string, unknown>) : values
+		const script = values.command ?? scriptArgs.code ?? scriptArgs.script ?? scriptArgs.command
+		const details = typeof script === "string" ? script : JSON.stringify(params, null, 2)
+		const operation = {
+			name: this.name === "use_mcp_tool" ? `${values.server_name} / ${values.tool_name}` : this.name,
+			details: details.length > 32000 ? `${details.slice(0, 32000)}\n[… preview truncated …]` : details,
+			startedAt: Date.now(),
+		}
+		await task.setCurrentOperation?.(operation)
+		try {
+			if (!task.abort && !task.abandoned) await this.execute(params, task, callbacks)
+		} finally {
+			if (task.currentOperation === operation) await task.setCurrentOperation?.(null)
+		}
+		// kilocode_change end
 	}
 }

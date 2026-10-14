@@ -474,6 +474,7 @@ export interface ExtensionMessage {
 		currentTaskTodos?: TodoItem[]
 		currentTaskCumulativeCost?: number
 		currentTaskTokenUsage?: TokenUsage // kilocode_change
+		currentTaskOperation?: { name: string; details: string; startedAt: number } | null // kilocode_change
 		messageQueue?: QueuedMessage[]
 	}
 	// kilocode_change end
@@ -762,6 +763,7 @@ export type ExtensionState = Pick<
 	// kilocode_change start
 	chatHistoryPage?: ChatHistoryPage
 	currentTaskTokenUsage?: TokenUsage
+	currentTaskOperation?: { name: string; details: string; startedAt: number } | null
 	// kilocode_change end
 	currentTaskId?: string // kilocode_change: stable task identity for incremental message updates
 	currentTaskItem?: HistoryItem

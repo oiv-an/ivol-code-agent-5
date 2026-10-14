@@ -138,6 +138,7 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 				pushToolResult,
 			)
 		} catch (error) {
+			if (task.abort || task.abandoned) return // kilocode_change: stale results must not reach the resumed task.
 			await handleError("executing MCP tool", error as Error)
 		}
 	}
@@ -371,8 +372,9 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 		const toolResult = await task.providerRef
 			.deref()
 			?.getMcpHub()
-			?.callTool(serverName, toolName, parsedArguments, undefined, task)
+			?.callTool(serverName, toolName, parsedArguments, undefined, task, task.toolAbortController?.signal)
 
+		if (task.abort || task.abandoned) return // kilocode_change
 		let toolResultPretty = "(No response)"
 
 		if (toolResult) {

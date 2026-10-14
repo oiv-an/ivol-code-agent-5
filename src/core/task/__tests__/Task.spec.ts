@@ -2250,6 +2250,33 @@ describe("Cline", () => {
 	})
 
 	describe("abortTask", () => {
+		// kilocode_change: disposal cancels only this task's tools and publishes no stale operation.
+		it("aborts the tool signal and active terminal while leaving another task untouched", async () => {
+			const task = new Task({
+				provider: mockProvider,
+				apiConfiguration: mockApiConfig,
+				startTask: false,
+				context: mockExtensionContext,
+			})
+			const other = new Task({
+				provider: mockProvider,
+				apiConfiguration: mockApiConfig,
+				startTask: false,
+				context: mockExtensionContext,
+			})
+			const abort = vi.fn()
+			task.terminalProcess = { abort } as any
+			await task.setCurrentOperation({ name: "execute_command", details: "sleep 600", startedAt: 1 })
+			expect(task.currentOperation?.details).toBe("sleep 600")
+			await task.abortTask()
+			expect(task.toolAbortController.signal.aborted).toBe(true)
+			expect(abort).toHaveBeenCalledOnce()
+			expect(task.currentOperation).toBeNull()
+			expect(other.toolAbortController.signal.aborted).toBe(false)
+			await task.setCurrentOperation({ name: "stale", details: "", startedAt: 2 })
+			expect(task.currentOperation).toBeNull()
+			other.dispose()
+		})
 		it("should set abort flag and emit TaskAborted event", async () => {
 			const task = new Task({
 				provider: mockProvider,

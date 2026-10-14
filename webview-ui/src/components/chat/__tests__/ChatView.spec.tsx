@@ -73,12 +73,17 @@ vi.mock("react-virtuoso", () => ({
 	Virtuoso: function MockVirtuoso({
 		data,
 		itemContent,
+		atBottomStateChange, // kilocode_change
 	}: {
 		data: ClineMessage[]
+		atBottomStateChange?: (atBottom: boolean) => void // kilocode_change
 		itemContent: (index: number, item: ClineMessage) => React.ReactNode
 	}) {
 		return (
 			<div data-testid="virtuoso-item-list">
+				{atBottomStateChange && (
+					<button aria-label="Simulate scrolling up" onClick={() => atBottomStateChange(false)} />
+				)}
 				{data.map((item, index) => (
 					<div key={item.ts} data-testid={`virtuoso-item-${index}`}>
 						{itemContent(index, item)}
@@ -321,6 +326,49 @@ const renderChatView = (props: Partial<ChatViewProps> = {}, ref?: React.Ref<Chat
 		</ExtensionStateContextProvider>,
 	)
 }
+
+// kilocode_change start: persistent operation controls outlive API streaming and preserve the draft.
+describe("ChatView - active operation", () => {
+	beforeEach(() => vi.clearAllMocks())
+	it("shows the script after API completion, cancels, and accepts a message after resume", async () => {
+		const view = renderChatView()
+		const messages: ClineMessage[] = [
+			{ ts: 1, type: "say", say: "text", text: "Task" },
+			{ ts: 2, type: "say", say: "api_req_started", text: JSON.stringify({ cost: 0.01 }) },
+			{ ts: 3, type: "say", say: "mcp_server_request_started" },
+		]
+		mockPostMessage({
+			currentTaskId: "task-a",
+			clineMessages: messages,
+			currentTaskOperation: {
+				name: "use_mcp_tool",
+				details: 'run({ code: "sleep(600)" })',
+				startedAt: Date.now() - 60000,
+			},
+		})
+		await waitFor(() => expect(view.getByTestId("active-operation")).toHaveTextContent("sleep(600)"))
+		fireEvent.click(view.getByRole("button", { name: "Simulate scrolling up" }))
+		expect(view.getByRole("button", { name: "chat:activeOperation.stop" })).toBeEnabled()
+		expect(view.getByTestId("active-operation")).toHaveTextContent("1:00")
+		const input = view.getByRole("textbox")
+		fireEvent.change(input, { target: { value: "Change direction" } })
+		fireEvent.click(view.getByRole("button", { name: "chat:activeOperation.stop" }))
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "cancelTask" })
+		expect(input).toHaveValue("Change direction")
+		expect(view.getByRole("button", { name: "chat:activeOperation.stopping" })).toBeDisabled()
+		mockPostMessage({
+			currentTaskId: "task-a",
+			currentTaskOperation: null,
+			clineMessages: [...messages, { ts: 4, type: "ask", ask: "resume_task", text: "Resume" }],
+		})
+		await waitFor(() => expect(view.queryByTestId("active-operation")).not.toBeInTheDocument())
+		fireEvent.keyDown(input, { key: "Enter" })
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "askResponse", text: "Change direction" }),
+		)
+	})
+})
+// kilocode_change end
 
 // kilocode_change start: bounded pages remain separate from live task controls.
 describe("ChatView - bounded history", () => {

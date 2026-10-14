@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.91
+
+- Keep a Stop button available during tool execution and while scrolling, show the current command or script with elapsed time, and cancel task-owned terminal and MCP work without closing the conversation.
+
 ## 5.17.90
 
 - Recover task history writes after an interrupted window reload and offer an explicit Retry action when a task cannot start, instead of leaving the chat stuck without controls.

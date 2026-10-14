@@ -42,6 +42,7 @@ import BrowserActionRow from "./BrowserActionRow"
 import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
 import ChatHistorySearch from "./ChatHistorySearch" // kilocode_change
+import { ActiveOperation } from "./kilocode/ActiveOperation" // kilocode_change
 import HistoryIconButton from "./HistoryIconButton" // kilocode_change
 import { ChatTextArea } from "./ChatTextArea"
 // import TaskHeader from "./TaskHeader"// kilocode_change
@@ -134,6 +135,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		messageQueue = [],
 		sendMessageOnEnter, // kilocode_change
 		isBrowserSessionActive,
+		currentTaskOperation, // kilocode_change
 	} = useExtensionState()
 	// kilocode_change start: manual requests use saved extension state, never an unsaved settings draft.
 	const intelligentTaskEnabled =
@@ -606,6 +608,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	useEffect(() => {
 		// Reset UI states only when task changes
 		setExpandedRows({})
+		setDidClickCancel(false) // kilocode_change
 		everVisibleMessagesTsRef.current.clear() // Clear for new task
 		setCurrentFollowUpTs(null) // Clear follow-up answered state for new task
 		setIsCondensing(false) // Reset condensing state when switching tasks
@@ -825,7 +828,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				// - Task is busy (sendingDisabled)
 				// - API request in progress (isStreaming)
 				// - Queue has items (preserve message order during drain)
-				if (sendingDisabled || isStreaming || messageQueue.length > 0) {
+				if (
+					sendingDisabled ||
+					isStreaming ||
+					(currentTaskOperation && !clineAskRef.current) ||
+					messageQueue.length > 0
+				) {
+					// kilocode_change
 					try {
 						console.log("queueMessage", text, images)
 						vscode.postMessage({ type: "queueMessage", text, images })
@@ -881,7 +890,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				handleChatReset()
 			}
 		},
-		[handleChatReset, markFollowUpAsAnswered, sendingDisabled, isStreaming, messageQueue.length], // messagesRef and clineAskRef are stable
+		[
+			handleChatReset,
+			markFollowUpAsAnswered,
+			sendingDisabled,
+			isStreaming,
+			currentTaskOperation,
+			messageQueue.length,
+		], // kilocode_change
 	)
 
 	const handleSetChatBoxMessage = useCallback(
@@ -2178,6 +2194,23 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				</>
 			)}
 
+			{/* kilocode_change start: never replace Stop with the scroll-to-bottom control. */}
+			{task && (currentTaskOperation || isStreaming) && (
+				<ActiveOperation
+					operation={currentTaskOperation}
+					stopping={didClickCancel}
+					onStop={() => {
+						userRespondedRef.current = true
+						if (autoApproveTimeoutRef.current) {
+							clearTimeout(autoApproveTimeoutRef.current)
+							autoApproveTimeoutRef.current = null
+						}
+						vscode.postMessage({ type: "cancelTask" })
+						setDidClickCancel(true)
+					}}
+				/>
+			)}
+			{/* kilocode_change end */}
 			<QueuedMessages
 				queue={messageQueue}
 				onRemove={(index) => {
