@@ -255,6 +255,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [primaryButtonText, setPrimaryButtonText] = useState<string | undefined>(undefined)
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>(undefined)
 	const [didClickCancel, setDidClickCancel] = useState(false)
+	const [operationExpanded, setOperationExpanded] = useState(false) // kilocode_change
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
@@ -770,6 +771,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 		return false
 	}, [messages, modifiedMessages, clineAsk, enableButtons, primaryButtonText, isCondensing])
+
+	// kilocode_change: new tasks and completed runs never reopen the panel automatically.
+	const operationActive = !!task && (!!currentTaskOperation || isStreaming)
+	useEffect(() => {
+		if (!operationActive) setOperationExpanded(false)
+	}, [operationActive])
+	useEffect(() => setOperationExpanded(false), [currentTaskId])
 
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")
@@ -2195,7 +2203,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 
 			{/* kilocode_change start: never replace Stop with the scroll-to-bottom control. */}
-			{task && (currentTaskOperation || isStreaming) && (
+			{operationActive && operationExpanded && (
 				<ActiveOperation
 					operation={currentTaskOperation}
 					stopping={didClickCancel}
@@ -2229,6 +2237,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			/>
 			<ChatTextArea
 				ref={textAreaRef}
+				operationActive={operationActive} // kilocode_change
+				operationExpanded={operationExpanded} // kilocode_change
+				onToggleOperation={() => setOperationExpanded((expanded) => !expanded)} // kilocode_change
 				inputValue={inputValue}
 				setInputValue={setInputValue}
 				sendingDisabled={sendingDisabled || isProfileDisabled}

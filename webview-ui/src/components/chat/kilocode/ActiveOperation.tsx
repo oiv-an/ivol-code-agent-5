@@ -21,7 +21,8 @@ export function ActiveOperation({
 	const seconds = operation ? Math.max(0, Math.floor((now - operation.startedAt) / 1000)) : null
 	return (
 		<section
-			className="mx-[15px] mb-2 shrink-0 border border-vscode-panel-border p-2"
+			id="active-operation-panel"
+			className="mx-[15px] mb-1 shrink-0 border border-vscode-panel-border p-2"
 			data-testid="active-operation">
 			<div className="flex items-center gap-2">
 				<span className="min-w-0 flex-1 break-words text-xs">
@@ -32,6 +33,7 @@ export function ActiveOperation({
 					type="button"
 					disabled={stopping}
 					onClick={onStop}
+					title={t("chat:activeOperation.notice")}
 					className="shrink-0 cursor-pointer border-0 bg-vscode-button-background px-3 py-1 text-vscode-button-foreground disabled:opacity-50">
 					{t(stopping ? "chat:activeOperation.stopping" : "chat:activeOperation.stop")}
 				</button>
@@ -44,7 +46,6 @@ export function ActiveOperation({
 					</pre>
 				</details>
 			)}
-			<p className="mb-0 mt-1 text-xs text-vscode-descriptionForeground">{t("chat:activeOperation.notice")}</p>
 		</section>
 	)
 }

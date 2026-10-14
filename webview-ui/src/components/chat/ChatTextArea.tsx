@@ -74,6 +74,11 @@ interface ChatTextAreaProps {
 	onCancel?: () => void
 	sendMessageOnEnter?: boolean // kilocode_change
 	showBrowserDockToggle?: boolean
+	// kilocode_change start
+	operationActive?: boolean
+	operationExpanded?: boolean
+	onToggleOperation?: () => void
+	// kilocode_change end
 }
 
 // kilocode_change start
@@ -144,6 +149,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			isEditMode = false,
 			onCancel,
 			sendMessageOnEnter = true,
+			operationActive = false, // kilocode_change
+			operationExpanded = false, // kilocode_change
+			onToggleOperation, // kilocode_change
 		},
 		ref,
 	) => {
@@ -1689,7 +1697,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							: "border border-transparent",
 						isEditMode ? "pt-1.5 pb-10 px-2" : "py-1.5 px-2",
 						"px-[8px]",
-						"pr-9",
+						!isEditMode && onToggleOperation ? "pr-[72px]" : "pr-9", // kilocode_change
 						"z-10",
 						"forced-color-adjust-none",
 						"pb-16", // kilocode_change
@@ -1776,7 +1784,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						"resize-none",
 						"overflow-x-hidden",
 						"overflow-y-auto",
-						"pr-9",
+						!isEditMode && onToggleOperation ? "pr-[72px]" : "pr-9", // kilocode_change
 						"flex-none flex-grow",
 						"z-[2]",
 						"scrollbar-none",
@@ -1811,7 +1819,29 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				)}
 
 				{/* kilocode_change: position tweaked */}
-				<div className="absolute top-2 right-2 z-30">
+				<div className="absolute top-2 right-2 z-30 flex items-center gap-1">
+					{/* kilocode_change start: compact operation control beside prompt enhancement. */}
+					{!isEditMode && onToggleOperation && (
+						<StandardTooltip content={t("chat:activeOperation.details")}>
+							<button
+								type="button"
+								aria-label={t("chat:activeOperation.details")}
+								aria-expanded={operationExpanded}
+								aria-controls="active-operation-panel"
+								disabled={!operationActive}
+								onClick={onToggleOperation}
+								className="inline-flex min-w-[28px] min-h-[28px] items-center justify-center border-none bg-transparent p-1.5 text-vscode-descriptionForeground hover:text-vscode-foreground disabled:opacity-30 cursor-pointer focus-visible:ring-1 focus-visible:ring-vscode-focusBorder">
+								<span
+									aria-hidden="true"
+									className={cn(
+										"codicon codicon-sync",
+										operationActive && "animate-spin motion-reduce:animate-none",
+									)}
+								/>
+							</button>
+						</StandardTooltip>
+					)}
+					{/* kilocode_change end */}
 					<StandardTooltip content={t("chat:enhancePrompt")}>
 						<button
 							aria-label={t("chat:enhancePrompt")}

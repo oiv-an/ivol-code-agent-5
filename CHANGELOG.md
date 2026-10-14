@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.92
+
+- Hide operation details behind a compact animated button beside prompt enhancement, keeping Stop and script details available on demand without taking up chat space.
+
 ## 5.17.91
 
 - Keep a Stop button available during tool execution and while scrolling, show the current command or script with elapsed time, and cancel task-owned terminal and MCP work without closing the conversation.

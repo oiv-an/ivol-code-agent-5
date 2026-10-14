@@ -198,6 +198,9 @@ interface ChatTextAreaProps {
 	placeholderText?: string
 	selectedImages?: string[]
 	shouldDisableImages?: boolean
+	operationActive?: boolean // kilocode_change
+	operationExpanded?: boolean // kilocode_change
+	onToggleOperation?: () => void // kilocode_change
 }
 
 const mockInputRef = React.createRef<HTMLInputElement>()
@@ -218,6 +221,12 @@ vi.mock("../ChatTextArea", () => {
 
 		return (
 			<div data-testid="chat-textarea">
+				<button
+					aria-label="Toggle operation"
+					disabled={!props.operationActive}
+					aria-expanded={props.operationExpanded}
+					onClick={props.onToggleOperation}
+				/>
 				<input
 					ref={mockInputRef}
 					type="text"
@@ -346,7 +355,14 @@ describe("ChatView - active operation", () => {
 				startedAt: Date.now() - 60000,
 			},
 		})
-		await waitFor(() => expect(view.getByTestId("active-operation")).toHaveTextContent("sleep(600)"))
+		await waitFor(() => expect(view.getByRole("button", { name: "Toggle operation" })).toBeEnabled())
+		expect(view.queryByTestId("active-operation")).not.toBeInTheDocument()
+		fireEvent.click(view.getByRole("button", { name: "Toggle operation" }))
+		expect(view.getByTestId("active-operation")).toHaveTextContent("sleep(600)")
+		expect(view.getByTestId("active-operation")).not.toHaveTextContent("chat:activeOperation.notice")
+		fireEvent.click(view.getByRole("button", { name: "Toggle operation" }))
+		expect(view.queryByTestId("active-operation")).not.toBeInTheDocument()
+		fireEvent.click(view.getByRole("button", { name: "Toggle operation" }))
 		fireEvent.click(view.getByRole("button", { name: "Simulate scrolling up" }))
 		expect(view.getByRole("button", { name: "chat:activeOperation.stop" })).toBeEnabled()
 		expect(view.getByTestId("active-operation")).toHaveTextContent("1:00")
