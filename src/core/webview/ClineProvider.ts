@@ -2091,8 +2091,9 @@ export class ClineProvider
 	}
 
 	async showTaskWithId(id: string) {
-		if (id !== this.getCurrentTask()?.taskId) {
-			// Non-current task.
+		// kilocode_change: a failed current instance must be recreated, not reposted as a frozen chat.
+		if (id !== this.getCurrentTask()?.taskId || this.getCurrentTask()?.lifecycleFailed) {
+			// Non-current task or an explicitly retried lifecycle failure.
 			const { historyItem } = await this.getTaskWithId(id)
 			await this.createTaskWithHistoryItem(historyItem) // Clears existing task.
 		} else {

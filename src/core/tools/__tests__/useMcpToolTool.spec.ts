@@ -280,7 +280,11 @@ describe("useMcpToolTool", () => {
 			expect(mockHandleError).not.toHaveBeenCalled()
 			expect(hub.callTool).toHaveBeenCalledTimes(allowed ? 1 : 0)
 			if (allowed) expect(hub.callTool).toHaveBeenCalledWith("browseros-neo", "tabs", args, undefined, mockTask)
-			else expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
+			else {
+				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("No browser action was sent"))
+				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("browser settings"))
+				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("A chat reply does not clear"))
+			}
 		})
 
 		// kilocode_change: scripts reuse explicit consent, not generic MCP/YOLO approval.

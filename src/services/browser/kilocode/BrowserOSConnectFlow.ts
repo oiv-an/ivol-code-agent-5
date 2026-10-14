@@ -7,40 +7,48 @@ export type BrowserOSConnectStage = "connecting" | "launching" | "permission"
 export async function connectBrowserOSForTask<T>(options: {
 	isCurrent: () => boolean
 	connect: () => Promise<T>
-	launch: () => Promise<boolean>
+	// Only an explicit UI action may offer to launch an application.
+	launch?: () => Promise<boolean>
 	grant: (connection: T) => Promise<void>
 	progress: (stage: BrowserOSConnectStage) => Promise<void>
 }): Promise<T | undefined> {
 	const assertCurrent = () => {
 		if (!options.isCurrent()) throw new Error("Browser connection request expired")
 	}
+	// A running browser may still be starting its local server. Retry readiness only,
+	// never a permission decision or a page action, before offering an application picker.
+	const connectWhenReady = async (): Promise<T> => {
+		const deadline = Date.now() + 15000
+		while (true) {
+			assertCurrent()
+			try {
+				return await options.connect()
+			} catch (error) {
+				assertCurrent()
+				if (!(error instanceof BrowserOSUnavailableError) || Date.now() >= deadline) throw error
+				await new Promise((resolve) => setTimeout(resolve, 500))
+			}
+		}
+	}
 	assertCurrent()
 	await options.progress("connecting")
 	let connection: T
 	try {
-		assertCurrent()
-		connection = await options.connect()
+		connection = await connectWhenReady()
 	} catch (error) {
 		assertCurrent()
-		// Configuration errors and permission refusals must never trigger an application launch.
 		if (!(error instanceof BrowserOSUnavailableError)) throw error
+		if (!options.launch)
+			throw new BrowserOSUnavailableError(
+				"BrowserOS local server is unavailable after waiting for startup. This is not a permission refusal. " +
+					"Start BrowserOS neo or use the browser settings connection button, then retry. No browser action was sent.",
+			)
 		await options.progress("launching")
 		assertCurrent()
 		if (!(await options.launch())) return undefined
 		assertCurrent()
 		await options.progress("connecting")
-		// Only transport readiness is retried, never browser page actions or a launch.
-		const deadline = Date.now() + 15000
-		while (true) {
-			assertCurrent()
-			try {
-				connection = await options.connect()
-				break
-			} catch (retryError) {
-				if (!(retryError instanceof BrowserOSUnavailableError) || Date.now() >= deadline) throw retryError
-				await new Promise((resolve) => setTimeout(resolve, 500))
-			}
-		}
+		connection = await connectWhenReady()
 	}
 	assertCurrent()
 	await options.progress("permission")

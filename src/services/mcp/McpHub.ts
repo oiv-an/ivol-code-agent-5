@@ -263,16 +263,11 @@ export class McpHub {
 		if (this.browserOSDeclinedCallers.has(caller)) return false
 		this.browserOSPreparation = (async () => {
 			const { connectBrowserOSForTask } = await import("../browser/kilocode/BrowserOSConnectFlow")
-			const { launchPersonalBrowser } = await import("../browser/kilocode/BrowserLauncher")
+			// Tool-driven recovery must not confuse cancelling an application picker with denying control.
 			let refused = false
 			const setup = await connectBrowserOSForTask({
 				isCurrent,
 				connect: () => this.prepareSelectedBrowserOSConnection(serverName, existing?.server.source),
-				launch: async () => {
-					const launched = await launchPersonalBrowser("browseros", isCurrent)
-					if (!launched) this.browserOSDeclinedCallers.add(caller)
-					return launched
-				},
 				progress: async () => undefined,
 				grant: async (connection) => {
 					const selected = this.findConnection(connection.serverName, connection.source)
@@ -290,6 +285,9 @@ export class McpHub {
 							{ modal: true },
 							allow,
 						)
+						// A cancelled/stale host request is not a user refusal and must not poison the caller.
+						if (!isCurrent())
+							throw new Error("Browser connection request expired; no permission decision retained")
 						if (answer !== allow) {
 							refused = true
 							this.browserOSDeclinedCallers.add(caller)
@@ -313,7 +311,8 @@ export class McpHub {
 					await this.grantBrowserOSAccess(connection.serverName, confirm, connection.source, true)
 				},
 			})
-			return !!setup && !refused && isCurrent() && this.browserOSAccess.getStatus() === "active"
+			if (!isCurrent()) throw new Error("Browser connection request expired; no browser action was sent")
+			return !!setup && !refused && this.browserOSAccess.getStatus() === "active"
 		})()
 		try {
 			return await this.browserOSPreparation

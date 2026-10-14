@@ -46,11 +46,13 @@ async function safeWriteJson(filePath: string, data: any, validateBeforeWrite?: 
 			update: 10000, // Update mtime every 10 seconds to prevent staleness if operation is long
 			realpath: false, // the file may not exist yet, which is acceptable
 			retries: {
-				// Configuration for retrying lock acquisition
-				retries: 5, // Number of retries after the initial attempt
-				factor: 2, // Exponential backoff factor (e.g., 100ms, 200ms, 400ms, ...)
-				minTimeout: 100, // Minimum time to wait before the first retry (in ms)
-				maxTimeout: 1000, // Maximum time to wait for any single retry (in ms)
+				// kilocode_change start: survive a host reload that leaves a fresh orphan lock.
+				// Wait beyond stale (31s); proper-lockfile still protects a live writer's heartbeat.
+				retries: 35,
+				factor: 1,
+				minTimeout: 1000,
+				maxTimeout: 1000,
+				// kilocode_change end
 			},
 			onCompromised: (err) => {
 				console.error(`Lock at ${absoluteFilePath} was compromised:`, err)

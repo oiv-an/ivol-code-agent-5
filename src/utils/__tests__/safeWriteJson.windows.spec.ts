@@ -67,6 +67,24 @@ describe("safeWriteJson Windows file synchronization", () => {
 		return { handles, injectedError }
 	}
 
+	// kilocode_change start: reload recovery waits for expiry without removing a fresh lock.
+	it("waits for an orphan lock to become stale and preserves history until then", async () => {
+		const previous = [{ role: "user", content: "Keep this history" }]
+		const next = [...previous, { role: "assistant", content: "Continued" }]
+		await fs.writeFile(filePath, JSON.stringify(previous))
+		await fs.mkdir(`${filePath}.lock`)
+		const recent = new Date(Date.now() - 27000)
+		await fs.utimes(`${filePath}.lock`, recent, recent)
+		const pending = safeWriteJson(filePath, next)
+		await new Promise((resolve) => setTimeout(resolve, 3000))
+		expect(JSON.parse(await fs.readFile(filePath, "utf8"))).toEqual(previous)
+		expect(await fs.stat(`${filePath}.lock`)).toBeDefined()
+		await pending
+		expect(JSON.parse(await fs.readFile(filePath, "utf8"))).toEqual(next)
+		expect(await fs.readdir(tempDir)).toEqual([path.basename(filePath)])
+	}, 12000)
+	// kilocode_change end
+
 	// kilocode_change start: reject stale browser configuration under the shared file lock.
 	it("validates under the write lock and preserves the file when validation fails", async () => {
 		const previous = { mcpServers: { team: { command: "node" } } }

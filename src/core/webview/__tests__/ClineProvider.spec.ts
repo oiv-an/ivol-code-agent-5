@@ -1,5 +1,24 @@
 // pnpm --filter roo-cline test core/webview/__tests__/ClineProvider.spec.ts
 
+// kilocode_change start
+describe("reopening the current task after a lifecycle failure", () => {
+	it.each([true, false])("recreates only a failed current instance (%s)", async (lifecycleFailed) => {
+		const historyItem = { id: "same-task" }
+		const provider = {
+			getCurrentTask: () => ({ taskId: "same-task", lifecycleFailed }),
+			getTaskWithId: vi.fn().mockResolvedValue({ historyItem }),
+			createTaskWithHistoryItem: vi.fn().mockResolvedValue(undefined),
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
+		}
+		await ClineProvider.prototype.showTaskWithId.call(provider as any, "same-task")
+		expect(provider.createTaskWithHistoryItem).toHaveBeenCalledTimes(lifecycleFailed ? 1 : 0)
+		expect(provider.postStateToWebview).toHaveBeenCalledTimes(lifecycleFailed ? 0 : 1)
+		if (lifecycleFailed) expect(provider.createTaskWithHistoryItem).toHaveBeenCalledWith(historyItem)
+	})
+})
+// kilocode_change end
+
 import Anthropic from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
 import axios from "axios"

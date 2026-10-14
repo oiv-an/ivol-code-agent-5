@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.90
+
+- Recover task history writes after an interrupted window reload and offer an explicit Retry action when a task cannot start, instead of leaving the chat stuck without controls.
+
+## 5.17.89
+
+- Recover BrowserOS connections after startup delays without mistaking an unavailable browser or cancelled application launch for denied control, and explain how to explicitly authorize a previously declined connection.
+
 ## 5.17.88
 
 - Restore the full task-memory instructions before compaction while keeping unrestricted preparation and the memory reread afterwards.

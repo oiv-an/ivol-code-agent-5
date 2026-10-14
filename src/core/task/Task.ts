@@ -820,12 +820,35 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	// kilocode_change start
-	private reportLifecycleFailure(error: unknown): void {
+	public lifecycleFailed = false
+
+	private async reportLifecycleFailure(error: unknown): Promise<void> {
 		if (this.abort || this.abandoned) return
 		this.abort = true
+		this.lifecycleFailed = true
+		this.isStreaming = false
+		this.isWaitingForFirstChunk = false
 		const message = error instanceof Error ? error.message : String(error)
 		console.error(`[Task ${this.taskId}] Could not start or resume:`, error)
-		void vscode.window.showErrorMessage(`Could not start or resume task ${this.taskId}: ${message}`)
+		// Do not write another message to the storage that just failed. The native
+		// action remains usable even when the webview has no pending ask/buttons.
+		try {
+			const retry = "Retry"
+			const answer = await vscode.window.showErrorMessage(
+				`Could not start or resume task ${this.taskId}: ${message}`,
+				{
+					modal: true,
+					detail: "The task has stopped. Retry reloads its saved history; no browser or IDE restart is needed.",
+				},
+				retry,
+			)
+			const provider = this.providerRef.deref()
+			if (answer === retry && !this.abandoned && provider?.getCurrentTask() === this) {
+				await provider.showTaskWithId(this.taskId)
+			}
+		} catch (recoveryError) {
+			console.error(`[Task ${this.taskId}] Could not recover startup:`, recoveryError)
+		}
 	}
 
 	private getContext(): vscode.ExtensionContext {

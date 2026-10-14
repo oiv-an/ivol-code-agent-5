@@ -1,5 +1,47 @@
 // npx vitest core/task/__tests__/Task.spec.ts
 
+// kilocode_change start: recovery must work without a persisted chat ask.
+describe("lifecycle failure recovery", () => {
+	it.each(["Retry", undefined])("offers a native retry without writing failed storage (%s)", async (answer) => {
+		const provider = { getCurrentTask: vi.fn(), showTaskWithId: vi.fn().mockResolvedValue(undefined) }
+		const task = Object.assign(Object.create(Task.prototype), {
+			taskId: "failed-task",
+			abort: false,
+			abandoned: false,
+			isStreaming: true,
+			isWaitingForFirstChunk: true,
+			providerRef: { deref: () => provider },
+		})
+		provider.getCurrentTask.mockReturnValue(task)
+		vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValueOnce(answer as never)
+		await task.reportLifecycleFailure(new Error("History is locked"))
+		expect(task.lifecycleFailed).toBe(true)
+		expect(task.abort).toBe(true)
+		expect(task.isStreaming).toBe(false)
+		expect(task.isWaitingForFirstChunk).toBe(false)
+		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+			expect.stringContaining("History is locked"),
+			expect.objectContaining({ modal: true }),
+			"Retry",
+		)
+		expect(provider.showTaskWithId).toHaveBeenCalledTimes(answer === "Retry" ? 1 : 0)
+	})
+
+	it("never retries a different active task after the dialog", async () => {
+		const provider = { getCurrentTask: () => ({}), showTaskWithId: vi.fn() }
+		const task = Object.assign(Object.create(Task.prototype), {
+			taskId: "old-task",
+			abort: false,
+			abandoned: false,
+			providerRef: { deref: () => provider },
+		})
+		vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValueOnce("Retry" as never)
+		await task.reportLifecycleFailure(new Error("History is locked"))
+		expect(provider.showTaskWithId).not.toHaveBeenCalled()
+	})
+})
+// kilocode_change end
+
 import * as os from "os"
 import * as path from "path"
 

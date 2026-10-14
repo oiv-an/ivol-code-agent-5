@@ -85,22 +85,93 @@ describe("BrowserOS combined connection flow", () => {
 		expect(options.progress.mock.calls.map(([stage]) => stage)).toEqual(["connecting", "permission"])
 	})
 
-	it("launches only when unavailable, then reconnects and requests permission", async () => {
-		const options = makeOptions()
-		options.connect.mockRejectedValueOnce(new BrowserOSUnavailableError("Not running"))
-		await connectBrowserOSForTask(options)
-		expect(options.launch).toHaveBeenCalledOnce()
-		expect(options.connect).toHaveBeenCalledTimes(2)
-		expect(options.grant).toHaveBeenCalledOnce()
+	it("waits for a restarting server without opening an application picker", async () => {
+		vi.useFakeTimers()
+		try {
+			const options = makeOptions()
+			options.connect.mockImplementation(async () => {
+				if (options.connect.mock.calls.length < 25) throw new BrowserOSUnavailableError("Starting")
+				return { serverName: "browseros-neo" }
+			})
+			const pending = connectBrowserOSForTask(options)
+			await vi.advanceTimersByTimeAsync(12000)
+			await pending
+			expect(options.launch).not.toHaveBeenCalled()
+			expect(options.grant).toHaveBeenCalledOnce()
+		} finally {
+			vi.useRealTimers()
+		}
 	})
 
-	it("stops after cancelling the application picker", async () => {
-		const options = makeOptions()
-		options.connect.mockRejectedValueOnce(new BrowserOSUnavailableError("Not running"))
-		options.launch.mockResolvedValue(false)
-		await expect(connectBrowserOSForTask(options)).resolves.toBeUndefined()
-		expect(options.connect).toHaveBeenCalledOnce()
-		expect(options.grant).not.toHaveBeenCalled()
+	it("offers an explicit UI launch only after readiness expires", async () => {
+		vi.useFakeTimers()
+		try {
+			const options = makeOptions()
+			options.connect.mockRejectedValue(new BrowserOSUnavailableError("Not running"))
+			options.launch.mockImplementation(async () => {
+				options.connect.mockResolvedValue({ serverName: "browseros-neo" })
+				return true
+			})
+			const pending = connectBrowserOSForTask(options)
+			await vi.advanceTimersByTimeAsync(15000)
+			await pending
+			expect(options.launch).toHaveBeenCalledOnce()
+			expect(options.grant).toHaveBeenCalledOnce()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
+	it("stops after cancelling the application picker without requesting control", async () => {
+		vi.useFakeTimers()
+		try {
+			const options = makeOptions()
+			options.connect.mockRejectedValue(new BrowserOSUnavailableError("Not running"))
+			options.launch.mockResolvedValue(false)
+			const pending = connectBrowserOSForTask(options)
+			await vi.advanceTimersByTimeAsync(15000)
+			await expect(pending).resolves.toBeUndefined()
+			expect(options.launch).toHaveBeenCalledOnce()
+			expect(options.grant).not.toHaveBeenCalled()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
+	it("reports tool-driven unavailability separately from a permission refusal", async () => {
+		vi.useFakeTimers()
+		try {
+			const options = makeOptions()
+			options.connect.mockRejectedValue(new BrowserOSUnavailableError("Not running"))
+			const pending = expect(connectBrowserOSForTask({ ...options, launch: undefined })).rejects.toThrow(
+				"This is not a permission refusal",
+			)
+			await vi.advanceTimersByTimeAsync(15000)
+			await pending
+			expect(options.launch).not.toHaveBeenCalled()
+			expect(options.grant).not.toHaveBeenCalled()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
+	it("stops readiness retries when the requesting context changes", async () => {
+		vi.useFakeTimers()
+		try {
+			const options = makeOptions()
+			options.connect.mockRejectedValue(new BrowserOSUnavailableError("Starting"))
+			const pending = expect(connectBrowserOSForTask(options)).rejects.toThrow("expired")
+			await vi.advanceTimersByTimeAsync(500)
+			const calls = options.connect.mock.calls.length
+			options.isCurrent.mockReturnValue(false)
+			await vi.advanceTimersByTimeAsync(500)
+			await pending
+			expect(options.connect).toHaveBeenCalledTimes(calls)
+			expect(options.launch).not.toHaveBeenCalled()
+			expect(options.grant).not.toHaveBeenCalled()
+		} finally {
+			vi.useRealTimers()
+		}
 	})
 
 	it("does not launch for a configuration error", async () => {

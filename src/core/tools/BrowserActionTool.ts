@@ -97,7 +97,10 @@ export async function browserActionTool(
 					if (!hub) throw new Error("Browser connection is still initializing; no page action was sent")
 					if (!(await hub.prepareBrowserOSInvocation("browseros-neo", cline))) {
 						pushToolResult(
-							"Browser control was declined or cancelled. No page action was sent. Do not retry without a new user request.",
+							"Browser control permission was declined or dismissed in this IDE window, or an earlier refusal is still retained. " +
+								"No page action was sent. A chat reply does not clear this local block. " +
+								"Use the BrowserOS connection/permission button in IVOL Code browser settings to explicitly authorize again. " +
+								"Do not repeat tool calls or switch browser routes to bypass the refusal.",
 						)
 						return
 					}

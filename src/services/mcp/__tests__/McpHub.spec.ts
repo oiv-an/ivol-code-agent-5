@@ -60,6 +60,7 @@ vi.mock("../../browser/kilocode/BrowserOSDiscovery", async (importOriginal) => (
 	probeBrowserOSEndpoint: vi.fn(),
 }))
 import { discoverBrowserOSEndpoint, probeBrowserOSEndpoint } from "../../browser/kilocode/BrowserOSDiscovery"
+import { BrowserOSUnavailableError } from "../../browser/kilocode/BrowserOSConnectFlow"
 // kilocode_change end
 
 // Mock NotificationService
@@ -410,6 +411,45 @@ describe("McpHub", () => {
 			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(calls)
 		})
 
+		// kilocode_change start: unavailable transport must not become a retained user refusal.
+		it("recovers the same caller after startup unavailability without a launcher or a retained refusal", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			const prepare = vi.spyOn(hub, "prepareSelectedBrowserOSConnection")
+			prepare.mockRejectedValue(new BrowserOSUnavailableError("Starting"))
+			const dialogs = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			vi.useFakeTimers()
+			try {
+				const pending = expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow(
+					"This is not a permission refusal",
+				)
+				await vi.advanceTimersByTimeAsync(15000)
+				await pending
+				expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(dialogs)
+				expect(hub.browserOSAccess.getStatus()).toBe("idle")
+			} finally {
+				vi.useRealTimers()
+				prepare.mockRestore()
+			}
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(true)
+			expect(hub.browserOSAccess.getStatus()).toBe("active")
+		})
+
+		it("does not retain a dismissed permission dialog after its task changes", async () => {
+			const caller = {} as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(async () => {
+				vi.mocked(mockProvider.getCurrentTask!).mockReturnValue({} as any)
+				return undefined
+			})
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("expired")
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(caller)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).resolves.toBe(true)
+		})
+		// kilocode_change end
+
 		it("cancels pending permission when disconnected from settings", async () => {
 			const caller = {} as any
 			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
@@ -417,7 +457,7 @@ describe("McpHub", () => {
 				hub.cancelBrowserOSPreparation()
 				return t("mcp:browserOS.allow") as never
 			})
-			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("expired") // kilocode_change
 			expect(hub.browserOSAccess.getStatus()).toBe("idle")
 		})
 
@@ -428,7 +468,7 @@ describe("McpHub", () => {
 				vi.mocked(mockProvider.getCurrentTask!).mockReturnValue({} as any)
 				return t("mcp:browserOS.allow") as never
 			})
-			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("expired") // kilocode_change
 			expect(hub.browserOSAccess.getStatus()).toBe("idle")
 		})
 
@@ -439,7 +479,7 @@ describe("McpHub", () => {
 				caller.abandoned = true
 				return t("mcp:browserOS.allow") as never
 			})
-			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("declined")
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", caller)).rejects.toThrow("expired") // kilocode_change
 			expect(hub.browserOSAccess.getStatus()).toBe("idle")
 		})
 
