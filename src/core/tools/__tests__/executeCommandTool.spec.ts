@@ -105,6 +105,46 @@ describe("executeCommandTool", () => {
 		}
 	})
 
+	// kilocode_change start: a silent process must not leave an approval prompt on screen.
+	it("shows running controls at process start without waiting for stdout", async () => {
+		vitest.mocked(executeCommandModule.executeCommandInTerminal).mockRestore()
+		const { TerminalRegistry } = await import("../../../integrations/terminal/TerminalRegistry")
+		let callbacks: any
+		let finish!: () => void
+		const process = Object.assign(
+			new Promise<void>((resolve) => {
+				finish = resolve
+			}),
+			{
+				continue: vitest.fn(),
+				abort: vitest.fn(),
+			},
+		)
+		vitest.mocked(TerminalRegistry.getOrCreateTerminal).mockResolvedValueOnce({
+			runCommand: vitest.fn((_command, handlers) => {
+				callbacks = handlers
+				handlers.onShellExecutionStarted(123, process)
+				return process
+			}),
+			getCurrentWorkingDirectory: () => "/test/workspace",
+		} as any)
+		mockCline.ask.mockImplementation(() => new Promise(() => {}))
+		const execution = executeCommandModule.executeCommandInTerminal(mockCline, {
+			executionId: "silent",
+			command: "sleep 60",
+		})
+		await vitest.waitFor(() => expect(mockCline.ask).toHaveBeenCalledWith("command_output", ""))
+		expect(mockCline.ask).toHaveBeenCalledTimes(1)
+		await callbacks.onLine("later output", process)
+		expect(mockCline.ask).toHaveBeenCalledTimes(1)
+		callbacks.onCompleted("done")
+		callbacks.onShellExecutionComplete({ exitCode: 0 })
+		finish()
+		await execution
+		expect(process.continue).not.toHaveBeenCalled()
+	})
+	// kilocode_change end
+
 	/**
 	 * Tests for HTML entity unescaping in commands
 	 * This verifies that HTML entities are properly converted to their actual characters

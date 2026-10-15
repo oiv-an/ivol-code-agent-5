@@ -1,7 +1,8 @@
 // pnpm --filter @roo-code/vscode-webview test src/components/chat/__tests__/CommandExecution.spec.tsx
 
 import React from "react"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react" // kilocode_change
+import { useEvent } from "react-use" // kilocode_change
 
 import { CommandExecution } from "../CommandExecution"
 import { ExtensionStateContext } from "../../../context/ExtensionStateContext"
@@ -61,6 +62,41 @@ describe("CommandExecution", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
+
+	// kilocode_change start: activity stays visible while collapsed and silent, and stops on exit.
+	it("shows an elapsed timer for a silent running command and clears it on exit", () => {
+		vi.useFakeTimers()
+		try {
+			render(
+				<ExtensionStateWrapper>
+					<CommandExecution executionId="silent" text="sleep 60" />
+				</ExtensionStateWrapper>,
+			)
+			const sendStatus = (status: object) => {
+				const listener = vi.mocked(useEvent).mock.calls.at(-1)![1] as (event: MessageEvent) => void
+				act(() =>
+					listener({
+						data: {
+							type: "commandExecutionStatus",
+							text: JSON.stringify({ executionId: "silent", ...status }),
+						},
+					} as MessageEvent),
+				)
+			}
+			expect(screen.queryByTestId("command-elapsed")).not.toBeInTheDocument()
+			sendStatus({ status: "started", pid: 123, command: "sleep 60" })
+			expect(screen.getByTestId("command-elapsed")).toHaveTextContent("0:00")
+			act(() => vi.advanceTimersByTime(65000))
+			expect(screen.getByTestId("command-elapsed")).toHaveTextContent("1:05")
+			expect(screen.queryByTestId("code-block")).not.toBeInTheDocument()
+			sendStatus({ status: "exited", exitCode: 0 })
+			expect(screen.queryByTestId("command-elapsed")).not.toBeInTheDocument()
+			expect(vi.getTimerCount()).toBe(0)
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+	// kilocode_change end
 
 	it("should render command without output", () => {
 		renderExpanded(

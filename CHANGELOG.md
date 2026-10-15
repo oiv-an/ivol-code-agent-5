@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.95
+
+- Replace approval buttons with running command controls immediately after launch, even without terminal output, and show an activity indicator with elapsed time in collapsed command rows.
+
 ## 5.17.94
 
 - Show agent commands, tool calls, MCP and browser actions directly in the chat, including auto-approved ones, with a toggle next to chat search and pinned messages to hide or show them. Command rows start collapsed with a one-line preview and expand on click.

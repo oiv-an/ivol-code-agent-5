@@ -244,9 +244,11 @@ export async function executeCommandInTerminal(
 			task.say("command_output", result)
 			completed = true
 		},
-		onShellExecutionStarted: (pid: number | undefined) => {
+		onShellExecutionStarted: (pid, process) => {
 			const status: CommandExecutionStatus = { executionId, status: "started", pid, command }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
+			// kilocode_change: establish running controls immediately, including commands with redirected or no output.
+			void callbacks.onLine("", process)
 		},
 		onShellExecutionComplete: (details: ExitCodeDetails) => {
 			const status: CommandExecutionStatus = { executionId, status: "exited", exitCode: details.exitCode }

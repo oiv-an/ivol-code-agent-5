@@ -1,7 +1,7 @@
-import { useCallback, useState, memo, useMemo } from "react"
+import { useCallback, useState, memo, useMemo, useEffect } from "react" // kilocode_change
 import { useEvent } from "react-use"
 import { t } from "i18next"
-import { ChevronDown, OctagonX } from "lucide-react"
+import { ChevronDown, OctagonX, LoaderCircle } from "lucide-react" // kilocode_change
 
 import { type ExtensionMessage, type CommandExecutionStatus, commandExecutionStatusSchema } from "@roo-code/types"
 
@@ -40,6 +40,17 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 	const commandPreview = useMemo(() => command.trim().split("\n")[0] ?? "", [command])
 	const [streamingOutput, setStreamingOutput] = useState("")
 	const [status, setStatus] = useState<CommandExecutionStatus | null>(null)
+
+	// kilocode_change start: show activity even when the process produces no output.
+	const [elapsedSeconds, setElapsedSeconds] = useState(0)
+	useEffect(() => {
+		if (status?.status !== "started") return
+		const startedAt = Date.now()
+		setElapsedSeconds(0)
+		const timer = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000)
+		return () => clearInterval(timer)
+	}, [status])
+	// kilocode_change end
 
 	// The command's output can either come from the text associated with the
 	// task message (this is the case for completed commands) or from the
@@ -170,6 +181,14 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 					<div className="flex flex-row items-center gap-1">
 						{status?.status === "started" && (
 							<div className="flex flex-row items-center gap-2 font-mono text-xs">
+								{/* kilocode_change: visible progress in the collapsed header, not only a PID. */}
+								<LoaderCircle
+									className="size-3 animate-spin motion-reduce:animate-none"
+									aria-hidden="true"
+								/>
+								<span className="whitespace-nowrap tabular-nums" data-testid="command-elapsed">
+									{Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, "0")}
+								</span>
 								{status.pid && <div className="whitespace-nowrap">(PID: {status.pid})</div>}
 								<StandardTooltip content={t("chat:commandExecution.abort")}>
 									<Button
