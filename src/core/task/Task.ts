@@ -1669,6 +1669,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	// kilocode_change start: YOLO approvals skip ask(), so the streamed preview must still become a visible, complete row.
+	public async finalizeApprovedAsk(type: ClineAsk, text?: string, isProtected?: boolean): Promise<void> {
+		if (this.abort) return
+		const lastMessage = this.clineMessages.at(-1)
+		if (lastMessage?.partial && lastMessage.type === "ask" && lastMessage.ask === type) {
+			lastMessage.text = text
+			lastMessage.partial = false
+			lastMessage.isProtected = isProtected
+			this.lastMessageTs = lastMessage.ts
+			await this.saveClineMessages()
+			await this.updateClineMessage(lastMessage)
+			return
+		}
+		const ts = await this.nextClineMessageTimestamp_kilocode()
+		this.lastMessageTs = ts
+		await this.addToClineMessages({ ts, type: "ask", ask: type, text, isProtected })
+	}
+	// kilocode_change end
+
 	public getRemotePendingAsk(): ClineMessage | undefined {
 		const pending = this.remotePendingAsk
 		if (

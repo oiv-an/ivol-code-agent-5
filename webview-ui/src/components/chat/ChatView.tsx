@@ -43,6 +43,7 @@ import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
 import ChatHistorySearch from "./ChatHistorySearch" // kilocode_change
 import { ActiveOperation } from "./kilocode/ActiveOperation" // kilocode_change
+import { filterAgentActionRows } from "./kilocode/agentActionRows" // kilocode_change
 import HistoryIconButton from "./HistoryIconButton" // kilocode_change
 import { ChatTextArea } from "./ChatTextArea"
 // import TaskHeader from "./TaskHeader"// kilocode_change
@@ -193,6 +194,25 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// kilocode_change start: browsing history never replaces the live messages used by approvals.
 	const [browsingHistory, setBrowsingHistory] = useState(false)
 	const [searchHistory, setSearchHistory] = useState(false) // kilocode_change
+	// kilocode_change start: shows commands/tool calls inline in the chat; survives task switches and reloads.
+	const [showActionLog, setShowActionLog] = useState(() => {
+		try {
+			return localStorage.getItem("ivol.showActionLog") !== "0"
+		} catch (error) {
+			console.warn("Action log preference unavailable", error)
+			return true
+		}
+	})
+	const toggleActionLog = () =>
+		setShowActionLog((value) => {
+			try {
+				localStorage.setItem("ivol.showActionLog", value ? "0" : "1")
+			} catch (error) {
+				console.warn("Action log preference not saved", error)
+			}
+			return !value
+		})
+	// kilocode_change end
 	useEffect(() => setSearchHistory(false), [currentTaskId]) // kilocode_change
 	useEffect(() => setBrowsingHistory(false), [currentTaskId])
 	// Pending approvals must always be visible, even when the user was browsing history.
@@ -1470,8 +1490,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				? transcriptRows
 				: showFrozenOnly
 					? groupedMessages.filter((msg) => msg.pinned)
-					: groupedMessages,
-		[showFrozenOnly, groupedMessages, browsingHistory, transcriptRows],
+					: filterAgentActionRows(groupedMessages, showActionLog),
+		[showFrozenOnly, groupedMessages, browsingHistory, transcriptRows, showActionLog],
 	)
 	// kilocode_change end
 
@@ -2059,6 +2079,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								}
 							}}
 						/>
+						{/* kilocode_change start */}
+						<HistoryIconButton
+							icon={showActionLog ? "pass-filled" : "circle-large-outline"}
+							label={t("chat:actionLog.toggle")}
+							aria-pressed={showActionLog}
+							onClick={toggleActionLog}
+							className={showActionLog ? "text-vscode-textLink-foreground" : ""}
+						/>
+						{/* kilocode_change end */}
 						{browsingHistory && (
 							<>
 								<HistoryIconButton

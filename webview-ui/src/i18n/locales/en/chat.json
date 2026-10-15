@@ -7,6 +7,9 @@
 		"details": "Command / script / arguments",
 		"notice": "Stop interrupts the agent and requests cancellation. Remote or detached processes may continue; completed changes are not undone."
 	},
+	"actionLog": {
+		"toggle": "Show agent commands and actions in the chat"
+	},
 	"historySearch": {
 		"search": "Search this chat",
 		"close": "Close search",

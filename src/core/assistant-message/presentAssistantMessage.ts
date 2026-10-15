@@ -741,6 +741,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return false
 					}
 					if (isYoloModeActive(currentState)) {
+						// Keep the approved action visible in the chat (command, tool, arguments).
+						await cline.finalizeApprovedAsk(type, partialMessage, isProtected || false)
 						captureAskApproval(block.name, true)
 						return true
 					}

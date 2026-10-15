@@ -71,6 +71,7 @@ describe("presentAssistantMessage - YOLO timer approval boundary", () => {
 				deref: () => ({ getState: async () => ({ ...state }), context: { globalState: { get: vi.fn() } } }),
 			},
 			say: vi.fn().mockResolvedValue(undefined),
+			finalizeApprovedAsk: vi.fn().mockResolvedValue(undefined),
 			ask: vi.fn().mockResolvedValue({ response: "noButtonClicked" }),
 		}
 		task.pushToolResultToUserContent = vi.fn((result) => {
@@ -101,6 +102,8 @@ describe("presentAssistantMessage - YOLO timer approval boundary", () => {
 		expect(mocks.gatekeeper).toHaveBeenCalledTimes(1)
 		expect(mocks.executeApprovedAction).toHaveBeenCalledTimes(1)
 		expect(task.ask).not.toHaveBeenCalled()
+		// The auto-approved action must still appear in the chat as a complete row.
+		expect(task.finalizeApprovedAsk).toHaveBeenCalledWith("tool", "Write example.ts", false)
 	})
 
 	it("asks the user without gatekeeper bypass after the deadline", async () => {
@@ -158,6 +161,7 @@ describe("presentAssistantMessage - YOLO timer approval boundary", () => {
 		mocks.gatekeeper.mockResolvedValue(false)
 		await presentAssistantMessage(task)
 		expect(task.ask).not.toHaveBeenCalled()
+		expect(task.finalizeApprovedAsk).not.toHaveBeenCalled()
 		expect(mocks.executeApprovedAction).not.toHaveBeenCalled()
 		expect(task.didRejectTool).toBe(true)
 	})

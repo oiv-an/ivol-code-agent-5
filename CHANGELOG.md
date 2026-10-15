@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.94
+
+- Show agent commands, tool calls, MCP and browser actions directly in the chat, including auto-approved ones, with a toggle next to chat search and pinned messages to hide or show them.
+
 ## 5.17.92
 
 - Hide operation details behind a compact animated button beside prompt enhancement, keeping Stop and script details available on demand without taking up chat space.
