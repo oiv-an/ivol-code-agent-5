@@ -357,6 +357,7 @@
 	},
 	"commandOutput": "Command Output",
 	"commandExecution": {
+		"toggleDetails": "Show command details",
 		"abort": "Abort",
 		"running": "Running",
 		"pid": "PID: {{pid}}",

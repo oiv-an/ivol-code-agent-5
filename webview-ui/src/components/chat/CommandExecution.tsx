@@ -31,19 +31,13 @@ interface CommandExecutionProps {
 }
 
 export const CommandExecution = ({ executionId, text, icon, title }: CommandExecutionProps) => {
-	const {
-		terminalShellIntegrationDisabled = true, // kilocode_change: default
-		allowedCommands = [],
-		deniedCommands = [],
-		setAllowedCommands,
-		setDeniedCommands,
-	} = useExtensionState()
+	const { allowedCommands = [], deniedCommands = [], setAllowedCommands, setDeniedCommands } = useExtensionState()
 
 	const { command, output: parsedOutput } = useMemo(() => parseCommandAndOutput(text), [text])
 
-	// If we aren't opening the VSCode terminal for this command then we default
-	// to expanding the command execution output.
-	const [isExpanded, setIsExpanded] = useState(terminalShellIntegrationDisabled)
+	// kilocode_change: command rows start collapsed so a long run of commands does not flood the chat.
+	const [isExpanded, setIsExpanded] = useState(false)
+	const commandPreview = useMemo(() => command.trim().split("\n")[0] ?? "", [command])
 	const [streamingOutput, setStreamingOutput] = useState("")
 	const [status, setStatus] = useState<CommandExecutionStatus | null>(null)
 
@@ -129,7 +123,6 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 							setStreamingOutput(data.output)
 							break
 						case "fallback":
-							setIsExpanded(true)
 							break
 						default:
 							setStatus(data)
@@ -146,9 +139,19 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 	return (
 		<>
 			<div className="flex flex-row items-center justify-between gap-2 mb-1">
-				<div className="flex flex-row items-center gap-2">
+				{/* kilocode_change: the whole header toggles the collapsed command details. */}
+				<button
+					type="button"
+					aria-expanded={isExpanded}
+					onClick={() => setIsExpanded(!isExpanded)}
+					className="flex flex-row items-center gap-2 min-w-0 flex-1 bg-transparent border-0 p-0 text-left cursor-pointer text-inherit">
 					{icon}
 					{title}
+					{commandPreview && (
+						<code className="truncate min-w-0 text-xs text-vscode-descriptionForeground">
+							{commandPreview}
+						</code>
+					)}
 					{status?.status === "exited" && (
 						<div className="flex flex-row items-center gap-2 font-mono text-xs">
 							<StandardTooltip
@@ -162,7 +165,7 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 							</StandardTooltip>
 						</div>
 					)}
-				</div>
+				</button>
 				<div className=" flex flex-row items-center justify-between gap-2 px-1">
 					<div className="flex flex-row items-center gap-1">
 						{status?.status === "started" && (
@@ -183,35 +186,37 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 								</StandardTooltip>
 							</div>
 						)}
-						{output.length > 0 && (
-							<Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)}>
-								<ChevronDown
-									className={cn(
-										"size-4 transition-transform duration-300",
-										isExpanded && "rotate-180",
-									)}
-								/>
-							</Button>
-						)}
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label={t("chat:commandExecution.toggleDetails")}
+							aria-expanded={isExpanded}
+							onClick={() => setIsExpanded(!isExpanded)}>
+							<ChevronDown
+								className={cn("size-4 transition-transform duration-300", isExpanded && "rotate-180")}
+							/>
+						</Button>
 					</div>
 				</div>
 			</div>
 
-			<div className="bg-vscode-editor-background border border-vscode-border rounded-xs ml-6 mt-2">
-				<div className="p-2">
-					<CodeBlock source={command} language="shell" />
-					<OutputContainer isExpanded={isExpanded} output={output} />
+			{isExpanded && (
+				<div className="bg-vscode-editor-background border border-vscode-border rounded-xs ml-6 mt-2">
+					<div className="p-2">
+						<CodeBlock source={command} language="shell" />
+						<OutputContainer isExpanded={true} output={output} />
+					</div>
+					{command && command.trim() && (
+						<CommandPatternSelector
+							patterns={commandPatterns}
+							allowedCommands={allowedCommands}
+							deniedCommands={deniedCommands}
+							onAllowPatternChange={handleAllowPatternChange}
+							onDenyPatternChange={handleDenyPatternChange}
+						/>
+					)}
 				</div>
-				{command && command.trim() && (
-					<CommandPatternSelector
-						patterns={commandPatterns}
-						allowedCommands={allowedCommands}
-						deniedCommands={deniedCommands}
-						onAllowPatternChange={handleAllowPatternChange}
-						onDenyPatternChange={handleDenyPatternChange}
-					/>
-				)}
-			</div>
+			)}
 		</>
 	)
 }

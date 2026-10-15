@@ -295,6 +295,7 @@
 	},
 	"commandOutput": "Вывод команды",
 	"commandExecution": {
+		"toggleDetails": "Показать подробности команды",
 		"running": "Выполняется",
 		"abort": "Прервать",
 		"pid": "PID: {{pid}}",
