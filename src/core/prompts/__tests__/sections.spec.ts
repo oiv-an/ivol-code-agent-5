@@ -26,6 +26,14 @@ describe("addCustomInstructions", () => {
 
 		expect(result).toContain("Language Preference:")
 		expect(result).toContain('You should always speak and think in the "Français" (fr) language')
+		// kilocode_change start: agent documents stay in English
+		expect(result).toContain("reply in the language of the user's latest message")
+		expect(result).toContain('"always speak Russian with me"')
+		expect(result).toContain("Code, comments, commit messages and agent-maintained documentation")
+		expect(result).toContain("unless the user explicitly asks for another language for that specific file")
+		expect(result).toContain("is not in English, rewrite it in English")
+		expect(result).toContain("preserving every requirement, decision, status and key data")
+		// kilocode_change end
 	})
 
 	it("works without vscode language", async () => {

@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.97
+
+- The agent replies in the language you write in, while code and its instruction and task memory files are kept in English; existing non-English memory and instruction files are rewritten in English unless you explicitly ask for another language.
+
 ## 5.17.96
 
 - Keep the model and reasoning level selected on the home screen when sending the first message in a new task, without changing shared profile defaults.

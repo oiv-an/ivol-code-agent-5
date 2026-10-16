@@ -116,6 +116,18 @@ describe("ordinary task document prompts", () => {
 		},
 	)
 
+	it.each([ORDINARY_TASK_INSTRUCTIONS, ORDINARY_CONTEXT_PREPARATION_PROMPT])(
+		"keeps task memory in English unless the user explicitly asks otherwise",
+		(prompt) => {
+			expect(prompt).toContain("Write the file in English at medium detail")
+			expect(prompt).toContain("unless the user explicitly asks for another language for this file")
+			expect(prompt).toContain("chatting in another language is not such a request")
+			expect(prompt).toContain("If the existing file is not in English, rewrite all of it in English")
+			expect(prompt).toContain("preserving every requirement, decision, status and key data")
+			expect(prompt).not.toContain("user's language")
+		},
+	)
+
 	it("tells the model to trust finished steps after compaction", () => {
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("do not redo steps it marks as done")
 		expect(ORDINARY_TASK_INSTRUCTIONS).toContain("Record new key data as soon as the user provides it")

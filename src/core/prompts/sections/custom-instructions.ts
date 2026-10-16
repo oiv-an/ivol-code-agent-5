@@ -14,6 +14,13 @@ try {
 }
 
 let hasShownNonKilocodeRulesMessage = false
+
+// Conversation follows the user; code and agent-maintained documents stay in English.
+export const AGENT_DOCUMENT_LANGUAGE_RULE = `
+Language policy:
+- Conversation: reply in the language of the user's latest message. An explicit instruction from the user (for example "always speak Russian with me") overrides this. The editor language above is only a fallback when the user's language is unclear.
+- Code, comments, commit messages and agent-maintained documentation (CURRENT_TASK.md, AI_INSTRUCTIONS.md, AGENTS.md, rule files and other internal docs) are written in English, unless the user explicitly asks for another language for that specific file. Chatting in another language is not such a request.
+- If an existing CURRENT_TASK.md or root instruction file (AI_INSTRUCTIONS.md, AGENTS.md) is not in English, rewrite it in English the first time you maintain or edit it, preserving every requirement, decision, status and key data. Keep quoted user phrases, commands, paths, identifiers and credentials exactly as given. Do not drop, shorten or reinterpret content while translating.`
 // kilocode_change end
 
 import { Dirent } from "fs"
@@ -441,7 +448,8 @@ export async function addCustomInstructions(
 	if (options.language) {
 		const languageName = isLanguage(options.language) ? LANGUAGES[options.language] : options.language
 		sections.push(
-			`Language Preference:\nYou should always speak and think in the "${languageName}" (${options.language}) language unless the user gives you instructions below to do otherwise.`,
+			`Language Preference:\nYou should always speak and think in the "${languageName}" (${options.language}) language unless the user gives you instructions below to do otherwise.` +
+				AGENT_DOCUMENT_LANGUAGE_RULE, // kilocode_change
 		)
 	}
 
