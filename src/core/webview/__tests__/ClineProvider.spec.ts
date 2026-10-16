@@ -624,6 +624,47 @@ describe("ClineProvider", () => {
 		expect(manager.saveConfig).not.toHaveBeenCalled()
 		expect(manager.activateProfile).not.toHaveBeenCalled()
 	})
+	test.each([false, true])(
+		"preserves the home-screen model draft without inheriting an active task (%s)",
+		async (hasActiveTask) => {
+			const defaults = {
+				name: "current-config",
+				id: "profile-id",
+				apiProvider: "openai" as const,
+				openAiModelId: "default-model",
+			}
+			const manager = {
+				ensurePersonalActiveProfile: vi.fn().mockResolvedValue(defaults),
+				getProfile: vi.fn().mockResolvedValue(defaults),
+				saveConfig: vi.fn(),
+				activateProfile: vi.fn(),
+			}
+			;(provider as any).providerSettingsManager = manager
+			vi.spyOn(provider, "postStateToWebview").mockResolvedValue(undefined)
+			vi.spyOn(provider, "addClineToStack").mockResolvedValue(undefined)
+			vi.spyOn(provider, "removeClineFromStack").mockImplementation(async () => {
+				;(provider as any).clineStack = []
+			})
+			await provider.contextProxy.initialize()
+			await provider.clearTask()
+			await provider.setTaskModelSelection(defaults.name, {
+				...defaults,
+				openAiModelId: "selected-opus",
+				reasoningEffort: "max",
+			})
+			if (hasActiveTask) {
+				;(provider as any).clineStack = [{ taskId: "previous-task" }]
+			}
+			await provider.createTask("First message")
+			expect(vi.mocked(Task).mock.calls.at(-1)?.[0].apiConfiguration).toMatchObject(
+				hasActiveTask
+					? { openAiModelId: "default-model" }
+					: { openAiModelId: "selected-opus", reasoningEffort: "max" },
+			)
+			expect(manager.saveConfig).not.toHaveBeenCalled()
+			expect(manager.activateProfile).not.toHaveBeenCalled()
+		},
+	)
 	// kilocode_change end
 
 	test("constructor initializes correctly", () => {

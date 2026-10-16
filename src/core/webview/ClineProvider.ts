@@ -3436,8 +3436,11 @@ export class ClineProvider
 		options: CreateTaskOptions = {},
 		configuration: RooCodeSettings = {},
 	): Promise<Task> {
-		// kilocode_change: a new conversation never inherits another task's model choice.
-		await this.resetConversationModel()
+		// kilocode_change start: preserve the home-screen draft, but never inherit another task's model.
+		if (this.getCurrentTask()) {
+			await this.resetConversationModel()
+		}
+		// kilocode_change end
 		if (configuration) {
 			// kilocode_change start: public task API cannot reactivate a hidden provider
 			if (configuration.apiProvider && !isPersonalProvider(configuration.apiProvider)) {

@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.96
+
+- Keep the model and reasoning level selected on the home screen when sending the first message in a new task, without changing shared profile defaults.
+
 ## 5.17.95
 
 - Replace approval buttons with running command controls immediately after launch, even without terminal output, and show an activity indicator with elapsed time in collapsed command rows.
