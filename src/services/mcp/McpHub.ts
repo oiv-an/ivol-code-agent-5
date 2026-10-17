@@ -44,6 +44,7 @@ import { sanitizeMcpName } from "../../utils/mcp-name"
 // kilocode_change start - MCP OAuth Authorization
 import { McpOAuthService, OAuthTokens } from "./oauth"
 import { BrowserOSHeartbeat } from "../browser/kilocode/BrowserOSHeartbeat" // kilocode_change
+import { BrowserOSTaskTrust } from "../browser/kilocode/BrowserOSTaskTrust" // kilocode_change
 import {
 	BrowserOSAccess,
 	browserOSOperation,
@@ -217,6 +218,41 @@ export class McpHub {
 	private browserOSPreparation?: Promise<boolean>
 	private browserOSDeclinedCallers = new WeakSet<object>()
 	private browserOSPreparationEpoch = 0
+	private browserOSGrantedTask?: string
+
+	async blockBrowserTaskPermission(): Promise<void> {
+		const provider = this.providerRef.deref()
+		const task = provider?.getCurrentTask()
+		if (provider && task?.taskId && task.cwd) {
+			await new BrowserOSTaskTrust(provider.context.globalState).block(task)
+		}
+	}
+
+	private browserTaskKey(): string | undefined {
+		const task = this.providerRef.deref()?.getCurrentTask()
+		return task?.taskId && task.cwd ? JSON.stringify([task.cwd, task.taskId]) : undefined
+	}
+
+	getBrowserTaskPermission(): { taskId: string; allowed: boolean } | undefined {
+		const provider = this.providerRef.deref()
+		const task = provider?.getCurrentTask()
+		if (!provider || !task?.taskId || !task.cwd) return undefined
+		return { taskId: task.taskId, allowed: !!new BrowserOSTaskTrust(provider.context.globalState).get(task) }
+	}
+
+	async revokeBrowserTaskPermission(expectedTaskId?: string): Promise<void> {
+		const provider = this.providerRef.deref()
+		const task = provider?.getCurrentTask()
+		if (expectedTaskId && task?.taskId !== expectedTaskId) return
+		this.cancelBrowserOSPreparation()
+		this.browserOSAccess.revoke()
+		this.browserOSGrantedTask = undefined
+		if (provider && task?.taskId && task.cwd) {
+			this.browserOSDeclinedCallers.add(task)
+			await new BrowserOSTaskTrust(provider.context.globalState).revoke(task)
+		}
+		await provider?.postStateToWebview()
+	}
 
 	cancelBrowserOSPreparation(): void {
 		++this.browserOSPreparationEpoch
@@ -253,6 +289,7 @@ export class McpHub {
 			provider.context.globalState.get("browserMode") === "browseros"
 		if (!isCurrent()) throw new Error("Select BrowserOS mode before using its tools")
 		if (this.browserOSPreparation) throw new Error("Browser permission is already being requested")
+		if (this.browserOSGrantedTask !== this.browserTaskKey()) this.browserOSAccess.revoke()
 		if (
 			existing &&
 			!existing.server.disabled &&
@@ -272,6 +309,31 @@ export class McpHub {
 				grant: async (connection) => {
 					const selected = this.findConnection(connection.serverName, connection.source)
 					if (selected && this.browserOSAccess.hasAccess(selected)) return
+					const task = provider?.getCurrentTask()
+					const saved =
+						provider && task?.taskId && task.cwd
+							? new BrowserOSTaskTrust(provider.context.globalState).get(task)
+							: undefined
+					if (saved?.blocked && this.browserOSAccess.getStatus() !== "paused")
+						throw new Error(
+							"Browser session stopped or access is paused. Return control explicitly in browser settings; task permission is still remembered.",
+						)
+					if (
+						saved &&
+						!saved.blocked &&
+						selected &&
+						this.browserOSAccess.getStatus() !== "paused" &&
+						saved.serverName === connection.serverName &&
+						saved.endpoint === validateBrowserOSEndpoint(JSON.parse(selected.server.config).url)
+					) {
+						await this.grantBrowserOSAccess(
+							connection.serverName,
+							async () => isCurrent(),
+							connection.source,
+							saved.allowTaskActions,
+						)
+						return
+					}
 					const allow = t("mcp:browserOS.allow")
 					const confirm = async () => {
 						if (!isCurrent()) return false
@@ -2770,6 +2832,7 @@ export class McpHub {
 			connection.type !== "connected" ||
 			connection.server.status !== "connected" ||
 			connection.server.disabled ||
+			this.browserOSGrantedTask !== this.browserTaskKey() ||
 			!this.browserOSAccess.canApproveTaskAction(owner, connection)
 		)
 			return false
@@ -2821,6 +2884,10 @@ export class McpHub {
 			throw new Error("This BrowserOS connection is shadowed by a project server. Use unique MCP server names.")
 		if (!provider || this.isDisposed || provider.context.globalState.get("browserMode") !== "browseros")
 			throw new Error("Select BrowserOS mode before granting access")
+		const grantingTask = provider.getCurrentTask()
+		const grantingKey = this.browserTaskKey()
+		const grantingEpoch = this.browserOSPreparationEpoch
+		if (this.browserOSGrantedTask !== grantingKey) this.browserOSAccess.revoke()
 		let confirmed = false
 		await this.browserOSAccess.acquire(
 			provider,
@@ -2829,6 +2896,8 @@ export class McpHub {
 				const approved = await confirm()
 				if (
 					this.isDisposed ||
+					this.browserOSPreparationEpoch !== grantingEpoch ||
+					provider.getCurrentTask() !== grantingTask ||
 					this.findConnection(serverName, source) !== connection ||
 					this.findConnection(serverName) !== connection ||
 					provider.context.globalState.get("browserMode") !== "browseros"
@@ -2839,6 +2908,21 @@ export class McpHub {
 			},
 			allowTaskActions,
 		)
+		this.browserOSGrantedTask = grantingKey
+		if (confirmed && grantingTask?.taskId && grantingTask.cwd) {
+			await new BrowserOSTaskTrust(provider.context.globalState).grant(grantingTask, {
+				serverName,
+				endpoint: validateBrowserOSEndpoint(browserConfig.url),
+				allowTaskActions,
+			})
+			if (this.browserOSPreparationEpoch !== grantingEpoch || provider.getCurrentTask() !== grantingTask) {
+				await new BrowserOSTaskTrust(provider.context.globalState).revoke(grantingTask)
+				this.browserOSAccess.revoke()
+				throw new Error("Browser permission changed while saving")
+			}
+			this.browserOSDeclinedCallers.delete(grantingTask)
+			await provider.postStateToWebview()
+		}
 		if (confirmed) void vscode.window.showInformationMessage(t("mcp:browserOS.permissionGranted"))
 	}
 	// kilocode_change end
@@ -2881,6 +2965,8 @@ export class McpHub {
 		const provider = this.providerRef.deref()
 		if (!caller || !provider || provider.getCurrentTask() !== caller)
 			throw new Error("BrowserOS requires the current calling task instance")
+		if (this.browserOSGrantedTask !== this.browserTaskKey())
+			throw new Error("Browser permission belongs to a different task")
 		const checkContext = () => {
 			if (
 				this.isDisposed ||
@@ -2901,12 +2987,24 @@ export class McpHub {
 			}
 		}
 		checkContext()
-		return this.browserOSAccess.execute(caller, connection, observation, async () => {
-			checkContext()
-			const result = await request()
-			checkContext()
+		try {
+			const result = await this.browserOSAccess.execute(caller, connection, observation, async () => {
+				checkContext()
+				const response = await request()
+				checkContext()
+				return response
+			})
+			// The access guard preserves known action errors. Unknown server errors may mean manual stop.
+			if (provider.getCurrentTask() === caller && !this.browserOSAccess.hasAccess(connection)) {
+				await this.blockBrowserTaskPermission()
+			}
 			return result
-		})
+		} catch (error) {
+			if (provider.getCurrentTask() === caller && !this.browserOSAccess.hasAccess(connection)) {
+				await this.blockBrowserTaskPermission()
+			}
+			throw error
+		}
 	}
 	// kilocode_change end
 

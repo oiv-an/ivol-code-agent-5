@@ -766,6 +766,7 @@ export type ExtensionState = Pick<
 	currentTaskOperation?: { name: string; details: string; startedAt: number } | null
 	// kilocode_change end
 	currentTaskId?: string // kilocode_change: stable task identity for incremental message updates
+	browserTaskPermission?: { taskId: string; allowed: boolean } // kilocode_change: local task consent, not connection status
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	currentTaskCumulativeCost?: number // kilocode_change: cumulative cost including deleted messages
@@ -910,6 +911,7 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 // kilocode_change end: Type-safe global state update message
 
 export interface WebviewMessage {
+	taskId?: string // kilocode_change: pin browser revocation to the task displayed by the toolbar.
 	chatSearchRequest?: { taskId: string; requestId: string; query: string; before?: number; messageTs?: number } // kilocode_change
 	// kilocode_change start
 	chatHistoryRequest?: { taskId: string; before?: number; after?: number; pinnedOnly?: boolean }

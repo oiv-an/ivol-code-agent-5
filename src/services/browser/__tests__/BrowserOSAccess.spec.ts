@@ -1,5 +1,33 @@
 // kilocode_change - new file: a rejected new tab must explain the rule, not leak a parser error.
 import { BrowserOSAccess, browserOSOperation } from "../kilocode/BrowserOSAccess"
+import { BrowserOSTaskTrust } from "../kilocode/BrowserOSTaskTrust"
+import type { Memento } from "vscode"
+
+// kilocode_change start: task permissions survive a host reload, never a task/project boundary.
+describe("BrowserOSTaskTrust", () => {
+	it("persists grants, pause and revocation without granting another task", async () => {
+		const values = new Map<string, unknown>()
+		const storage = {
+			keys: () => [...values.keys()],
+			get: (key: string) => values.get(key),
+			update: async (key: string, value: unknown) => {
+				values.set(key, value)
+			},
+		} as Memento
+		const task = { taskId: "a", cwd: "/project" }
+		const grant = { serverName: "browseros-neo", endpoint: "http://127.0.0.1:9010/mcp", allowTaskActions: true }
+		await new BrowserOSTaskTrust(storage).grant(task, grant)
+		const reloaded = new BrowserOSTaskTrust(storage)
+		expect(reloaded.get(task)).toEqual({ ...grant, version: 1 })
+		expect(reloaded.get({ ...task, taskId: "b" })).toBeUndefined()
+		expect(reloaded.get({ ...task, cwd: "/other" })).toBeUndefined()
+		await reloaded.block(task)
+		expect(new BrowserOSTaskTrust(storage).get(task)?.blocked).toBe(true)
+		await reloaded.revoke(task)
+		expect(new BrowserOSTaskTrust(storage).get(task)).toBeUndefined()
+	})
+})
+// kilocode_change end
 
 const RULE = "BrowserOS new tabs require HTTP(S) or about:blank without credentials"
 

@@ -389,7 +389,11 @@ describe("webviewMessageHandler - BrowserOS permission", () => {
 		const access = { pause: vi.fn(), resume: vi.fn(), revoke: vi.fn(), getStatus: () => "idle" }
 		const grantBrowserOSAccess = vi.fn()
 		const provider = {
-			getMcpHub: () => ({ grantBrowserOSAccess, browserOSAccess: access }),
+			getMcpHub: () => ({
+				grantBrowserOSAccess,
+				browserOSAccess: access,
+				revokeBrowserTaskPermission: access.revoke,
+			}),
 			postMessageToWebview: vi.fn(),
 		} as unknown as ClineProvider
 		await webviewMessageHandler(provider, { type: "browserOSAccess", text: action })

@@ -2037,14 +2037,19 @@ export const webviewMessageHandler = async (
 						hub.cancelBrowserOSPreparation?.() // kilocode_change: a pending dialog cannot undo manual pause
 						if (hub.browserOSAccess.getStatus() === "awaitingPermission") hub.browserOSAccess.revoke()
 						else hub.browserOSAccess.pause()
+						await hub.blockBrowserTaskPermission?.() // kilocode_change: pause survives window reload.
 						break
 					case "resume":
 						hub.browserOSAccess.resume()
 						break
+					case "revokeTask": // kilocode_change: stale toolbar messages must not revoke another task.
+						if (!message.taskId || provider.getCurrentTask()?.taskId !== message.taskId) return
+						browserOSConnectRequests.delete(provider)
+						await hub.revokeBrowserTaskPermission(message.taskId)
+						break
 					case "revoke":
 						browserOSConnectRequests.delete(provider) // kilocode_change: cancel pending launch/setup/grant
-						hub.cancelBrowserOSPreparation?.() // kilocode_change: also cancel preparation initiated by a tool
-						hub.browserOSAccess.revoke()
+						await hub.revokeBrowserTaskPermission() // kilocode_change
 						break
 					case "status":
 						break

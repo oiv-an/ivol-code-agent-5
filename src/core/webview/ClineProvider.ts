@@ -2636,6 +2636,7 @@ export class ClineProvider
 			browserMode: this.contextProxy.getGlobalState("browserMode"), // kilocode_change
 			// kilocode_change start: the remembered checkbox is a preference only, never a granted permission.
 			browserOSAllowTaskActions: this.contextProxy.getGlobalState("browserOSAllowTaskActions") ?? false,
+			browserTaskPermission: this.getMcpHub()?.getBrowserTaskPermission(),
 			// kilocode_change end
 			remoteBrowserEnabled: remoteBrowserEnabled ?? false,
 			cachedChromeHostUrl: cachedChromeHostUrl,

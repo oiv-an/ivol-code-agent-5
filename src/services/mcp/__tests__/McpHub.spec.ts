@@ -377,6 +377,34 @@ describe("McpHub", () => {
 			await hub.dispose()
 		})
 
+		it("remembers approval for one real task across reconnects and revokes it explicitly", async () => {
+			const values = new Map<string, unknown>([["browserMode", "browseros"]])
+			mockProvider.context!.globalState.get = vi.fn((key: string) => values.get(key)) as any
+			mockProvider.context!.globalState.update = vi.fn(async (key: string, value: unknown) => {
+				values.set(key, value)
+			})
+			mockProvider.postStateToWebview = vi.fn()
+			const task = { taskId: "task-a", cwd: "/project" } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			expect(hub.getBrowserTaskPermission()).toEqual({ taskId: "task-a", allowed: true })
+			const prompts = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			hub.browserOSAccess.revoke() // Transport loss invalidates the live grant, not the saved decision.
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts)
+			const other = { taskId: "task-b", cwd: "/project" } as any
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(other)
+			expect(hub.canAutoApproveBrowserOSTool("browseros-neo", "tabs", { action: "list" }, other)).toBe(false)
+			expect(hub.getBrowserTaskPermission()?.allowed).toBe(false)
+			vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(task)
+			await hub.revokeBrowserTaskPermission("task-b")
+			expect(hub.getBrowserTaskPermission()?.allowed).toBe(true)
+			await hub.revokeBrowserTaskPermission("task-a")
+			expect(hub.getBrowserTaskPermission()?.allowed).toBe(false)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(false)
+		})
+
 		it("prepares and requests consent on invocation, then reuses it across chats", async () => {
 			const caller = {} as any
 			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)
@@ -1097,8 +1125,8 @@ describe("McpHub", () => {
 					vi.mocked(mockProvider.getCurrentTask!).mockReturnValue(replacement)
 					return true
 				}),
-			).resolves.toBeUndefined()
-			expect(hub.browserOSAccess.getStatus()).toBe("active")
+			).rejects.toThrow("permission declined") // kilocode_change: approval cannot move to another task.
+			expect(hub.browserOSAccess.getStatus()).toBe("idle")
 			expect(connection.client.request).toHaveBeenCalledTimes(3)
 			hub.browserOSAccess.revoke()
 			hub.connections = []

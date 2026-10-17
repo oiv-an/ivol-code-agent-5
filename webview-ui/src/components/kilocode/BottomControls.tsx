@@ -17,7 +17,7 @@ interface BottomControlsProps {
 const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }) => {
 	const { t } = useAppTranslation()
 	const { unread, checking, hasStarted } = useAdvisor()
-	const { apiConfiguration, currentApiConfigName } = useExtensionState()
+	const { apiConfiguration, currentApiConfigName, currentTaskId, browserTaskPermission } = useExtensionState()
 
 	const showFeedbackOptions = () => {
 		vscode.postMessage({ type: "showFeedbackOptions" })
@@ -53,6 +53,27 @@ const BottomControls: React.FC<BottomControlsProps> = ({ showApiConfig = false }
 				<div className="flex items-center gap-1">
 					{/* The compact toolbar switch must not depend on the legacy full-panel visibility setting. */}
 					<AutoApproveMenu compact />
+					{browserTaskPermission?.allowed && browserTaskPermission.taskId === currentTaskId && (
+						<button
+							type="button"
+							className="flex h-6 items-center gap-0.5 rounded-sm px-1 text-vscode-foreground hover:bg-vscode-list-hoverBackground"
+							aria-label={t("settings:browser.revokeTaskAccess", {
+								defaultValue: "Revoke browser access for this task",
+							})}
+							title={t("settings:browser.revokeTaskAccess", {
+								defaultValue: "Revoke browser access for this task",
+							})}
+							onClick={() =>
+								vscode.postMessage({
+									type: "browserOSAccess",
+									text: "revokeTask",
+									taskId: currentTaskId,
+								})
+							}>
+							<span className="codicon codicon-browser" aria-hidden="true" />
+							<span className="codicon codicon-check" aria-hidden="true" />
+						</button>
+					)}
 					<TelegramButton />
 					<StandaloneWebSearch
 						apiConfiguration={apiConfiguration}

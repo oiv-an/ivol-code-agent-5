@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { vscode } from "@/utils/vscode"
 import type { ProviderSettings } from "@roo-code/types"
 
 import { useExtensionState, type ExtensionStateContextType } from "@/context/ExtensionStateContext"
@@ -33,6 +34,34 @@ describe("BottomControls standalone search", () => {
 		} as ExtensionStateContextType)
 	})
 	afterEach(cleanup)
+
+	it("shows task browser consent beside approval and revokes only the displayed task", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration,
+			currentTaskId: "task-a",
+			browserTaskPermission: { taskId: "task-a", allowed: true },
+		} as ExtensionStateContextType)
+		render(<BottomControls />)
+		const button = screen.getByRole("button", { name: "settings:browser.revokeTaskAccess" })
+		const buttons = screen.getAllByRole("button")
+		expect(buttons[buttons.indexOf(screen.getByText("Auto approval")) + 1]).toBe(button)
+		fireEvent.click(button)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "browserOSAccess",
+			text: "revokeTask",
+			taskId: "task-a",
+		})
+	})
+
+	it("does not show another task's stale permission", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			apiConfiguration,
+			currentTaskId: "task-b",
+			browserTaskPermission: { taskId: "task-a", allowed: true },
+		} as ExtensionStateContextType)
+		render(<BottomControls />)
+		expect(screen.queryByRole("button", { name: "settings:browser.revokeTaskAccess" })).not.toBeInTheDocument()
+	})
 
 	it("hides Advisor until a scan is started from its menu", () => {
 		const view = render(<BottomControls />)
