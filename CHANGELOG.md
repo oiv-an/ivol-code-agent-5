@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.101
+
+- When context compression fails after Current Task is updated, choose between retrying only the compression or continuing without compression.
+
 ## 5.17.99
 
 - Retrying a failed context compression no longer repeats the Current Task update that already succeeded, including after a window reload.

@@ -2442,8 +2442,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.providerRef.deref()?.getTaskDocumentSettings?.(this.apiConfiguration, this.cwd)
 							.supported === true
 					const enableAnswer = "Enable Current Task and retry"
-					// kilocode_change start: a verified file update is not repeated when only compression failed.
+					// kilocode_change start: two plain choices — retry the missing step, or keep working uncompressed.
 					const retryCompressionAnswer = "Retry compression"
+					const skipAnswer = "Continue without compression"
 					const canRetryCompression =
 						preparation.documentUpdated &&
 						this.getContextMemoryMode() === "task" &&
@@ -2453,18 +2454,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						JSON.stringify({
 							contextPreparationDecision: true,
 							question: canRetryCompression
-								? `CURRENT_TASK.md was updated, but history has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`
-								: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`,
-							suggest: [
-								...(canRetryCompression ? [{ answer: retryCompressionAnswer }] : []),
-								...(disabledByProfile ? [{ answer: enableAnswer }] : []),
-								...(this.getContextMemoryMode() === "task" ? [{ answer: "Retry update" }] : []),
-								{ answer: "Continue without updating" },
-							],
+								? `CURRENT_TASK.md was updated, but history has not been compressed. ${preparation.failure ?? ""}`
+								: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""}`,
+							suggest: canRetryCompression
+								? [{ answer: retryCompressionAnswer }, { answer: skipAnswer }]
+								: [
+										...(disabledByProfile ? [{ answer: enableAnswer }] : []),
+										...(this.getContextMemoryMode() === "task" ? [{ answer: "Retry update" }] : []),
+										{ answer: skipAnswer },
+									],
 						}),
 						false,
 					)
 					if (text === retryCompressionAnswer && canRetryCompression) preparation.retryCompression()
+					else if (text === skipAnswer) {
+						await this.skipOrdinaryContextPreparation(preparation)
+						return
+					}
+					// Legacy answer from an older, still pending dialog.
 					else if (text === "Continue without updating") preparation.continueWithoutUpdate()
 					// kilocode_change end
 					else if (text === enableAnswer && disabledByProfile) {
@@ -2519,6 +2526,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.finishContextCondensation()
 			}
 		}
+	}
+	// kilocode_change end
+
+	// kilocode_change start: the user chose to keep working with the full history.
+	private contextPreparationSkippedAtTokens?: number
+
+	private async skipOrdinaryContextPreparation(preparation: OrdinaryContextPreparation): Promise<void> {
+		preparation.dispose()
+		if (this.ordinaryContextPreparation === preparation) this.ordinaryContextPreparation = undefined
+		this.contextPreparationSkippedAtTokens = this.getTokenUsage().contextTokens ?? 0
+		await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, null)
+		await this.finishContextCondensation()
+	}
+
+	/** After an explicit skip, automatic compression waits until the context grows by 10% of the window. */
+	private isAutomaticPreparationSkipped(contextTokens: number, contextWindow: number): boolean {
+		const skippedAt = this.contextPreparationSkippedAtTokens
+		if (skippedAt === undefined) return false
+		if (contextTokens < skippedAt + contextWindow * 0.1) return true
+		this.contextPreparationSkippedAtTokens = undefined
+		return false
 	}
 	// kilocode_change end
 
@@ -5692,7 +5720,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
 			}
 
-			if (contextManagementWillRun && taskDocumentEnabled) {
+			if (
+				contextManagementWillRun &&
+				taskDocumentEnabled &&
+				!this.isAutomaticPreparationSkipped(contextTokens, contextWindow) // kilocode_change
+			) {
 				await this.queueOrdinaryContextPreparation("automatic")
 				await this.ordinaryPreparationBoundary()
 			}
