@@ -3,10 +3,15 @@ import { OrdinaryContextPreparation } from "../kilocode/OrdinaryContextPreparati
 import { Task } from "../Task"
 import { summarizeConversation } from "../../condense"
 
-import { readOrdinaryPreparation } from "../kilocode/ordinaryPreparationStorage"
+import {
+	readOrdinaryPreparation,
+	readOrdinaryPreparationDocumentHash,
+	saveOrdinaryPreparation,
+} from "../kilocode/ordinaryPreparationStorage"
 vi.mock("../kilocode/ordinaryPreparationStorage", () => ({
 	saveOrdinaryPreparation: vi.fn(),
 	readOrdinaryPreparation: vi.fn(),
+	readOrdinaryPreparationDocumentHash: vi.fn(),
 }))
 
 vi.mock("../../condense", async (original) => ({
@@ -175,6 +180,71 @@ describe("ordinary context preparation", () => {
 		expect(task.ask).toHaveBeenCalledTimes(2)
 		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
 		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+
+	it("restores an interrupted compression as compression-only while the file is unchanged", async () => {
+		const { task } = fixture()
+		const internal = task as any
+		Object.assign(task, { hashTaskDocument: vi.fn(async () => "abc") })
+		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce("manual")
+		vi.mocked(readOrdinaryPreparationDocumentHash).mockResolvedValueOnce("abc")
+		await internal.restoreOrdinaryContextPreparation()
+		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
+		expect(internal.ordinaryContextPreparation.documentUpdated).toBe(true)
+	})
+
+	it("requires a new update after restore when the file changed", async () => {
+		const { task } = fixture()
+		const internal = task as any
+		Object.assign(task, { hashTaskDocument: vi.fn(async () => "changed") })
+		vi.mocked(readOrdinaryPreparation).mockResolvedValueOnce("manual")
+		vi.mocked(readOrdinaryPreparationDocumentHash).mockResolvedValueOnce("abc")
+		await internal.restoreOrdinaryContextPreparation()
+		expect(internal.ordinaryContextPreparation.documentUpdated).toBe(false)
+	})
+
+	it("persists the verified file hash before compressing", async () => {
+		const { task, boundary, write } = fixture()
+		Object.assign(task, { hashTaskDocument: vi.fn(async () => "abc") })
+		await task.queueOrdinaryContextPreparation("manual")
+		await boundary(false)
+		write()
+		await boundary()
+		expect(saveOrdinaryPreparation).toHaveBeenCalledWith(undefined, "task", "manual", "abc")
+		expect(vi.mocked(saveOrdinaryPreparation).mock.calls.at(-1)?.[2]).toBeNull()
+	})
+
+	it("retries only compression after a verified file update, never the update turn", async () => {
+		const { task, boundary, write, events } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		await boundary(false)
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+		write()
+		vi.mocked(summarizeConversation).mockRejectedValueOnce(new Error("provider failed"))
+		await expect(boundary()).rejects.toThrow("provider failed")
+		const internal = task as any
+		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
+		expect(internal.ordinaryContextPreparation.documentUpdated).toBe(true)
+		Object.assign(task, { ask: vi.fn(async () => ({ text: "Retry compression" })) })
+		await boundary(false)
+		const question = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string)
+		expect(question.question).toContain("CURRENT_TASK.md was updated")
+		expect(question.suggest[0]).toEqual({ answer: "Retry compression" })
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+		expect(events).toContain("compact")
+		expect(internal.ordinaryContextPreparation).toBeUndefined()
+	})
+
+	it("does not offer a compression retry when the file update was never verified", async () => {
+		const { task, boundary } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		const internal = task as any
+		internal.ordinaryContextPreparation.fail("Interrupted")
+		Object.assign(task, { ask: vi.fn(async () => ({ text: "Continue without updating" })) })
+		await boundary(false)
+		const question = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string)
+		expect(question.suggest).not.toContainEqual({ answer: "Retry compression" })
+		expect(question.question).toContain("CURRENT_TASK.md was not updated")
 	})
 
 	it("compares normalized prototypes without accepting changed values", () => {

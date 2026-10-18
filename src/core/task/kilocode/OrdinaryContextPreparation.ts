@@ -16,6 +16,8 @@ export class OrdinaryContextPreparation {
 	completedTurn = false
 	failure?: string
 	continuedWithoutUpdate = false
+	/** In-memory only: the file step finished, so a compression retry must not repeat it. */
+	documentUpdated = false
 	private observation?: WriteObservation
 
 	private readonly configuration: unknown
@@ -49,6 +51,7 @@ export class OrdinaryContextPreparation {
 		if (this.phase !== "editing") return
 		if (this.observation?.wasWritten()) {
 			this.phase = "ready"
+			this.documentUpdated = true
 			this.dispose()
 		}
 	}
@@ -56,7 +59,23 @@ export class OrdinaryContextPreparation {
 	fail(message: string): void {
 		this.failure = message
 		this.phase = "waiting"
+		this.documentUpdated = false
 		this.dispose()
+	}
+
+	/** Compression itself failed after a verified file update; keep that evidence for a retry. */
+	failCompression(message: string): void {
+		const documentUpdated = this.documentUpdated
+		this.fail(message)
+		this.documentUpdated = documentUpdated
+	}
+
+	retryCompression(): void {
+		if (this.phase !== "waiting" || !this.documentUpdated) {
+			throw new Error("No updated task document is available for a compression retry")
+		}
+		this.failure = undefined
+		this.phase = "ready"
 	}
 
 	continueWithoutUpdate(): void {

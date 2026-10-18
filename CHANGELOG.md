@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.99
+
+- Retrying a failed context compression no longer repeats the Current Task update that already succeeded, including after a window reload.
+
 ## 5.17.98
 
 - Remember browser approval for each task and add a browser checkmark beside auto-approval to revoke it; server-stopped sessions still require explicit recovery.

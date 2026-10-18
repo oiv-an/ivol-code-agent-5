@@ -8,7 +8,11 @@ import EventEmitter from "events"
 
 import { AskIgnoredError } from "./AskIgnoredError"
 // kilocode_change start
-import { readOrdinaryPreparation, saveOrdinaryPreparation } from "./kilocode/ordinaryPreparationStorage"
+import {
+	readOrdinaryPreparation,
+	readOrdinaryPreparationDocumentHash,
+	saveOrdinaryPreparation,
+} from "./kilocode/ordinaryPreparationStorage"
 import {
 	OrdinaryContextPreparation,
 	ORDINARY_CONTEXT_PREPARATION_PROMPT,
@@ -2354,11 +2358,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return
 			}
 		}
-		this.ordinaryContextPreparation = new OrdinaryContextPreparation(pending, this.apiConfiguration)
-		this.ordinaryContextPreparation.fail(
-			"The previous preparation was interrupted. Review saved tool outcomes before retrying.",
-		)
+		const restored = new OrdinaryContextPreparation(pending, this.apiConfiguration)
+		this.ordinaryContextPreparation = restored
+		// kilocode_change start: an interrupted compression keeps a verified update while the file is unchanged.
+		const savedHash = await readOrdinaryPreparationDocumentHash(this.globalStoragePath, this.taskId)
+		if (savedHash && savedHash === (await this.hashTaskDocument())) {
+			restored.fail("The previous compression was interrupted after CURRENT_TASK.md was updated.")
+			restored.documentUpdated = true
+			return
+		}
+		// kilocode_change end
+		restored.fail("The previous preparation was interrupted. Review saved tool outcomes before retrying.")
 	}
+
+	// kilocode_change start
+	private async hashTaskDocument(): Promise<string | undefined> {
+		try {
+			const content = await fs.promises.readFile(path.join(this.cwd, "CURRENT_TASK.md"))
+			return crypto.createHash("sha256").update(content).digest("hex")
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				console.warn("[Task] Could not hash CURRENT_TASK.md", error)
+			}
+			return undefined
+		}
+	}
+	// kilocode_change end
 	// kilocode_change end
 
 	public async queueOrdinaryContextPreparation(trigger: ContextPreparationTrigger): Promise<void> {
@@ -2417,12 +2442,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.providerRef.deref()?.getTaskDocumentSettings?.(this.apiConfiguration, this.cwd)
 							.supported === true
 					const enableAnswer = "Enable Current Task and retry"
+					// kilocode_change start: a verified file update is not repeated when only compression failed.
+					const retryCompressionAnswer = "Retry compression"
+					const canRetryCompression =
+						preparation.documentUpdated &&
+						this.getContextMemoryMode() === "task" &&
+						preparation.matchesConfiguration(this.apiConfiguration)
 					const { text } = await this.ask(
 						"followup",
 						JSON.stringify({
 							contextPreparationDecision: true,
-							question: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`,
+							question: canRetryCompression
+								? `CURRENT_TASK.md was updated, but history has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`
+								: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""} Choose how to continue.`,
 							suggest: [
+								...(canRetryCompression ? [{ answer: retryCompressionAnswer }] : []),
 								...(disabledByProfile ? [{ answer: enableAnswer }] : []),
 								...(this.getContextMemoryMode() === "task" ? [{ answer: "Retry update" }] : []),
 								{ answer: "Continue without updating" },
@@ -2430,7 +2464,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}),
 						false,
 					)
-					if (text === "Continue without updating") preparation.continueWithoutUpdate()
+					if (text === retryCompressionAnswer && canRetryCompression) preparation.retryCompression()
+					else if (text === "Continue without updating") preparation.continueWithoutUpdate()
+					// kilocode_change end
 					else if (text === enableAnswer && disabledByProfile) {
 						// Turning the feature on is the user's explicit answer here, never implicit.
 						await this.providerRef.deref()?.enableIntelligentTaskForCurrentProfile()
@@ -2459,12 +2495,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		} else if (preparation.phase === "ready") {
 			try {
+				// kilocode_change start: record the verified file so a restart retries only compression.
+				if (preparation.documentUpdated) {
+					const documentHash = await this.hashTaskDocument()
+					if (documentHash) {
+						await saveOrdinaryPreparation(
+							this.globalStoragePath,
+							this.taskId,
+							preparation.trigger,
+							documentHash,
+						)
+					}
+				}
+				// kilocode_change end
 				await this.runContextPreparation((signal) => this.performContextCondensation(signal))
 				await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, null)
 				preparation.dispose()
 				this.ordinaryContextPreparation = undefined
 			} catch (error) {
-				preparation.fail(error instanceof Error ? error.message : String(error))
+				preparation.failCompression(error instanceof Error ? error.message : String(error)) // kilocode_change
 				throw error
 			} finally {
 				await this.finishContextCondensation()
@@ -2477,6 +2526,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Repeated clicks must not clear the first operation's spinner or start a second request.
 		if (this.isContextCondensationInProgress) {
 			if (this.canResumeContextPreparation) {
+				// kilocode_change start: the user's explicit compression click skips an already verified file step.
+				const preparation = this.ordinaryContextPreparation
+				if (
+					preparation?.documentUpdated &&
+					this.getContextMemoryMode() === "task" &&
+					preparation.matchesConfiguration(this.apiConfiguration)
+				) {
+					preparation.retryCompression()
+				}
+				// kilocode_change end
 				await this.flushPendingToolResultsToHistory()
 				await this.recursivelyMakeClineRequests([])
 			}
