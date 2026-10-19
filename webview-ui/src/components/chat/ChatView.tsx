@@ -2344,7 +2344,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				inputValue={inputValue}
 				setInputValue={setInputValue}
 				sendingDisabled={sendingDisabled || isProfileDisabled}
-				selectApiConfigDisabled={sendingDisabled && clineAsk !== "api_req_failed"}
+				// kilocode_change: the user may select the next model at any time, regardless of task activity.
+				selectApiConfigDisabled={false}
 				placeholderText={placeholderText}
 				selectedImages={selectedImages}
 				setSelectedImages={setSelectedImages}

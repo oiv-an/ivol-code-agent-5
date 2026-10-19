@@ -104,6 +104,7 @@ describe("ordinary context preparation", () => {
 				ask: "followup",
 				text: JSON.stringify({ contextPreparationDecision: true, suggest: [{ answer }] }),
 			}
+			task.apiConfiguration = { intelligentTaskEnabled: true, apiModelId: "replacement" }
 			expect(await internal.applyRestoredPreparationDecision(message, answer)).toBe(true)
 			await boundary(false)
 			expect(task.ask).not.toHaveBeenCalled()
@@ -319,13 +320,6 @@ describe("ordinary context preparation", () => {
 		expect(question.question).toContain("CURRENT_TASK.md was not updated")
 	})
 
-	it("compares normalized prototypes without accepting changed values", () => {
-		const config = { headers: Object.assign(Object.create(null), { tier: "standard" }) }
-		const preparation = new OrdinaryContextPreparation("manual", config)
-		expect(preparation.matchesConfiguration(config)).toBe(true)
-		config.headers.tier = "priority"
-		expect(preparation.matchesConfiguration(config)).toBe(false)
-	})
 	beforeEach(() => vi.clearAllMocks())
 
 	it("waits for file-tool evidence and saved results, preserving the ordinary summary", async () => {
@@ -440,42 +434,24 @@ describe("ordinary context preparation", () => {
 	})
 
 	it("a retry cannot reuse a previous observation", () => {
-		const config = {}
 		const observation = { wasWritten: () => true, dispose: vi.fn() }
-		const first = new OrdinaryContextPreparation("forced", config)
+		const first = new OrdinaryContextPreparation("forced")
 		first.start(observation)
 		first.fail("cancelled")
-		const retry = new OrdinaryContextPreparation("forced", config)
+		const retry = new OrdinaryContextPreparation("forced")
 		expect(retry.phase).toBe("queued")
 		expect(observation.dispose).toHaveBeenCalledOnce()
 	})
 
-	it("does not invalidate an explicit continue decision after a profile switch", () => {
-		const preparation = new OrdinaryContextPreparation("manual", {})
-		preparation.start({ wasWritten: () => false, dispose: vi.fn() })
-		preparation.fail("Provider settings changed during context preparation")
-		preparation.continueWithoutUpdate()
-		preparation.settle({})
-		expect(preparation.phase).toBe("ready")
-		expect(preparation.continuedWithoutUpdate).toBe(true)
-	})
-
-	it("invalidates saved-file readiness if the profile changes before compaction", () => {
-		const configuration = {}
-		const preparation = new OrdinaryContextPreparation("manual", configuration)
+	it("keeps verified readiness without binding it to provider settings", () => {
+		const preparation = new OrdinaryContextPreparation("manual")
 		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
-		preparation.settle(configuration)
+		preparation.settle()
 		expect(preparation.phase).toBe("ready")
-		preparation.settle({ apiModelId: "different-model" })
-		expect(preparation.phase).toBe("waiting")
-		expect(preparation.continuedWithoutUpdate).toBe(false)
-	})
-
-	it("rejects a profile switch even when the old model wrote the file", () => {
-		const preparation = new OrdinaryContextPreparation("manual", {})
-		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
-		preparation.settle({ apiModelId: "different-model" })
-		expect(preparation.phase).toBe("waiting")
+		preparation.failCompression("provider failed")
+		preparation.retryCompression()
+		expect(preparation.phase).toBe("ready")
+		expect(preparation.documentUpdated).toBe(true)
 	})
 
 	it("accepts refreshed equivalent settings at real task boundaries", async () => {
@@ -490,36 +466,39 @@ describe("ordinary context preparation", () => {
 		expect(summarizeConversation).toHaveBeenCalledOnce()
 	})
 
-	it("detects in-place mutations of nested provider settings", () => {
-		const configuration = { headers: { tier: "standard" } }
-		const preparation = new OrdinaryContextPreparation("manual", configuration)
-		preparation.start({ wasWritten: () => true, dispose: vi.fn() })
-		configuration.headers.tier = "priority"
-		preparation.settle(configuration)
-		expect(preparation.phase).toBe("waiting")
-	})
-
-	it.each(["Retry update"])("resolves %s after a real settings change", async (text) => {
+	it("keeps a verified update when switching models before compression", async () => {
 		const { task, boundary, write } = fixture()
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary(false)
-		Object.assign(task, {
-			apiConfiguration: { intelligentTaskEnabled: true, apiModelId: "changed" },
-			ask: vi.fn(async () => ({ text })),
+		write()
+		task.apiConfiguration = { intelligentTaskEnabled: true, apiModelId: "changed" }
+		await boundary()
+		expect(task.ask).not.toHaveBeenCalled()
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+
+	it("uses the newly selected handler for an explicit compression retry", async () => {
+		const { task, boundary, write } = fixture()
+		await task.queueOrdinaryContextPreparation("manual")
+		await boundary(false)
+		write()
+		const originalApi = task.api
+		const replacementApi = {
+			...originalApi,
+			getModel: () => ({ ...originalApi.getModel(), id: "replacement" }),
+		}
+		vi.mocked(summarizeConversation).mockRejectedValueOnce(new Error("provider failed"))
+		vi.mocked(task.ask).mockImplementationOnce(async () => {
+			task.apiConfiguration = { intelligentTaskEnabled: true, apiModelId: "replacement" }
+			task.api = replacementApi
+			return { response: "messageResponse", text: "Retry compression" }
 		})
 		await boundary()
-		expect(task.ask).toHaveBeenCalledOnce()
-		expect(task.ask).toHaveBeenCalledWith(
-			"followup",
-			expect.stringContaining('"contextPreparationDecision":true'),
-			false,
-		)
-		if (text === "Retry update") {
-			expect(summarizeConversation).not.toHaveBeenCalled()
-			write()
-			await boundary()
-		}
-		expect(summarizeConversation).toHaveBeenCalledOnce()
+		expect(summarizeConversation).toHaveBeenCalledTimes(2)
+		expect(vi.mocked(summarizeConversation).mock.calls[0][1]).toBe(originalApi)
+		expect(vi.mocked(summarizeConversation).mock.calls[1][1]).toBe(replacementApi)
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
 	})
 })
 
@@ -527,7 +506,7 @@ describe("checkpoint restore", () => {
 	it("discards pending preparation so the rewound task does not ask to compress again", async () => {
 		const { task } = fixture()
 		Object.defineProperty(task, "globalStoragePath", { value: "/storage" })
-		const preparation = new OrdinaryContextPreparation("manual", task.apiConfiguration)
+		const preparation = new OrdinaryContextPreparation("manual")
 		preparation.documentUpdated = true
 		;(task as any).ordinaryContextPreparation = preparation
 		vi.mocked(saveOrdinaryPreparation).mockClear()

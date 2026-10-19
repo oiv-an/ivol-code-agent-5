@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.111
+
+- Keep the model selector available at all times, regardless of the current task operation.
+
+## 5.17.110
+
+- Allow switching models for context compression without repeating an already completed task document update.
+
 ## 5.17.109
 
 - Restoring a checkpoint now cancels a pending context compression, so the restored task no longer asks to compress again.

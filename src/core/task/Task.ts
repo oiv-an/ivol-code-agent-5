@@ -2373,7 +2373,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return
 			}
 		}
-		const restored = new OrdinaryContextPreparation(pending, this.apiConfiguration)
+		const restored = new OrdinaryContextPreparation(pending)
 		this.ordinaryContextPreparation = restored
 		// kilocode_change start: an interrupted compression keeps a verified update while the file is unchanged.
 		const savedHash = await readOrdinaryPreparationDocumentHash(this.globalStoragePath, this.taskId)
@@ -2402,14 +2402,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			return false
 		// Consume obsolete skip buttons without bypassing mandatory compression.
 		if (text === "Continue without compression" || text === "Continue without updating") return true
-		if (this.getContextMemoryMode() !== "task" || !preparation.matchesConfiguration(this.apiConfiguration))
-			return false
+		if (this.getContextMemoryMode() !== "task") return false
 		if (text === "Retry compression" && preparation.documentUpdated) {
 			preparation.retryCompression()
 			return true
 		}
 		if (text === "Retry update") {
-			this.ordinaryContextPreparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
+			this.ordinaryContextPreparation = new OrdinaryContextPreparation(preparation.trigger)
 			return true
 		}
 		return false
@@ -2433,7 +2432,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	public async queueOrdinaryContextPreparation(trigger: ContextPreparationTrigger): Promise<void> {
 		if (this.ordinaryContextPreparation) return
-		const preparation = new OrdinaryContextPreparation(trigger, this.apiConfiguration)
+		const preparation = new OrdinaryContextPreparation(trigger)
 		this.ordinaryContextPreparation = preparation
 		try {
 			await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, trigger)
@@ -2467,13 +2466,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				preparation.fail(
 					"Current Task is disabled or unavailable in this workspace. Enable it before retrying, or continue without updating.",
 				)
-			} else if (!preparation.matchesConfiguration(this.apiConfiguration)) {
-				preparation.fail("Provider settings changed during context preparation")
 			}
 		}
 		if (preparation.phase === "editing" && preparation.completedTurn) {
 			preparation.completedTurn = false
-			preparation.settle(this.apiConfiguration)
+			preparation.settle()
 		}
 		if (preparation.phase === "waiting") {
 			this.ordinaryPreparationDecision = true
@@ -2489,10 +2486,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const enableAnswer = "Enable Current Task and retry"
 					// kilocode_change start: retry only the missing step; never bypass compression.
 					const retryCompressionAnswer = "Retry compression"
-					const canRetryCompression =
-						preparation.documentUpdated &&
-						this.getContextMemoryMode() === "task" &&
-						preparation.matchesConfiguration(this.apiConfiguration)
+					const canRetryCompression = preparation.documentUpdated && this.getContextMemoryMode() === "task"
 					const { text } = await this.ask(
 						"followup",
 						JSON.stringify({
@@ -2514,10 +2508,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					else if (text === enableAnswer && disabledByProfile) {
 						// Turning the feature on is the user's explicit answer here, never implicit.
 						await this.providerRef.deref()?.enableIntelligentTaskForCurrentProfile()
-						preparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
+						preparation = new OrdinaryContextPreparation(preparation.trigger)
 						this.ordinaryContextPreparation = preparation
 					} else if (text === "Retry update" && this.getContextMemoryMode() === "task") {
-						preparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
+						preparation = new OrdinaryContextPreparation(preparation.trigger)
 						this.ordinaryContextPreparation = preparation
 					}
 				}
@@ -2579,11 +2573,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (this.canResumeContextPreparation) {
 				// kilocode_change start: the user's explicit compression click skips an already verified file step.
 				const preparation = this.ordinaryContextPreparation
-				if (
-					preparation?.documentUpdated &&
-					this.getContextMemoryMode() === "task" &&
-					preparation.matchesConfiguration(this.apiConfiguration)
-				) {
+				if (preparation?.documentUpdated && this.getContextMemoryMode() === "task") {
 					preparation.retryCompression()
 				}
 				// kilocode_change end

@@ -206,6 +206,7 @@ interface ChatTextAreaProps {
 	inputValue?: string
 	setInputValue?: (value: string) => void
 	sendingDisabled?: boolean
+	selectApiConfigDisabled?: boolean
 	placeholderText?: string
 	selectedImages?: string[]
 	shouldDisableImages?: boolean
@@ -256,6 +257,7 @@ vi.mock("../ChatTextArea", () => {
 						}
 					}}
 					data-sending-disabled={props.sendingDisabled}
+					data-profile-disabled={props.selectApiConfigDisabled}
 				/>
 			</div>
 		)
@@ -1507,7 +1509,7 @@ describe.skip("ChatView - Message Queueing Tests", () => {
 	})
 
 	// kilocode_change start
-	it.each(["Retry update", "Continue without updating"])(
+	it.each(["Retry update", "Retry compression", "Continue without updating"])(
 		"sends preparation decision %s directly despite a busy request and queue",
 		async (answer) => {
 			const { getByTestId, getByText } = renderChatView()
@@ -1793,6 +1795,26 @@ describe("ChatView - Context Condensing Indicator Tests", () => {
 		Array.from(container.querySelectorAll('[data-testid="chat-row"]'))
 			.map((row) => JSON.parse(row.textContent || "{}") as ClineMessage)
 			.filter((message) => message.partial)
+
+	it("keeps model selection available during requests, preparation and compression", async () => {
+		const { getByTestId } = renderChatView()
+		mockPostMessage({
+			clineMessages: [
+				{ type: "say", say: "task", ts: 1, text: "Initial task" },
+				{ type: "say", say: "api_req_started", ts: 2, text: "{}" },
+			],
+		})
+		const input = getByTestId("chat-textarea").querySelector("input")!
+		await waitFor(() => expect(input).toHaveAttribute("data-profile-disabled", "false"))
+		await dispatchProgress("contextHandoffStarted")
+		expect(input).toHaveAttribute("data-profile-disabled", "false")
+		vi.mocked(vscode.postMessage).mockClear()
+		await dispatchProgress("condenseTaskContextStarted")
+		await waitFor(() => expect(input).toHaveAttribute("data-profile-disabled", "false"))
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: "condenseTaskContextRequest" }),
+		)
+	})
 
 	it("shows preparation before compression and clears both indicators on response", async () => {
 		const { container } = renderChatView()

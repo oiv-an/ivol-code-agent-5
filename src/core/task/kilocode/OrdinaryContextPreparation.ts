@@ -1,6 +1,5 @@
 // Task-local state for an ordinary file-tool turn before condensation.
 // No filesystem polling, managed writer, model routing, or persisted authorization.
-import { isDeepStrictEqual } from "node:util"
 
 export { ORDINARY_CONTEXT_PREPARATION_PROMPT, ORDINARY_TASK_INSTRUCTIONS } from "../../task-document/prompts"
 
@@ -20,21 +19,7 @@ export class OrdinaryContextPreparation {
 	documentUpdated = false
 	private observation?: WriteObservation
 
-	private readonly configuration: unknown
-
-	constructor(
-		readonly trigger: PreparationTrigger,
-		configuration: unknown,
-	) {
-		// Provider state refreshes allocate new objects even when no settings changed.
-		// Snapshot values so in-place edits still invalidate an existing authorization.
-		this.configuration = structuredClone(configuration)
-	}
-
-	matchesConfiguration(configuration: unknown): boolean {
-		// Compare snapshots on both sides: structuredClone normalizes object prototypes.
-		return isDeepStrictEqual(structuredClone(configuration), this.configuration)
-	}
+	constructor(readonly trigger: PreparationTrigger) {}
 
 	start(observation: WriteObservation): void {
 		if (this.phase !== "queued") throw new Error("Context preparation is not queued")
@@ -43,11 +28,7 @@ export class OrdinaryContextPreparation {
 	}
 
 	/** Call only after the preceding assistant and tool results have been saved. */
-	settle(configuration: unknown): void {
-		if (!this.continuedWithoutUpdate && !this.matchesConfiguration(configuration)) {
-			this.fail("Provider settings changed during context preparation")
-			return
-		}
+	settle(): void {
 		if (this.phase !== "editing") return
 		if (this.observation?.wasWritten()) {
 			this.phase = "ready"

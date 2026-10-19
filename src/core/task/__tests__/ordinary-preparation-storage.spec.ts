@@ -22,7 +22,7 @@ describe("durable ordinary preparation intent", () => {
 			await fs.readFile(path.join(storage, "tasks/task-one/ordinary_context_preparation.json"), "utf8"),
 		)
 		expect(saved).toEqual({ version: 1, trigger: "forced" })
-		const restored = new OrdinaryContextPreparation(trigger!, {})
+		const restored = new OrdinaryContextPreparation(trigger!)
 		restored.fail("Interrupted")
 		expect(restored.phase).toBe("waiting")
 		expect(restored.continuedWithoutUpdate).toBe(false)
