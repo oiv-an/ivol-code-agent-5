@@ -215,23 +215,61 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// kilocode_change end
 	useEffect(() => setSearchHistory(false), [currentTaskId]) // kilocode_change
 	useEffect(() => setBrowsingHistory(false), [currentTaskId])
-	// Pending approvals must always be visible, even when the user was browsing history.
-	const latestRowTimestamp = messages.at(-1)?.ts
-	const latestRowType = messages.at(-1)?.type
+	// kilocode_change: keep every loaded row until execution resumes, not just one page.
+	const [historyRows, setHistoryRows] = useState<ClineMessage[]>([])
+	const historySession = useRef(0)
+	const historyRequestPage = useRef<typeof chatHistoryPage>(undefined)
+	const latestRequestTs = messages.findLast((message) => message.say === "api_req_started")?.ts
 	useEffect(() => {
-		if (latestRowType === "ask") setBrowsingHistory(false)
-	}, [latestRowTimestamp, latestRowType])
-	const transcriptMessages =
-		browsingHistory && chatHistoryPage && chatHistoryPage.taskId === currentTaskId
-			? chatHistoryPage.messages
-			: messages.slice(1)
+		setBrowsingHistory(false)
+		setHistoryRows([])
+		historyRequestPage.current = undefined
+		historySession.current += 1
+	}, [currentTaskId, latestRequestTs])
+	const transcriptMessages = browsingHistory ? historyRows : messages.slice(1)
+	// Approval/usage logic keeps using the live list; rendering uses the same pipeline for both.
 	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
-	// Historical pages preserve every raw row: grouping across a page boundary
-	// could otherwise hide command output or orphan an API completion.
-	const transcriptRows = transcriptMessages
+	const transcriptRows = useMemo(
+		() => combineApiRequests(combineCommandSequences(transcriptMessages)),
+		[transcriptMessages],
+	)
+	// kilocode_change: reaching the top only loads history after an explicit upward gesture.
+	const historyAtTop = useRef(false)
+	const historyUpwardGesture = useRef(false)
+	const historyRequestPending = useRef(false)
+	const historyDirection = useRef<"before" | "after" | "pinned">("before")
+	useEffect(() => {
+		if (
+			!historyRequestPending.current ||
+			!chatHistoryPage ||
+			chatHistoryPage.taskId !== currentTaskId ||
+			chatHistoryPage === historyRequestPage.current
+		)
+			return
+		historyRequestPending.current = false
+		historyUpwardGesture.current = false
+		setHistoryRows((previous) => {
+			if (historyDirection.current === "pinned") return chatHistoryPage.messages
+			const rows = new Map(previous.map((row) => [row.ts, row]))
+			for (const row of chatHistoryPage.messages) rows.set(row.ts, row)
+			return [...rows.values()].sort((a, b) => a.ts - b.ts)
+		})
+	}, [currentTaskId, chatHistoryPage])
+	useEffect(() => {
+		historyAtTop.current = false
+		historyRequestPending.current = false
+	}, [currentTaskId, latestRequestTs])
 	const requestHistory = (direction: "before" | "after" | "pinned") => {
-		if (!currentTaskId) return
-		const page = browsingHistory ? chatHistoryPage : undefined
+		if (!currentTaskId || historyRequestPending.current) return
+		const page = browsingHistory && chatHistoryPage?.taskId === currentTaskId ? chatHistoryPage : undefined
+		if (direction === "before" && (page ? page.before === undefined : messages.length < 81)) return
+		historyRequestPending.current = true
+		historyUpwardGesture.current = false
+		historyDirection.current = direction
+		historyRequestPage.current = chatHistoryPage
+		if (!browsingHistory || direction === "pinned") {
+			setHistoryRows(direction === "pinned" ? [] : messages.slice(1))
+		}
 		setBrowsingHistory(true)
 		vscode.postMessage({
 			type: "loadChatHistoryPage",
@@ -278,6 +316,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [operationExpanded, setOperationExpanded] = useState(false) // kilocode_change
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
+	// kilocode_change: newly fetched historical blocks always arrive collapsed.
+	useEffect(() => {
+		if (!browsingHistory || !chatHistoryPage || chatHistoryPage.taskId !== currentTaskId) return
+		setExpandedRows((previous) => {
+			const next = { ...previous }
+			for (const row of chatHistoryPage.messages) delete next[row.ts]
+			return next
+		})
+	}, [chatHistoryPage, currentTaskId, browsingHistory])
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const stickyFollowRef = useRef<boolean>(false)
@@ -1252,7 +1299,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const visibleMessages = useMemo(() => {
 		// Pre-compute checkpoint hashes that have associated user messages for O(1) lookup
 		const userMessageCheckpointHashes = new Set<string>()
-		modifiedMessages.forEach((msg) => {
+		transcriptRows.forEach((msg) => {
 			if (
 				msg.say === "user_feedback" &&
 				msg.checkpoint &&
@@ -1265,7 +1312,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 		// Remove the 500-message limit to prevent array index shifting
 		// Virtuoso is designed to efficiently handle large lists through virtualization
-		const newVisibleMessages = modifiedMessages.filter((message) => {
+		const newVisibleMessages = transcriptRows.filter((message) => {
 			// Filter out checkpoint_saved messages that should be suppressed
 			if (message.say === "checkpoint_saved") {
 				// Check if this checkpoint has the suppressMessage flag set
@@ -1319,8 +1366,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					return false
 				case "api_req_retry_delayed":
 				case "api_req_rate_limit_wait":
-					const last1 = modifiedMessages.at(-1)
-					const last2 = modifiedMessages.at(-2)
+					const last1 = transcriptRows.at(-1)
+					const last2 = transcriptRows.at(-2)
 					if (last1?.ask === "resume_task" && last2 === message) {
 						return true
 					} else if (message !== last1) {
@@ -1342,7 +1389,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			.forEach((msg: ClineMessage) => everVisibleMessagesTsRef.current.set(msg.ts, true))
 
 		return newVisibleMessages
-	}, [modifiedMessages])
+	}, [transcriptRows])
 
 	useEffect(() => {
 		const cleanupInterval = setInterval(() => {
@@ -1444,7 +1491,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const result: ClineMessage[] = visibleMessages.filter((msg) => !isBrowserSessionMessage(msg))
 
 		// kilocode_change start: only live synthetic rows spin; saved history remains static.
-		if (isPreparingContextHandoff) {
+		if (!browsingHistory && isPreparingContextHandoff) {
 			result.push({
 				type: "say",
 				say: "context_handoff",
@@ -1455,7 +1502,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						? JSON.stringify({ phase: "preparing", path: "CURRENT_TASK.md" })
 						: undefined,
 			})
-		} else if (isCondensing) {
+		} else if (!browsingHistory && isCondensing) {
 			// kilocode_change end
 			result.push({
 				type: "say",
@@ -1466,6 +1513,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 		return result
 	}, [
+		browsingHistory,
 		isCondensing,
 		isPreparingContextHandoff,
 		visibleMessages,
@@ -1486,13 +1534,20 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const displayedMessages = useMemo(
 		() =>
-			browsingHistory
-				? transcriptRows
-				: showFrozenOnly
-					? groupedMessages.filter((msg) => msg.pinned)
-					: filterAgentActionRows(groupedMessages, showActionLog),
-		[showFrozenOnly, groupedMessages, browsingHistory, transcriptRows, showActionLog],
+			showFrozenOnly
+				? groupedMessages.filter((msg) => msg.pinned)
+				: filterAgentActionRows(groupedMessages, showActionLog),
+		[showFrozenOnly, groupedMessages, showActionLog],
 	)
+	// kilocode_change: inverse-list indices preserve the visible row when older rows are prepended.
+	const historyAnchor = useRef({ taskId: currentTaskId, firstTs: undefined as number | undefined, index: 1_000_000 })
+	if (historyAnchor.current.taskId !== currentTaskId || !browsingHistory) {
+		historyAnchor.current = { taskId: currentTaskId, firstTs: displayedMessages[0]?.ts, index: 1_000_000 }
+	} else if (historyAnchor.current.firstTs !== displayedMessages[0]?.ts) {
+		const added = displayedMessages.findIndex((row) => row.ts === historyAnchor.current.firstTs)
+		if (added > 0) historyAnchor.current.index -= added
+		historyAnchor.current.firstTs = displayedMessages[0]?.ts
+	}
 	// kilocode_change end
 
 	// scrolling
@@ -1750,7 +1805,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						isExpanded={expandedRows[messageOrGroup.ts] || false}
 						onToggleExpand={toggleRowExpansion} // This was already stabilized
 						lastModifiedMessage={modifiedMessages.at(-1)} // Original direct access
-						isLast={index === displayedMessages.length - 1} // kilocode_change: index belongs to the displayed list
+						isLast={messageOrGroup.ts === messages.at(-1)?.ts} // kilocode_change: historical tails are not pending approvals.
 						onHeightChange={handleRowHeightChange}
 						isStreaming={isStreaming}
 						onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
@@ -1783,9 +1838,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		},
 		[
 			expandedRows,
+			messages,
 			toggleRowExpansion,
 			modifiedMessages,
-			displayedMessages.length, // kilocode_change
 			handleRowHeightChange,
 			isStreaming,
 			handleSuggestionClickInRow,
@@ -2116,11 +2171,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						<div className="flex-auto min-h-0">
 							<Virtuoso
 								ref={virtuosoRef}
-								key={`${task.ts}:${browsingHistory ? (chatHistoryPage?.messages[0]?.ts ?? "empty") : "live"}`} // kilocode_change
+								key={`${task.ts}:${historySession.current}`} // kilocode_change: never remount when prepending.
+								firstItemIndex={historyAnchor.current.index}
+								computeItemKey={(_index, message) => message.ts}
 								className="scrollable grow overflow-y-scroll mb-1"
 								increaseViewportBy={{ top: 400, bottom: 400 }} // kilocode_change: use more modest numbers to see if they reduce gray screen incidence
 								data={displayedMessages} // kilocode_change
-								itemContent={itemContent}
+								itemContent={(index, message) =>
+									itemContent(index - historyAnchor.current.index, message)
+								}
+								// kilocode_change start: wheel gestures at the top fetch the preceding bounded page.
+								onWheel={(event) => {
+									historyUpwardGesture.current = event.deltaY < 0
+									if (event.deltaY < 0 && historyAtTop.current) requestHistory("before")
+								}}
+								atTopStateChange={(atTop) => {
+									historyAtTop.current = atTop
+									if (atTop && historyUpwardGesture.current) requestHistory("before")
+								}}
+								atTopThreshold={20}
+								// kilocode_change end
 								followOutput={(isAtBottom: boolean) =>
 									!browsingHistory && (isAtBottom || stickyFollowRef.current)
 								} // kilocode_change
@@ -2131,7 +2201,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								}}
 								atBottomThreshold={10}
 								initialTopMostItemIndex={
-									browsingHistory ? 0 : Math.max(0, displayedMessages.length - 1)
+									browsingHistory && historyDirection.current !== "before"
+										? 0
+										: Math.max(0, displayedMessages.length - 1)
 								} // kilocode_change
 							/>
 						</div>

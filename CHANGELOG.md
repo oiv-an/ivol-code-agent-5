@@ -1,5 +1,37 @@
 # IVOL Code Agent 5
 
+## 5.17.109
+
+- Restoring a checkpoint now cancels a pending context compression, so the restored task no longer asks to compress again.
+
+## 5.17.108
+
+- Restoring a checkpoint no longer shows a false "Ask ignored: superseded" task failure dialog.
+
+## 5.17.107
+
+- Keep previously loaded messages when scrolling back, preserve the reading position, and apply the live chat filters and collapsed defaults to older history.
+
+## 5.17.106
+
+- Load earlier chat history when scrolling upward at the top of the message list.
+
+## 5.17.105
+
+- Keep only the retry action when required context compression fails, and display model, operation and technical failure details instead of a generic empty-response error.
+
+## 5.17.104
+
+- Apply the selected compression recovery action when resuming a stopped task instead of asking the same question again.
+
+## 5.17.103
+
+- Accept valid context summaries above the configured context window instead of rejecting them locally; let the provider enforce its actual request limits.
+
+## 5.17.102
+
+- Keep retry and continue buttons responsive after a compression failure instead of stopping the task.
+
 ## 5.17.101
 
 - When context compression fails after Current Task is updated, choose between retrying only the compression or continuing without compression.

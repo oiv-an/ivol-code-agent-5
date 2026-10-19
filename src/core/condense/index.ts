@@ -368,6 +368,9 @@ export async function summarizeConversation(
 	// kilocode_change: ordinary summarization always honors the user's custom prompt.
 	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
 
+	// kilocode_change: retain safe stream metadata, never response contents, for visible diagnostics.
+	const receivedChunks = new Set<string>()
+	const diagnosticContext = `Operation: context compression. Model: ${handlerToUse.getModel().id}. Task: ${taskId}.`
 	let summary = ""
 	let cost = 0
 	let outputTokens = 0
@@ -405,6 +408,11 @@ export async function summarizeConversation(
 				assertPreparationActive()
 				if (item.done) break
 				const chunk = item.value
+				receivedChunks.add(chunk.type) // kilocode_change
+				if (chunk.type === "error") {
+					// kilocode_change: stream errors must not disappear behind an empty-summary label.
+					throw new Error(`API stream error (${chunk.error}): ${chunk.message}`)
+				}
 				if (chunk.type === "text") {
 					summary += chunk.text
 				} else if (chunk.type === "usage") {
@@ -433,7 +441,7 @@ export async function summarizeConversation(
 			// kilocode_change: an SDK may expose a custom abort reason; use a safe stable message.
 			error: preparation.signal?.aborted
 				? cancellationError
-				: `Context preparation failed: ${error instanceof Error ? error.message : String(error)}`,
+				: `${diagnosticContext}\nRequest failed: ${error instanceof Error ? error.message : String(error)}\nA connection interruption alone cannot identify whether the network, proxy, or upstream provider caused it. History was not compressed.`,
 		}
 	}
 	// kilocode_change end
@@ -452,7 +460,7 @@ export async function summarizeConversation(
 	summary = summary.trim()
 
 	if (summary.length === 0) {
-		const error = t("common:errors.condense_failed")
+		const error = `${diagnosticContext}\nThe API stream ended without summary text. Received chunk types: ${[...receivedChunks].join(", ") || "none"}. Reported output tokens: ${outputTokens}.\nNo explicit failure cause was supplied to the compression handler. The responsible side (provider, proxy, or response processing) is unknown. History was not compressed.` // kilocode_change
 		return { ...response, cost, error }
 	}
 
@@ -613,8 +621,8 @@ export async function summarizeConversation(
 	}
 	// kilocode_change end
 	// kilocode_change start: a requested small-context reset may cost more than it
-	// frees. Report real counts; the task commit still enforces the active model's
-	// capacity before committing. Never relax automatic compression.
+	// frees. Report real counts without treating the configured window as a capacity
+	// gate. Ordinary compression still checks whether the result reduces context.
 	if (manualTaskCompaction && (!Number.isFinite(newContextTokens) || newContextTokens <= 0)) {
 		return { ...response, cost, error: "Context preparation produced an invalid token estimate" }
 	}

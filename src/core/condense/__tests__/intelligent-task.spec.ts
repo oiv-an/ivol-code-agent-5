@@ -46,6 +46,29 @@ function setup() {
 }
 
 describe("ordinary summary streaming", () => {
+	it("shows explicit stream errors instead of reporting an empty summary", async () => {
+		const { messages, createMessage, run } = setup()
+		createMessage.mockImplementationOnce(async function* () {
+			yield { type: "error", error: "rate_limit", message: "API rejected the request" }
+		})
+		const result = await run({})
+		expect(result.error).toContain("rate_limit")
+		expect(result.error).toContain("API rejected the request")
+		expect(result.error).toContain("test-model")
+		expect(result.messages).toBe(messages)
+	})
+
+	it("explains an empty response without inventing its origin", async () => {
+		const { createMessage, run } = setup()
+		createMessage.mockImplementationOnce(async function* () {
+			yield { type: "usage", inputTokens: 100, outputTokens: 1 }
+		})
+		const result = await run({})
+		expect(result.error).toContain("without summary text")
+		expect(result.error).toContain("usage")
+		expect(result.error).toContain("output tokens: 1")
+		expect(result.error).toContain("unknown")
+	})
 	it("cancels a stalled provider read without waiting for generator cleanup", async () => {
 		const { messages, createMessage, run } = setup()
 		const controller = new AbortController()

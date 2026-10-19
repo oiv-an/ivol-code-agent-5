@@ -55,8 +55,12 @@ vi.mock("../BrowserSessionRow", () => ({
 }))
 
 vi.mock("../ChatRow", () => ({
-	default: function MockChatRow({ message }: { message: ClineMessage }) {
-		return <div data-testid="chat-row">{JSON.stringify(message)}</div>
+	default: function MockChatRow({ message, isExpanded }: { message: ClineMessage; isExpanded?: boolean }) {
+		return (
+			<div data-testid="chat-row" data-expanded={String(isExpanded)}>
+				{JSON.stringify(message)}
+			</div>
+		)
 	},
 }))
 
@@ -74,19 +78,26 @@ vi.mock("react-virtuoso", () => ({
 		data,
 		itemContent,
 		atBottomStateChange, // kilocode_change
+		atTopStateChange,
+		onWheel,
+		firstItemIndex = 0,
 	}: {
 		data: ClineMessage[]
 		atBottomStateChange?: (atBottom: boolean) => void // kilocode_change
+		atTopStateChange?: (atTop: boolean) => void
+		onWheel?: React.WheelEventHandler<HTMLDivElement>
+		firstItemIndex?: number
 		itemContent: (index: number, item: ClineMessage) => React.ReactNode
 	}) {
 		return (
-			<div data-testid="virtuoso-item-list">
+			<div data-testid="virtuoso-item-list" onWheel={onWheel}>
+				{atTopStateChange && <button aria-label="Reach history top" onClick={() => atTopStateChange(true)} />}
 				{atBottomStateChange && (
 					<button aria-label="Simulate scrolling up" onClick={() => atBottomStateChange(false)} />
 				)}
 				{data.map((item, index) => (
 					<div key={item.ts} data-testid={`virtuoso-item-${index}`}>
-						{itemContent(index, item)}
+						{itemContent(index + firstItemIndex, item)}
 					</div>
 				))}
 			</div>
@@ -389,6 +400,134 @@ describe("ChatView - active operation", () => {
 // kilocode_change start: bounded pages remain separate from live task controls.
 describe("ChatView - bounded history", () => {
 	beforeEach(() => vi.clearAllMocks())
+	it("loads earlier messages on an upward wheel gesture at the top, without duplicate requests", async () => {
+		const view = renderChatView()
+		mockPostMessage({
+			currentTaskId: "task-a",
+			clineMessages: [
+				{ ts: 1, type: "say", say: "text", text: "Task" },
+				...Array.from({ length: 80 }, (_, i) => ({
+					ts: 100 + i,
+					type: "say" as const,
+					say: "text",
+					text: `Row ${i}`,
+				})),
+			],
+		})
+		await waitFor(() => expect(view.getAllByTestId("chat-row")).toHaveLength(80))
+		vi.mocked(vscode.postMessage).mockClear()
+		fireEvent.click(view.getByRole("button", { name: "Reach history top" }))
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		const transcript = view.getByRole("button", { name: "Reach history top" }).parentElement!
+		fireEvent.wheel(transcript, { deltaY: -100 })
+		fireEvent.wheel(transcript, { deltaY: -100 })
+		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "loadChatHistoryPage",
+			chatHistoryRequest: { taskId: "task-a", before: 100, after: undefined, pinnedOnly: undefined },
+		})
+	})
+
+	it("prepends history without losing the live tail and clears it when execution resumes", async () => {
+		const view = renderChatView()
+		const live = [
+			{ ts: 1, type: "say" as const, say: "text", text: "Task" },
+			...Array.from({ length: 80 }, (_, i) => ({
+				ts: 100 + i,
+				type: "say" as const,
+				say: "text",
+				text: `Live ${i}`,
+			})),
+		]
+		mockPostMessage({ currentTaskId: "task-a", clineMessages: live })
+		await waitFor(() => expect(view.getAllByTestId("chat-row")).toHaveLength(80))
+		fireEvent.click(view.getByRole("button", { name: "Reach history top" }))
+		fireEvent.wheel(view.getByRole("button", { name: "Reach history top" }).parentElement!, { deltaY: -100 })
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "chatHistoryPage",
+						chatHistoryPage: {
+							taskId: "task-a",
+							messages: Array.from({ length: 80 }, (_, i) => ({
+								ts: 20 + i,
+								type: "say",
+								say: "text",
+								text: `Older ${i}`,
+							})),
+							start: 0,
+							end: 80,
+							total: 160,
+							after: 99,
+						},
+					},
+				}),
+			),
+		)
+		await waitFor(() => expect(view.getAllByTestId("chat-row")).toHaveLength(160))
+		expect(view.getAllByTestId("chat-row").at(-1)).toHaveTextContent("Live 79")
+		mockPostMessage({
+			currentTaskId: "task-a",
+			clineMessages: [...live, { ts: 200, type: "say", say: "api_req_started", text: "{}" }],
+		})
+		await waitFor(() => expect(view.queryByText(/Older 0/)).not.toBeInTheDocument())
+	})
+
+	it("applies the action filter and collapsed defaults to loaded history", async () => {
+		localStorage.setItem("ivol.showActionLog", "0")
+		const view = renderChatView()
+		mockPostMessage({
+			currentTaskId: "task-a",
+			clineMessages: [
+				{ ts: 1, type: "say", say: "text", text: "Task" },
+				...Array.from({ length: 80 }, (_, i) => ({
+					ts: 100 + i,
+					type: "say" as const,
+					say: "text",
+					text: `Live ${i}`,
+				})),
+			],
+		})
+		await waitFor(() => expect(view.getAllByTestId("chat-row")).toHaveLength(80))
+		fireEvent.click(view.getByRole("button", { name: "Reach history top" }))
+		fireEvent.wheel(view.getByRole("button", { name: "Reach history top" }).parentElement!, { deltaY: -100 })
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "chatHistoryPage",
+						chatHistoryPage: {
+							taskId: "task-a",
+							start: 0,
+							end: 2,
+							total: 82,
+							after: 3,
+							messages: [
+								{
+									ts: 2,
+									type: "say",
+									say: "tool",
+									text: JSON.stringify({ tool: "readFile", path: "hidden.php" }),
+								},
+								{
+									ts: 3,
+									type: "say",
+									say: "tool",
+									text: JSON.stringify({ tool: "editedExistingFile", path: "visible.php" }),
+								},
+							],
+						},
+					},
+				}),
+			),
+		)
+		await waitFor(() => expect(view.getAllByTestId("chat-row")).toHaveLength(81))
+		expect(view.queryByText(/hidden.php/)).not.toBeInTheDocument()
+		expect(view.getByText(/visible.php/)).toHaveAttribute("data-expanded", "false")
+		localStorage.removeItem("ivol.showActionLog")
+	})
+
 	it("requests pinned history and returns to the live transcript without replacing task state", async () => {
 		const view = renderChatView()
 		mockPostMessage({

@@ -27,6 +27,21 @@ describe("lifecycle failure recovery", () => {
 		expect(provider.showTaskWithId).toHaveBeenCalledTimes(answer === "Retry" ? 1 : 0)
 	})
 
+	it("treats a superseded startup ask as a handoff, not a failure", async () => {
+		const task = Object.assign(Object.create(Task.prototype), {
+			taskId: "restored-task",
+			instanceId: "old",
+			abort: false,
+			abandoned: false,
+			providerRef: { deref: () => undefined },
+		})
+		const showError = vi.spyOn(vscode.window, "showErrorMessage")
+		showError.mockClear()
+		await task.reportLifecycleFailure(new AskIgnoredError("superseded"))
+		expect(showError).not.toHaveBeenCalled()
+		expect(task.lifecycleFailed).not.toBe(true)
+	})
+
 	it("never retries a different active task after the dialog", async () => {
 		const provider = { getCurrentTask: () => ({}), showTaskWithId: vi.fn() }
 		const task = Object.assign(Object.create(Task.prototype), {
@@ -52,6 +67,7 @@ import type { GlobalState, ProviderSettings, ModelInfo } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 
 import { Task } from "../Task"
+import { AskIgnoredError } from "../AskIgnoredError" // kilocode_change
 import { ClineProvider } from "../../webview/ClineProvider"
 import { ApiStreamChunk } from "../../../api/transform/stream"
 import { ContextProxy } from "../../config/ContextProxy"

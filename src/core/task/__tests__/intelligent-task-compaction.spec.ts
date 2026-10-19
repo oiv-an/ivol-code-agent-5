@@ -186,6 +186,16 @@ describe("intelligent task ordinary compaction boundaries", () => {
 		},
 	)
 
+	it("accepts a valid summary above the configured window instead of imposing a local size limit", async () => {
+		const { task, ready, overwrite } = setup()
+		const prepared = { ...result(), newContextTokens: 1_000_000 }
+		vi.mocked(summarizeConversation).mockResolvedValueOnce(prepared)
+		await ready()
+		expect(summarizeConversation).toHaveBeenCalledOnce()
+		expect(overwrite).toHaveBeenCalledWith(prepared.messages)
+		expect(task.ask).not.toHaveBeenCalled()
+	})
+
 	it("preserves signed thinking and the actual summary instead of a resume pointer", async () => {
 		const { task, ready } = setup()
 		const prepared = result()
@@ -270,9 +280,12 @@ describe("intelligent task ordinary compaction boundaries", () => {
 			else task.apiConfiguration = { ...task.apiConfiguration }
 			return result()
 		})
-		await expect(ready()).rejects.toThrow(
-			change === "opt-out" ? "Context memory mode changed" : "Provider settings changed",
-		)
+		vi.mocked(task.ask).mockImplementationOnce(async () => {
+			task.abort = true
+			return { response: "messageResponse", text: "" }
+		})
+		await expect(ready()).rejects.toThrow("cancelled")
+		expect(task.ask).toHaveBeenCalledOnce()
 		expect(task.apiConversationHistory.some((message) => message.isSummary)).toBe(false)
 		expect(overwrite).not.toHaveBeenCalled()
 	})
@@ -315,7 +328,12 @@ describe("intelligent task ordinary compaction boundaries", () => {
 		async (error) => {
 			const { task, ready, overwrite } = setup()
 			vi.mocked(summarizeConversation).mockResolvedValueOnce({ ...result(), error })
-			await expect(ready(error === "does not fit" ? "manual" : "automatic")).rejects.toThrow(error)
+			vi.mocked(task.ask).mockImplementationOnce(async () => {
+				task.abort = true
+				return { response: "messageResponse", text: "" }
+			})
+			await expect(ready(error === "does not fit" ? "manual" : "automatic")).rejects.toThrow("cancelled")
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.stringContaining(error), false)
 			expect(overwrite).not.toHaveBeenCalled()
 			expect(task.apiConversationHistory.some((m) => m.isSummary)).toBe(false)
 		},

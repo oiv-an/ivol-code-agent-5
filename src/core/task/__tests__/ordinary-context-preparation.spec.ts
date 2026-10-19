@@ -92,6 +92,36 @@ function fixture() {
 }
 
 describe("ordinary context preparation", () => {
+	it.each(["Retry update", "Retry compression"])(
+		"applies the saved preparation choice on resume: %s",
+		async (answer) => {
+			const { task, boundary } = fixture()
+			await task.queueOrdinaryContextPreparation("automatic")
+			const internal = task as any
+			internal.ordinaryContextPreparation.fail("Interrupted")
+			internal.ordinaryContextPreparation.documentUpdated = answer === "Retry compression"
+			const message = {
+				ask: "followup",
+				text: JSON.stringify({ contextPreparationDecision: true, suggest: [{ answer }] }),
+			}
+			expect(await internal.applyRestoredPreparationDecision(message, answer)).toBe(true)
+			await boundary(false)
+			expect(task.ask).not.toHaveBeenCalled()
+			if (answer === "Retry update") expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+			if (answer === "Retry compression") expect(summarizeConversation).toHaveBeenCalledOnce()
+		},
+	)
+
+	it("does not interpret unrelated resume text as a preparation choice", async () => {
+		const { task } = fixture()
+		await task.queueOrdinaryContextPreparation("automatic")
+		const internal = task as any
+		internal.ordinaryContextPreparation.fail("Interrupted")
+		expect(await internal.applyRestoredPreparationDecision({ ask: "followup", text: "{}" }, "Retry update")).toBe(
+			false,
+		)
+		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
+	})
 	it.each(["automatic", "manual", "forced"] as const)(
 		"allows %s memory preparation without a second context ceiling",
 		async (trigger) => {
@@ -152,10 +182,7 @@ describe("ordinary context preparation", () => {
 		})
 		await boundary(false)
 		const question = vi.mocked(task.ask).mock.calls[0][1] as string
-		expect(JSON.parse(question).suggest).toEqual([
-			{ answer: "Enable Current Task and retry" },
-			{ answer: "Continue without compression" },
-		])
+		expect(JSON.parse(question).suggest).toEqual([{ answer: "Enable Current Task and retry" }])
 		expect(enable).toHaveBeenCalledOnce()
 		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
 		write()
@@ -163,23 +190,23 @@ describe("ordinary context preparation", () => {
 		expect(summarizeConversation).toHaveBeenCalledOnce()
 	})
 
-	it("never repeats the same unanswerable question when the feature stays off", async () => {
+	it("does not bypass compression when the workspace cannot update the file", async () => {
 		const { task, boundary, provider } = fixture()
 		await task.queueOrdinaryContextPreparation("automatic")
 		Object.assign(provider, { getTaskDocumentSettings: () => ({ supported: false }) })
 		Object.assign(task, {
 			apiConfiguration: { intelligentTaskEnabled: false },
-			ask: vi
-				.fn()
-				.mockResolvedValueOnce({ text: "Retry update" })
-				.mockResolvedValue({ text: "Continue without updating" }),
+			ask: vi.fn(async () => {
+				task.abort = true
+				return { text: "" }
+			}),
 		})
-		await boundary(false)
+		await expect(boundary(false)).rejects.toThrow("cancelled")
 		const suggestions = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string).suggest
-		expect(suggestions).toEqual([{ answer: "Continue without compression" }])
-		expect(task.ask).toHaveBeenCalledTimes(2)
+		expect(suggestions).toEqual([])
+		expect(task.ask).toHaveBeenCalledOnce()
 		expect(task.notifyTaskDocumentPreparing).not.toHaveBeenCalled()
-		expect(summarizeConversation).toHaveBeenCalledOnce()
+		expect(summarizeConversation).not.toHaveBeenCalled()
 	})
 
 	it("restores an interrupted compression as compression-only while the file is unchanged", async () => {
@@ -221,37 +248,63 @@ describe("ordinary context preparation", () => {
 		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
 		write()
 		vi.mocked(summarizeConversation).mockRejectedValueOnce(new Error("provider failed"))
-		await expect(boundary()).rejects.toThrow("provider failed")
 		const internal = task as any
-		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
-		expect(internal.ordinaryContextPreparation.documentUpdated).toBe(true)
-		Object.assign(task, { ask: vi.fn(async () => ({ text: "Retry compression" })) })
-		await boundary(false)
+		Object.assign(task, {
+			ask: vi.fn(async () => {
+				expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
+				expect(internal.ordinaryContextPreparation.documentUpdated).toBe(true)
+				expect(task.abort).not.toBe(true)
+				return { text: "Retry compression" }
+			}),
+		})
+		await boundary()
 		const question = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string)
 		expect(question.question).toContain("CURRENT_TASK.md was updated")
-		expect(question.suggest).toEqual([{ answer: "Retry compression" }, { answer: "Continue without compression" }])
+		expect(question.suggest).toEqual([{ answer: "Retry compression" }])
 		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
 		expect(events).toContain("compact")
 		expect(internal.ordinaryContextPreparation).toBeUndefined()
 	})
 
-	it("continues without compression and does not restart preparation right away", async () => {
+	it("waits for a fresh decision after each failed compression retry", async () => {
+		const { task, boundary, write, events } = fixture()
+		await task.queueOrdinaryContextPreparation("automatic")
+		await boundary(false)
+		write()
+		vi.mocked(summarizeConversation)
+			.mockRejectedValueOnce(new Error("first failure"))
+			.mockRejectedValueOnce(new Error("second failure"))
+		vi.mocked(task.ask)
+			.mockResolvedValueOnce({ response: "messageResponse", text: "Retry compression" })
+			.mockResolvedValueOnce({ response: "messageResponse", text: "Retry compression" })
+		await boundary()
+		expect(task.ask).toHaveBeenCalledTimes(2)
+		expect(summarizeConversation).toHaveBeenCalledTimes(3)
+		expect(task.notifyTaskDocumentPreparing).toHaveBeenCalledOnce()
+		expect(events).toContain("compact")
+		expect(task.abort).not.toBe(true)
+		expect((task as any).ordinaryContextPreparation).toBeUndefined()
+	})
+
+	it("rejects obsolete skip answers and stays paused until cancellation", async () => {
 		const { task, boundary, write, events } = fixture()
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary(false)
 		write()
 		vi.mocked(summarizeConversation).mockRejectedValueOnce(new Error("provider failed"))
-		await expect(boundary()).rejects.toThrow("provider failed")
 		const internal = task as any
-		Object.assign(task, { ask: vi.fn(async () => ({ text: "Continue without compression" })) })
+		vi.mocked(task.ask)
+			.mockResolvedValueOnce({ response: "messageResponse", text: "Continue without compression" })
+			.mockImplementationOnce(async () => {
+				task.abort = true
+				return { response: "messageResponse", text: "" }
+			})
 		const history = [...task.apiConversationHistory]
-		await boundary(false)
-		expect(internal.ordinaryContextPreparation).toBeUndefined()
+		await expect(boundary()).rejects.toThrow("cancelled")
+		expect(task.ask).toHaveBeenCalledTimes(2)
+		expect(internal.ordinaryContextPreparation.phase).toBe("waiting")
 		expect(events).not.toContain("compact")
 		expect(task.apiConversationHistory).toEqual(history)
-		expect(vi.mocked(saveOrdinaryPreparation).mock.calls.at(-1)?.[2]).toBeNull()
-		expect(internal.isAutomaticPreparationSkipped(1000, 400_000)).toBe(true)
-		expect(internal.isAutomaticPreparationSkipped(1000 + 40_000, 400_000)).toBe(false)
 	})
 
 	it("does not offer a compression retry when the file update was never verified", async () => {
@@ -259,10 +312,10 @@ describe("ordinary context preparation", () => {
 		await task.queueOrdinaryContextPreparation("manual")
 		const internal = task as any
 		internal.ordinaryContextPreparation.fail("Interrupted")
-		Object.assign(task, { ask: vi.fn(async () => ({ text: "Continue without compression" })) })
+		Object.assign(task, { ask: vi.fn(async () => ({ text: "Retry update" })) })
 		await boundary(false)
 		const question = JSON.parse(vi.mocked(task.ask).mock.calls[0][1] as string)
-		expect(question.suggest).toEqual([{ answer: "Retry update" }, { answer: "Continue without compression" }])
+		expect(question.suggest).toEqual([{ answer: "Retry update" }])
 		expect(question.question).toContain("CURRENT_TASK.md was not updated")
 	})
 
@@ -446,7 +499,7 @@ describe("ordinary context preparation", () => {
 		expect(preparation.phase).toBe("waiting")
 	})
 
-	it.each(["Retry update", "Continue without updating"])("resolves %s after a real settings change", async (text) => {
+	it.each(["Retry update"])("resolves %s after a real settings change", async (text) => {
 		const { task, boundary, write } = fixture()
 		await task.queueOrdinaryContextPreparation("manual")
 		await boundary(false)
@@ -467,5 +520,19 @@ describe("ordinary context preparation", () => {
 			await boundary()
 		}
 		expect(summarizeConversation).toHaveBeenCalledOnce()
+	})
+})
+
+describe("checkpoint restore", () => {
+	it("discards pending preparation so the rewound task does not ask to compress again", async () => {
+		const { task } = fixture()
+		Object.defineProperty(task, "globalStoragePath", { value: "/storage" })
+		const preparation = new OrdinaryContextPreparation("manual", task.apiConfiguration)
+		preparation.documentUpdated = true
+		;(task as any).ordinaryContextPreparation = preparation
+		vi.mocked(saveOrdinaryPreparation).mockClear()
+		await task.discardOrdinaryContextPreparation()
+		expect((task as any).ordinaryContextPreparation).toBeUndefined()
+		expect(saveOrdinaryPreparation).toHaveBeenCalledWith("/storage", "task", null)
 	})
 })

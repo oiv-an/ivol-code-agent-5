@@ -842,6 +842,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async reportLifecycleFailure(error: unknown): Promise<void> {
 		if (this.abort || this.abandoned) return
+		// A newer message replaced this instance's pending ask (for example, a
+		// checkpoint restore rewinds history and rehydrates the task). The owner of
+		// that newer message continues the lifecycle, so this is not a failure.
+		if (error instanceof AskIgnoredError) {
+			console.log(`[Task ${this.taskId}.${this.instanceId}] Startup ask superseded: ${error.message}`)
+			return
+		}
 		this.abort = true
 		this.lifecycleFailed = true
 		this.isStreaming = false
@@ -2320,6 +2327,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// kilocode_change start: the configured condensation threshold owns preparation timing.
 
+	// kilocode_change start: a checkpoint restore rewinds history to before any
+	// pending preparation, so that intent must not resurface after rehydration.
+	public async discardOrdinaryContextPreparation(): Promise<void> {
+		this.ordinaryContextPreparation = undefined
+		await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, null)
+	}
+	// kilocode_change end
+
 	private async restoreOrdinaryContextPreparation(): Promise<void> {
 		if (this.ordinaryContextPreparation) return
 		const pending = await readOrdinaryPreparation(this.globalStoragePath, this.taskId)
@@ -2370,6 +2385,36 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// kilocode_change end
 		restored.fail("The previous preparation was interrupted. Review saved tool outcomes before retrying.")
 	}
+
+	// kilocode_change start: a reply to the saved preparation question can arrive
+	// through the resume prompt. Consume it as a decision, not as model input.
+	private async applyRestoredPreparationDecision(message: ClineMessage | undefined, text?: string): Promise<boolean> {
+		const preparation = this.ordinaryContextPreparation
+		if (preparation?.phase !== "waiting" || message?.ask !== "followup" || !text) return false
+		let question: { contextPreparationDecision?: boolean; suggest?: { answer: string }[] }
+		try {
+			question = JSON.parse(message.text ?? "{}")
+		} catch {
+			// Ordinary or malformed saved questions are not preparation authorization.
+			return false
+		}
+		if (!question?.contextPreparationDecision || !question.suggest?.some((item) => item.answer === text))
+			return false
+		// Consume obsolete skip buttons without bypassing mandatory compression.
+		if (text === "Continue without compression" || text === "Continue without updating") return true
+		if (this.getContextMemoryMode() !== "task" || !preparation.matchesConfiguration(this.apiConfiguration))
+			return false
+		if (text === "Retry compression" && preparation.documentUpdated) {
+			preparation.retryCompression()
+			return true
+		}
+		if (text === "Retry update") {
+			this.ordinaryContextPreparation = new OrdinaryContextPreparation(preparation.trigger, this.apiConfiguration)
+			return true
+		}
+		return false
+	}
+	// kilocode_change end
 
 	// kilocode_change start
 	private async hashTaskDocument(): Promise<string | undefined> {
@@ -2442,9 +2487,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.providerRef.deref()?.getTaskDocumentSettings?.(this.apiConfiguration, this.cwd)
 							.supported === true
 					const enableAnswer = "Enable Current Task and retry"
-					// kilocode_change start: two plain choices — retry the missing step, or keep working uncompressed.
+					// kilocode_change start: retry only the missing step; never bypass compression.
 					const retryCompressionAnswer = "Retry compression"
-					const skipAnswer = "Continue without compression"
 					const canRetryCompression =
 						preparation.documentUpdated &&
 						this.getContextMemoryMode() === "task" &&
@@ -2457,22 +2501,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								? `CURRENT_TASK.md was updated, but history has not been compressed. ${preparation.failure ?? ""}`
 								: `CURRENT_TASK.md was not updated. History has not been compressed. ${preparation.failure ?? ""}`,
 							suggest: canRetryCompression
-								? [{ answer: retryCompressionAnswer }, { answer: skipAnswer }]
+								? [{ answer: retryCompressionAnswer }]
 								: [
 										...(disabledByProfile ? [{ answer: enableAnswer }] : []),
 										...(this.getContextMemoryMode() === "task" ? [{ answer: "Retry update" }] : []),
-										{ answer: skipAnswer },
 									],
 						}),
 						false,
 					)
 					if (text === retryCompressionAnswer && canRetryCompression) preparation.retryCompression()
-					else if (text === skipAnswer) {
-						await this.skipOrdinaryContextPreparation(preparation)
-						return
-					}
-					// Legacy answer from an older, still pending dialog.
-					else if (text === "Continue without updating") preparation.continueWithoutUpdate()
 					// kilocode_change end
 					else if (text === enableAnswer && disabledByProfile) {
 						// Turning the feature on is the user's explicit answer here, never implicit.
@@ -2521,32 +2558,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.ordinaryContextPreparation = undefined
 			} catch (error) {
 				preparation.failCompression(error instanceof Error ? error.message : String(error)) // kilocode_change
-				throw error
+				if (this.abort) throw error
 			} finally {
 				await this.finishContextCondensation()
 			}
+			// kilocode_change start: keep the decision attached to a live request instead of
+			// aborting the task and leaving its buttons targeting a dead message queue.
+			// The waiting boundary requires an explicit answer before another paid request.
+			if (this.ordinaryContextPreparation === preparation) {
+				await this.ordinaryPreparationBoundary()
+			}
+			// kilocode_change end
 		}
-	}
-	// kilocode_change end
-
-	// kilocode_change start: the user chose to keep working with the full history.
-	private contextPreparationSkippedAtTokens?: number
-
-	private async skipOrdinaryContextPreparation(preparation: OrdinaryContextPreparation): Promise<void> {
-		preparation.dispose()
-		if (this.ordinaryContextPreparation === preparation) this.ordinaryContextPreparation = undefined
-		this.contextPreparationSkippedAtTokens = this.getTokenUsage().contextTokens ?? 0
-		await saveOrdinaryPreparation(this.globalStoragePath, this.taskId, null)
-		await this.finishContextCondensation()
-	}
-
-	/** After an explicit skip, automatic compression waits until the context grows by 10% of the window. */
-	private isAutomaticPreparationSkipped(contextTokens: number, contextWindow: number): boolean {
-		const skippedAt = this.contextPreparationSkippedAtTokens
-		if (skippedAt === undefined) return false
-		if (contextTokens < skippedAt + contextWindow * 0.1) return true
-		this.contextPreparationSkippedAtTokens = undefined
-		return false
 	}
 	// kilocode_change end
 
@@ -2758,15 +2781,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (!summaryText.trim()) {
 			throw new Error("The model did not produce a valid continuation state")
 		}
-		const contextWindow = this.api.contextWindow ?? this.api.getModel().info.contextWindow
-		if (
-			typeof result.newContextTokens !== "number" ||
-			!Number.isFinite(result.newContextTokens) ||
-			result.newContextTokens < 0 ||
-			result.newContextTokens >= contextWindow
-		) {
-			throw new Error("The condensed context does not fit the active model context window; history was preserved")
-		}
+		// The configured window triggers compression; it is not a local admission limit.
+		// Accept the model's valid summary and let the provider judge the next request.
 		// kilocode_change end
 
 		// kilocode_change: preparation is an ordinary tool turn; never replace the summary or write it to disk.
@@ -3151,9 +3167,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let responseImages: string[] | undefined
 
 		if (response === "messageResponse") {
+			// kilocode_change: carry a saved preparation choice across task rehydration.
+			const preparationDecision =
+				!images?.length && (await this.applyRestoredPreparationDecision(lastClineMessage, text))
 			await this.say("user_feedback", text, images)
-			responseText = text
-			responseImages = images
+			if (!preparationDecision) {
+				responseText = text
+				responseImages = images
+			}
 		}
 
 		// Make sure that the api conversation history can be resumed by the API,
@@ -5720,11 +5741,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
 			}
 
-			if (
-				contextManagementWillRun &&
-				taskDocumentEnabled &&
-				!this.isAutomaticPreparationSkipped(contextTokens, contextWindow) // kilocode_change
-			) {
+			if (contextManagementWillRun && taskDocumentEnabled) {
 				await this.queueOrdinaryContextPreparation("automatic")
 				await this.ordinaryPreparationBoundary()
 			}

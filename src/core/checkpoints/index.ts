@@ -289,6 +289,8 @@ export async function checkpointRestore(
 			await task.messageManager.rewindToTimestamp(ts, {
 				includeTargetMessage: operation === "edit",
 			})
+			// kilocode_change: the rewound history predates any pending compression.
+			await task.discardOrdinaryContextPreparation()
 
 			// Report the deleted API request metrics
 			await task.say(
