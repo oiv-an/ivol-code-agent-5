@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.114
+
+- Add separate plugin packages for PyCharm 2026.1 and PyCharm 2026.2.3.
+
 ## 5.17.113
 
 - The plugin no longer slows down in projects with very long first messages in task history: saving, starting and stopping tasks respond quickly again.
