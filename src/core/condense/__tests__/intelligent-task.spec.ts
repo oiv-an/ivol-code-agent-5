@@ -2,7 +2,12 @@
 import type { ApiHandler } from "../../../api"
 import type { ApiStreamChunk } from "../../../api/transform/stream"
 import type { ApiMessage } from "../../task-persistence/apiMessages"
-import { getEffectiveApiHistory, summarizeConversation, type ContextPreparationOptions } from "../index"
+import {
+	appendSummaryRequest,
+	getEffectiveApiHistory,
+	summarizeConversation,
+	type ContextPreparationOptions,
+} from "../index"
 
 vi.mock("@roo-code/telemetry", () => ({
 	TelemetryService: { instance: { captureContextCondensed: vi.fn() } },
@@ -105,7 +110,9 @@ describe("ordinary summary streaming", () => {
 		expect(result.error).toBeUndefined()
 		const request = createMessage.mock.calls[0] as unknown as Parameters<ApiHandler["createMessage"]>
 		expect(request[0]).toBe("CUSTOM OLD CONVERSATION SUMMARY INSTRUCTIONS")
-		expect(request[1]).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
+		expect(request[1]).toEqual(
+			appendSummaryRequest(messages.slice(0, -3).map(({ role, content }) => ({ role, content }))),
+		)
 		expect(request[2]).toEqual({ taskId: "task-one", signal: controller.signal, tool_choice: "none" })
 		expect(result.messages.filter((message) => message.isSummary)).toHaveLength(1)
 	})
@@ -285,7 +292,9 @@ describe("explicit manual intelligent task compaction before the context fills",
 		expect(messages[1]).toBe(toolRequest)
 		expect(toolRequest.condenseParent).toBeUndefined()
 		const request = createMessage.mock.calls[0] as unknown as Parameters<ApiHandler["createMessage"]>
-		expect(request[1].slice(0, 3)).toEqual(messages.map(({ role, content }) => ({ role, content })))
+		expect(request[1].slice(0, 3)).toEqual(
+			appendSummaryRequest(messages.map(({ role, content }) => ({ role, content }))),
+		)
 	})
 
 	it.each([{ messages: [] }, { messages: [first] }])(

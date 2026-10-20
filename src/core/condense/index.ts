@@ -360,10 +360,16 @@ export async function summarizeConversation(
 		}
 	}
 
-	const requestMessages = maybeRemoveImageBlocks(messagesToSummarize, handlerToUse).map(({ role, content }) => ({
-		role,
-		content,
-	}))
+	// kilocode_change start: a text summary never needs raw image data. On a prompt-cache miss some
+	// providers/proxies bill base64 screenshots as text, tripling the request beyond the context window
+	// and returning an empty summary. Replace images, including those nested in tool results.
+	const requestMessages = appendSummaryRequest(
+		stripImagesForSummary(maybeRemoveImageBlocks(messagesToSummarize, handlerToUse)).map(({ role, content }) => ({
+			role,
+			content,
+		})),
+	)
+	// kilocode_change end
 
 	// kilocode_change: ordinary summarization always honors the user's custom prompt.
 	const promptToUse = customCondensingPrompt?.trim() ? customCondensingPrompt.trim() : SUMMARY_PROMPT
@@ -634,6 +640,58 @@ export async function summarizeConversation(
 	// kilocode_change end
 	return { messages: newMessages, summary, cost, newContextTokens, condenseId }
 }
+
+// kilocode_change start
+const SUMMARY_FINAL_REQUEST =
+	"Context compression request: do not call any tools and do not continue the task. " +
+	"Reply now with the summary text only, following the system instructions."
+
+/**
+ * The summarized history usually ends with a task instruction (for example "reread CURRENT_TASK.md").
+ * Without an explicit final request the model follows that instruction and answers with a tool call,
+ * which a tool-less summary request discards, leaving an empty summary. Always end with a text request.
+ */
+export function appendSummaryRequest<T extends { role: string; content: any }>(messages: T[]): T[] {
+	const request = { type: "text", text: SUMMARY_FINAL_REQUEST }
+	const last = messages.at(-1)
+	if (last?.role === "user") {
+		const content = Array.isArray(last.content)
+			? [...last.content, request]
+			: [{ type: "text", text: String(last.content ?? "") }, request]
+		return [...messages.slice(0, -1), { ...last, content }]
+	}
+	return [...messages, { role: "user", content: [request] } as T]
+}
+
+const SUMMARY_IMAGE_PLACEHOLDER = "[Image omitted from the context compression request]"
+
+/**
+ * Replaces every image block, including images nested in tool results, with a short text placeholder.
+ * Only the summary request is affected; the stored conversation history keeps its images.
+ */
+export function stripImagesForSummary(messages: ApiMessage[]): ApiMessage[] {
+	const replaceImage = (block: any): any =>
+		block?.type === "image" ? { type: "text", text: SUMMARY_IMAGE_PLACEHOLDER } : block
+
+	return messages.map((message) => {
+		if (!Array.isArray(message.content)) return message
+		let changed = false
+		const content = message.content.map((block: any) => {
+			if (block?.type === "image") {
+				changed = true
+				return replaceImage(block)
+			}
+			if (block?.type === "tool_result" && Array.isArray(block.content)) {
+				if (!block.content.some((part: any) => part?.type === "image")) return block
+				changed = true
+				return { ...block, content: block.content.map(replaceImage) }
+			}
+			return block
+		})
+		return changed ? { ...message, content } : message
+	})
+}
+// kilocode_change end
 
 /* Returns the list of all messages since the last summary message, including the summary. Returns all messages if there is no summary. */
 export function getMessagesSinceLastSummary(messages: ApiMessage[]): ApiMessage[] {

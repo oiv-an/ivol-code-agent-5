@@ -91,7 +91,11 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
  * Common checkpoint restore validation and initialization utility.
  * This can be used by any checkpoint restore flow that needs to wait for initialization.
  */
-export async function waitForClineInitialization(provider: ClineProvider, timeoutMs: number = 3000): Promise<boolean> {
+export async function waitForClineInitialization(
+	provider: ClineProvider,
+	timeoutMs: number = 30_000,
+): Promise<boolean> {
+	// kilocode_change: large histories need more than 3s
 	try {
 		await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, {
 			timeout: timeoutMs,

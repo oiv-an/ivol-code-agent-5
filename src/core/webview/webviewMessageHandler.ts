@@ -1519,7 +1519,8 @@ export const webviewMessageHandler = async (
 				await provider.cancelTask()
 
 				try {
-					await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, { timeout: 3_000 })
+					// kilocode_change: large task histories take longer than 3s to reload.
+					await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, { timeout: 30_000 })
 				} catch (error) {
 					vscode.window.showErrorMessage(t("common:errors.checkpoint_timeout"))
 				}

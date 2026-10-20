@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.112
+
+- Context compression no longer sends screenshots, so it stays within the model window and does not fail with an empty summary.
+- Context compression ends with an explicit summary request, so the model writes a summary instead of an ignored tool call.
+- Restoring a checkpoint in a long task no longer shows a false timeout error.
+
 ## 5.17.111
 
 - Keep the model selector available at all times, regardless of the current task operation.

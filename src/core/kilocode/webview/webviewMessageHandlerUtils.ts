@@ -189,7 +189,7 @@ export const editMessageHandler = async (provider: ClineProvider, message: Webvi
 				await provider.cancelTask()
 
 				try {
-					await pWaitFor(() => currentCline.isInitialized === true, { timeout: 3_000 })
+					await pWaitFor(() => currentCline.isInitialized === true, { timeout: 30_000 })
 				} catch (error) {
 					vscode.window.showErrorMessage(t("common:errors.checkpoint_timeout"))
 				}

@@ -17,6 +17,8 @@ import {
 	N_MESSAGES_TO_KEEP,
 	hasIncompatibleSummaryForExtendedThinking,
 	uncondenseForExtendedThinking,
+	stripImagesForSummary, // kilocode_change
+	appendSummaryRequest, // kilocode_change
 } from "../index"
 
 vi.mock("../../../api/transform/image-cleaning", () => ({
@@ -717,6 +719,64 @@ describe("getMessagesSinceLastSummary", () => {
 	})
 })
 
+// kilocode_change start
+describe("stripImagesForSummary", () => {
+	const image = { type: "image", source: { type: "base64", media_type: "image/png", data: "A".repeat(1000) } }
+
+	it("replaces top-level and tool_result images and keeps text", () => {
+		const messages: ApiMessage[] = [
+			{ role: "user", content: [{ type: "text", text: "look" }, image as any], ts: 1 },
+			{
+				role: "user",
+				content: [
+					{
+						type: "tool_result",
+						tool_use_id: "t1",
+						content: [{ type: "text", text: "shot" }, image as any],
+					} as any,
+				],
+				ts: 2,
+			},
+		]
+
+		const result = stripImagesForSummary(messages)
+		const serialized = JSON.stringify(result)
+		expect(serialized).not.toContain("base64")
+		expect(serialized).toContain("shot")
+		expect(serialized).toContain("look")
+		expect((result[1].content as any)[0].tool_use_id).toBe("t1")
+		// Stored history is untouched.
+		expect(JSON.stringify(messages)).toContain("base64")
+	})
+
+	it("returns the same message objects when there are no images", () => {
+		const messages: ApiMessage[] = [{ role: "user", content: "plain", ts: 1 }]
+		expect(stripImagesForSummary(messages)[0]).toBe(messages[0])
+	})
+})
+
+describe("appendSummaryRequest", () => {
+	it("appends the request to a trailing user message without adding a new turn", () => {
+		const result = appendSummaryRequest([
+			{ role: "assistant", content: "a" },
+			{ role: "user", content: [{ type: "text", text: "reread CURRENT_TASK.md" }] },
+		])
+		expect(result).toHaveLength(2)
+		expect(JSON.stringify(result[1].content)).toContain("do not call any tools")
+		expect(JSON.stringify(result[1].content)).toContain("reread CURRENT_TASK.md")
+	})
+
+	it("adds a user turn after a trailing assistant message", () => {
+		const result = appendSummaryRequest([
+			{ role: "user", content: "u" },
+			{ role: "assistant", content: "a" },
+		])
+		expect(result).toHaveLength(3)
+		expect(result[2].role).toBe("user")
+	})
+})
+// kilocode_change end
+
 describe("summarizeConversation", () => {
 	// Mock ApiHandler
 	let mockApiHandler: ApiHandler
@@ -1005,7 +1065,9 @@ describe("summarizeConversation", () => {
 
 		expect(result.error).toBeUndefined()
 		const request = (mockApiHandler.createMessage as Mock).mock.calls[0][1]
-		expect(request).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
+		expect(request).toEqual(
+			appendSummaryRequest(messages.slice(0, -3).map(({ role, content }) => ({ role, content }))),
+		)
 		expect(JSON.stringify(request)).not.toContain("<recent_messages>")
 		expect(result.messages.slice(-3)).toEqual(original.slice(-3))
 		expect(messages).toEqual(original)
@@ -1058,7 +1120,9 @@ describe("summarizeConversation", () => {
 
 		expect(result.error).toBeUndefined()
 		const request = (mockApiHandler.createMessage as Mock).mock.calls[0][1]
-		expect(request).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
+		expect(request).toEqual(
+			appendSummaryRequest(messages.slice(0, -3).map(({ role, content }) => ({ role, content }))),
+		)
 		expect(JSON.stringify(request)).not.toContain("<recent_messages>")
 		expect(result.messages.slice(-3)).toEqual(original.slice(-3))
 		expect(messages).toEqual(original)
@@ -1100,7 +1164,9 @@ describe("summarizeConversation", () => {
 
 		expect(result.error).toBeUndefined()
 		const request = (mockApiHandler.createMessage as Mock).mock.calls[0][1]
-		expect(request).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
+		expect(request).toEqual(
+			appendSummaryRequest(messages.slice(0, -3).map(({ role, content }) => ({ role, content }))),
+		)
 		expect(JSON.stringify(request)).not.toContain("<recent_messages>")
 		expect(result.messages.slice(-3)).toEqual(original.slice(-3))
 		expect(messages).toEqual(original)
@@ -1146,7 +1212,9 @@ describe("summarizeConversation", () => {
 
 		expect(result.error).toBeUndefined()
 		const request = (mockApiHandler.createMessage as Mock).mock.calls[0][1]
-		expect(request).toEqual(messages.slice(0, -3).map(({ role, content }) => ({ role, content })))
+		expect(request).toEqual(
+			appendSummaryRequest(messages.slice(0, -3).map(({ role, content }) => ({ role, content }))),
+		)
 		expect(JSON.stringify(request)).not.toContain("<recent_messages>")
 		expect(result.messages.slice(-3)).toEqual(original.slice(-3))
 		expect(messages).toEqual(original)
@@ -2403,7 +2471,8 @@ describe("summarizeConversation with custom settings", () => {
 		]
 		expect(prompt).toBe(customPrompt)
 		expect(prompt).not.toContain("CONTEXT_RESTART.md")
-		expect(requestMessages).toHaveLength(sampleMessages.length - N_MESSAGES_TO_KEEP)
+		// kilocode_change: a trailing assistant turn gets one explicit summary request appended.
+		expect(requestMessages).toHaveLength(sampleMessages.length - N_MESSAGES_TO_KEEP + 1)
 		expect(requestMessages.at(-1)?.content).not.toEqual(expect.stringContaining("<recent_messages>"))
 	})
 
