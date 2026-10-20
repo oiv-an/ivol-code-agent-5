@@ -29,6 +29,7 @@ import {
 	getLocalTaskIds,
 } from "../../services/kilocode/project-task-storage"
 import type { HistoryItem } from "@roo-code/types"
+import { capHistoryItemTitle } from "../../shared/kilocode/historyTitle" // kilocode_change
 // kilocode_change end
 
 // kilocode_change start: Configuration change event types
@@ -259,6 +260,13 @@ export class ContextProxy {
 		// kilocode_change end
 		if (isPassThroughStateKey(key)) {
 			const value = this.originalContext.globalState.get<GlobalState[K]>(key)
+			// kilocode_change start: oversized legacy titles are capped; the next history save persists them short
+			if (key === "taskHistory" && Array.isArray(value)) {
+				const items = value as HistoryItem[]
+				if (items.some((item) => capHistoryItemTitle(item) !== item))
+					return items.map(capHistoryItemTitle) as GlobalState[K]
+			}
+			// kilocode_change end
 			return value === undefined || value === null ? defaultValue : value
 		}
 
@@ -271,6 +279,10 @@ export class ContextProxy {
 			return this.updateTaskStorageHistory((value ?? []) as HistoryItem[]) // kilocode_change
 		if (YOLO_STATE_KEYS.includes(key)) return this.updateYoloGlobalState(key, value) // kilocode_change
 		if (isPassThroughStateKey(key)) {
+			// kilocode_change start: keep the IDE memento small; oversized titles slowed every save
+			if (key === "taskHistory" && Array.isArray(value))
+				return this.originalContext.globalState.update(key, (value as HistoryItem[]).map(capHistoryItemTitle))
+			// kilocode_change end
 			return this.originalContext.globalState.update(key, value)
 		}
 
@@ -301,7 +313,7 @@ export class ContextProxy {
 				if (item) latest.set(id, item)
 				else latest.delete(id)
 			}
-			await this.originalContext.globalState.update("taskHistory", [...latest.values()])
+			await this.originalContext.globalState.update("taskHistory", [...latest.values()].map(capHistoryItemTitle))
 		}
 	}
 

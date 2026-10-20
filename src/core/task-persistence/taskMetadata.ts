@@ -9,6 +9,7 @@ import { getApiMetrics } from "../../shared/getApiMetrics"
 import { findLastIndex } from "../../shared/array"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { t } from "../../i18n"
+import { capHistoryTaskTitle } from "../../shared/kilocode/historyTitle" // kilocode_change
 
 const taskSizeCache = new NodeCache({ stdTTL: 30, checkperiod: 5 * 60 })
 
@@ -119,7 +120,7 @@ export async function taskMetadata({
 		number: taskNumber,
 		ts: timestamp,
 		task: hasMessages
-			? taskMessage!.text?.trim() || t("common:tasks.incomplete", { taskNumber })
+			? capHistoryTaskTitle(taskMessage!.text?.trim() || "") || t("common:tasks.incomplete", { taskNumber }) // kilocode_change: bounded history title
 			: t("common:tasks.no_messages", { taskNumber }),
 		tokensIn: tokenUsage.totalTokensIn,
 		tokensOut: tokenUsage.totalTokensOut,

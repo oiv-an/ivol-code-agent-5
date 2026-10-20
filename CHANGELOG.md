@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.113
+
+- The plugin no longer slows down in projects with very long first messages in task history: saving, starting and stopping tasks respond quickly again.
+
 ## 5.17.112
 
 - Context compression no longer sends screenshots, so it stays within the model window and does not fail with an empty summary.

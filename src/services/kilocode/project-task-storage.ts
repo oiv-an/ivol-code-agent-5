@@ -9,6 +9,7 @@ import * as vscode from "vscode"
 import type { HistoryItem, ProjectTaskCopyProgress } from "@roo-code/types"
 import { historyItemSchema } from "@roo-code/types"
 import { safeWriteJson } from "../../utils/safeWriteJson"
+import { capHistoryItemTitle } from "../../shared/kilocode/historyTitle"
 import * as lockfile from "proper-lockfile"
 
 const exec = promisify(execFile)
@@ -77,9 +78,25 @@ function workspaceRoots(): string[] {
 		.map((folder) => folder.uri.fsPath)
 }
 
+// Parsed indexes keyed by file path; reused while the file's mtime and size are unchanged.
+// Callers must treat the returned index as read-only.
+const indexCache = new Map<string, { mtimeMs: number; size: number; data: ProjectIndex }>()
+
 function readIndex(workspace: string): ProjectIndex {
 	const file = path.join(projectStorageRoot(workspace), INDEX)
 	assertNotSymlink(file)
+	let stat: fs.Stats
+	try {
+		stat = fs.statSync(file)
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			indexCache.delete(file)
+			return { version: 1, items: [], deletedIds: [] }
+		}
+		throw error
+	}
+	const cached = indexCache.get(file)
+	if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.data
 	let data: ProjectIndex
 	try {
 		data = JSON.parse(fs.readFileSync(file, "utf8"))
@@ -91,11 +108,13 @@ function readIndex(workspace: string): ProjectIndex {
 		throw new Error(`Invalid project task index: ${file}`)
 	}
 	data.items = data.items.map((item) => {
-		const parsed = historyItemSchema.parse(item)
+		// Oversized legacy titles are capped in memory; the next index write persists the short form.
+		const parsed = capHistoryItemTitle(historyItemSchema.parse(item))
 		validateTaskId(parsed.id)
 		return parsed
 	})
 	data.deletedIds.forEach(validateTaskId)
+	indexCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, data })
 	return data
 }
 
@@ -115,7 +134,7 @@ export function getLocalTaskIds(): Set<string> {
 
 /** Merge local indexes into the IDE history without persisting machine-specific paths locally. */
 export function mergeProjectTaskHistory(global: HistoryItem[]): HistoryItem[] {
-	const result = new Map(global.map((item) => [item.id, item]))
+	const result = new Map(global.map((item) => [item.id, capHistoryItemTitle(item)]))
 	for (const workspace of workspaceRoots()) {
 		if (!readProjectTaskStorage(workspace)) continue
 		const index = readIndex(workspace)

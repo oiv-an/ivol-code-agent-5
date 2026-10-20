@@ -108,6 +108,7 @@ import {
 	getProjectTasksToCopy,
 	ensureProjectTaskIgnore,
 } from "../project-task-storage"
+import { HISTORY_TASK_TITLE_MAX_LENGTH } from "../../../shared/kilocode/historyTitle"
 
 let root: string
 let workspace: string
@@ -407,6 +408,34 @@ describe("portable project task storage", () => {
 			".ivol/project.json",
 		)
 		expect(await fs.readFile(path.join(workspace, ".gitignore"), "utf8")).toContain("!/.ivol/**")
+	})
+	it("caps oversized legacy titles on read and persists the short form on the next index write", async () => {
+		await enable()
+		const huge = { ...item(), task: "x".repeat(HISTORY_TASK_TITLE_MAX_LENGTH * 10) }
+		const other = item()
+		await save(huge)
+		await save(other)
+		const merged = mergeProjectTaskHistory([])
+		expect(merged.find((row) => row.id === huge.id)!.task.length).toBe(HISTORY_TASK_TITLE_MAX_LENGTH + 1)
+		await updateProjectTaskHistory(merged, [
+			...merged.filter((row) => row.id !== other.id),
+			{ ...merged.find((row) => row.id === other.id)!, tokensIn: 5 },
+		])
+		const raw = JSON.parse(await fs.readFile(path.join(workspace, ".ivol/task-history.json"), "utf8"))
+		expect(raw.items.find((row: HistoryItem) => row.id === huge.id).task.length).toBe(
+			HISTORY_TASK_TITLE_MAX_LENGTH + 1,
+		)
+	})
+	it("rereads the cached index after another window changes the file", async () => {
+		await enable()
+		const entry = item()
+		await save(entry)
+		expect(mergeProjectTaskHistory([])).toHaveLength(1)
+		const file = path.join(workspace, ".ivol/task-history.json")
+		const raw = JSON.parse(await fs.readFile(file, "utf8"))
+		raw.items.push({ ...raw.items[0], id: randomUUID() })
+		await fs.writeFile(file, JSON.stringify(raw))
+		expect(mergeProjectTaskHistory([])).toHaveLength(2)
 	})
 	it("fails closed on malformed indexes, traversal and symlinked storage", async () => {
 		expect(() => resolveProjectTaskDirectory("../outside")).toThrow("identifier")
