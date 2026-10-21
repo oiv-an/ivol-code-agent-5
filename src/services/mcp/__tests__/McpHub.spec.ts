@@ -405,6 +405,29 @@ describe("McpHub", () => {
 			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(false)
 		})
 
+		// kilocode_change start: a blocked saved grant asks again instead of failing forever.
+		it("asks for permission again when the saved task grant is blocked", async () => {
+			const values = new Map<string, unknown>([["browserMode", "browseros"]])
+			mockProvider.context!.globalState.get = vi.fn((key: string) => values.get(key)) as any
+			mockProvider.context!.globalState.update = vi.fn(async (key: string, value: unknown) => {
+				values.set(key, value)
+			})
+			mockProvider.postStateToWebview = vi.fn()
+			const task = { taskId: "task-a", cwd: "/project" } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			await hub.blockBrowserTaskPermission()
+			hub.browserOSAccess.revoke() // Simulates a window reload after an idle-stopped session.
+			const prompts = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts + 1)
+			hub.browserOSAccess.revoke()
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts + 1)
+		})
+		// kilocode_change end
+
 		it("prepares and requests consent on invocation, then reuses it across chats", async () => {
 			const caller = {} as any
 			mockProvider.getCurrentTask = vi.fn().mockReturnValue(caller)

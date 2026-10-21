@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.115.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.116.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -91,7 +91,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 
 - **BrowserOS neo** integration through local MCP with one-button connect, confirmed browser launch and connection recovery after startup delays.
 - **Personal Chrome control** (preview) through a browser extension, with per-task consent, background tabs, visible tab groups, and pause and revoke controls.
-- Browser approval is **remembered per task** across window reloads and browser restarts. A browser checkmark beside auto-approval revokes it. Sessions stopped by the browser server still require explicit recovery.
+- Browser approval is **remembered per task** across window reloads and browser restarts. A browser checkmark beside auto-approval revokes it. If the browser server stops or pauses the session, the next browser action asks for permission again instead of failing.
 - Browser scripts (`run`, `evaluate`) are allowed after explicit approval. Element interactions still require a fresh page observation.
 
 ### Telegram

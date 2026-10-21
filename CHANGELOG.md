@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.116
+
+- When a browser session was stopped or paused, the next browser action asks for permission again instead of failing until the window is reloaded.
+
 ## 5.17.115
 
 - New conversations and new windows always start on the MAX preset when it is configured; reopened tasks keep their own choice.

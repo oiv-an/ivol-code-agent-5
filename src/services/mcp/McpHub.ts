@@ -314,10 +314,7 @@ export class McpHub {
 						provider && task?.taskId && task.cwd
 							? new BrowserOSTaskTrust(provider.context.globalState).get(task)
 							: undefined
-					if (saved?.blocked && this.browserOSAccess.getStatus() !== "paused")
-						throw new Error(
-							"Browser session stopped or access is paused. Return control explicitly in browser settings; task permission is still remembered.",
-						)
+					// kilocode_change: a blocked saved grant is not reused silently; fall through to the explicit prompt.
 					if (
 						saved &&
 						!saved.blocked &&
