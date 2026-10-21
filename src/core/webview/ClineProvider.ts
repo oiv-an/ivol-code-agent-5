@@ -104,7 +104,7 @@ import { VirtualQuotaFallbackHandler } from "../../api/providers/virtual-quota-f
 import { ContextProxy } from "../config/ContextProxy"
 import { getEnabledRules } from "./kilorules"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
-import { applyModelSelection, pickModelSelection } from "../config/kilocode/taskModelSelection" // kilocode_change
+import { applyMaxModelPreset, applyModelSelection, pickModelSelection } from "../config/kilocode/taskModelSelection" // kilocode_change
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
 import { disposeTelegram, beginTelegramTransfer } from "../kilocode/webview/telegramHandler" // kilocode_change
@@ -1663,6 +1663,8 @@ export class ClineProvider
 			this.contextProxy.setValue("fastApplyApiProvider", fastApplyApiProvider),
 			this.contextProxy.setValue("imageGenerationProvider", "openrouter"),
 		])
+		// Window start: the conversation draft begins on MAX without changing stored profile defaults.
+		this.contextProxy.setRuntimeProviderSettings(name, applyMaxModelPreset(providerSettings))
 	}
 	// kilocode_change end
 
@@ -1770,7 +1772,7 @@ export class ClineProvider
 	// kilocode_change start: footer edits change the conversation, never the shared profile.
 	private async resetConversationModel(): Promise<void> {
 		const { name, id: _id, ...settings } = await this.providerSettingsManager.ensurePersonalActiveProfile()
-		this.contextProxy.setRuntimeProviderSettings(name, settings)
+		this.contextProxy.setRuntimeProviderSettings(name, applyMaxModelPreset(settings)) // new conversations start on MAX
 	}
 
 	async setTaskModelSelection(name: string, settings: ProviderSettings): Promise<void> {

@@ -1,33 +1,24 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is a stable VS Code AI coding agent based on the open-source upstream v5.16.2 codebase.
+IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source upstream v5.16.2 codebase.
 
-This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
+This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors. It uses its own extension ID, so an official upstream release cannot replace it.
 
-## Why this build exists
+The full list of changes is in the [README on GitHub](https://github.com/oiv-an/ivol-code-agent-5/blob/stable-v5/README.md) and in the included CHANGELOG.
 
-This build preserves the version 5 workflow while keeping it compatible with current VS Code releases. It is intentionally isolated from the official upstream extension and cannot be automatically replaced by a newer upstream release.
+## Main differences from upstream
 
-## Included improvements
-
-- Fast model switching from the chat input.
-- Persistent OpenAI-compatible model catalogs that remain available after restart or a temporary provider failure.
-- More efficient updates for very long conversations.
-- Reliable reopening of saved tasks.
-- Supported prompt caching is enabled.
-- Optional native web search lets compatible OpenAI Responses models decide autonomously when current information is needed and returns source links.
-- A separate web search window is available from the globe button below the chat for OpenAI-compatible profiles. It uses the configured native search model, does not send task history or project files, and offers an explicit Markdown export. Provider search support is required and usage charges may apply.
-- Automatic Kilo/Roo account, Marketplace, task-sharing, telemetry, and upgrade communications are disabled in this build.
-
-## Providers available in this build
-
-- OpenAI-compatible API endpoints.
-- OpenAI Codex account access.
-- Claude Code account access.
-- Ollama.
-- LM Studio.
-
-Other provider choices and Kilo subscription services are hidden in this build.
+- **Privacy:** automatic Kilo/Roo account, task sharing, telemetry, cloud Marketplace and upgrade traffic are disabled.
+- **Providers:** OpenAI-compatible endpoints, OpenAI Codex (ChatGPT Plus/Pro), Claude Code account, Ollama and LM Studio. Each profile has an optional TLS certificate exception and a connection check.
+- **Models:** a fast cached model selector, reasoning level beside it (including max and Ultra), MAX / MED / MIN presets, and a separate model and reasoning choice per conversation and project.
+- **Web search:** optional native web search that the model triggers on its own, with sources, plus a separate search window from the globe button.
+- **Long conversations:** incremental updates, a bounded live message window with history loading on scroll, a compact task history index and fast saves.
+- **Current Task memory:** `CURRENT_TASK.md` keeps the goal, checklist and next step. Work continues after context compression, and failed compression offers explicit retry or continue choices. Frozen messages stay in context.
+- **Chat:** tool and command activity shown in chat, an always-available Stop button, conversation search, file attachments from anywhere on disk, a message queue that never loses input, and a YOLO timer.
+- **Task history:** stored inside each project in `.ivol/` with atomic, recoverable writes and reliable checkpoint restore.
+- **Browser:** BrowserOS neo and personal Chrome control, with browser approval remembered per task.
+- **Telegram:** continue an explicitly connected task in a private Telegram topic.
+- **Autocomplete:** a separate model for autocomplete, off by default.
 
 ## Claude Code account access
 
@@ -35,13 +26,13 @@ If `ANTHROPIC_API_KEY` is set in the environment, it can conflict with Claude Co
 
 ## Data and network access
 
-When you submit a chat request, prompts, selected files, and other context are sent to the AI provider selected by the user. Provider credentials are kept in VS Code secure storage. Local providers can be used through Ollama or LM Studio. Browser, MCP, terminal, and similar tools may access services or files that the user explicitly selects or configures.
+When you submit a chat request, prompts, selected files and other context are sent to the AI provider you selected. Provider credentials are kept in VS Code secure storage. Local providers can be used through Ollama or LM Studio. Browser, MCP, terminal and similar tools may access services or files that you explicitly select or configure.
 
 Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-agent-5/blob/stable-v5/PRIVACY.md) before using the extension.
 
 ## Versioning
 
-Version `5.16.242` corresponds to the upstream `5.16.2` base plus the current IVOL improvements and stability revisions.
+Version `5.17.115` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
 
 ## License and attribution
 

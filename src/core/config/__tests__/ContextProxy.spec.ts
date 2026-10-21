@@ -1,5 +1,5 @@
-import { isIntelligentTaskEnabled, historyItemSchema } from "@roo-code/types" // kilocode_change
-import { pickModelSelection, applyModelSelection } from "../kilocode/taskModelSelection" // kilocode_change
+import { isIntelligentTaskEnabled, historyItemSchema, type ProviderSettings } from "@roo-code/types" // kilocode_change
+import { pickModelSelection, applyModelSelection, applyMaxModelPreset } from "../kilocode/taskModelSelection" // kilocode_change
 // npx vitest core/config/__tests__/ContextProxy.spec.ts
 
 import * as vscode from "vscode"
@@ -85,6 +85,41 @@ describe("ContextProxy", () => {
 		expect(restored.openAiModelId).toBe("task")
 		expect(restored.reasoningEffort).toBeUndefined()
 		expect(restored.openAiApiKey).toBe("current-key")
+	})
+	it("starts new conversations on the configured MAX preset without touching credentials", () => {
+		const profile: ProviderSettings = {
+			apiProvider: "openai",
+			openAiModelId: "medium-model",
+			openAiApiKey: "key",
+			reasoningEffort: "medium",
+			activeModelPreset: "med",
+			modelPresets: {
+				max: { modelId: "big-model", reasoningEffort: "xhigh", enableReasoningEffort: true },
+				med: { modelId: "medium-model", reasoningEffort: "medium", enableReasoningEffort: true },
+			},
+		}
+		const result = applyMaxModelPreset(profile)
+		expect(result).toMatchObject({
+			openAiModelId: "big-model",
+			reasoningEffort: "xhigh",
+			enableReasoningEffort: true,
+			activeModelPreset: "max",
+			openAiApiKey: "key",
+		})
+		expect(result.openAiCustomModelInfo?.reasoningEffort).toBe("xhigh")
+		expect(profile.openAiModelId).toBe("medium-model")
+		const noMax: ProviderSettings = {
+			apiProvider: "openai",
+			openAiModelId: "m",
+			modelPresets: { med: { modelId: "m" } },
+		}
+		expect(applyMaxModelPreset(noMax)).toBe(noMax)
+		const codexProfile: ProviderSettings = {
+			apiProvider: "openai-codex",
+			modelPresets: { max: { modelId: "gpt" } },
+		}
+		const codex = applyMaxModelPreset(codexProfile)
+		expect(codex.apiModelId).toBe("gpt")
 	})
 	it("isolates runtime model and credentials between windows without shared writes", async () => {
 		await proxy.setProviderSettings({

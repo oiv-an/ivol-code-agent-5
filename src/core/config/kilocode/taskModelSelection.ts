@@ -1,6 +1,10 @@
 import {
+	isTypicalProvider,
+	modelIdKeysByProvider,
+	openAiModelInfoSaneDefaults,
 	taskModelSelectionKeys,
 	taskModelSelectionSchema,
+	type ModelIdKey,
 	type ProviderSettings,
 	type TaskModelSelection,
 } from "@roo-code/types"
@@ -18,4 +22,34 @@ export function applyModelSelection<T extends ProviderSettings>(settings: T, sel
 	const result = { ...settings }
 	for (const key of taskModelSelectionKeys) delete result[key]
 	return { ...result, ...structuredClone(parsed) }
+}
+
+function getPresetModelIdKey(provider: ProviderSettings["apiProvider"]): ModelIdKey | undefined {
+	if (provider === "openai" || provider === "openai-responses") return "openAiModelId"
+	return provider && isTypicalProvider(provider) ? modelIdKeysByProvider[provider] : undefined
+}
+
+/**
+ * New conversations always start on the MAX preset when the profile has one configured.
+ * Only the runtime conversation view changes; the stored profile defaults stay untouched.
+ */
+export function applyMaxModelPreset<T extends ProviderSettings>(settings: T): T {
+	const preset = settings.modelPresets?.max
+	if (!preset?.modelId || settings.profileType === "autocomplete") return settings
+	const modelIdKey = getPresetModelIdKey(settings.apiProvider)
+	if (!modelIdKey) return settings
+	const next: T = {
+		...settings,
+		[modelIdKey]: preset.modelId,
+		reasoningEffort: preset.reasoningEffort,
+		enableReasoningEffort: preset.enableReasoningEffort,
+		activeModelPreset: "max",
+	}
+	if (settings.apiProvider === "openai" || settings.apiProvider === "openai-responses") {
+		const info = { ...(settings.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults) }
+		if (!preset.reasoningEffort || preset.reasoningEffort === "disable") delete info.reasoningEffort
+		else info.reasoningEffort = preset.reasoningEffort
+		next.openAiCustomModelInfo = info
+	}
+	return next
 }

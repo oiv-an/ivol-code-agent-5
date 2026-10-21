@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.115
+
+- New conversations and new windows always start on the MAX preset when it is configured; reopened tasks keep their own choice.
+
 ## 5.17.114
 
 - Add separate plugin packages for PyCharm 2026.1 and PyCharm 2026.2.3.
