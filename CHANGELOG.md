@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.117
+
+- New clock button in the chat input: set a per-task reminder (repeat every N minutes/hours, once after a delay, or at an exact time) that sends your text to the open task so the agent keeps working. A countdown next to the clock shows the time left. A reminder is sent only when the agent has finished and is waiting; runs that fall while it works are skipped.
+
 ## 5.17.116
 
 - When a browser session was stopped or paused, the next browser action asks for permission again instead of failing until the window is reloaded.

@@ -1904,7 +1904,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			acceptsQueuedText &&
 			!this.ordinaryPreparationDecision &&
 			!(
-				this.messageQueueService.messages[0]?.source === "telegram" &&
+				(this.messageQueueService.messages[0]?.source === "telegram" ||
+					this.messageQueueService.messages[0]?.source === "schedule") && // kilocode_change
 				["tool", "command", "browser_action_launch", "use_mcp_server"].includes(type)
 			)
 		const isMessageQueued = canConsumeQueuedText() && !this.messageQueueService.isEmpty()

@@ -912,6 +912,8 @@ export type UpdateGlobalStateMessage<K extends keyof GlobalState = keyof GlobalS
 
 export interface WebviewMessage {
 	taskId?: string // kilocode_change: pin browser revocation to the task displayed by the toolbar.
+	// kilocode_change: chat toolbar reminder form; null clears the task's schedule.
+	taskSchedule?: { mode: "interval" | "delay" | "at"; text: string; minutes?: number; at?: number } | null
 	chatSearchRequest?: { taskId: string; requestId: string; query: string; before?: number; messageTs?: number } // kilocode_change
 	// kilocode_change start
 	chatHistoryRequest?: { taskId: string; before?: number; after?: number; pinnedOnly?: boolean }
@@ -1179,6 +1181,7 @@ export interface WebviewMessage {
 		| "imageGenerationSettings"
 		| "kiloCodeImageApiKey" // kilocode_change
 		| "queueMessage"
+		| "setTaskSchedule" // kilocode_change
 		| "removeQueuedMessage"
 		| "editQueuedMessage"
 		| "dismissUpsell"

@@ -1,6 +1,17 @@
 import { z } from "zod"
 import { taskModelSelectionSchema } from "./provider-settings.js" // kilocode_change
 
+// kilocode_change start: a per-task reminder that re-sends text to this task while it is open.
+export const taskScheduleSchema = z.object({
+	mode: z.enum(["interval", "delay", "at"]),
+	text: z.string(),
+	intervalMinutes: z.number().optional(),
+	nextRunAt: z.number(),
+})
+
+export type TaskSchedule = z.infer<typeof taskScheduleSchema>
+// kilocode_change end
+
 /**
  * HistoryItem
  */
@@ -34,6 +45,7 @@ export const historyItemSchema = z.object({
 	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
 	// kilocode_change: chat-footer model/reasoning/preset choice made inside this task (no credentials)
 	modelSelection: taskModelSelectionSchema.optional(),
+	schedule: taskScheduleSchema.optional(), // kilocode_change
 	status: z.enum(["active", "completed", "delegated"]).optional(),
 	delegatedToId: z.string().optional(), // Last child this parent delegated to
 	childIds: z.array(z.string()).optional(), // All children spawned by this task

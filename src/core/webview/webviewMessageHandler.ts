@@ -112,6 +112,7 @@ import {
 	copyProviderConnectionReport,
 } from "./providerConnectionTest" // kilocode_change
 import { handleStandaloneWebSearch, cancelStandaloneWebSearch, saveStandaloneWebSearch } from "./standaloneWebSearch" // kilocode_change
+import { createTaskSchedule } from "../kilocode/task-schedule/taskSchedule" // kilocode_change
 
 // kilocode_change: personal build intentionally has no pre-release updater command
 // kilocode_change start: draft catalogs must never inherit credentials or TLS exceptions from another profile.
@@ -4413,6 +4414,29 @@ export const webviewMessageHandler = async (
 			// kilocode_change end
 			break
 		}
+		// kilocode_change start: per-task reminder set from the chat toolbar clock.
+		case "setTaskSchedule": {
+			const taskId = message.taskId
+			if (!taskId || provider.getCurrentTask()?.taskId !== taskId) break
+			if (!message.taskSchedule) {
+				await provider.taskScheduleRunner.setSchedule(taskId, undefined)
+				break
+			}
+			const previous = provider.taskScheduleRunner.getSchedule(taskId)
+			const schedule = createTaskSchedule(message.taskSchedule, Date.now(), previous)
+			if (!schedule) {
+				vscode.window.showWarningMessage("The schedule was not saved: enter text and a valid time.")
+				break
+			}
+			const saved = await provider.taskScheduleRunner.setSchedule(taskId, schedule)
+			if (!saved) {
+				vscode.window.showWarningMessage(
+					"The schedule was not saved: send a first message so the task appears in history.",
+				)
+			}
+			break
+		}
+		// kilocode_change end
 		case "removeQueuedMessage": {
 			provider.getCurrentTask()?.messageQueueService.removeMessage(message.text ?? "")
 			break

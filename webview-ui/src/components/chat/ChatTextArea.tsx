@@ -33,6 +33,7 @@ import ContextMenu from "./ContextMenu"
 import { ImageWarningBanner } from "./ImageWarningBanner"
 import { VolumeX, Pin, Check, WandSparkles, SendHorizontal, Paperclip, MessageSquareX, AtSign } from "lucide-react"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
+import { TaskScheduleButton } from "../kilocode/chat/TaskScheduleButton" // kilocode_change
 import { MicrophoneButton } from "./MicrophoneButton" // kilocode_change: STT microphone button
 import { VolumeVisualizer } from "./VolumeVisualizer" // kilocode_change: STT volume level visual
 import { VoiceRecordingCursor } from "./VoiceRecordingCursor" // kilocode_change: STT recording cursor
@@ -1842,6 +1843,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						</StandardTooltip>
 					)}
 					{/* kilocode_change end */}
+					{!isEditMode && <TaskScheduleButton />}
+					{/* kilocode_change: per-task reminder clock */}
 					<StandardTooltip content={t("chat:enhancePrompt")}>
 						<button
 							aria-label={t("chat:enhancePrompt")}

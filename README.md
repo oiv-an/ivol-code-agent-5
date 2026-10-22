@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.116.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.117.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -74,6 +74,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - **Search** in the current conversation from the chat, also available to the agent as a tool.
 - **Attach files** from anywhere on disk with drag and drop or the paperclip button. The `@` button lists files from the open project.
 - Messages you send while the agent is busy are queued and never lost. Unsent input is restored when a task stops.
+- A **clock** button in the chat input sets one reminder per task: repeat every N minutes or hours, once after a delay, or at an exact time. While the task is open, the text is sent when the agent has finished and is waiting; runs that fall while it works are skipped. A countdown shows the time left, and closing the task stops the reminder.
 - The auto-approval checkbox is always visible in the bottom toolbar. A **YOLO timer** temporarily auto-approves everything and returns to normal rules when it expires.
 - One checkbox approves all current and future tools of a selected MCP server.
 - Completed root tasks remain open for follow-up. A notification appears 5 minutes after a task finishes if you left the editor.

@@ -358,7 +358,7 @@ export type TokenUsage = z.infer<typeof tokenUsageSchema>
  */
 
 export const queuedMessageSchema = z.object({
-	source: z.literal("telegram").optional(), // kilocode_change: remote text never implicitly approves a tool.
+	source: z.enum(["telegram", "schedule"]).optional(), // kilocode_change: remote/scheduled text never implicitly approves a tool.
 	timestamp: z.number(),
 	id: z.string(),
 	text: z.string(),

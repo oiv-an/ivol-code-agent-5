@@ -247,14 +247,14 @@
 		"rateLimitWait": "Rate limiting",
 		"errorTitle": "Provider Error {{code}}",
 		"errorMessage": {
-			"docs": "Docs",
-			"goToSettings": "Settings",
 			"400": "The provider couldn't process the request as made. Stop the task and try a different approach.",
 			"401": "Couldn't authenticate with provider. Please check your API key configuration.",
 			"402": "You seem to have run out of funds/credits in your account. Go to your provider and add more to continue.",
 			"403": "Unauthorized. Your API key is valid, but the provider refused to complete this request.",
 			"429": "Too many requests. You're being rate-limited by the provider. Please wait a bit before your next API call.",
 			"500": "Provider server error. Something is wrong on the provider side, there's nothing wrong with your request.",
+			"docs": "Docs",
+			"goToSettings": "Settings",
 			"connection": "Connection error. Make sure you have a working internet connection.",
 			"claudeCodeNotAuthenticated": "You need to sign in to use Claude Code. Go to Settings and click \"Sign in to Claude Code\" to authenticate.",
 			"unknown": "Unknown API error, click Details for more information."
@@ -604,5 +604,27 @@
 		"updated": "Updated the to-do list",
 		"completed": "Completed",
 		"started": "Started"
+	},
+	"taskSchedule": {
+		"title": "Task reminder",
+		"next": "Next reminder: {{time}}",
+		"mode": {
+			"interval": "Repeat",
+			"delay": "Once after",
+			"at": "At time"
+		},
+		"every": "Every",
+		"after": "After",
+		"amount": "Amount",
+		"unit": "Unit",
+		"minutes": "minutes",
+		"hours": "hours",
+		"text": "Reminder text",
+		"placeholder": "For example: check the task progress",
+		"hint": "The text is sent to this task while it is open. Closing the task stops the reminder.",
+		"save": "Save",
+		"stop": "Stop",
+		"left": "Left: {{time}}",
+		"close": "Close"
 	}
 }

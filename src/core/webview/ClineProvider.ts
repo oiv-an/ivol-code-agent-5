@@ -108,6 +108,7 @@ import { applyMaxModelPreset, applyModelSelection, pickModelSelection } from "..
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
 import { disposeTelegram, beginTelegramTransfer } from "../kilocode/webview/telegramHandler" // kilocode_change
+import { TaskScheduleRunner } from "../kilocode/task-schedule/TaskScheduleRunner" // kilocode_change
 import { getSystemPromptFilePath } from "../prompts/sections/custom-system-prompt"
 // kilocode_change start
 import {
@@ -188,6 +189,7 @@ export class ClineProvider
 	private autoPurgeScheduler?: any // kilocode_change - (Any) Prevent circular import
 
 	private recentTasksCache?: string[]
+	public readonly taskScheduleRunner: TaskScheduleRunner // kilocode_change
 	private pendingOperations: Map<string, PendingEditOperation> = new Map()
 	private static readonly PENDING_OPERATION_TIMEOUT_MS = 30000 // 30 seconds
 
@@ -230,6 +232,17 @@ export class ClineProvider
 		this.customModesManager = new CustomModesManager(this.context, async () => {
 			await this.postStateToWebview()
 		})
+
+		// kilocode_change start: per-task reminders run only for the task open in this view.
+		this.taskScheduleRunner = new TaskScheduleRunner({
+			getCurrentTask: () => this.getCurrentTask(),
+			getValue: () => this.getGlobalState("taskHistory"),
+			updateTaskHistory: (item) => this.updateTaskHistory(item),
+			postStateToWebview: () => this.postStateToWebview(),
+			log: (message) => this.log(message),
+		})
+		this.taskScheduleRunner.start()
+		// kilocode_change end
 
 		// Initialize MCP Hub through the singleton manager
 		McpServerManager.getInstance(this.context, this)
@@ -717,6 +730,7 @@ export class ClineProvider
 
 	async dispose() {
 		disposeTelegram(this) // kilocode_change: remote task access never outlives its owning provider.
+		this.taskScheduleRunner.dispose() // kilocode_change
 		disposeProviderConnectionTest(this) // kilocode_change: stop only this view's isolated settings check.
 		disposeStandaloneWebSearch(this) // kilocode_change: no independent search survives its owning view.
 		this.log("Disposing ClineProvider...")
@@ -2606,9 +2620,12 @@ export class ClineProvider
 			kiloCodeWrapperProperties, // kilocode_change wrapper information
 			kilocodeDefaultModel: openRouterDefaultModelId, // kilocode_change: personal build has no automatic Kilo defaults request
 			currentTaskId: this.getCurrentTask()?.taskId, // kilocode_change: route incremental updates to the active task
-			currentTaskItem: this.getCurrentTask()?.taskId
-				? (taskHistory || []).find((item: HistoryItem) => item.id === this.getCurrentTask()?.taskId)
-				: undefined,
+			currentTaskItem: (() => {
+				const taskId = this.getCurrentTask()?.taskId
+				const item = taskId ? (taskHistory || []).find((entry: HistoryItem) => entry.id === taskId) : undefined
+				// kilocode_change: the live reminder state wins over a possibly stale history copy.
+				return item ? { ...item, schedule: this.taskScheduleRunner.getSchedule(taskId) } : undefined
+			})(),
 			// kilocode_change start
 			clineMessages: projectLiveChat(this.getCurrentTask()?.clineMessages || []),
 			chatHistoryPage: this.getCurrentTask()

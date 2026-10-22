@@ -38,7 +38,7 @@ export class MessageQueueService extends EventEmitter<QueueEvents> {
 		return { index, message: this._messages[index] }
 	}
 
-	public addMessage(text: string, images?: string[], source?: "telegram"): QueuedMessage | undefined {
+	public addMessage(text: string, images?: string[], source?: "telegram" | "schedule"): QueuedMessage | undefined {
 		// kilocode_change
 		if (!text && !images?.length) {
 			return undefined
