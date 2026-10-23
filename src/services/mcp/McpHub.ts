@@ -334,6 +334,14 @@ export class McpHub {
 					const allow = t("mcp:browserOS.allow")
 					const confirm = async () => {
 						if (!isCurrent()) return false
+						// kilocode_change start: the task's clock schedule can pre-approve browser control.
+						if (
+							this.browserOSAccess.getStatus() !== "paused" &&
+							task?.taskId &&
+							provider?.taskScheduleRunner?.getSchedule(task.taskId)?.allowBrowser === true
+						)
+							return isCurrent()
+						// kilocode_change end
 						const answer = await vscode.window.showWarningMessage(
 							t(
 								this.browserOSAccess.getStatus() === "paused"
@@ -2984,24 +2992,15 @@ export class McpHub {
 			}
 		}
 		checkContext()
-		try {
-			const result = await this.browserOSAccess.execute(caller, connection, observation, async () => {
-				checkContext()
-				const response = await request()
-				checkContext()
-				return response
-			})
-			// The access guard preserves known action errors. Unknown server errors may mean manual stop.
-			if (provider.getCurrentTask() === caller && !this.browserOSAccess.hasAccess(connection)) {
-				await this.blockBrowserTaskPermission()
-			}
-			return result
-		} catch (error) {
-			if (provider.getCurrentTask() === caller && !this.browserOSAccess.hasAccess(connection)) {
-				await this.blockBrowserTaskPermission()
-			}
-			throw error
-		}
+		// kilocode_change start: a lost/stopped session drops only the live grant. The saved task decision
+		// stays, so the next call reconnects without asking again. Explicit pause/revoke still block it.
+		return this.browserOSAccess.execute(caller, connection, observation, async () => {
+			checkContext()
+			const response = await request()
+			checkContext()
+			return response
+		})
+		// kilocode_change end
 	}
 	// kilocode_change end
 

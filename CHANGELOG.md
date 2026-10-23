@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.118
+
+- Browser access approved for a task is remembered: a dropped or expired browser session no longer asks for permission again. Pausing or revoking access still requires a new approval.
+- The clock reminder form has an "Allow browser control" checkbox: when enabled, browser access for that task is confirmed automatically without the prompt.
+
 ## 5.17.117
 
 - New clock button in the chat input: set a per-task reminder (repeat every N minutes/hours, once after a delay, or at an exact time) that sends your text to the open task so the agent keeps working. A countdown next to the clock shows the time left. A reminder is sent only when the agent has finished and is waiting; runs that fall while it works are skipped.

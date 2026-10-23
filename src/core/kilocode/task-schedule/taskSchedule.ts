@@ -8,6 +8,8 @@ export interface TaskScheduleInput {
 	minutes?: number
 	/** Exact run time in epoch milliseconds ("at"). */
 	at?: number
+	/** Auto-confirm the browser control prompt for this task. */
+	allowBrowser?: boolean
 }
 
 const MAX_MINUTES = 60 * 24 * 365
@@ -23,6 +25,7 @@ export function createTaskSchedule(
 ): TaskSchedule | undefined {
 	const text = typeof input?.text === "string" ? input.text.trim() : ""
 	if (!text) return undefined
+	const browser = input.allowBrowser === true ? { allowBrowser: true } : {}
 
 	if (input.mode === "interval" || input.mode === "delay") {
 		const minutes = Number(input.minutes)
@@ -35,13 +38,14 @@ export function createTaskSchedule(
 			text,
 			intervalMinutes: rounded,
 			nextRunAt: unchanged ? previous.nextRunAt : now + rounded * 60_000,
+			...browser,
 		}
 	}
 
 	if (input.mode === "at") {
 		const at = Number(input.at)
 		if (!Number.isFinite(at) || at <= now) return undefined
-		return { mode: "at", text, nextRunAt: at }
+		return { mode: "at", text, nextRunAt: at, ...browser }
 	}
 
 	return undefined

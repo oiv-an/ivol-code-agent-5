@@ -41,6 +41,7 @@ export const TaskScheduleButton = () => {
 	const [unit, setUnit] = useState<Unit>("hours")
 	const [at, setAt] = useState("")
 	const [text, setText] = useState("")
+	const [allowBrowser, setAllowBrowser] = useState(false)
 
 	// Load the saved schedule into the form whenever the form opens.
 	useEffect(() => {
@@ -48,6 +49,7 @@ export const TaskScheduleButton = () => {
 		if (schedule) {
 			setMode(schedule.mode)
 			setText(schedule.text)
+			setAllowBrowser(schedule.allowBrowser === true)
 			const minutes = schedule.mode !== "at" ? schedule.intervalMinutes : undefined
 			if (minutes !== undefined) {
 				const inHours = minutes % 60 === 0
@@ -81,7 +83,10 @@ export const TaskScheduleButton = () => {
 		vscode.postMessage({
 			type: "setTaskSchedule",
 			taskId,
-			taskSchedule: mode === "at" ? { mode, text: text.trim(), at: atTs } : { mode, text: text.trim(), minutes },
+			taskSchedule:
+				mode === "at"
+					? { mode, text: text.trim(), at: atTs, allowBrowser }
+					: { mode, text: text.trim(), minutes, allowBrowser },
 		})
 		setOpen(false)
 	}
@@ -192,6 +197,10 @@ export const TaskScheduleButton = () => {
 					rows={3}
 					className={cn(fieldClass, "resize-y")}
 				/>
+				<label className="flex items-center gap-2 cursor-pointer">
+					<input type="checkbox" checked={allowBrowser} onChange={(e) => setAllowBrowser(e.target.checked)} />
+					<span>{t("chat:taskSchedule.allowBrowser")}</span>
+				</label>
 				<div className="text-xs text-vscode-descriptionForeground">{t("chat:taskSchedule.hint")}</div>
 				<div className="flex justify-end gap-2">
 					<button

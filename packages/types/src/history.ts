@@ -7,6 +7,7 @@ export const taskScheduleSchema = z.object({
 	text: z.string(),
 	intervalMinutes: z.number().optional(),
 	nextRunAt: z.number(),
+	allowBrowser: z.boolean().optional(), // auto-confirm the browser control prompt for this task
 })
 
 export type TaskSchedule = z.infer<typeof taskScheduleSchema>

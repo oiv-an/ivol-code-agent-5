@@ -621,6 +621,7 @@
 		"hours": "hours",
 		"text": "Reminder text",
 		"placeholder": "For example: check the task progress",
+		"allowBrowser": "Allow browser control (no confirmation prompt)",
 		"hint": "The text is sent to this task while it is open. Closing the task stops the reminder.",
 		"save": "Save",
 		"stop": "Stop",

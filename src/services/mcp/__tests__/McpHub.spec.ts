@@ -426,6 +426,49 @@ describe("McpHub", () => {
 			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
 			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts + 1)
 		})
+
+		it("keeps the saved task grant when a browser call fails with a stopped session", async () => {
+			const values = new Map<string, unknown>([["browserMode", "browseros"]])
+			mockProvider.context!.globalState.get = vi.fn((key: string) => values.get(key)) as any
+			mockProvider.context!.globalState.update = vi.fn(async (key: string, value: unknown) => {
+				values.set(key, value)
+			})
+			mockProvider.postStateToWebview = vi.fn()
+			const task = { taskId: "task-a", cwd: "/project" } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(t("mcp:browserOS.allow") as never)
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			const connection = hub.connections.find((entry) => entry.server.name === "browseros-neo") as any
+			connection.client.request = vi.fn().mockRejectedValue(new Error("Browser session stopped"))
+			await expect(hub.callTool("browseros-neo", "snapshot", { page: 1 }, undefined, task)).rejects.toThrow()
+			expect(hub.getBrowserTaskPermission()).toEqual({ taskId: "task-a", allowed: true })
+			const prompts = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			hub.browserOSAccess.revoke()
+			await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+			expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts)
+		})
+
+		it("grants browser control without a prompt when the task schedule allows it", async () => {
+			const values = new Map<string, unknown>([["browserMode", "browseros"]])
+			mockProvider.context!.globalState.get = vi.fn((key: string) => values.get(key)) as any
+			mockProvider.context!.globalState.update = vi.fn(async (key: string, value: unknown) => {
+				values.set(key, value)
+			})
+			mockProvider.postStateToWebview = vi.fn()
+			const task = { taskId: "task-s", cwd: "/project" } as any
+			mockProvider.getCurrentTask = vi.fn().mockReturnValue(task)
+			;(mockProvider as any).taskScheduleRunner = {
+				getSchedule: (id: string) => (id === "task-s" ? { allowBrowser: true } : undefined),
+			}
+			const prompts = vi.mocked(vscode.window.showWarningMessage).mock.calls.length
+			try {
+				await expect(hub.prepareBrowserOSInvocation("browseros-neo", task)).resolves.toBe(true)
+				expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(prompts)
+				expect(hub.getBrowserTaskPermission()).toEqual({ taskId: "task-s", allowed: true })
+			} finally {
+				delete (mockProvider as any).taskScheduleRunner
+			}
+		})
 		// kilocode_change end
 
 		it("prepares and requests consent on invocation, then reuses it across chats", async () => {
