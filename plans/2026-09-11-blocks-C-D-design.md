@@ -75,7 +75,7 @@ translating freeze terminology; excluding frozen messages from summary input.
 
 ### A-num — Numbering
 
-[Numbering](../src/core/kilocode/context-pinning/numbering.ts):
+Historical `src/core/kilocode/context-pinning/numbering.ts` (no longer present at this path):
 
 - `ensureSequenceNumbers()` assigns a number once, continuing from `max(seq) + 1`; existing
   numbers survive new messages, IDE restarts and migration of old tasks.
@@ -101,7 +101,7 @@ API message with a timestamp greater than or equal to its own. One API message h
 
 ### A5 — Model tool
 
-[freezeMessagesTool](../src/core/tools/kilocode/freezeMessagesTool.ts) accepts `messages` and
+Historical `src/core/tools/kilocode/freezeMessagesTool.ts` (no longer present at this path) accepts `messages` and
 `action` (`freeze` / `unfreeze`), understands `42`, `#42`, `[#42]` and lists, and reports frozen,
 already-frozen and missing numbers. Registered in seven places, including XML documentation and
 the native tool schema.

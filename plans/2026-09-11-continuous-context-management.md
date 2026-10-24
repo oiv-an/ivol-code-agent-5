@@ -152,7 +152,7 @@ The intended behaviour, for the record:
    a new one arrives.
 7. When compaction triggers and the document is fresh, the preparation LLM call could be skipped
    entirely — the plan is already on disk and is re-read into every request by
-   [`TaskDocumentSession`](../src/core/task-document/session.ts:60).
+   `TaskDocumentSession` (historically `src/core/task-document/session.ts:60`; no longer present at this path).
 
 ---
 
