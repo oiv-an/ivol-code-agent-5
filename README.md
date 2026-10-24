@@ -38,7 +38,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - The quick model selector shows every model the OpenAI-compatible provider exposes. The catalog is cached, so it appears immediately and survives restarts and temporary provider failures.
 - The reasoning level is chosen right next to the model selector. Added levels: GPT-5.6 **max** and **Ultra** for OpenAI-compatible and Codex connections, with automatic fallback when a provider rejects the highest level.
 - **MAX / MED / MIN presets**: three buttons next to the model selector store a model and reasoning pair for each provider profile. The active preset is highlighted in green. New conversations and new windows always start on **MAX** when it is configured; reopened tasks keep their own choice.
-- Each conversation keeps its own model, reasoning level and preset. Switching in one window or project no longer changes other windows, and new tasks start with the provider defaults.
+- Each conversation keeps its own model, reasoning level and preset. Switching in one window or project no longer changes other windows. New tasks use configured MAX, or provider defaults when MAX is not configured.
 - The model selected on the home screen is used for the first message of a new task. The model selector stays available during every task operation.
 - The signed-in ChatGPT Plus/Pro model catalog loads automatically, with a 370k context limit and prompt caching kept on.
 - OpenAI-compatible requests send an explicit output limit (64,000-token fallback), which prevents silently truncated answers.
@@ -64,7 +64,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - **Current Task** is on by default. The agent maintains `CURRENT_TASK.md` in the project root with the goal, checklist, key data and the exact next step. It removes completed blocks after you confirm and keeps the file short.
 - Before compression, the task memory is updated and verified. Afterwards the agent rereads it and **continues working** instead of stopping with a status report. A summary you request yourself still hands control back to you.
 - The automatic compression threshold is configurable from 1% to 95% of remaining context (default 10%), globally or per profile, based on the full context window.
-- When compression fails you get explicit choices: **Retry compression** or **Continue without compression**. Retrying does not repeat a task-memory update that already succeeded, including after a window reload. Model, operation and technical details of the failure are shown.
+- When compression fails, work pauses for an explicit **Retry compression**; there is no bypass that continues ordinary work without the required compression. If the task-memory update itself failed, retry that step first. A verified update is retained across model changes and window reloads. Model, operation and technical details of failures are shown.
 - Compression requests do not send screenshots and end with an explicit summary request. This prevents empty summaries on large or image-heavy histories.
 - **Frozen messages**: you can freeze important messages so they are sent with every request, even after compression.
 - The agent replies in your language, while code and memory/instruction files stay in English.
@@ -121,6 +121,14 @@ Active development and regular releases currently target VS Code only. New JetBr
 If `ANTHROPIC_API_KEY` is set in the environment, Claude Code account access may use that key instead of your subscription. Unset the variable and restart VS Code when you want to use your Claude account.
 
 See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
+
+## Documentation and design history
+
+- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.121 (English content; historical filename retained).
+- [Release history](CHANGELOG.md): version-by-version changes, including Agent Manager recovery, scheduled reminders, browser consent, task-history performance and compression fixes.
+- [Project task storage](docs/project-task-storage.md): project-local history and migration behavior.
+- [Modern prompt audit](docs/modern-prompts-audit-2026-10-01.md): historical source audit and research; proposed prompt changes are not shipped features, and model/API claims require revalidation.
+- [Continuous-context proposal](plans/2026-09-11-continuous-context-management.md) and [freeze implementation snapshot](plans/2026-09-11-blocks-C-D-design.md): historical design decisions and recorded verification, not current implementation instructions or a release checklist.
 
 ## Development
 
