@@ -46,6 +46,9 @@ import { startSessionMessageSchema, type StartSessionMessage } from "./types"
 import { openImage } from "../../../integrations/misc/image-handler"
 import { getModelsFromCache } from "../../../api/providers/fetchers/modelCache"
 import { isRouterName, type ModelRecord } from "../../../shared/api"
+import { getOpenAiModels } from "../../../api/providers/openai"
+import { OpenAiModelCatalogCache } from "../../../api/providers/openai-model-cache"
+import { applyAgentModelChoice } from "../../config/kilocode/taskModelSelection"
 import { OPENAI_CODEX_CREDENTIALS_KEY } from "../../../integrations/openai-codex/oauth"
 
 /**
@@ -93,6 +96,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 	private availableModels: { provider: string; currentModel: string; models: ModelRecord } | null = null
 	// Flag to track if models are being fetched
 	private fetchingModels: boolean = false
+	private currentReasoningEffort: string | undefined // kilocode_change: profile default shown in the reasoning selector
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -428,6 +432,13 @@ export class AgentManagerProvider implements vscode.Disposable {
 					// Handle image click from ImageThumbnail component
 					void openImage(message.text as string)
 					break
+				case "agentManager.setSessionModel":
+					void this.setSessionModel(
+						message.sessionId as string,
+						message.model as string,
+						message.continueTask === true,
+					)
+					break
 				case "agentManager.setMode":
 					void this.setSessionMode(message.sessionId as string, message.mode as string)
 					break
@@ -456,6 +467,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 
 		const validatedMessage: StartSessionMessage = parseResult.data
 		const { prompt, parallelMode = false, existingBranch, model, mode, images } = validatedMessage
+		const reasoningEffort = validatedMessage.reasoningEffort as ProviderSettings["reasoningEffort"] // kilocode_change
 
 		// For agent-runtime, pass base64 images directly (not file paths)
 		// The extension expects base64 data URLs in the format "data:image/png;base64,..."
@@ -483,6 +495,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 				model,
 				mode,
 				images,
+				reasoningEffort, // kilocode_change
 			})
 			return
 		}
@@ -502,6 +515,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 				model,
 				mode,
 				images, // Send images to all versions
+				reasoningEffort, // kilocode_change
 			})
 
 			// Wait for the pending session to transition to active before spawning the next
@@ -649,6 +663,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 			model?: string
 			mode?: string // Mode slug (e.g., "code", "architect")
 			images?: string[] // Image file paths to include with the initial prompt
+			reasoningEffort?: ProviderSettings["reasoningEffort"] // kilocode_change
 		},
 	): Promise<void> {
 		if (!prompt) {
@@ -716,6 +731,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 				model: options?.model,
 				mode: options?.mode,
 				images: options?.images, // Images are sent with prompt via stdin newTask message
+				reasoningEffort: options?.reasoningEffort, // kilocode_change
 			},
 			onSetupFailed,
 		)
@@ -778,6 +794,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 			model?: string
 			mode?: string // Mode slug (e.g., "code", "architect")
 			images?: string[] // Image file paths to include with the initial prompt
+			reasoningEffort?: ProviderSettings["reasoningEffort"] // kilocode_change
 			sessionData?: {
 				uiMessages: ClineMessage[]
 				apiConversationHistory: unknown[]
@@ -800,6 +817,10 @@ export class AgentManagerProvider implements vscode.Disposable {
 		let apiConfiguration: ProviderSettings | undefined
 		try {
 			apiConfiguration = await this.getApiConfigurationForCli()
+			// kilocode_change: the model/reasoning picked in Agent Manager apply to this sub-agent only
+			if (apiConfiguration) {
+				apiConfiguration = applyAgentModelChoice(apiConfiguration, options.model, options.reasoningEffort)
+			}
 		} catch (error) {
 			this.outputChannel.appendLine(
 				`[AgentManager] Failed to read provider settings: ${
@@ -1270,6 +1291,29 @@ export class AgentManagerProvider implements vscode.Disposable {
 		await this.safeWriteToStdin(sessionId, message, "message")
 	}
 
+	/** Change only this agent's model; continuing is a separate explicit user action. */
+	private async setSessionModel(sessionId: string, model: string, continueTask: boolean): Promise<void> {
+		const session = this.registry.getSession(sessionId)
+		if (!session || typeof model !== "string" || !model.trim()) return
+		try {
+			if (this.processHandler.hasStdin(sessionId)) {
+				await this.processHandler.sendMessage(sessionId, {
+					type: "agentManager.modelChoice",
+					model,
+					continueTask,
+				})
+			} else if (continueTask) {
+				throw new Error("The agent process has stopped; reopen the session before continuing")
+			}
+			session.model = model
+			this.postStateToWebview()
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error)
+			this.outputChannel.appendLine(`[AgentManager] Model change failed for ${sessionId}: ${reason}`)
+			void vscode.window.showErrorMessage(`Agent Manager: ${reason}`)
+		}
+	}
+
 	/**
 	 * Set the mode for a running agent session via IPC.
 	 * This sends a "mode" webview message to the agent process which calls handleModeSwitch().
@@ -1658,6 +1702,34 @@ export class AgentManagerProvider implements vscode.Disposable {
 
 			// Personal builds must fail closed instead of falling back to a vendor gateway.
 			const providerName = apiConfiguration.apiProvider || "openai"
+			// kilocode_change start
+			this.currentReasoningEffort =
+				apiConfiguration.enableReasoningEffort === false
+					? "disable"
+					: (apiConfiguration.reasoningEffort ?? apiConfiguration.openAiCustomModelInfo?.reasoningEffort)
+			// kilocode_change end
+
+			// kilocode_change start: OpenAI-compatible profiles use the same catalog as the chat model selector
+			if (providerName === "openai" || providerName === "openai-responses") {
+				const models = await this.getOpenAiCompatibleModels(apiConfiguration, state)
+				if (models.length === 0) {
+					this.postMessage({
+						type: "agentManager.modelsLoadFailed",
+						error: "The OpenAI-compatible model catalog is empty",
+					})
+					return
+				}
+				const currentModel = apiConfiguration.openAiModelId || models[0]
+				const record: ModelRecord = {}
+				for (const id of models.includes(currentModel) ? models : [currentModel, ...models]) {
+					record[id] = { contextWindow: 0, supportsPromptCache: false }
+				}
+				this.availableModels = { provider: providerName, currentModel, models: record }
+				this.outputChannel.appendLine(`[AgentManager] Got ${models.length} OpenAI-compatible models`)
+				this.postModelsToWebview(this.availableModels)
+				return
+			}
+			// kilocode_change end
 
 			// Check if this provider supports model fetching via router
 			if (!isRouterName(providerName)) {
@@ -1713,6 +1785,29 @@ export class AgentManagerProvider implements vscode.Disposable {
 			this.fetchingModels = false
 		}
 	}
+
+	// kilocode_change start
+	/** Saved catalog of the active OpenAI-compatible profile; falls back to a live request. */
+	private async getOpenAiCompatibleModels(
+		apiConfiguration: ProviderSettings,
+		state: { currentApiConfigName?: string; listApiConfigMeta?: Array<{ id: string; name: string }> },
+	): Promise<string[]> {
+		const baseUrl = apiConfiguration.openAiBaseUrl
+		const apiKey = apiConfiguration.openAiApiKey
+		const allowInsecureTls = apiConfiguration.allowInsecureTls === true
+		const profileId = state.listApiConfigMeta?.find((c) => c.name === state.currentApiConfigName)?.id ?? ""
+		const cache = new OpenAiModelCatalogCache(this.context.globalState, {
+			log: (line) => this.outputChannel.appendLine(`[AgentManager] ${line}`),
+		})
+		const identity = { profileId, baseUrl, allowInsecureTls }
+		const saved = profileId ? cache.get(identity) : []
+		if (saved.length > 0 || !baseUrl || !apiKey) {
+			return saved
+		}
+		const load = () => getOpenAiModels(baseUrl, apiKey, apiConfiguration.openAiHeaders ?? {}, allowInsecureTls)
+		return profileId ? cache.refresh(identity, load) : load()
+	}
+	// kilocode_change end
 
 	/**
 	 * Fetch available modes from ClineProvider and post to webview
@@ -1771,6 +1866,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 			provider: cached.provider,
 			currentModel: cached.currentModel,
 			models: modelsArray,
+			currentReasoningEffort: this.currentReasoningEffort, // kilocode_change
 		})
 	}
 

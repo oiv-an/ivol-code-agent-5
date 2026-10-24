@@ -87,6 +87,7 @@ export const startSessionMessageSchema = z.object({
 	labels: z.array(z.string()).optional(), // Labels for multi-version sessions
 	images: z.array(z.string()).optional(), // Image data URLs to include with the prompt
 	yoloMode: z.boolean().optional(), // True to enable auto-approval (default: true)
+	reasoningEffort: z.string().optional(), // kilocode_change: reasoning effort for this session
 })
 
 export const agentManagerMessageSchema = z.discriminatedUnion("type", [

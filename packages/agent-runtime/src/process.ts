@@ -49,6 +49,8 @@
 import { createExtensionService, type ExtensionService } from "./services/extension.js"
 import { logs, setLogger, createIPCLogger } from "./utils/logger.js"
 import type { ExtensionMessage, WebviewMessage, ExtensionState, ModeConfig, ProviderSettings } from "./types/index.js"
+// kilocode_change: resolve session model overrides against the child process's own provider.
+import { isTypicalProvider, modelIdKeysByProvider } from "@roo-code/types"
 
 /**
  * Agent configuration passed via AGENT_CONFIG environment variable
@@ -391,6 +393,8 @@ async function main(): Promise<void> {
 		// Initialize the agent (with optional resume data for pre-seeding)
 		await agent.initialize(config.resumeData)
 
+		// kilocode_change: continuation must wait until the selected model has actually been applied.
+		let modelUpdate: Promise<void> = Promise.resolve()
 		// Set up message handler from parent
 		process.on("message", async (msg: ParentMessage) => {
 			// Log incoming message from parent
@@ -405,6 +409,48 @@ async function main(): Promise<void> {
 				switch (msg.type) {
 					case "sendMessage":
 						if (msg.payload && agent) {
+							// kilocode_change start
+							if (payloadType === "agentManager.modelChoice") {
+								const choice = msg.payload as unknown as { model: string; continueTask?: boolean }
+								const service = agent
+								modelUpdate = modelUpdate
+									.catch(() => undefined)
+									.then(async () => {
+										const state = service.getState()
+										const settings = state?.apiConfiguration
+										const provider = settings?.apiProvider
+										const key =
+											provider === "openai" || provider === "openai-responses"
+												? "openAiModelId"
+												: isTypicalProvider(provider)
+													? modelIdKeysByProvider[provider]
+													: undefined
+										if (!settings || !key || !choice.model)
+											throw new Error("Cannot resolve the session's model configuration")
+										await service.sendWebviewMessage({
+											type: "setTaskModelSelection",
+											text: state?.currentApiConfigName || "default",
+											apiConfiguration: { ...settings, [key]: choice.model },
+										})
+										if (choice.continueTask) {
+											const last = service.getState()?.clineMessages?.at(-1)
+											if (
+												last?.type !== "ask" ||
+												!["api_req_failed", "mistake_limit_reached"].includes(last.ask ?? "")
+											) {
+												throw new Error("The session is no longer waiting for error recovery")
+											}
+											await service.sendWebviewMessage({
+												type: "askResponse",
+												askResponse: "yesButtonClicked",
+											})
+										}
+									})
+								await modelUpdate
+								break
+							}
+							if (payloadType === "askResponse") await modelUpdate
+							// kilocode_change end
 							logs.debug(`[Ext→] sendWebviewMessage(${payloadType})`, "AgentProcess")
 							await agent.sendWebviewMessage(msg.payload as WebviewMessage)
 						}

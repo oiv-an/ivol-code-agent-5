@@ -2257,6 +2257,12 @@ export class CommandsAPI {
 		}
 	}
 
+	// kilocode_change start - the extension queries registered commands (project task storage)
+	getCommands(_filterInternal?: boolean): Thenable<string[]> {
+		return Promise.resolve(Array.from(this.commands.keys()))
+	}
+	// kilocode_change end
+
 	executeCommand<T = unknown>(command: string, ...rest: unknown[]): Thenable<T> {
 		const handler = this.commands.get(command)
 		if (handler) {

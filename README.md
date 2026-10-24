@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.118.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.119.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -32,6 +32,8 @@ Active development and regular releases currently target VS Code only. New JetBr
 - JetBrains authentication parameters and webview message contents are no longer written to IDE logs.
 
 ### Models and reasoning
+
+- **Agent Manager:** launch sub-agents with the active provider's model catalog and a reasoning level. Change the model inside an existing session without restarting it, then use **Continue** after an API failure or repeated tool-use errors.
 
 - The quick model selector shows every model the OpenAI-compatible provider exposes. The catalog is cached, so it appears immediately and survives restarts and temporary provider failures.
 - The reasoning level is chosen right next to the model selector. Added levels: GPT-5.6 **max** and **Ultra** for OpenAI-compatible and Codex connections, with automatic fallback when a provider rejects the highest level.

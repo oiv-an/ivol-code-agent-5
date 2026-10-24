@@ -25,6 +25,7 @@ import type {
 } from "./CliOutputParser"
 import type { ClineMessage, ModeConfig, ProviderSettings } from "@roo-code/types"
 import { Package } from "../../../shared/package"
+import { applyAgentModelChoice } from "../../config/kilocode/taskModelSelection"
 
 /**
  * Timeout for pending sessions (ms) - if "ready" message doesn't arrive within this time,
@@ -237,19 +238,11 @@ export class RuntimeProcessHandler {
 
 		const config: Record<string, unknown> = {
 			workspace,
-			providerSettings: options?.apiConfiguration || {},
+			providerSettings: applyAgentModelChoice(options?.apiConfiguration || {}, options?.model),
 			mode: modeToUse, // Use provided mode or default to "code"
 			customModes: options?.customModes, // Pass custom modes to agent process
 			autoApprove: options?.autoApprove ?? true, // Default to auto-approve for agent manager
 			sessionId: options?.sessionId,
-		}
-
-		// Add model override if specified
-		if (options?.model) {
-			// Model is typically set via providerSettings
-			if (config.providerSettings && typeof config.providerSettings === "object") {
-				;(config.providerSettings as Record<string, unknown>).kilocodeModel = options.model
-			}
 		}
 
 		// Add VS Code app root for finding bundled binaries (ripgrep, etc.)

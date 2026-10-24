@@ -72,6 +72,7 @@ interface AvailableModelsMessage {
 	provider: string
 	currentModel: string
 	models: AvailableModel[]
+	currentReasoningEffort?: string // kilocode_change
 }
 
 interface ModelsLoadFailedMessage {
@@ -278,8 +279,8 @@ export function useAgentManagerMessages() {
 				}
 
 				case "agentManager.availableModels": {
-					const { provider, currentModel, models } = message as AvailableModelsMessage
-					updateModelsConfig({ provider, currentModel, models })
+					const { provider, currentModel, models, currentReasoningEffort } = message as AvailableModelsMessage
+					updateModelsConfig({ provider, currentModel, models, currentReasoningEffort }) // kilocode_change
 					break
 				}
 

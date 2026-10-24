@@ -29,6 +29,27 @@ function getPresetModelIdKey(provider: ProviderSettings["apiProvider"]): ModelId
 	return provider && isTypicalProvider(provider) ? modelIdKeysByProvider[provider] : undefined
 }
 
+/** Agent Manager: apply the model and reasoning chosen for a sub-agent to a copy of the profile. */
+export function applyAgentModelChoice<T extends ProviderSettings>(
+	settings: T,
+	modelId?: string,
+	reasoningEffort?: ProviderSettings["reasoningEffort"],
+): T {
+	const next: T = { ...settings }
+	const modelIdKey = getPresetModelIdKey(settings.apiProvider)
+	if (modelId && modelIdKey) (next as ProviderSettings)[modelIdKey] = modelId
+	if (!reasoningEffort) return next
+	next.reasoningEffort = reasoningEffort
+	next.enableReasoningEffort = reasoningEffort !== "disable"
+	if (settings.apiProvider === "openai" || settings.apiProvider === "openai-responses") {
+		const info = { ...(settings.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults) }
+		if (reasoningEffort === "disable") delete info.reasoningEffort
+		else info.reasoningEffort = reasoningEffort
+		next.openAiCustomModelInfo = info
+	}
+	return next
+}
+
 /**
  * New conversations always start on the MAX preset when the profile has one configured.
  * Only the runtime conversation view changes; the stored profile defaults stay untouched.

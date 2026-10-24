@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.119
+
+- Agent Manager: sub-agents start again (they previously stalled with no messages), and the new-agent form lets you pick the model from your provider and the reasoning effort.
+- Switch models inside an existing sub-agent session and press Continue after an API failure or repeated tool-use errors without losing the conversation.
+
 ## 5.17.118
 
 - Browser access approved for a task is remembered: a dropped or expired browser session no longer asks for permission again. Pausing or revoking access still requires a new approval.

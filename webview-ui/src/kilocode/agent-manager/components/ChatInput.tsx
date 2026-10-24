@@ -17,6 +17,8 @@ import { ImageThumbnail } from "./ImageThumbnail"
 import { AddImageButton } from "./AddImageButton"
 import { SessionModeSelector } from "./SessionModeSelector"
 
+import { lastSessionMessageAtomFamily } from "../state/atoms/messages"
+
 interface ChatInputProps {
 	sessionId: string
 	sessionLabel?: string
@@ -27,7 +29,7 @@ interface ChatInputProps {
 	worktreeBranchName?: string
 	parentBranch?: string
 	sessionStatus?: "creating" | "running" | "done" | "error" | "stopped"
-	modelId?: string // Model ID used for this session (displayed read-only)
+	modelId?: string // Model ID used for this session
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -47,11 +49,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 	const [selectedImages, setSelectedImages] = useAtom(sessionImagesAtomFamily(sessionId))
 	const todoStats = useAtomValue(sessionTodoStatsAtomFamily(sessionId))
 	const modelsConfig = useAtomValue(modelsConfigAtom)
+	const lastMessage = useAtomValue(lastSessionMessageAtomFamily(sessionId))
+	const canContinue =
+		lastMessage?.type === "ask" &&
+		!lastMessage.partial &&
+		["api_req_failed", "mistake_limit_reached"].includes(lastMessage.ask ?? "")
+	const [modelChoice, setModelChoice] = useState<{ sessionId: string; model: string } | null>(null)
+	const effectiveModel =
+		modelChoice?.sessionId === sessionId ? modelChoice.model : modelId || modelsConfig?.currentModel || ""
+	const changeModel = (model: string, continueTask = false) => {
+		setModelChoice({ sessionId, model })
+		vscode.postMessage({ type: "agentManager.setSessionModel", sessionId, model, continueTask })
+	}
 	const [isFocused, setIsFocused] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const addToQueue = useSetAtom(addToQueueAtom)
 
-	// Build model options for the disabled dropdown (consistent with NewAgentForm)
+	// Build model options for this session (consistent with NewAgentForm)
 	const modelOptions: DropdownOption[] = useMemo(() => {
 		if (!modelsConfig) return []
 		return modelsConfig.models.map((model) => ({
@@ -291,19 +305,27 @@ If any step fails, ask the user for help.`
 							/>
 							{/* Mode selector for running sessions */}
 							<SessionModeSelector sessionId={sessionId} disabled={false} />
-							{/* Model indicator (read-only) - disabled SelectDropdown for visual consistency */}
-							{modelId && modelOptions.length > 0 && (
+							{/* Model selection remains available during requests and recovery. */}
+							{effectiveModel && modelOptions.length > 0 && (
 								<div className="am-model-selector mr-1">
 									<SelectDropdown
-										value={modelId}
+										value={effectiveModel}
 										options={modelOptions}
-										onChange={() => {}} // No-op since disabled
-										disabled={true}
+										onChange={(model) => changeModel(model)}
+										portalToBody
 										triggerClassName="am-model-selector-trigger"
 										contentClassName="am-model-selector-content"
 										align="end"
 									/>
 								</div>
+							)}
+							{canContinue && (
+								<button
+									type="button"
+									className="px-2 py-1 text-vscode-button-foreground bg-vscode-button-background rounded"
+									onClick={() => changeModel(effectiveModel, true)}>
+									{t("chat:resumeTask.title")}
+								</button>
 							)}
 							{showFinishToBranch && (
 								<StandardTooltip

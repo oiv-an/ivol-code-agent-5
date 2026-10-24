@@ -1,5 +1,10 @@
 import { isIntelligentTaskEnabled, historyItemSchema, type ProviderSettings } from "@roo-code/types" // kilocode_change
-import { pickModelSelection, applyModelSelection, applyMaxModelPreset } from "../kilocode/taskModelSelection" // kilocode_change
+import {
+	pickModelSelection,
+	applyModelSelection,
+	applyMaxModelPreset,
+	applyAgentModelChoice,
+} from "../kilocode/taskModelSelection" // kilocode_change
 // npx vitest core/config/__tests__/ContextProxy.spec.ts
 
 import * as vscode from "vscode"
@@ -85,6 +90,27 @@ describe("ContextProxy", () => {
 		expect(restored.openAiModelId).toBe("task")
 		expect(restored.reasoningEffort).toBeUndefined()
 		expect(restored.openAiApiKey).toBe("current-key")
+	})
+	it("applies the Agent Manager model and reasoning choice to a copy of the profile", () => {
+		const profile: ProviderSettings = {
+			apiProvider: "openai",
+			openAiModelId: "default-model",
+			openAiApiKey: "key",
+			reasoningEffort: "medium",
+		}
+		const result = applyAgentModelChoice(profile, "picked-model", "high")
+		expect(result).toMatchObject({
+			openAiModelId: "picked-model",
+			reasoningEffort: "high",
+			enableReasoningEffort: true,
+			openAiApiKey: "key",
+		})
+		expect(result.kilocodeModel).toBeUndefined()
+		expect(result.openAiCustomModelInfo?.reasoningEffort).toBe("high")
+		expect(profile.openAiModelId).toBe("default-model")
+		const off = applyAgentModelChoice(profile, undefined, "disable")
+		expect(off).toMatchObject({ openAiModelId: "default-model", enableReasoningEffort: false })
+		expect(off.openAiCustomModelInfo?.reasoningEffort).toBeUndefined()
 	})
 	it("starts new conversations on the configured MAX preset without touching credentials", () => {
 		const profile: ProviderSettings = {

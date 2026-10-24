@@ -89,9 +89,14 @@ export const effectiveModelIdAtom = atom((get) => {
  */
 export const updateModelsConfigAtom = atom(
 	null,
-	(get, set, payload: { provider: string; currentModel: string; models: AvailableModel[] }) => {
+	(
+		get,
+		set,
+		payload: { provider: string; currentModel: string; models: AvailableModel[]; currentReasoningEffort?: string },
+	) => {
 		set(modelsConfigAtom, payload)
 		set(modelsLoadingAtom, false)
+		set(profileReasoningEffortAtom, payload.currentReasoningEffort ?? null) // kilocode_change
 
 		// Validate persisted selection - clear if model no longer exists
 		const currentSelection = get(selectedModelIdAtom)
@@ -105,6 +110,14 @@ export const updateModelsConfigAtom = atom(
 		}
 	},
 )
+
+// kilocode_change start: reasoning effort for new sessions (profile default unless picked)
+export const profileReasoningEffortAtom = atom<string | null>(null)
+export const selectedReasoningEffortAtom = atom<string | null>(null)
+export const effectiveReasoningEffortAtom = atom(
+	(get) => get(selectedReasoningEffortAtom) ?? get(profileReasoningEffortAtom) ?? "disable",
+)
+// kilocode_change end
 
 /**
  * Action atom to handle model loading failure.

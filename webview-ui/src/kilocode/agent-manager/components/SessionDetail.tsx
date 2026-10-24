@@ -18,6 +18,8 @@ import {
 	modelsLoadingAtom,
 	effectiveModelIdAtom,
 	setSelectedModelIdAtom,
+	effectiveReasoningEffortAtom, // kilocode_change
+	selectedReasoningEffortAtom, // kilocode_change
 } from "../state/atoms/models"
 import { effectiveModeSlugAtom } from "../state/atoms/modes"
 import { CaretDownIcon } from "@radix-ui/react-icons"
@@ -340,6 +342,9 @@ function PendingSessionView({
 	)
 }
 
+// kilocode_change: same effort levels as the chat footer selector for custom OpenAI-compatible profiles
+const REASONING_LEVELS = ["disable", "low", "medium", "high", "xhigh", "max", "ultra"] as const
+
 function NewAgentForm() {
 	const { t } = useTranslation("agentManager")
 	const [promptText, setPromptText] = useState("")
@@ -351,6 +356,20 @@ function NewAgentForm() {
 	const modelsLoading = useAtomValue(modelsLoadingAtom)
 	const effectiveModelId = useAtomValue(effectiveModelIdAtom)
 	const effectiveModeSlug = useAtomValue(effectiveModeSlugAtom)
+	// kilocode_change start: reasoning selector like the chat footer
+	const { t: tSettings } = useTranslation("settings")
+	const reasoningEffort = useAtomValue(effectiveReasoningEffortAtom)
+	const setReasoningEffort = useSetAtom(selectedReasoningEffortAtom)
+	const reasoningOptions: DropdownOption[] = useMemo(
+		() =>
+			REASONING_LEVELS.map((level) => ({
+				value: level,
+				label: tSettings(`providers.reasoningEffort.${level === "disable" ? "none" : level}`),
+				codicon: "codicon-lightbulb",
+			})),
+		[tSettings],
+	)
+	// kilocode_change end
 	const [isStarting, setIsStarting] = useState(false)
 	const [isFocused, setIsFocused] = useState(false)
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -440,6 +459,7 @@ function NewAgentForm() {
 			mode: effectiveModeSlug || undefined,
 			images,
 			yoloMode,
+			reasoningEffort: reasoningEffort || undefined, // kilocode_change
 		})
 	}
 
@@ -718,7 +738,7 @@ function NewAgentForm() {
 				</div>
 
 				{/* Model selector below textarea - like in the main sidebar */}
-				<div className="mt-2 flex items-center justify-start">
+				<div className="mt-2 flex items-center justify-start gap-2">
 					{modelsLoading ? (
 						<div className="am-model-selector-trigger opacity-70 flex items-center gap-1.5">
 							<Loader2 size={14} className="am-spinning" />
@@ -740,6 +760,22 @@ function NewAgentForm() {
 							/>
 						</div>
 					) : null}
+					{/* kilocode_change start: reasoning effort for the sub-agent */}
+					<div className="am-model-selector" data-testid="am-reasoning-selector">
+						<SelectDropdown
+							value={reasoningEffort}
+							options={reasoningOptions}
+							onChange={(value) => setReasoningEffort(value)}
+							disabled={isStarting}
+							disableSearch
+							title={tSettings("providers.reasoningEffort.label")}
+							triggerClassName="am-model-selector-trigger"
+							contentClassName="am-model-selector-content"
+							align="start"
+							triggerIcon={CaretDownIcon}
+						/>
+					</div>
+					{/* kilocode_change end */}
 				</div>
 			</div>
 
