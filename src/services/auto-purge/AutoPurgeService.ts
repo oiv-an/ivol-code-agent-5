@@ -168,6 +168,9 @@ export class AutoPurgeService {
 				const shouldPurge = retentionDays !== null && ageInDays > retentionDays
 				const taskDirectoryPath = await getTaskDirectoryPath(this.globalStoragePath, historyItem.id)
 
+				// kilocode_change: Agent Manager sessions are retained until explicit user deletion.
+				if (await fileExistsAtPath(path.join(taskDirectoryPath, "agent-session.json"))) continue
+
 				// Check if task directory actually exists
 				const taskDirExists = await fileExistsAtPath(taskDirectoryPath)
 				if (!taskDirExists) {

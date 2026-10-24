@@ -56,11 +56,38 @@ vi.mock("react-virtuoso", () => ({
 	}),
 }))
 
+vi.mock("../ProgressIndicator", () => ({ ProgressIndicator: () => <span data-testid="request-spinner" /> }))
+
 describe("MessageList", () => {
 	const sessionId = "test-session"
 
 	beforeEach(() => {
 		vi.mocked(vscode.postMessage).mockClear()
+	})
+
+	it("clears the pending request spinner after Stop and when reopening stopped history", () => {
+		const store = createStore()
+		const session = {
+			sessionId,
+			label: "Task",
+			prompt: "Task",
+			status: "running" as const,
+			startTime: 1,
+			source: "local" as const,
+		}
+		store.set(sessionsMapAtom, { [sessionId]: session })
+		store.set(selectedSessionIdAtom, sessionId)
+		store.set(sessionMachineStateAtom, { [sessionId]: "streaming" })
+		store.set(sessionMessagesAtomFamily(sessionId), [{ ts: 1, type: "say", say: "api_req_started", text: "{}" }])
+		render(
+			<Provider store={store}>
+				<MessageList sessionId={sessionId} />
+			</Provider>,
+		)
+		expect(screen.getByTestId("request-spinner")).toBeInTheDocument()
+		act(() => store.set(sessionsMapAtom, { [sessionId]: { ...session, status: "stopped" } }))
+		expect(screen.queryByTestId("request-spinner")).not.toBeInTheDocument()
+		expect(screen.getByText("messages.apiRequest · status.stopped")).toBeInTheDocument()
 	})
 
 	describe("handleCopyToInput", () => {

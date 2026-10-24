@@ -11,7 +11,7 @@ The full list of changes is in the [README on GitHub](https://github.com/oiv-an/
 - **Privacy:** automatic Kilo/Roo account, task sharing, telemetry, cloud Marketplace and upgrade traffic are disabled.
 - **Providers:** OpenAI-compatible endpoints, OpenAI Codex (ChatGPT Plus/Pro), Claude Code account, Ollama and LM Studio. Each profile has an optional TLS certificate exception and a connection check.
 - **Models:** a fast cached model selector, reasoning level beside it (including max and Ultra), MAX / MED / MIN presets, and a separate model and reasoning choice per conversation and project.
-- **Agent Manager:** sub-agents with provider model and reasoning selection, model switching within existing sessions, and explicit continuation after errors.
+- **Agent Manager:** sub-agents with provider model and reasoning selection, model switching within existing sessions, explicit continuation after errors, and one persistent project session list with local history recovery after restart.
 - **Web search:** optional native web search that the model triggers on its own, with sources, plus a separate search window from the globe button.
 - **Long conversations:** incremental updates, a bounded live message window with history loading on scroll, a compact task history index and fast saves.
 - **Current Task memory:** `CURRENT_TASK.md` keeps the goal, checklist and next step. Work continues after context compression, and failed compression offers explicit retry or continue choices. Frozen messages stay in context.
@@ -33,7 +33,7 @@ Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-
 
 ## Versioning
 
-Version `5.17.119` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
+Version `5.17.121` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
 
 ## License and attribution
 

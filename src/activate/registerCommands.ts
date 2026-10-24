@@ -71,8 +71,23 @@ let agentManagerProvider: AgentManagerProvider | undefined
 const registerAgentManager = (options: RegisterCommandOptions) => {
 	const { context, outputChannel, provider } = options
 
+	if (agentManagerProvider) return
 	agentManagerProvider = new AgentManagerProvider(context, outputChannel, provider)
 	context.subscriptions.push(agentManagerProvider)
+	if (!process.env.AGENT_CONFIG) {
+		context.subscriptions.push(
+			vscode.window.registerWebviewPanelSerializer(AgentManagerProvider.viewType, {
+				deserializeWebviewPanel: async (panel) => {
+					await agentManagerProvider?.restorePanel(panel)
+				},
+			}),
+		)
+	}
+	context.subscriptions.push({
+		dispose: () => {
+			agentManagerProvider = undefined
+		},
+	})
 }
 // kilocode_change end
 

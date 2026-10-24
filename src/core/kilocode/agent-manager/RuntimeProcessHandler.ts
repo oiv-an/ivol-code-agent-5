@@ -118,6 +118,7 @@ export interface RuntimeProcessHandlerCallbacks {
 	onSessionCompleted?: (sessionId: string, exitCode: number | null) => void
 	onModeChanged?: (sessionId: string, mode: string, previousMode: string) => void
 	onWorktreeSessionCreated?: (sessionId: string, worktreePath: string) => void // Called when a worktree session is created
+	onTaskIdentified?: (sessionId: string, taskId: string) => void
 }
 
 export class RuntimeProcessHandler {
@@ -263,9 +264,16 @@ export class RuntimeProcessHandler {
 
 		// Add resume data if this is a resume with history
 		// This pre-seeds the session data BEFORE extension activation to avoid race conditions
-		if (options?.sessionData && options?.sessionId) {
+		if (
+			options?.sessionData &&
+			options?.sessionId &&
+			this.registry.getSession(options.sessionId)?.source === "local"
+		) {
+			// Reopen canonical local history directly; never copy it into AGENT_CONFIG or overwrite it.
+			config.resumeTaskId = options.sessionData.metadata.sessionId
+		} else if (options?.sessionData && options?.sessionId) {
 			config.resumeData = {
-				sessionId: options.sessionId,
+				sessionId: options.sessionData.metadata.sessionId,
 				prompt: prompt,
 				images: options.images,
 				uiMessages: options.sessionData.uiMessages,
@@ -626,6 +634,14 @@ export class RuntimeProcessHandler {
 			[key: string]: unknown
 		}
 
+		const taskId =
+			typeof extMsg.taskId === "string"
+				? extMsg.taskId
+				: extMsg.type === "taskMessagesSaved" && Array.isArray(extMsg.payload)
+					? extMsg.payload[0]
+					: undefined
+		if (typeof taskId === "string") this.callbacks.onTaskIdentified?.(sessionId, taskId)
+
 		// Handle messageCreated events without waiting for a full state snapshot.
 		if (extMsg.type === "messageCreated" && extMsg.chatMessage) {
 			this.handleMessageCreated(sessionId, extMsg.chatMessage, onEvent)
@@ -903,7 +919,10 @@ export class RuntimeProcessHandler {
 			this.sessionModes.delete(sessionId)
 
 			// Update session status based on exit code
-			if (code === 0) {
+			if (this.registry.getSession(sessionId)?.status === "stopped") {
+				// An acknowledged user stop remains stopped even after a graceful exit.
+				this.registry.updateSessionStatus(sessionId, "stopped")
+			} else if (code === 0) {
 				this.registry.updateSessionStatus(sessionId, "done")
 			} else if (signal === "SIGTERM" || signal === "SIGINT" || signal === "SIGKILL") {
 				this.registry.updateSessionStatus(sessionId, "stopped")

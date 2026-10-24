@@ -3,6 +3,8 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { t } from "i18next"
 import { AgentRegistry } from "./AgentRegistry"
+import { LocalSessionStore } from "./LocalSessionStore"
+import { resolveProjectTaskDirectory } from "../../../services/kilocode/project-task-storage"
 import { renameMapKey } from "./mapUtils"
 import {
 	buildParallelModeWorktreePath,
@@ -98,6 +100,10 @@ export class AgentManagerProvider implements vscode.Disposable {
 	private fetchingModels: boolean = false
 	private currentReasoningEffort: string | undefined // kilocode_change: profile default shown in the reasoning selector
 
+	private localSessionStore?: LocalSessionStore
+	private localSessionsReady: Promise<void> = Promise.resolve()
+	private sessionTasks = new Map<string, { taskId: string; workspace: string }>()
+
 	constructor(
 		private readonly context: vscode.ExtensionContext,
 		private readonly outputChannel: vscode.OutputChannel,
@@ -105,12 +111,29 @@ export class AgentManagerProvider implements vscode.Disposable {
 	) {
 		this.registry = new AgentRegistry()
 		this.remoteSessionService = new RemoteSessionService({ outputChannel })
+		const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+		if (workspace && !process.env.AGENT_CONFIG) {
+			this.localSessionStore = new LocalSessionStore(workspace)
+			this.localSessionsReady = this.restoreLocalSessions()
+		}
 		this.terminalManager = new SessionTerminalManager(this.registry, this.outputChannel)
 
 		// Initialize currentGitUrl from workspace
 		void this.initializeCurrentGitUrl()
 
 		const callbacks: RuntimeProcessHandlerCallbacks = {
+			onTaskIdentified: (sessionId, taskId) => {
+				if (!/^[a-zA-Z0-9_-]+$/.test(taskId)) return
+				const previous = this.sessionTasks.get(sessionId)
+				if (previous?.taskId === taskId) return
+				const workspace =
+					this.registry.getSession(sessionId)?.parallelMode?.worktreePath ??
+					vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+				if (workspace) {
+					this.sessionTasks.set(sessionId, { taskId, workspace })
+					this.persistLocalSessions()
+				}
+			},
 			onLog: (message) => this.outputChannel.appendLine(`[AgentManager] ${message}`),
 			onSessionLog: (sessionId, line) => this.log(sessionId, line),
 			onStateChanged: () => this.postStateToWebview(),
@@ -263,10 +286,73 @@ export class AgentManagerProvider implements vscode.Disposable {
 		return message
 	}
 
+	private async restoreLocalSessions(): Promise<void> {
+		try {
+			for (const record of await this.localSessionStore!.read()) {
+				this.registry.restoreSession(record.session)
+				if (record.taskId)
+					this.sessionTasks.set(record.session.sessionId, {
+						taskId: record.taskId,
+						workspace: record.workspace,
+					})
+			}
+		} catch (error) {
+			this.outputChannel.appendLine(`[AgentManager] Cannot restore local sessions: ${String(error)}`)
+			void vscode.window.showErrorMessage(`Agent Manager: cannot read saved sessions: ${String(error)}`)
+			throw error
+		}
+	}
+
+	private persistLocalSessions(): void {
+		if (!this.localSessionStore) return
+		void this.localSessionsReady
+			.then(async () => {
+				const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+				if (!workspace) return
+				await this.localSessionStore!.save(
+					this.registry.getSessions().map((session) => ({
+						session: { ...session, logs: [] },
+						workspace: session.parallelMode?.worktreePath ?? workspace,
+						...this.sessionTasks.get(session.sessionId),
+					})),
+				)
+			})
+			.catch((error) => {
+				this.outputChannel.appendLine(`[AgentManager] Cannot save sessions: ${String(error)}`)
+				void vscode.window.showErrorMessage(`Agent Manager: cannot save sessions: ${String(error)}`)
+			})
+	}
+
+	private async readLocalSession(sessionId: string) {
+		const location = this.sessionTasks.get(sessionId)
+		const session = this.registry.getSession(sessionId)
+		if (!location || !session) throw new Error("Local session history has not been identified")
+		const directory = resolveProjectTaskDirectory(location.taskId, location.workspace)
+		if (!directory) throw new Error("Local task history is unavailable; the session was not replaced")
+		const [uiMessages, apiConversationHistory] = await Promise.all([
+			fs.promises.readFile(path.join(directory, "ui_messages.json"), "utf8").then(JSON.parse),
+			fs.promises.readFile(path.join(directory, "api_conversation_history.json"), "utf8").then(JSON.parse),
+		])
+		if (!Array.isArray(uiMessages) || !Array.isArray(apiConversationHistory) || !apiConversationHistory.length) {
+			throw new Error("Saved session history is invalid or empty; it was not overwritten")
+		}
+		return {
+			uiMessages: uiMessages as ClineMessage[],
+			apiConversationHistory: apiConversationHistory as unknown[],
+			metadata: {
+				sessionId: location.taskId,
+				title: session.label,
+				createdAt: new Date(session.startTime).toISOString(),
+				mode: session.mode ?? null,
+			},
+		}
+	}
+
 	/**
 	 * Open or focus the Agent Manager panel
 	 */
 	public async openPanel(): Promise<void> {
+		await this.localSessionsReady
 		if (this.panel) {
 			this.panel.reveal(vscode.ViewColumn.One)
 			return
@@ -283,20 +369,38 @@ export class AgentManagerProvider implements vscode.Disposable {
 			},
 		)
 
-		this.panel.iconPath = {
+		await this.attachPanel(this.panel)
+	}
+
+	/** VS Code restores the saved tab into the same manager, rather than an orphan panel. */
+	public async restorePanel(panel: vscode.WebviewPanel): Promise<void> {
+		await this.localSessionsReady
+		if (this.panel && this.panel !== panel) {
+			panel.dispose()
+			this.panel.reveal(vscode.ViewColumn.One)
+			return
+		}
+		this.panel = panel
+		await this.attachPanel(panel)
+	}
+
+	private async attachPanel(panel: vscode.WebviewPanel): Promise<void> {
+		panel.webview.options = { enableScripts: true, localResourceRoots: [this.context.extensionUri] }
+		panel.iconPath = {
 			light: vscode.Uri.joinPath(this.context.extensionUri, "assets", "icons", "kilo-light.svg"),
 			dark: vscode.Uri.joinPath(this.context.extensionUri, "assets", "icons", "kilo-dark.svg"),
 		}
 
-		this.panel.webview.html =
+		panel.webview.html =
 			this.context.extensionMode === vscode.ExtensionMode.Development
-				? await this.getHMRHtmlContent(this.panel.webview)
-				: this.getHtmlContent(this.panel.webview)
+				? await this.getHMRHtmlContent(panel.webview)
+				: this.getHtmlContent(panel.webview)
 
-		this.panel.webview.onDidReceiveMessage((message) => this.handleMessage(message), null, this.disposables)
+		panel.webview.onDidReceiveMessage((message) => this.handleMessage(message), null, this.disposables)
 
-		this.panel.onDidDispose(
+		panel.onDidDispose(
 			() => {
+				if (this.panel !== panel) return
 				this.panel = undefined
 				this.stopAllAgents()
 			},
@@ -348,6 +452,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 			switch (message.type) {
 				case "agentManager.webviewReady":
 					this.postStateToWebview()
+					if (this.registry.selectedId) this.selectSession(this.registry.selectedId)
 					void this.fetchAndPostRemoteSessions()
 					void this.fetchAndPostAvailableModels()
 					void this.fetchAndPostAvailableModes()
@@ -1106,7 +1211,9 @@ export class AgentManagerProvider implements vscode.Disposable {
 
 	private async fetchRemoteSessionMessages(sessionId: string): Promise<void> {
 		try {
-			const messages = await this.remoteSessionService.fetchSessionMessages(sessionId)
+			const messages = this.sessionTasks.has(sessionId)
+				? (await this.readLocalSession(sessionId)).uiMessages
+				: await this.remoteSessionService.fetchSessionMessages(sessionId)
 			if (!messages) return
 
 			this.storeAndPostMessages(sessionId, messages)
@@ -1469,19 +1576,23 @@ export class AgentManagerProvider implements vscode.Disposable {
 			  }
 			| undefined
 		try {
-			const fetchedData = await this.remoteSessionService.fetchSessionDataForResume(sessionId)
+			const fetchedData = this.sessionTasks.has(sessionId)
+				? await this.readLocalSession(sessionId)
+				: await this.remoteSessionService.fetchSessionDataForResume(sessionId)
 			if (fetchedData) {
 				sessionData = fetchedData
 				this.outputChannel.appendLine(
 					`[AgentManager] Fetched session data: ${fetchedData.uiMessages.length} UI messages, ${fetchedData.apiConversationHistory.length} API history entries`,
 				)
 			} else {
-				this.outputChannel.appendLine(`[AgentManager] No session data available for resume`)
+				throw new Error("No saved session history is available; cannot resume without losing context")
 			}
 		} catch (error) {
 			this.outputChannel.appendLine(
 				`[AgentManager] Failed to fetch session data for resume: ${error instanceof Error ? error.message : String(error)}`,
 			)
+			void vscode.window.showErrorMessage(`Agent Manager: ${String(error)}`)
+			return
 		}
 
 		// Determine the mode to use for resume: prefer session metadata, fall back to local session mode
@@ -1650,10 +1761,11 @@ export class AgentManagerProvider implements vscode.Disposable {
 	}
 
 	private getFilteredState() {
-		return this.registry.getStateForGitUrl(this.currentGitUrl)
+		return this.registry.getState()
 	}
 
 	private postStateToWebview(): void {
+		this.persistLocalSessions()
 		this.postMessage({
 			type: "agentManager.state",
 			state: this.getFilteredState(),
@@ -2011,6 +2123,7 @@ export class AgentManagerProvider implements vscode.Disposable {
 		}
 
 		this.firstApiReqStarted.clear()
+		this.persistLocalSessions()
 	}
 
 	public dispose(): void {

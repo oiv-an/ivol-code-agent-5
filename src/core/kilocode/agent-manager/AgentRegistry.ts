@@ -8,7 +8,6 @@ export interface CreateSessionOptions {
 	yoloMode?: boolean
 }
 
-const MAX_SESSIONS = 10
 const MAX_LOGS = 100
 
 export class AgentRegistry {
@@ -79,7 +78,6 @@ export class AgentRegistry {
 
 		this.sessions.set(sessionId, session)
 		this.selectedId = sessionId
-		this.pruneOldSessions()
 
 		return session
 	}
@@ -276,19 +274,14 @@ export class AgentRegistry {
 		return true
 	}
 
-	private pruneOldSessions(): void {
-		const sessions = this.getSessions()
-		const overflow = sessions.length - MAX_SESSIONS
-		if (overflow <= 0) return
-
-		const nonRunning = sessions.filter((s) => s.status !== "running")
-		if (nonRunning.length === 0) return
-
-		const toRemove = nonRunning.slice(-Math.min(overflow, nonRunning.length))
-
-		for (const session of toRemove) {
-			this.sessions.delete(session.sessionId)
-		}
+	/** Restore metadata without starting a process or replacing a live session. */
+	public restoreSession(session: AgentSession): void {
+		if (this.sessions.has(session.sessionId)) return
+		this.sessions.set(session.sessionId, {
+			...session,
+			pid: undefined,
+			status: session.status === "running" || session.status === "creating" ? "stopped" : session.status,
+		})
 	}
 
 	private truncatePrompt(prompt: string, maxLength = 40): string {

@@ -83,6 +83,9 @@ export function MessageList({ sessionId }: MessageListProps) {
 	// Determine if approval buttons should be shown for the last ask message
 	const sessionState = machineStates[sessionId]
 	const isWaitingApproval = sessionState === "waiting_approval"
+	const isSessionRunning =
+		selectedSession?.sessionId === sessionId && selectedSession.status === "running" && sessionState === "streaming"
+	const isSessionStopped = selectedSession?.sessionId === sessionId && selectedSession.status === "stopped"
 	const isYoloMode = selectedSession?.yoloMode !== false
 
 	// Combine command and command_output messages into single entries
@@ -227,6 +230,8 @@ export function MessageList({ sessionId }: MessageListProps) {
 					key={msg.ts || index}
 					message={msg}
 					isLast={isLastCombinedMessage}
+					isSessionRunning={isSessionRunning}
+					isSessionStopped={isSessionStopped}
 					commandExecutionByTs={commandExecutionByTs}
 					onSuggestionClick={handleSuggestionClick}
 					onCopyToInput={handleCopyToInput}
@@ -237,6 +242,8 @@ export function MessageList({ sessionId }: MessageListProps) {
 		},
 		[
 			combinedMessages.length,
+			isSessionRunning,
+			isSessionStopped,
 			commandExecutionByTs,
 			handleSuggestionClick,
 			handleCopyToInput,
@@ -313,6 +320,8 @@ function extractFollowUpData(message: ClineMessage): { question: string; suggest
 interface MessageItemProps {
 	message: ClineMessage
 	isLast: boolean
+	isSessionRunning: boolean
+	isSessionStopped: boolean
 	commandExecutionByTs: Map<number, { exitCode?: number; status?: string; isRunning?: boolean }>
 	onSuggestionClick?: (suggestion: SuggestionItem) => void
 	onCopyToInput?: (suggestion: SuggestionItem) => void
@@ -323,6 +332,8 @@ interface MessageItemProps {
 function MessageItem({
 	message,
 	isLast,
+	isSessionRunning,
+	isSessionStopped,
 	commandExecutionByTs,
 	onSuggestionClick,
 	onCopyToInput,
@@ -346,13 +357,15 @@ function MessageItem({
 		switch (message.say) {
 			case "api_req_started": {
 				title = t("messages.apiRequest")
-				const info = safeJsonParse<{ cost?: number }>(messageText)
+				const info = safeJsonParse<{ cost?: number; cancelReason?: string }>(messageText)
+				const cancelled = !!info?.cancelReason || (isLast && isSessionStopped)
+				if (cancelled) title = `${title} · ${t("status.stopped")}`
 				const hasCost = info?.cost !== undefined && info.cost !== null
 				// Show spinner when this is the last message and no cost yet (API request in progress)
 				if (hasCost) {
 					icon = <ArrowRightLeft size={16} className="opacity-70" />
 					extraInfo = <span className="am-message-cost">${info.cost!.toFixed(4)}</span>
-				} else if (isLast) {
+				} else if (isLast && isSessionRunning && !cancelled) {
 					icon = <ProgressIndicator />
 				} else {
 					icon = <ArrowRightLeft size={16} className="opacity-70" />

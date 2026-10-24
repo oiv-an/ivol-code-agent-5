@@ -3,6 +3,10 @@ import * as vscode from "vscode"
 import { AgentManagerProvider } from "../AgentManagerProvider"
 import { AgentRegistry } from "../AgentRegistry"
 import type { RuntimeProcessHandler } from "../RuntimeProcessHandler"
+import { LocalSessionStore } from "../LocalSessionStore"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 
 // Minimal mocks for VS Code APIs
 vi.mock("vscode", () => {
@@ -28,7 +32,7 @@ vi.mock("vscode", () => {
 	const env = {
 		appRoot: "/mock/vscode/app/root",
 	}
-	return { window, Uri, workspace, ExtensionMode, ThemeIcon, env }
+	return { window, Uri, workspace, ExtensionMode, ThemeIcon, env, ViewColumn: { One: 1 } }
 })
 
 describe("AgentManagerProvider IPC paths", () => {
@@ -82,6 +86,22 @@ describe("AgentManagerProvider IPC paths", () => {
 		;(provider as any).registry = registry
 	})
 
+	it("reuses the existing panel on repeated opens", async () => {
+		mockPanel.reveal = vi.fn()
+		await Promise.all([provider.openPanel(), provider.openPanel(), provider.openPanel()])
+		expect(mockPanel.reveal).toHaveBeenCalledTimes(3)
+		expect((provider as any).panel).toBe(mockPanel)
+	})
+
+	it("restores additional tabs into the existing manager without stopping its sessions", async () => {
+		mockPanel.reveal = vi.fn()
+		const duplicate = { dispose: vi.fn() }
+		await provider.restorePanel(duplicate as any)
+		expect(duplicate.dispose).toHaveBeenCalledOnce()
+		expect((provider as any).panel).toBe(mockPanel)
+		expect(mockProcessHandler.stopProcess).not.toHaveBeenCalled()
+	})
+
 	it("sendMessage surfaces stdin errors", async () => {
 		mockProcessHandler.hasStdin.mockReturnValue(true)
 		mockProcessHandler.writeToStdin.mockRejectedValue(new Error("boom"))
@@ -98,6 +118,25 @@ describe("AgentManagerProvider IPC paths", () => {
 		await provider.cancelSession("sess")
 
 		expect(mockProcessHandler.stopProcess).toHaveBeenCalledWith("sess")
+	})
+
+	it("persists sessions across store instances and merges other windows without erasing history", async () => {
+		const root = await fs.mkdtemp(path.join(os.tmpdir(), "agent-session-store-"))
+		try {
+			const first = registry.createSession("first", "Original conversation")
+			const second = registry.createSession("second", "Another conversation")
+			const store = new LocalSessionStore(root)
+			await store.save([{ session: first, workspace: root, taskId: "task-first" }])
+			const reopened = new LocalSessionStore(root)
+			expect((await reopened.read())[0].taskId).toBe("task-first")
+			await reopened.save([{ session: second, workspace: root, taskId: "task-second" }])
+			expect((await store.read()).map((entry) => entry.session.sessionId)).toEqual(["first", "second"])
+			await fs.writeFile(path.join(root, ".ivol", "agent-sessions.json"), "invalid")
+			await expect(store.save([])).rejects.toThrow()
+			expect(await fs.readFile(path.join(root, ".ivol", "agent-sessions.json"), "utf8")).toBe("invalid")
+		} finally {
+			await fs.rm(root, { recursive: true, force: true })
+		}
 	})
 
 	it("respondToApproval surfaces stdin errors", async () => {

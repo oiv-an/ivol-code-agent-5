@@ -1,5 +1,13 @@
 # IVOL Code Agent 5
 
+## 5.17.121
+
+- Stop showing an active API request spinner after an Agent Manager session is stopped, including reopened history, and preserve the stopped status after graceful process exit.
+
+## 5.17.120
+
+- Keep Agent Manager sessions in a persistent project list, reopen their local history after restart, and reuse one manager panel. Saved agent sessions are no longer automatically evicted or purged.
+
 ## 5.17.119
 
 - Agent Manager: sub-agents start again (they previously stalled with no messages), and the new-agent form lets you pick the model from your provider and the reasoning effort.

@@ -52,8 +52,8 @@ describe("AgentRegistry", () => {
 		expect(session?.logs.at(-1)).toBe("log-104")
 	})
 
-	it("prunes oldest non-running sessions when over capacity", () => {
-		// Fill up to the limit
+	it("retains completed sessions beyond the former ten-session limit", () => {
+		// Previously, adding an eleventh session silently removed history from the list.
 		const created: string[] = []
 		for (let i = 0; i < 10; i++) {
 			vi.advanceTimersByTime(1)
@@ -61,19 +61,35 @@ describe("AgentRegistry", () => {
 			created.push(session.sessionId)
 		}
 
-		// Mark the earliest three as non-running so they are eligible for pruning
+		// Completed sessions must remain discoverable too.
 		registry.updateSessionStatus(created[0], "done")
 		registry.updateSessionStatus(created[1], "done")
 		registry.updateSessionStatus(created[2], "done")
 
-		// Create one more to trigger pruning; should drop the oldest done session (created[0])
+		// Creating another session must not evict existing entries.
 		const extra = registry.createSession("session-overflow", "overflow")
 
 		const ids = registry.getSessions().map((s) => s.sessionId)
-		expect(ids).toHaveLength(10)
-		expect(ids).not.toContain(created[0])
+		expect(ids).toHaveLength(11)
+		expect(ids).toContain(created[0])
 		expect(ids).toContain(created[1])
 		expect(ids).toContain(extra.sessionId)
+	})
+
+	it("restores saved sessions as stopped without replacing an active session", () => {
+		const original = registry.createSession("saved-session", "Keep this history")
+		registry.setSessionPid(original.sessionId, 123)
+		const restored = new AgentRegistry()
+		restored.restoreSession(structuredClone(original))
+		expect(restored.getSession(original.sessionId)).toMatchObject({
+			prompt: "Keep this history",
+			status: "stopped",
+			pid: undefined,
+		})
+		expect(restored.selectedId).toBeNull()
+		registry.restoreSession({ ...original, label: "Stale saved label" })
+		expect(registry.getSession(original.sessionId)?.label).toBe("Keep this history")
+		expect(registry.getSession(original.sessionId)?.status).toBe("running")
 	})
 
 	it("getState returns the current sessions and selection", () => {

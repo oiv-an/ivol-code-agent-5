@@ -69,6 +69,8 @@ interface AgentConfig {
 	// Behavior
 	autoApprove?: boolean // replaces --yolo
 
+	// kilocode_change: resume existing project history without copying or replacing its files.
+	resumeTaskId?: string
 	// Session management
 	sessionId?: string // for resuming sessions
 
@@ -362,6 +364,14 @@ async function main(): Promise<void> {
 
 			logs.debug("[IPC→Parent] ready", "AgentProcess")
 			sendToParent({ type: "ready" })
+			// kilocode_change: announce readiness first so the parent registers the process before resume events.
+			if (config.resumeTaskId) {
+				try {
+					await agent!.sendWebviewMessage({ type: "showTaskWithId", text: config.resumeTaskId })
+				} catch (error) {
+					sendToParent({ type: "error", error: { message: `Cannot reopen saved task: ${String(error)}` } })
+				}
+			}
 		})
 
 		agent.on("message", (message: ExtensionMessage) => {
