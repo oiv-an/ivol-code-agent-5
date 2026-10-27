@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.121.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.122.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -66,6 +66,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - The automatic compression threshold is configurable from 1% to 95% of remaining context (default 10%), globally or per profile, based on the full context window.
 - When compression fails, work pauses for an explicit **Retry compression**; there is no bypass that continues ordinary work without the required compression. If the task-memory update itself failed, retry that step first. A verified update is retained across model changes and window reloads. Model, operation and technical details of failures are shown.
 - Compression requests do not send screenshots and end with an explicit summary request. This prevents empty summaries on large or image-heavy histories.
+- Screenshots and attached images are shrunk automatically: new images are capped at 2000 px so providers accept them, and images the model has already seen stay in later requests as compact JPEGs.
 - **Frozen messages**: you can freeze important messages so they are sent with every request, even after compression.
 - The agent replies in your language, while code and memory/instruction files stay in English.
 

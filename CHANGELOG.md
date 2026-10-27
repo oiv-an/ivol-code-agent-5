@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.122
+
+- Automatically shrink screenshots and attached images: new images are capped at 2000 px so providers no longer reject the request, and images the model has already seen are kept as compact JPEGs in later requests.
+
 ## 5.17.121
 
 - Stop showing an active API request spinner after an Agent Manager session is stopped, including reopened history, and preserve the stopped status after graceful process exit.

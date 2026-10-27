@@ -171,6 +171,12 @@ import {
 // kilocode_change start: explicit keep marks that survive context compaction
 import { type PinChange, type PinnedBy, pinMessages, unpinMessages } from "../kilocode/context-pinning"
 import { findChatMessageTarget } from "../kilocode/context-pinning/chat-message-target" // kilocode_change
+import {
+	compactMessageImages,
+	findLastUserMessageIndex,
+	historyImageOptions,
+	requestImageOptions,
+} from "../kilocode/image-compaction/imageCompaction" // kilocode_change
 // kilocode_change end
 import { MessageQueueService } from "../message-queue/MessageQueueService"
 
@@ -1395,6 +1401,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Clear the pending content since it's now saved
 		this.userMessageContent = []
 	}
+
+	// kilocode_change start
+	/**
+	 * Keeps images in the API history small: the newest (not yet answered) user turn is capped
+	 * to the provider-safe request size, every earlier image the model has already seen is
+	 * shrunk to a compact JPEG. The compressed copy replaces the stored one.
+	 */
+	private async compactHistoryImages(): Promise<void> {
+		try {
+			const history = this.apiConversationHistory
+			const lastUserIndex = findLastUserMessageIndex(history)
+			const seen = compactMessageImages(
+				lastUserIndex >= 0 ? history.slice(0, lastUserIndex) : history,
+				historyImageOptions,
+			)
+			const pending = compactMessageImages(
+				lastUserIndex >= 0 ? history.slice(lastUserIndex) : [],
+				requestImageOptions,
+			)
+			if (!seen.changed && !pending.changed) return
+			this.apiConversationHistory = [...seen.messages, ...pending.messages]
+			await this.saveApiConversationHistory()
+		} catch (error) {
+			console.warn(`[Task#${this.taskId}] Image compaction failed:`, error)
+		}
+	}
+	// kilocode_change end
 
 	private async saveApiConversationHistory(): Promise<boolean> {
 		try {
@@ -5882,6 +5915,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// kilocode_change: reload the authoritative file after any compaction/approval wait.
 		if (taskDocumentEnabled) systemPrompt = await this.getSystemPrompt()
+
+		await this.compactHistoryImages() // kilocode_change
 
 		// Get the effective API history by filtering out condensed messages
 		// This allows non-destructive condensing where messages are tagged but not deleted,
