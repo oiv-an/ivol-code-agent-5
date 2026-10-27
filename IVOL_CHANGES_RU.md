@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.121. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.122. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -55,6 +55,8 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
   and cache parsed project history; large ignored folders do not require recursive scanning.
 - History writes are atomic and recoverable, including fixes for Windows save failures.
 - Task history is stored inside projects; checkpoint restores avoid false initialization timeouts.
+- Screenshots and attached images are shrunk automatically: new images are capped at 2000 px, and
+  images the model has already seen are kept as compact JPEGs in later requests.
 
 ## 7. Chat and integrations
 

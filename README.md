@@ -125,7 +125,7 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 ## Documentation and design history
 
-- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.121 (English content; historical filename retained).
+- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.122 (English content; historical filename retained).
 - [Release history](CHANGELOG.md): version-by-version changes, including Agent Manager recovery, scheduled reminders, browser consent, task-history performance and compression fixes.
 - [Project task storage](docs/project-task-storage.md): project-local history and migration behavior.
 - [Modern prompt audit](docs/modern-prompts-audit-2026-10-01.md): historical source audit and research; proposed prompt changes are not shipped features, and model/API claims require revalidation.
