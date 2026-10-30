@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.124. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.127. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -60,6 +60,8 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - Image generation and editing through the OpenAI-compatible provider (IVOL settings: model from the
   provider list + Test button). Results go to images_ivol/; the agent gets only the path and edits the
   original file.
+- Web search and image generation pinned to a chosen saved profile + model (separately); profile selector on
+  the IVOL page; MAX/MED/MIN presets always come from the selected profile.
 
 ## 7. Chat and integrations
 

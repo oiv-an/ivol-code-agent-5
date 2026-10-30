@@ -1,7 +1,12 @@
 import path from "path"
 import fs from "fs/promises"
 import * as vscode from "vscode"
-import { GenerateImageParams, IMAGE_GENERATION_MODEL_IDS, IMAGE_GENERATION_MODELS } from "@roo-code/types"
+import {
+	GenerateImageParams,
+	IMAGE_GENERATION_MODEL_IDS,
+	IMAGE_GENERATION_MODELS,
+	type ProviderSettings,
+} from "@roo-code/types"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -19,6 +24,7 @@ import {
 	getOpenAiImageGenerationModel,
 	type OpenAiInputImage,
 } from "../kilocode/image-generation/openAiImageGeneration"
+import { resolveToolSettings } from "../kilocode/pinned-tools/resolvePinnedTools"
 // kilocode_change end
 import type { ToolUse } from "../../shared/tools"
 
@@ -42,9 +48,11 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 		const provider = task.providerRef.deref()
 
 		// kilocode_change start: OpenAI-compatible Images API through the current profile
-		const openAiImageModel = getOpenAiImageGenerationModel(task.apiConfiguration)
-		if (openAiImageModel) {
-			await this.executeOpenAi(params, task, callbacks, openAiImageModel)
+		// Pinned image profile (IVOL settings) or the active profile's own settings.
+		const resolvedImage = await resolveToolSettings("imageGeneration", task.apiConfiguration, provider)
+		const openAiImageModel = getOpenAiImageGenerationModel(resolvedImage?.settings)
+		if (resolvedImage && openAiImageModel) {
+			await this.executeOpenAi(params, task, callbacks, openAiImageModel, resolvedImage.settings)
 			return
 		}
 		// kilocode_change end
@@ -284,6 +292,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 		task: Task,
 		callbacks: ToolCallbacks,
 		model: string,
+		imageSettings: ProviderSettings,
 	): Promise<void> {
 		const { handleError, pushToolResult, askApproval } = callbacks
 		const prompt = typeof params.prompt === "string" ? params.prompt.trim() : ""
@@ -356,7 +365,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 				return
 			}
 
-			const result = await generateOpenAiImage(task.apiConfiguration, model, prompt, {
+			const result = await generateOpenAiImage(imageSettings, model, prompt, {
 				signal: task.currentRequestAbortController?.signal,
 				...(inputImage && { inputImages: [inputImage] }),
 			})

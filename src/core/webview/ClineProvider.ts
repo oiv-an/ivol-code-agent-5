@@ -2404,6 +2404,10 @@ export class ClineProvider
 			autoCondenseContext,
 			autoCondenseContextPercent,
 			frozenMessagesBudgetPercent, // kilocode_change
+			ivolWebSearchProfileId, // kilocode_change
+			ivolWebSearchModelId, // kilocode_change
+			ivolImageGenerationProfileId, // kilocode_change
+			ivolImageGenerationModelId, // kilocode_change
 			soundEnabled,
 			ttsEnabled,
 			ttsSpeed,
@@ -2615,6 +2619,10 @@ export class ClineProvider
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			frozenMessagesBudgetPercent, // kilocode_change
+			ivolWebSearchProfileId, // kilocode_change
+			ivolWebSearchModelId, // kilocode_change
+			ivolImageGenerationProfileId, // kilocode_change
+			ivolImageGenerationModelId, // kilocode_change
 			uriScheme: vscode.env.uriScheme,
 			uiKind: vscode.UIKind[vscode.env.uiKind], // kilocode_change
 			kiloCodeWrapperProperties, // kilocode_change wrapper information
@@ -2968,6 +2976,12 @@ export class ClineProvider
 			autoCondenseContext: stateValues.autoCondenseContext ?? true,
 			autoCondenseContextPercent: stateValues.autoCondenseContextPercent ?? 90,
 			frozenMessagesBudgetPercent: stateValues.frozenMessagesBudgetPercent, // kilocode_change
+			// kilocode_change start: pinned tool profiles
+			ivolWebSearchProfileId: stateValues.ivolWebSearchProfileId,
+			ivolWebSearchModelId: stateValues.ivolWebSearchModelId,
+			ivolImageGenerationProfileId: stateValues.ivolImageGenerationProfileId,
+			ivolImageGenerationModelId: stateValues.ivolImageGenerationModelId,
+			// kilocode_change end
 			// taskHistory: stateValues.taskHistory ?? [], // kilocode_change
 			allowedCommands: stateValues.allowedCommands,
 			deniedCommands: stateValues.deniedCommands,

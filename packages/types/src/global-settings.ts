@@ -112,6 +112,12 @@ export const globalSettingsSchema = z.object({
 	autoCondenseContext: z.boolean().optional(),
 	autoCondenseContextPercent: z.number().optional(),
 	frozenMessagesBudgetPercent: z.number().optional(), // kilocode_change: share of the context window frozen messages may take
+	// kilocode_change start: pin web search / image generation to a saved OpenAI-compatible profile
+	ivolWebSearchProfileId: z.string().optional(),
+	ivolWebSearchModelId: z.string().optional(),
+	ivolImageGenerationProfileId: z.string().optional(),
+	ivolImageGenerationModelId: z.string().optional(),
+	// kilocode_change end
 	maxConcurrentFileReads: z.number().optional(),
 	allowVeryLargeReads: z.boolean().optional(), // kilocode_change
 

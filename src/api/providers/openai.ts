@@ -526,7 +526,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	): Pick<OpenAI.Chat.Completions.ChatCompletionCreateParams, "tools" | "tool_choice" | "parallel_tool_calls"> {
 		// Summaries and connection probes have no executor for local function calls.
 		if (metadata?.tool_choice === "none") return {}
-		const webSearchEnabled = this.options.openAiWebSearchEnabled ?? DEFAULT_OPENAI_WEB_SEARCH_ENABLED
+		// kilocode_change: pinned tool profiles are resolved by the task and passed in metadata
+		const webSearchEnabled =
+			metadata?.providerLocalTools?.webSearch ??
+			this.options.openAiWebSearchEnabled ??
+			DEFAULT_OPENAI_WEB_SEARCH_ENABLED
 		// Only force the OpenAI-specific serial-call flag when web search was
 		// explicitly enabled on the saved provider profile. Some compatible
 		// gateways (notably LiteLLM/Bedrock routes) reject the field entirely,
@@ -535,7 +539,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		const configuredTools = this.convertToolsForOpenAI(metadata?.tools) ?? []
 		// kilocode_change start: provider-local image generation tool (Images API)
 		const imageGenerationEnabled =
-			this.options.openAiImageGenerationEnabled === true && !!this.options.openAiImageGenerationModelId?.trim()
+			metadata?.providerLocalTools?.imageGeneration ??
+			(this.options.openAiImageGenerationEnabled === true && !!this.options.openAiImageGenerationModelId?.trim())
 		const providerToolNames = new Set<string>([
 			...(webSearchEnabled ? [OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME] : []),
 			...(imageGenerationEnabled ? [OPENAI_NATIVE_IMAGE_GENERATION_TOOL_NAME] : []),

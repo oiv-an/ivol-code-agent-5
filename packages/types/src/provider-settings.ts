@@ -856,7 +856,8 @@ export const modelIdKeys = [
 // kilocode_change start: only these non-secret fields may travel with task history.
 export const taskModelSelectionKeys = [
 	...modelIdKeys,
-	"modelPresets",
+	// kilocode_change: MAX/MED/MIN presets belong to the profile, never to a conversation snapshot,
+	// so another profile's (or an older) preset list can't override what Settings saved.
 	"activeModelPreset",
 	"reasoningEffort",
 	"enableReasoningEffort",

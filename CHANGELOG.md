@@ -1,5 +1,17 @@
 # IVOL Code Agent 5
 
+## 5.17.127
+
+- MAX/MED/MIN presets always come from the profile itself: a conversation no longer carries an older or another profile's preset list, so switching profiles in Settings or in the chat shows only that profile's presets (none when it has none).
+
+## 5.17.126
+
+- IVOL settings page: a profile selector at the top lets you configure any saved profile right on the page without switching the active profile.
+
+## 5.17.125
+
+- Web search and image generation can be pinned to a saved OpenAI-compatible profile and model in IVOL settings, separately for each tool. Switching the main provider no longer loses them; the tools are still offered only while the active provider is OpenAI-compatible. Models are loaded from the chosen profile without exposing its key to the settings page.
+
 ## 5.17.124
 
 - Image generation through your OpenAI-compatible provider: enable it in IVOL settings, pick the image model from the provider list, press Test to check it, and ask the agent to generate an image. Images are saved to images_ivol/ and the agent receives only the file path.

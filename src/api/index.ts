@@ -142,6 +142,9 @@ export interface ApiHandlerCreateMessageMetadata {
 	// kilocode_change: internal-only switch used by the dedicated Responses
 	// search worker after the primary Chat model has selected `web_search`.
 	forceWebSearch?: boolean
+	// kilocode_change: provider-local tools resolved by the task (pinned profiles in IVOL settings).
+	// When omitted, the OpenAI handler falls back to the active profile's own settings.
+	providerLocalTools?: { webSearch: boolean; imageGeneration: boolean }
 	/**
 	 * Optional array of tool names that the model is allowed to call.
 	 * When provided, all tool definitions are passed to the model (so it can reference

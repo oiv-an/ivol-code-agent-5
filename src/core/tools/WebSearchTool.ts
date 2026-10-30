@@ -1,4 +1,4 @@
-import { DEFAULT_OPENAI_WEB_SEARCH_ENABLED } from "@roo-code/types"
+import { resolveToolSettings } from "../kilocode/pinned-tools/resolvePinnedTools" // kilocode_change
 
 import { OpenAiCompatibleResponsesHandler } from "../../api/providers/openai-responses"
 import { formatResponse } from "../prompts/responses"
@@ -41,10 +41,11 @@ export class WebSearchTool extends BaseTool<"web_search"> {
 			return
 		}
 
-		const configuration = task.apiConfiguration
-		const searchEnabled = configuration.openAiWebSearchEnabled ?? DEFAULT_OPENAI_WEB_SEARCH_ENABLED
+		// kilocode_change: web search may be pinned to another saved OpenAI-compatible profile
+		const resolved = await resolveToolSettings("webSearch", task.apiConfiguration, task.providerRef?.deref())
+		const configuration = resolved?.settings ?? task.apiConfiguration
 
-		if (configuration.apiProvider !== "openai" || !searchEnabled) {
+		if (!resolved) {
 			const message =
 				"Native web search is unavailable for the active provider or is disabled in the OpenAI provider settings."
 			task.consecutiveMistakeCount++

@@ -1,4 +1,5 @@
 import * as fs from "fs"
+import { resolvePinnedToolAvailability } from "../kilocode/pinned-tools/resolvePinnedTools" // kilocode_change
 import * as path from "path"
 import * as vscode from "vscode"
 import os from "os"
@@ -6036,6 +6037,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 					: {}),
 				projectId: (await kiloConfig)?.project?.id, // kilocode_change: pass projectId for backend tracking (ignored by other providers)
+				// kilocode_change: web search / image generation may be pinned to another saved profile
+				...(shouldIncludeTools && this.apiConfiguration.apiProvider === "openai"
+					? {
+							providerLocalTools: await resolvePinnedToolAvailability(
+								this.apiConfiguration,
+								this.providerRef.deref(),
+							),
+						}
+					: {}),
 				// kilocode_change: child tasks (spawned via new_task tool) are parallel agents
 				...(this.parentTaskId ? { feature: "parallel-agent" } : {}),
 			}

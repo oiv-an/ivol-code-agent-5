@@ -204,6 +204,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		autoCondenseContext,
 		autoCondenseContextPercent,
 		frozenMessagesBudgetPercent, // kilocode_change
+		ivolWebSearchProfileId, // kilocode_change
+		ivolWebSearchModelId, // kilocode_change
+		ivolImageGenerationProfileId, // kilocode_change
+		ivolImageGenerationModelId, // kilocode_change
 		browserToolEnabled,
 		browserViewportSize,
 		enableCheckpoints,
@@ -335,6 +339,21 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
 	}, [editingApiConfigName])
+
+	// kilocode_change start: pick which saved profile is edited (Providers tab and IVOL page)
+	const selectEditingProfile = (configName: string) => {
+		checkUnsaveChanges(() => {
+			setEditingApiConfigName(configName)
+			// Set flag to prevent extensionState sync while loading
+			isLoadingProfileForEditing.current = true
+			// Request the profile's configuration for editing
+			vscode.postMessage({
+				type: "getProfileConfigurationForEditing",
+				text: configName,
+			})
+		})
+	}
+	// kilocode_change end
 
 	// Temporary way of making sure that the Settings view updates its local state properly when receiving
 	// api keys from providers that support url callbacks. This whole Settings View needs proper with this local state thing later
@@ -574,6 +593,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 					autoCondenseContext,
 					autoCondenseContextPercent,
 					frozenMessagesBudgetPercent, // kilocode_change
+					ivolWebSearchProfileId: ivolWebSearchProfileId ?? "", // kilocode_change
+					ivolWebSearchModelId: ivolWebSearchModelId ?? "", // kilocode_change
+					ivolImageGenerationProfileId: ivolImageGenerationProfileId ?? "", // kilocode_change
+					ivolImageGenerationModelId: ivolImageGenerationModelId ?? "", // kilocode_change
 					browserToolEnabled: browserToolEnabled ?? true,
 					soundEnabled: soundEnabled ?? true,
 					soundVolume: soundVolume ?? 0.5,
@@ -1048,10 +1071,16 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 							<IvolSettings
 								apiConfiguration={apiConfiguration}
 								profileName={editingApiConfigName}
+								activeProfileName={currentApiConfigName} // kilocode_change
+								onSelectProfile={selectEditingProfile} // kilocode_change
 								setApiConfigurationField={setApiConfigurationField}
 								browserMode={cachedState.browserMode}
 								browserOSAllowTaskActions={cachedState.browserOSAllowTaskActions}
 								frozenMessagesBudgetPercent={frozenMessagesBudgetPercent}
+								ivolWebSearchProfileId={ivolWebSearchProfileId}
+								ivolWebSearchModelId={ivolWebSearchModelId}
+								ivolImageGenerationProfileId={ivolImageGenerationProfileId}
+								ivolImageGenerationModelId={ivolImageGenerationModelId}
 								setCachedStateField={setCachedStateField}
 							/>
 						)}
@@ -1067,18 +1096,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>((props, ref)
 										currentApiConfigName={editingApiConfigName}
 										activeApiConfigName={currentApiConfigName}
 										listApiConfigMeta={listApiConfigMeta}
-										onSelectConfig={(configName: string) => {
-											checkUnsaveChanges(() => {
-												setEditingApiConfigName(configName)
-												// Set flag to prevent extensionState sync while loading
-												isLoadingProfileForEditing.current = true
-												// Request the profile's configuration for editing
-												vscode.postMessage({
-													type: "getProfileConfigurationForEditing",
-													text: configName,
-												})
-											})
-										}}
+										onSelectConfig={selectEditingProfile} // kilocode_change: shared with the IVOL page
 										onActivateConfig={(configName: string) => {
 											vscode.postMessage({ type: "loadApiConfiguration", text: configName })
 										}}

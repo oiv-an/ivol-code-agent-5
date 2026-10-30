@@ -1358,13 +1358,43 @@ export const webviewMessageHandler = async (
 			// kilocode_change end
 			break
 		}
+		// kilocode_change start: model catalog of a saved profile for pinned search/image settings.
+		// Credentials are read on the extension side and never sent to the webview.
+		case "requestPinnedProfileModels": {
+			const profileId = typeof message.values?.profileId === "string" ? message.values.profileId.trim() : ""
+			let openAiModels: string[] = []
+			let error: string | undefined
+			try {
+				if (!profileId) throw new Error("No profile selected.")
+				const profile = await provider.providerSettingsManager.getProfile({ id: profileId })
+				if (profile.apiProvider !== "openai") throw new Error("The selected profile is not OpenAI-compatible.")
+				if (!profile.openAiBaseUrl) throw new Error("The selected profile has no Base URL.")
+				const headers = profile.openAiHeaders ?? {}
+				const tls = profile.allowInsecureTls === true
+				openAiModels = await getOpenAiModels(profile.openAiBaseUrl, profile.openAiApiKey, headers, tls)
+				if (openAiModels.length === 0) {
+					openAiModels = await getOpenAiModels(profile.openAiBaseUrl, undefined, headers, tls)
+				}
+			} catch (err) {
+				error = err instanceof Error ? err.message : String(err)
+			}
+			provider.postMessageToWebview({
+				type: "openAiModels",
+				openAiModels,
+				requestId: message.requestId,
+				...(error ? { error } : {}),
+			})
+			break
+		}
+		// kilocode_change end
 		// kilocode_change start: settings "Test" button for the image generation model
 		case "testImageGeneration": {
 			const values = message.values ?? {}
 			const model = typeof values.model === "string" ? values.model.trim() : ""
-			const baseUrl = typeof values.baseUrl === "string" ? values.baseUrl : undefined
-			const apiKey = typeof values.apiKey === "string" ? values.apiKey : undefined
-			const openAiHeaders = Object.entries(values.openAiHeaders ?? {}).reduce<Record<string, string>>(
+			let baseUrl = typeof values.baseUrl === "string" ? values.baseUrl : undefined
+			let apiKey = typeof values.apiKey === "string" ? values.apiKey : undefined
+			let allowInsecureTls = values.allowInsecureTls === true
+			let openAiHeaders = Object.entries(values.openAiHeaders ?? {}).reduce<Record<string, string>>(
 				(headers, [headerName, headerValue]) => {
 					if (typeof headerValue === "string") headers[headerName] = headerValue
 					return headers
@@ -1374,6 +1404,17 @@ export const webviewMessageHandler = async (
 			const startedAt = Date.now()
 			try {
 				if (!model) throw new Error("Select an image generation model first.")
+				// A pinned saved profile supplies its own credentials; they never reach the webview.
+				const pinnedProfileId = typeof values.profileId === "string" ? values.profileId.trim() : ""
+				if (pinnedProfileId) {
+					const profile = await provider.providerSettingsManager.getProfile({ id: pinnedProfileId })
+					if (profile.apiProvider !== "openai")
+						throw new Error("The selected profile is not OpenAI-compatible.")
+					baseUrl = profile.openAiBaseUrl
+					apiKey = profile.openAiApiKey
+					openAiHeaders = profile.openAiHeaders ?? {}
+					allowInsecureTls = profile.allowInsecureTls === true
+				}
 				const { generateOpenAiImage } = await import("../kilocode/image-generation/openAiImageGeneration")
 				const result = await generateOpenAiImage(
 					{
@@ -1381,7 +1422,7 @@ export const webviewMessageHandler = async (
 						openAiBaseUrl: baseUrl,
 						openAiApiKey: apiKey,
 						openAiHeaders,
-						allowInsecureTls: values.allowInsecureTls === true,
+						allowInsecureTls,
 					},
 					model,
 					"A small red apple on a white background, simple flat illustration.",

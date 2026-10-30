@@ -837,6 +837,12 @@ export type ExtensionState = Pick<
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
 	frozenMessagesBudgetPercent?: number // kilocode_change
+	// kilocode_change start: pinned tool profiles
+	ivolWebSearchProfileId?: string
+	ivolWebSearchModelId?: string
+	ivolImageGenerationProfileId?: string
+	ivolImageGenerationModelId?: string
+	// kilocode_change end
 	marketplaceItems?: MarketplaceItem[]
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
@@ -983,6 +989,7 @@ export interface WebviewMessage {
 		| "requestRouterModels"
 		| "requestOpenAiModels"
 		| "testImageGeneration" // kilocode_change
+		| "requestPinnedProfileModels" // kilocode_change
 		| "requestOllamaModels"
 		| "requestLmStudioModels"
 		| "requestRooModels"
