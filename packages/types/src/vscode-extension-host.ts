@@ -300,6 +300,7 @@ export interface ExtensionMessage {
 		| "listApiConfig"
 		| "routerModels"
 		| "openAiModels"
+		| "imageGenerationTestResult" // kilocode_change
 		| "ollamaModels"
 		| "lmStudioModels"
 		| "vsCodeLmModels"
@@ -981,6 +982,7 @@ export interface WebviewMessage {
 		| "flushRouterModels"
 		| "requestRouterModels"
 		| "requestOpenAiModels"
+		| "testImageGeneration" // kilocode_change
 		| "requestOllamaModels"
 		| "requestLmStudioModels"
 		| "requestRooModels"

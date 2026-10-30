@@ -409,6 +409,8 @@ const openAiSchema = baseProviderSettingsSchema.extend({
 	openAiStreamingEnabled: z.boolean().optional(),
 	openAiWebSearchEnabled: z.boolean().optional(),
 	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
+	openAiImageGenerationEnabled: z.boolean().optional(), // kilocode_change: native image generation tool
+	openAiImageGenerationModelId: z.string().optional(), // kilocode_change: user-selected image model
 	openAiHostHeader: z.string().optional(), // Keep temporarily for backward compatibility during migration.
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
@@ -426,6 +428,8 @@ const openAiResponsesSchema = baseProviderSettingsSchema.extend({
 	openAiStreamingEnabled: z.boolean().optional(),
 	openAiWebSearchEnabled: z.boolean().optional(),
 	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
+	openAiImageGenerationEnabled: z.boolean().optional(), // kilocode_change: native image generation tool
+	openAiImageGenerationModelId: z.string().optional(), // kilocode_change: user-selected image model
 	openAiHostHeader: z.string().optional(), // Keep temporarily for backward compatibility during migration.
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })

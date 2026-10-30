@@ -90,7 +90,9 @@ export function isToolAllowedForMode(
 	// Native web search is exposed provider-specifically by the OpenAI handler.
 	// It is read-only and may be used in every mode; the executor performs the
 	// provider/setting check again before making a network request.
-	if (tool === "web_search") {
+	// kilocode_change: generate_image is likewise injected by the OpenAI handler when
+	// enabled in settings; the executor re-checks settings and asks for approval.
+	if (tool === "web_search" || tool === "generate_image") {
 		return true
 	}
 

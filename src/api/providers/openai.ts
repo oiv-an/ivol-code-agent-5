@@ -63,6 +63,42 @@ const OPENAI_NATIVE_WEB_SEARCH_TOOL: OpenAI.Chat.ChatCompletionFunctionTool = {
 }
 // kilocode_change end
 
+// kilocode_change start: provider-local image generation through the Images API.
+// Exposed only when the profile enables it and a model is selected in settings.
+export const OPENAI_NATIVE_IMAGE_GENERATION_TOOL_NAME = "generate_image"
+
+const OPENAI_NATIVE_IMAGE_GENERATION_TOOL: OpenAI.Chat.ChatCompletionFunctionTool = {
+	type: "function",
+	function: {
+		name: OPENAI_NATIVE_IMAGE_GENERATION_TOOL_NAME,
+		strict: true,
+		description:
+			"Generate a new image from a text description, or edit an existing image, using the image model configured in settings. Use it whenever the user asks to create, draw or generate a picture, illustration, icon, logo or similar, or to change/edit/retouch an existing image or screenshot. To edit, pass the source image in `image` and describe the changes in `prompt`. The result is always saved in the workspace folder images_ivol/; the result tells you the saved path but does not attach the image. Read the file afterwards only if you actually need to inspect it.",
+		parameters: {
+			type: "object",
+			properties: {
+				prompt: {
+					type: "string",
+					description: "Detailed description of the image to generate.",
+				},
+				path: {
+					type: ["string", "null"],
+					description:
+						"Optional short file name for the image (for example 'sunset.png'). It is always saved inside images_ivol/. Use null to let the tool choose a name.",
+				},
+				image: {
+					type: ["string", "null"],
+					description:
+						"Source image to edit. Either a file path (relative to the workspace or absolute; PNG, JPG, JPEG or WEBP), or the literal value 'attached' to use the most recent image the user attached or pasted in this chat. For images generated earlier or saved in the project (e.g. images_ivol/...), always pass the file path: it sends the original full-quality file. Use 'attached' only for images that exist only in the chat. Use null to generate a new image from scratch.",
+				},
+			},
+			required: ["prompt", "path", "image"],
+			additionalProperties: false,
+		},
+	},
+}
+// kilocode_change end
+
 // kilocode_change start: personal fork prompt-cache compatibility
 type OpenAiChatMessage = OpenAI.Chat.ChatCompletionMessageParam
 
@@ -497,15 +533,24 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		// so an implicit default must preserve the legacy omit-unless-true rule.
 		const forceSerialWebSearch = this.options.openAiWebSearchEnabled === true
 		const configuredTools = this.convertToolsForOpenAI(metadata?.tools) ?? []
-		const tools = webSearchEnabled
-			? [
-					...configuredTools.filter(
-						(tool) =>
-							tool?.type !== "function" || tool.function?.name !== OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME,
-					),
-					OPENAI_NATIVE_WEB_SEARCH_TOOL,
-				]
-			: configuredTools
+		// kilocode_change start: provider-local image generation tool (Images API)
+		const imageGenerationEnabled =
+			this.options.openAiImageGenerationEnabled === true && !!this.options.openAiImageGenerationModelId?.trim()
+		const providerToolNames = new Set<string>([
+			...(webSearchEnabled ? [OPENAI_NATIVE_WEB_SEARCH_TOOL_NAME] : []),
+			...(imageGenerationEnabled ? [OPENAI_NATIVE_IMAGE_GENERATION_TOOL_NAME] : []),
+		])
+		const tools =
+			providerToolNames.size > 0
+				? [
+						...configuredTools.filter(
+							(tool) => tool?.type !== "function" || !providerToolNames.has(tool.function?.name),
+						),
+						...(webSearchEnabled ? [OPENAI_NATIVE_WEB_SEARCH_TOOL] : []),
+						...(imageGenerationEnabled ? [OPENAI_NATIVE_IMAGE_GENERATION_TOOL] : []),
+					]
+				: configuredTools
+		// kilocode_change end
 
 		if (tools.length === 0) {
 			return {}

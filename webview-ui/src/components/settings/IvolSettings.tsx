@@ -11,6 +11,7 @@ import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
 import { PersonalBrowserSettings } from "./PersonalBrowserSettings"
 import { WebSearchSettings } from "./WebSearchSettings"
+import { OpenAiImageGenerationSettings } from "./OpenAiImageGenerationSettings" // kilocode_change
 import { TelegramSettings } from "./TelegramSettings"
 import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings"
 
@@ -81,6 +82,14 @@ export function IvolSettings({
 						setApiConfigurationField={setApiConfigurationField}
 					/>
 				)}
+				{/* kilocode_change start: native image generation (Images API) */}
+				{apiConfiguration.apiProvider === "openai" && (
+					<OpenAiImageGenerationSettings
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setApiConfigurationField}
+					/>
+				)}
+				{/* kilocode_change end */}
 			</Section>
 			<SectionHeader>{t("settings:ivol.memory")}</SectionHeader>
 			<Section>

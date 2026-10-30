@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.124
+
+- Image generation through your OpenAI-compatible provider: enable it in IVOL settings, pick the image model from the provider list, press Test to check it, and ask the agent to generate an image. Images are saved to images_ivol/ and the agent receives only the file path.
+- The agent can also edit an existing image: a file in the project or the image you attached in the chat, with a description of the changes (OpenAI Images API /images/edits).
+
 ## 5.17.122
 
 - Automatically shrink screenshots and attached images: new images are capped at 2000 px so providers no longer reject the request, and images the model has already seen are kept as compact JPEGs in later requests.

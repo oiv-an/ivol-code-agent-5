@@ -58,6 +58,8 @@ export const openAIProviderSchema = baseProviderSchema.extend({
 	openAiStreamingEnabled: z.boolean().optional(),
 	openAiWebSearchEnabled: z.boolean().optional(),
 	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
+	openAiImageGenerationEnabled: z.boolean().optional(), // kilocode_change: native image generation tool
+	openAiImageGenerationModelId: z.string().optional(), // kilocode_change: user-selected image model
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
 
@@ -75,6 +77,8 @@ export const openAIResponsesProviderSchema = baseProviderSchema.extend({
 	openAiStreamingEnabled: z.boolean().optional(),
 	openAiWebSearchEnabled: z.boolean().optional(),
 	openAiWebSearchModelId: z.string().optional(), // kilocode_change: dedicated model for native web-search requests
+	openAiImageGenerationEnabled: z.boolean().optional(), // kilocode_change: native image generation tool
+	openAiImageGenerationModelId: z.string().optional(), // kilocode_change: user-selected image model
 	openAiHeaders: z.record(z.string(), z.string()).optional(),
 })
 // kilocode_change end

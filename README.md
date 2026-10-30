@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.122.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.124.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -67,6 +67,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - When compression fails, work pauses for an explicit **Retry compression**; there is no bypass that continues ordinary work without the required compression. If the task-memory update itself failed, retry that step first. A verified update is retained across model changes and window reloads. Model, operation and technical details of failures are shown.
 - Compression requests do not send screenshots and end with an explicit summary request. This prevents empty summaries on large or image-heavy histories.
 - Screenshots and attached images are shrunk automatically: new images are capped at 2000 px so providers accept them, and images the model has already seen stay in later requests as compact JPEGs.
+- Image generation and editing through the OpenAI-compatible provider: enable it in IVOL settings, pick the image model from the provider list and press Test. The agent saves results to images_ivol/, receives only the file path, and edits the original file when asked (Images API, with a Responses API fallback for editing).
 - **Frozen messages**: you can freeze important messages so they are sent with every request, even after compression.
 - The agent replies in your language, while code and memory/instruction files stay in English.
 
@@ -125,7 +126,7 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 ## Documentation and design history
 
-- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.122 (English content; historical filename retained).
+- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.124 (English content; historical filename retained).
 - [Release history](CHANGELOG.md): version-by-version changes, including Agent Manager recovery, scheduled reminders, browser consent, task-history performance and compression fixes.
 - [Project task storage](docs/project-task-storage.md): project-local history and migration behavior.
 - [Modern prompt audit](docs/modern-prompts-audit-2026-10-01.md): historical source audit and research; proposed prompt changes are not shipped features, and model/API claims require revalidation.

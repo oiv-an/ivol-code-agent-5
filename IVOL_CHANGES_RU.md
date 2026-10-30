@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.122. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.124. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -57,6 +57,9 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - Task history is stored inside projects; checkpoint restores avoid false initialization timeouts.
 - Screenshots and attached images are shrunk automatically: new images are capped at 2000 px, and
   images the model has already seen are kept as compact JPEGs in later requests.
+- Image generation and editing through the OpenAI-compatible provider (IVOL settings: model from the
+  provider list + Test button). Results go to images_ivol/; the agent gets only the path and edits the
+  original file.
 
 ## 7. Chat and integrations
 

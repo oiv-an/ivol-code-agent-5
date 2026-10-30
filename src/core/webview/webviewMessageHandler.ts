@@ -1358,6 +1358,60 @@ export const webviewMessageHandler = async (
 			// kilocode_change end
 			break
 		}
+		// kilocode_change start: settings "Test" button for the image generation model
+		case "testImageGeneration": {
+			const values = message.values ?? {}
+			const model = typeof values.model === "string" ? values.model.trim() : ""
+			const baseUrl = typeof values.baseUrl === "string" ? values.baseUrl : undefined
+			const apiKey = typeof values.apiKey === "string" ? values.apiKey : undefined
+			const openAiHeaders = Object.entries(values.openAiHeaders ?? {}).reduce<Record<string, string>>(
+				(headers, [headerName, headerValue]) => {
+					if (typeof headerValue === "string") headers[headerName] = headerValue
+					return headers
+				},
+				{},
+			)
+			const startedAt = Date.now()
+			try {
+				if (!model) throw new Error("Select an image generation model first.")
+				const { generateOpenAiImage } = await import("../kilocode/image-generation/openAiImageGeneration")
+				const result = await generateOpenAiImage(
+					{
+						apiProvider: "openai",
+						openAiBaseUrl: baseUrl,
+						openAiApiKey: apiKey,
+						openAiHeaders,
+						allowInsecureTls: values.allowInsecureTls === true,
+					},
+					model,
+					"A small red apple on a white background, simple flat illustration.",
+				)
+				const mime = result.extension === "jpg" ? "jpeg" : result.extension
+				provider.postMessageToWebview({
+					type: "imageGenerationTestResult",
+					requestId: message.requestId,
+					success: true,
+					values: {
+						model,
+						bytes: result.data.length,
+						durationMs: Date.now() - startedAt,
+						preview: `data:image/${mime};base64,${result.data.toString("base64")}`,
+					},
+				})
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				provider.log(`[ImageGeneration] Test failed for model ${model}: ${errorMessage}`)
+				provider.postMessageToWebview({
+					type: "imageGenerationTestResult",
+					requestId: message.requestId,
+					success: false,
+					error: errorMessage,
+					values: { model, durationMs: Date.now() - startedAt },
+				})
+			}
+			break
+		}
+		// kilocode_change end
 		// kilocode_change start: hidden catalogs cannot initiate provider discovery
 		case "requestVsCodeLmModels":
 			provider.log("[Models] Ignored VS Code LM model request in personal build")
