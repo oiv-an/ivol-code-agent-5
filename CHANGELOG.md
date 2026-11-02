@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.128
+
+- Chat messages with dollar amounts (for example "$1000 ... $440 a year") now display and copy as normal text instead of being turned into broken math formulas.
+
 ## 5.17.127
 
 - MAX/MED/MIN presets always come from the profile itself: a conversation no longer carries an older or another profile's preset list, so switching profiles in Settings or in the chat shows only that profile's presets (none when it has none).

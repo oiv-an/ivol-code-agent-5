@@ -308,7 +308,8 @@ const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
 			<ReactMarkdown
 				remarkPlugins={[
 					remarkGfm,
-					remarkMath,
+					// kilocode_change: single "$" is treated as currency, not inline math ("$1000 ... $440" broke text)
+					[remarkMath, { singleDollarTextMath: false }],
 					() => {
 						return (tree: any) => {
 							visit(tree, "code", (node: any) => {
