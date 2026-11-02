@@ -38,6 +38,8 @@ vi.mock("fs/promises", () => ({
 		readFile: mockReadFile,
 		readdir: mockReaddir,
 		lstat: mockLstat,
+		mkdir: vi.fn(), // kilocode_change
+		writeFile: vi.fn(), // kilocode_change
 	},
 }))
 
@@ -50,6 +52,13 @@ vi.mock("../../../../services/roo-config", () => ({
 }))
 
 import { loadRuleFiles, addCustomInstructions } from "../custom-instructions"
+// kilocode_change start
+import fs from "fs/promises"
+import {
+	ensureGlobalInstructions,
+	getGlobalInstructionsPath,
+} from "../../../kilocode/webview/globalInstructionsHandler"
+// kilocode_change end
 
 describe("custom-instructions global .roo support", () => {
 	const mockCwd = "/mock/project"
@@ -73,6 +82,44 @@ describe("custom-instructions global .roo support", () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
+
+	// kilocode_change start
+	it("creates the shared instruction file exclusively and preserves existing rules", async () => {
+		vi.mocked(fs.mkdir).mockResolvedValue(undefined)
+		vi.mocked(fs.writeFile).mockResolvedValueOnce(undefined)
+		const filePath = getGlobalInstructionsPath()
+		expect(await ensureGlobalInstructions()).toBe(
+			path.join(mockHomeDir, ".kilocode", "rules", "GLOBAL_INSTRUCTIONS.md"),
+		)
+		expect(fs.writeFile).toHaveBeenCalledWith(filePath, expect.stringContaining(filePath), {
+			encoding: "utf8",
+			flag: "wx",
+		})
+		vi.mocked(fs.writeFile).mockRejectedValueOnce(Object.assign(new Error("exists"), { code: "EEXIST" }))
+		expect(await ensureGlobalInstructions()).toBe(filePath)
+		vi.mocked(fs.writeFile).mockRejectedValueOnce(Object.assign(new Error("denied"), { code: "EACCES" }))
+		await expect(ensureGlobalInstructions()).rejects.toThrow("denied")
+	})
+
+	it("rereads shared instructions for another project after an edit", async () => {
+		mockStat.mockImplementation(
+			async (p) =>
+				({
+					isDirectory: () => String(p) === path.join(globalRooDir, "rules"),
+					isFile: () => true,
+				}) as any,
+		)
+		mockReaddir.mockResolvedValue([
+			{ name: "GLOBAL_INSTRUCTIONS.md", isFile: () => true, isSymbolicLink: () => false },
+		] as any)
+		mockReadFile.mockResolvedValue("First shared instruction")
+		expect(await loadRuleFiles(mockCwd)).toContain("First shared instruction")
+		mockReadFile.mockResolvedValue("Updated shared instruction")
+		const next = await loadRuleFiles("/another/project")
+		expect(next).toContain("Updated shared instruction")
+		expect(next).not.toContain("First shared instruction")
+	})
+	// kilocode_change end
 
 	describe("loadRuleFiles", () => {
 		it("should load global rules only when project rules do not exist", async () => {

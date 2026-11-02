@@ -15,6 +15,7 @@ import { OpenAiImageGenerationSettings } from "./OpenAiImageGenerationSettings" 
 import { PinnedToolSettings } from "./PinnedToolSettings" // kilocode_change
 import { TelegramSettings } from "./TelegramSettings"
 import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings"
+import { GlobalInstructionsSettings } from "./GlobalInstructionsSettings"
 
 export function IntelligentTaskSettings({
 	enabled,
@@ -84,6 +85,7 @@ export function IvolSettings({
 	return (
 		<div data-testid="ivol-settings">
 			<SectionHeader description={t("settings:ivol.description")}>{t("settings:sections.ivol")}</SectionHeader>
+			<GlobalInstructionsSettings />
 			<SectionHeader>{t("settings:ivol.profile", { name: profileName })}</SectionHeader>
 			<Section>
 				{/* kilocode_change start: choose which saved profile these settings edit */}

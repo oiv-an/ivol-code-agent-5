@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.128. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.129. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 

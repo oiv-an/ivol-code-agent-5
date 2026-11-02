@@ -551,6 +551,12 @@ export const webviewMessageHandler = async (
 			await handleTelegram(provider, message)
 			break
 		}
+		case "getGlobalInstructions":
+		case "openGlobalInstructions": {
+			const { handleGlobalInstructions } = await import("../kilocode/webview/globalInstructionsHandler")
+			await handleGlobalInstructions(provider, message.type === "openGlobalInstructions")
+			break
+		}
 		case "getProjectTaskStorage":
 		case "setProjectTaskStorage":
 		case "copyTasksToProject": {

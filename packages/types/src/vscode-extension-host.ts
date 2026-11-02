@@ -274,6 +274,7 @@ export interface ExtensionMessage {
 	advisorRequestId?: string // kilocode_change
 	advisorState?: AdvisorState // kilocode_change
 	projectTaskStorage?: ProjectTaskStorageState // kilocode_change
+	globalInstructions?: { path: string; error?: string } // kilocode_change
 	telegramState?: TelegramState // kilocode_change
 	telegramSettingsSaved?: boolean // kilocode_change
 	telegramRequestId?: string // kilocode_change
@@ -282,6 +283,7 @@ export interface ExtensionMessage {
 		| "telegramState" // kilocode_change
 		| "telegramSettingsSaved" // kilocode_change
 		| "projectTaskStorage" // kilocode_change
+		| "globalInstructions" // kilocode_change
 		| "action"
 		| "state"
 		| "selectedImages"
@@ -946,6 +948,8 @@ export interface WebviewMessage {
 		| "saveTelegramSettings"
 		| "activateTelegram"
 		| "deactivateTelegram"
+		| "getGlobalInstructions" // kilocode_change
+		| "openGlobalInstructions" // kilocode_change
 		| "getProjectTaskStorage"
 		| "setProjectTaskStorage"
 		| "copyTasksToProject"

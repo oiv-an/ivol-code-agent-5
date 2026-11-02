@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.129
+
+- Open and edit a shared global instructions file from IVOL settings, with its full location shown and no automatic migration of existing rules.
+
 ## 5.17.128
 
 - Chat messages with dollar amounts (for example "$1000 ... $440 a year") now display and copy as normal text instead of being turned into broken math formulas.

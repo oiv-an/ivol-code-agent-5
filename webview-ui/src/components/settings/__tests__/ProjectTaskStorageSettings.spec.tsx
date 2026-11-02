@@ -2,6 +2,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { vscode } from "@src/utils/vscode"
 import { ProjectTaskStorageSettings } from "../ProjectTaskStorageSettings"
+import { GlobalInstructionsSettings } from "../GlobalInstructionsSettings"
+
+vi.mock("../SearchableSetting", () => ({
+	SearchableSetting: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
 
 vi.mock("@src/utils/vscode", () => ({ vscode: { postMessage: vi.fn() } }))
 vi.mock("@src/i18n/TranslationContext", () => ({ useAppTranslation: () => ({ t: (key: string) => key }) }))
@@ -25,6 +30,35 @@ function respond(extra: Record<string, unknown> = {}) {
 	)
 }
 beforeEach(() => vi.clearAllMocks())
+
+it("shows the canonical global rules path and opens it only on click", () => {
+	render(<GlobalInstructionsSettings />)
+	expect(vscode.postMessage).toHaveBeenLastCalledWith({ type: "getGlobalInstructions" })
+	act(() =>
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: {
+					type: "globalInstructions",
+					globalInstructions: { path: "/home/user/.kilocode/rules/GLOBAL_INSTRUCTIONS.md" },
+				},
+			}),
+		),
+	)
+	expect(screen.getByText("/home/user/.kilocode/rules/GLOBAL_INSTRUCTIONS.md")).toBeVisible()
+	fireEvent.click(screen.getByRole("button", { name: "settings:globalInstructions.title" }))
+	expect(vscode.postMessage).toHaveBeenLastCalledWith({ type: "openGlobalInstructions" })
+	act(() =>
+		window.dispatchEvent(
+			new MessageEvent("message", {
+				data: {
+					type: "globalInstructions",
+					globalInstructions: { path: "/rules", error: "Permission denied" },
+				},
+			}),
+		),
+	)
+	expect(screen.getByRole("alert")).toHaveTextContent("Permission denied")
+})
 
 describe("project task storage settings", () => {
 	it("loads settings and only enables local storage on explicit interaction", () => {

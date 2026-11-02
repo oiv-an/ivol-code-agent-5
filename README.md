@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.128.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.129.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -84,6 +84,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - One checkbox approves all current and future tools of a selected MCP server.
 - Completed root tasks remain open for follow-up. A notification appears 5 minutes after a task finishes if you left the editor.
 - A dedicated **IVOL settings** section brings together task memory, storage, Telegram, personal browser, web search and model presets.
+- **Global rules:** open one shared instruction file directly from IVOL settings, with its full path displayed. Ask the agent from any project to add rules for all projects on the same extension host. Saved edits apply to subsequent requests while the rule is enabled; existing project rules and settings are not migrated automatically.
 - Dollar amounts in replies (for example "$1000 … $440") are shown as plain text; only `$$…$$` blocks render as math formulas.
 
 ### Task history and checkpoints
@@ -128,7 +129,7 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 ## Documentation and design history
 
-- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.128 (English content; historical filename retained).
+- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.129 (English content; historical filename retained).
 - [Release history](CHANGELOG.md): version-by-version changes, including Agent Manager recovery, scheduled reminders, browser consent, task-history performance and compression fixes.
 - [Project task storage](docs/project-task-storage.md): project-local history and migration behavior.
 - [Modern prompt audit](docs/modern-prompts-audit-2026-10-01.md): historical source audit and research; proposed prompt changes are not shipped features, and model/API claims require revalidation.
