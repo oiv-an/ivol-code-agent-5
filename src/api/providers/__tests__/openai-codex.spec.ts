@@ -10,27 +10,42 @@ vi.mock("../fetchers/modelCache", () => ({
 	getModelsFromCache: (...args: unknown[]) => getModelsFromCacheMock(...args),
 }))
 
+// kilocode_change start: models come only from the account catalog (mocked here)
+const accountCatalog = {
+	"gpt-6.1-sol": {
+		contextWindow: 500_000,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max", "ultra"],
+		reasoningEffort: "low",
+	},
+	"gpt-5.6-sol": {
+		contextWindow: 370_000,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh", "max"],
+		reasoningEffort: "low",
+	},
+	"gpt-5.5": {
+		contextWindow: 370_000,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["low", "medium", "high", "xhigh"],
+		reasoningEffort: "medium",
+	},
+}
+// kilocode_change end
+
 describe("OpenAiCodexHandler.getModel", () => {
 	beforeEach(() => {
 		getModelsFromCacheMock.mockReset()
-		getModelsFromCacheMock.mockReturnValue(undefined)
+		getModelsFromCacheMock.mockReturnValue(accountCatalog) // kilocode_change
 	})
 
+	// kilocode_change start
 	it.each([
+		["gpt-6.1-sol", "low"],
 		["gpt-5.6-sol", "low"],
-		["gpt-5.6-terra", "medium"],
-		["gpt-5.6-luna", "medium"],
 		["gpt-5.5", "medium"],
-		["gpt-5.4-mini", "medium"],
-		["gpt-5.3-codex-spark", "high"],
-		["gpt-5.1", "medium"],
-		["gpt-5", "medium"],
-		["gpt-5.1-codex", "medium"],
-		["gpt-5-codex", "medium"],
-		["gpt-5-codex-mini", "medium"],
-	] as const)("returns registered model %s", (apiModelId, expectedEffort) => {
-		const handler = new OpenAiCodexHandler({ apiModelId })
-		const model = handler.getModel()
+	] as const)("returns catalog model %s", (apiModelId, expectedEffort) => {
+		const model = new OpenAiCodexHandler({ apiModelId }).getModel()
 
 		expect(model.id).toBe(apiModelId)
 		expect(model.info.reasoningEffort).toBe(expectedEffort)
@@ -38,13 +53,24 @@ describe("OpenAiCodexHandler.getModel", () => {
 		expect(model.info.supportsPromptCache).toBe(true)
 	})
 
-	it("should fall back to default model when an invalid model id is provided", () => {
-		const handler = new OpenAiCodexHandler({ apiModelId: "not-a-real-model" })
-		const model = handler.getModel()
-
+	it("falls back to the catalog default for a model the subscription no longer offers", () => {
+		const model = new OpenAiCodexHandler({ apiModelId: "gpt-5.1-codex-max" }).getModel()
 		expect(model.id).toBe("gpt-5.6-sol")
-		expect(model.info).toBeDefined()
 	})
+
+	it("uses the first catalog model when the preferred default is absent", () => {
+		getModelsFromCacheMock.mockReturnValue({ "gpt-6.1-sol": accountCatalog["gpt-6.1-sol"] })
+		expect(new OpenAiCodexHandler({ apiModelId: "old-model" }).getModel().id).toBe("gpt-6.1-sol")
+	})
+
+	it("keeps the saved model id before the catalog is loaded", () => {
+		getModelsFromCacheMock.mockReturnValue(undefined)
+		const model = new OpenAiCodexHandler({ apiModelId: "gpt-6-astra" }).getModel()
+		expect(model.id).toBe("gpt-6-astra")
+		expect(model.info.contextWindow).toBe(370_000)
+		expect(model.info.supportsPromptCache).toBe(true)
+	})
+	// kilocode_change end
 
 	it("accepts an account-discovered model and enforces the fixed subscription capabilities", () => {
 		getModelsFromCacheMock.mockReturnValue({

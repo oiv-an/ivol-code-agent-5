@@ -31,7 +31,6 @@ import {
 	// kilocode_change start
 	autocompleteServiceSettingsSchema,
 	fastApplyModelSchema,
-	openAiCodexModels,
 	// kilocode_change end
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	RooCodeSettings,
@@ -1140,12 +1139,14 @@ export const webviewMessageHandler = async (
 				try {
 					// The account catalog is refreshed whenever it is requested so a
 					// long-lived v5 installation automatically sees newly released models.
-					// On auth/network failure refreshModels returns the last known good cache;
-					// the bundled catalog is the final offline fallback.
+					// On auth/network failure refreshModels returns the last known good cache.
+					// kilocode_change: no bundled model list; an empty catalog is reported as an error.
 					if (providerFilter === "openai-codex") {
 						const accountModels = await refreshModels(targetCandidate.options)
-						routerModels[providerFilter] =
-							Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
+						if (Object.keys(accountModels).length === 0) {
+							throw new Error("OpenAI Codex model catalog is unavailable. Sign in to OpenAI Codex again.")
+						}
+						routerModels[providerFilter] = accountModels
 					} else {
 						routerModels[providerFilter] = await getModels(targetCandidate.options)
 					}
@@ -3524,6 +3525,13 @@ export const webviewMessageHandler = async (
 					.waitForCallback()
 					.then(async () => {
 						vscode.window.showInformationMessage("Successfully signed in to OpenAI Codex")
+						// kilocode_change start: load the new account's model catalog right after sign-in
+						for (const allowInsecureTls of [false, true]) {
+							await refreshModels({ provider: "openai-codex", allowInsecureTls }).catch((error) =>
+								provider.log(`OpenAI Codex catalog refresh after sign in failed: ${error}`),
+							)
+						}
+						// kilocode_change end
 						await provider.postStateToWebview()
 					})
 					.catch((error) => {

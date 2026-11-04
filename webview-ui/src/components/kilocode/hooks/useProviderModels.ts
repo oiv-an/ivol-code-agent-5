@@ -17,8 +17,7 @@ import {
 	mistralModels,
 	openAiNativeDefaultModelId,
 	openAiNativeModels,
-	openAiCodexDefaultModelId,
-	openAiCodexModels,
+	getOpenAiCodexDefaultModelId, // kilocode_change
 	vertexDefaultModelId,
 	vertexModels,
 	xaiDefaultModelId,
@@ -187,14 +186,9 @@ export const getModelsByProvider = ({
 			}
 		}
 		case "openai-codex": {
-			const accountModels = routerModels["openai-codex"]
-			const models = accountModels && Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
-			return {
-				models,
-				defaultModel: models[openAiCodexDefaultModelId]
-					? openAiCodexDefaultModelId
-					: Object.keys(models)[0] || openAiCodexDefaultModelId,
-			}
+			// kilocode_change: models come only from the signed-in account catalog
+			const models = routerModels["openai-codex"] ?? {}
+			return { models, defaultModel: getOpenAiCodexDefaultModelId(models) }
 		}
 		case "mistral": {
 			return {

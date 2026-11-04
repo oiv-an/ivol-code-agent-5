@@ -1,6 +1,7 @@
-import React from "react"
+import React, { useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 
-import { type ModelRecord, type ProviderSettings, openAiCodexDefaultModelId, openAiCodexModels } from "@roo-code/types"
+import { type ModelRecord, type ProviderSettings, getOpenAiCodexDefaultModelId } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Button, Checkbox } from "@src/components/ui"
@@ -25,12 +26,15 @@ export const OpenAICodex: React.FC<OpenAICodexProps> = ({
 	models,
 }) => {
 	const { t } = useAppTranslation()
-	// kilocode_change start: prefer the signed-in account catalog, with a
-	// bundled offline fallback so settings remain usable during an outage.
-	const availableModels = models && Object.keys(models).length > 0 ? models : openAiCodexModels
-	const defaultModelId = availableModels[openAiCodexDefaultModelId]
-		? openAiCodexDefaultModelId
-		: Object.keys(availableModels)[0] || openAiCodexDefaultModelId
+	// kilocode_change start: models come only from the signed-in account catalog.
+	const queryClient = useQueryClient()
+	const availableModels = models ?? {}
+	const defaultModelId = getOpenAiCodexDefaultModelId(availableModels)
+	const catalogEmpty = Object.keys(availableModels).length === 0
+	// Reload the catalog after sign-in/sign-out so the new account models appear immediately.
+	useEffect(() => {
+		void queryClient.invalidateQueries({ queryKey: ["routerModels", "openai-codex"] })
+	}, [openAiCodexIsAuthenticated, queryClient])
 	// kilocode_change end
 
 	return (
@@ -69,6 +73,21 @@ export const OpenAICodex: React.FC<OpenAICodexProps> = ({
 					{t("settings:providers.enablePromptCaching", { defaultValue: "Enable prompt caching" })}
 				</span>
 			</Checkbox>
+			{/* kilocode_change end */}
+
+			{/* kilocode_change start */}
+			{catalogEmpty && (
+				<div className="text-sm text-vscode-descriptionForeground">
+					{openAiCodexIsAuthenticated
+						? t("settings:providers.openAiCodex.catalogUnavailable", {
+								defaultValue:
+									"The model list could not be loaded from OpenAI. Sign out and sign in again.",
+							})
+						: t("settings:providers.openAiCodex.signInForModels", {
+								defaultValue: "Sign in to load the models available to your subscription.",
+							})}
+				</div>
+			)}
 			{/* kilocode_change end */}
 
 			{/* Model Picker */}

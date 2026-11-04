@@ -1,11 +1,6 @@
 import { renderHook } from "@testing-library/react"
 
-import {
-	openAiCodexModels,
-	openAiModelInfoSaneDefaults,
-	type ModelRecord,
-	type ProviderSettings,
-} from "@roo-code/types"
+import { openAiModelInfoSaneDefaults, type ModelRecord, type ProviderSettings } from "@roo-code/types"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useRouterModels } from "@/components/ui/hooks/useRouterModels"
 
@@ -114,7 +109,7 @@ describe("useProviderModels", () => {
 		},
 	)
 
-	it("keeps the bundled Codex catalog available while the account catalog loads", () => {
+	it("shows no bundled Codex models while the account catalog loads", () => {
 		mockUseRouterModels.mockReturnValue({
 			data: undefined,
 			isLoading: true,
@@ -123,7 +118,7 @@ describe("useProviderModels", () => {
 
 		const { result } = renderHook(() => useProviderModels({ apiProvider: "openai-codex" }))
 
-		expect(result.current.providerModels).toBe(openAiCodexModels)
+		expect(result.current.providerModels).toEqual({}) // kilocode_change: catalog only from OpenAI
 		expect(result.current.isLoading).toBe(true)
 	})
 

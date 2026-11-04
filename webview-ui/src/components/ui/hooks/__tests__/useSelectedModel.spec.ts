@@ -12,7 +12,7 @@ import {
 	litellmDefaultModelInfo,
 	openAiModelInfoSaneDefaults,
 	openAiCodexDefaultModelId,
-	openAiCodexModels,
+	openAiCodexFallbackModelInfo, // kilocode_change
 	moonshotModels,
 } from "@roo-code/types"
 
@@ -1128,7 +1128,7 @@ describe("useSelectedModel", () => {
 			expect(result.current.isLoading).toBe(false)
 		})
 
-		it("falls back to the bundled catalog when account discovery is unavailable", () => {
+		it("uses fallback capabilities when account discovery is unavailable", () => {
 			mockUseRouterModels.mockReturnValue({
 				data: {},
 				isLoading: false,
@@ -1139,7 +1139,7 @@ describe("useSelectedModel", () => {
 			const { result } = renderHook(() => useSelectedModel({ apiProvider: "openai-codex" }), { wrapper })
 
 			expect(result.current.id).toBe(openAiCodexDefaultModelId)
-			expect(result.current.info).toBe(openAiCodexModels[openAiCodexDefaultModelId])
+			expect(result.current.info).toBe(openAiCodexFallbackModelInfo) // kilocode_change
 			expect(result.current.isError).toBe(true)
 		})
 	})

@@ -30,7 +30,8 @@ import {
 	openRouterDefaultModelId,
 	claudeCodeModels,
 	normalizeClaudeCodeModelId,
-	openAiCodexModels,
+	openAiCodexFallbackModelInfo, // kilocode_change
+	getOpenAiCodexDefaultModelId, // kilocode_change
 	sambaNovaModels,
 	doubaoModels,
 	internationalZAiModels,
@@ -575,13 +576,15 @@ function getSelectedModel({
 			return { id, info }
 		}
 		case "openai-codex": {
-			const accountModels = routerModels["openai-codex"]
-			const models: ModelRecord =
-				accountModels && Object.keys(accountModels).length > 0 ? accountModels : openAiCodexModels
-			const availableDefault = models[defaultModelId] ? defaultModelId : Object.keys(models)[0] || defaultModelId
-			const id = getValidatedModelId(apiConfiguration.apiModelId, models, availableDefault)
-			const info = models[id]
+			// kilocode_change start: models come only from the signed-in account catalog
+			const models: ModelRecord = routerModels["openai-codex"] ?? {}
+			const hasCatalog = Object.keys(models).length > 0
+			const id = hasCatalog
+				? getValidatedModelId(apiConfiguration.apiModelId, models, getOpenAiCodexDefaultModelId(models))
+				: (apiConfiguration.apiModelId ?? defaultModelId)
+			const info = models[id] ?? openAiCodexFallbackModelInfo
 			return { id, info }
+			// kilocode_change end
 		}
 		case "vercel-ai-gateway": {
 			const id = getValidatedModelId(

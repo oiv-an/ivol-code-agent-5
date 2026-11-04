@@ -6,7 +6,8 @@ import OpenAI from "openai"
 import {
 	type ModelInfo,
 	openAiCodexDefaultModelId,
-	openAiCodexModels,
+	openAiCodexFallbackModelInfo, // kilocode_change
+	getOpenAiCodexDefaultModelId, // kilocode_change
 	OPENAI_CODEX_CONTEXT_WINDOW,
 	type ReasoningEffort,
 	type ReasoningEffortExtended,
@@ -1054,20 +1055,23 @@ export class OpenAiCodexHandler extends BaseProvider /* kilocode_change: impleme
 	}
 
 	override getModel() {
+		// kilocode_change start: models come only from the signed-in account catalog
 		const modelId = this.options.apiModelId
-		const accountModels = getModelsFromCache("openai-codex", { allowInsecureTls: this.options.allowInsecureTls }) // kilocode_change
-		const selectedInfo =
-			modelId && accountModels?.[modelId]
-				? accountModels[modelId]
-				: modelId && modelId in openAiCodexModels
-					? openAiCodexModels[modelId as keyof typeof openAiCodexModels]
-					: undefined
-		const id = selectedInfo ? modelId! : openAiCodexDefaultModelId
+		const accountModels = getModelsFromCache("openai-codex", { allowInsecureTls: this.options.allowInsecureTls })
+		const hasCatalog = !!accountModels && Object.keys(accountModels).length > 0
+		const id =
+			modelId && (!hasCatalog || accountModels![modelId])
+				? modelId
+				: hasCatalog
+					? getOpenAiCodexDefaultModelId(accountModels)
+					: openAiCodexDefaultModelId
+		const selectedInfo = (hasCatalog ? accountModels![id] : undefined) ?? openAiCodexFallbackModelInfo
+		// kilocode_change end
 
 		// kilocode_change: enforce the subscription-wide fixed budget and cache
 		// capability even when the model metadata came from an older disk cache.
 		const info: ModelInfo = {
-			...(selectedInfo ?? openAiCodexModels[openAiCodexDefaultModelId]),
+			...selectedInfo,
 			contextWindow: OPENAI_CODEX_CONTEXT_WINDOW,
 			supportsPromptCache: true,
 		}

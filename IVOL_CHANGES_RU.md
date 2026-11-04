@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.129. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.130. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -17,7 +17,8 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - Model selection remains available while a task is running; changing it applies to subsequent
   requests without automatically restarting the current one.
 - The OpenAI-compatible catalog is cached across restarts and temporary provider failures.
-- Codex loads the account's model catalog, retains the last working catalog offline, uses a 370k
+- Codex models come only from the account catalog (no built-in list), reloaded after sign-in;
+  the last working catalog is retained offline. Uses a 370k
   context limit and stable per-task prompt caching. Other supported providers also use caching.
 - Responses API input is a structured array, including proxy and Codex OAuth routes.
 

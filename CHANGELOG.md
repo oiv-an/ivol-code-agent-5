@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.130
+
+- OpenAI - ChatGPT Plus/Pro no longer ships a built-in model list: models are loaded only from your OpenAI account, refreshed right after sign-in, with a hint to sign in again when the list cannot be loaded.
+
 ## 5.17.129
 
 - Open and edit a shared global instructions file from IVOL settings, with its full location shown and no automatic migration of existing rules.
