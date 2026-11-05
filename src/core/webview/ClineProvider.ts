@@ -1664,7 +1664,7 @@ export class ClineProvider
 	// kilocode_change start: personal build provider initialization
 	public async initializePersonalProviderProfile(): Promise<void> {
 		await this.providerSettingsManager.initialize()
-		const { name, id: _id, ...providerSettings } = await this.providerSettingsManager.ensurePersonalActiveProfile()
+		const { name, id: _id, ...providerSettings } = await this.resolveProjectProviderProfile()
 		const fastApplyApiProvider =
 			this.contextProxy.getValue("fastApplyApiProvider") === "kilocode"
 				? "current"
@@ -1730,6 +1730,7 @@ export class ClineProvider
 						? applyModelSelection(providerSettings, task.taskModelSelection)
 						: providerSettings
 				this.contextProxy.setRuntimeProviderSettings(name, effective)
+				await this.contextProxy.setProjectProviderProfileName(name) // remember per project
 				this.updateTaskApiHandlerIfNeeded(effective, { forceRebuild: true })
 				// kilocode_change end
 
@@ -1783,9 +1784,26 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	// kilocode_change start: each project keeps its own last selected profile; the shared one is the first-open default.
+	private async resolveProjectProviderProfile() {
+		const fallback = await this.providerSettingsManager.ensurePersonalActiveProfile()
+		const projectName = this.contextProxy.getProjectProviderProfileName()
+		if (!projectName || projectName === fallback.name) return fallback
+		try {
+			const profile = await this.providerSettingsManager.getProfile({ name: projectName })
+			if (isPersonalProvider(profile.apiProvider)) return { ...profile, name: projectName }
+		} catch (error) {
+			this.log(
+				`Project profile '${projectName}' is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+		return fallback
+	}
+	// kilocode_change end
+
 	// kilocode_change start: footer edits change the conversation, never the shared profile.
 	private async resetConversationModel(): Promise<void> {
-		const { name, id: _id, ...settings } = await this.providerSettingsManager.ensurePersonalActiveProfile()
+		const { name, id: _id, ...settings } = await this.resolveProjectProviderProfile()
 		this.contextProxy.setRuntimeProviderSettings(name, applyMaxModelPreset(settings)) // new conversations start on MAX
 	}
 
@@ -1865,6 +1883,7 @@ export class ClineProvider
 		// See `upsertProviderProfile` for a description of what this is doing.
 		await this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig())
 		this.contextProxy.setRuntimeProviderSettings(name, providerSettings) // kilocode_change
+		await this.contextProxy.setProjectProviderProfileName(name) // kilocode_change: remember per project
 
 		// kilocode_change: mode associations are defaults edited explicitly, not by task restoration.
 

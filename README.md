@@ -4,7 +4,7 @@ IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source up
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.130.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current version: 5.17.131.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
@@ -38,7 +38,7 @@ Active development and regular releases currently target VS Code only. New JetBr
 - The quick model selector shows every model the OpenAI-compatible provider exposes. The catalog is cached, so it appears immediately and survives restarts and temporary provider failures.
 - The reasoning level is chosen right next to the model selector. Added levels: GPT-5.6 **max** and **Ultra** for OpenAI-compatible and Codex connections, with automatic fallback when a provider rejects the highest level.
 - **MAX / MED / MIN presets**: three buttons next to the model selector store a model and reasoning pair for each provider profile. The active preset is highlighted in green. New conversations and new windows always start on **MAX** when it is configured; reopened tasks keep their own choice.
-- Each conversation keeps its own model, reasoning level and preset. Switching in one window or project no longer changes other windows. New tasks use configured MAX, or provider defaults when MAX is not configured.
+- Each conversation keeps its own model, reasoning level and preset. Switching in one window or project no longer changes other windows. The mode and provider profile buttons in the chat bottom bar are remembered separately for each project. New tasks use configured MAX, or provider defaults when MAX is not configured.
 - The model selected on the home screen is used for the first message of a new task. The model selector stays available during every task operation.
 - ChatGPT Plus/Pro models come only from the signed-in OpenAI account (no built-in list); the catalog reloads right after sign-in, with a 370k context limit and prompt caching kept on.
 - OpenAI-compatible requests send an explicit output limit (64,000-token fallback), which prevents silently truncated answers.
@@ -129,7 +129,7 @@ See [PRIVACY.md](PRIVACY.md) for the data and network behavior of this build.
 
 ## Documentation and design history
 
-- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.130 (English content; historical filename retained).
+- [Improvements at a glance](IVOL_CHANGES_RU.md): a compact overview of the fork's additions, updated through 5.17.131 (English content; historical filename retained).
 - [Release history](CHANGELOG.md): version-by-version changes, including Agent Manager recovery, scheduled reminders, browser consent, task-history performance and compression fixes.
 - [Project task storage](docs/project-task-storage.md): project-local history and migration behavior.
 - [Modern prompt audit](docs/modern-prompts-audit-2026-10-01.md): historical source audit and research; proposed prompt changes are not shipped features, and model/API claims require revalidation.

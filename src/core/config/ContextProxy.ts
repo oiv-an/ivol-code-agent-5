@@ -54,6 +54,10 @@ const YOLO_STATE_KEYS = [
 	"yoloModeGrant",
 ]
 // kilocode_change end
+// kilocode_change start: selections that belong to the open project, not to every window
+const PROJECT_SCOPED_STATE_KEYS = ["mode"]
+const PROJECT_PROVIDER_PROFILE_KEY = "ivolProjectProviderProfile"
+// kilocode_change end
 
 export const isPassThroughStateKey = (key: string) => PASS_THROUGH_STATE_KEYS.includes(key)
 
@@ -248,6 +252,12 @@ export class ContextProxy {
 			return history as GlobalState[K]
 		}
 		// kilocode_change end
+		// kilocode_change start: the project's own choice wins; the shared value is only the first-open default
+		if (PROJECT_SCOPED_STATE_KEYS.includes(key)) {
+			const projectValue = this.originalContext.workspaceState?.get<unknown>(key)
+			if (typeof projectValue === "string") return projectValue as GlobalState[K]
+		}
+		// kilocode_change end
 		// kilocode_change start: another window's timer/stop must not be hidden by the startup cache
 		if (YOLO_STATE_KEYS.includes(key)) {
 			if (key === "yoloMode" && (this.pendingYoloWrites > 0 || this.yoloWriteFailed)) {
@@ -278,6 +288,12 @@ export class ContextProxy {
 		if (key === "taskHistory" && hasProjectTaskStorage())
 			return this.updateTaskStorageHistory((value ?? []) as HistoryItem[]) // kilocode_change
 		if (YOLO_STATE_KEYS.includes(key)) return this.updateYoloGlobalState(key, value) // kilocode_change
+		// kilocode_change start: a project's selection never changes other projects
+		if (PROJECT_SCOPED_STATE_KEYS.includes(key) && this.originalContext.workspaceState) {
+			this.stateCache[key] = value // window-local cache only; shared storage stays untouched
+			return this.originalContext.workspaceState.update(key, value)
+		}
+		// kilocode_change end
 		if (isPassThroughStateKey(key)) {
 			// kilocode_change start: keep the IDE memento small; oversized titles slowed every save
 			if (key === "taskHistory" && Array.isArray(value))
@@ -405,6 +421,16 @@ export class ContextProxy {
 
 	async getWorkspaceState(context: vscode.ExtensionContext, key: string) {
 		return await context.workspaceState.get(key)
+	}
+
+	/** Provider profile last selected in this project (window-independent, project-specific). */
+	public getProjectProviderProfileName(): string | undefined {
+		const name = this.originalContext.workspaceState?.get<unknown>(PROJECT_PROVIDER_PROFILE_KEY)
+		return typeof name === "string" ? name : undefined
+	}
+
+	public async setProjectProviderProfileName(name: string | undefined): Promise<void> {
+		await this.originalContext.workspaceState?.update(PROJECT_PROVIDER_PROFILE_KEY, name)
 	}
 	// kilocode_change end
 

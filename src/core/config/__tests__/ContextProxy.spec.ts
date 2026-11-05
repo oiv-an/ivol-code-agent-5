@@ -213,6 +213,30 @@ describe("ContextProxy", () => {
 		})
 	})
 
+	// kilocode_change start: mode and provider profile are remembered per project
+	describe("project-scoped selections", () => {
+		it("keeps mode and profile in workspace state, independent of other projects", async () => {
+			const store = new Map<string, unknown>()
+			mockContext.workspaceState = {
+				get: vi.fn((key: string) => store.get(key)),
+				update: vi.fn(async (key: string, value: unknown) => void store.set(key, value)),
+			}
+			mockGlobalState.get.mockImplementation((key: string) => (key === "mode" ? "code" : undefined))
+			const projectProxy = new ContextProxy(mockContext)
+			await projectProxy.initialize()
+
+			expect(projectProxy.getGlobalState("mode")).toBe("code")
+			mockGlobalState.update.mockClear()
+			await projectProxy.updateGlobalState("mode", "review")
+			await projectProxy.setProjectProviderProfileName("PROX_VS")
+
+			expect(projectProxy.getGlobalState("mode")).toBe("review")
+			expect(projectProxy.getProjectProviderProfileName()).toBe("PROX_VS")
+			expect(mockGlobalState.update).not.toHaveBeenCalledWith("mode", expect.anything())
+		})
+	})
+	// kilocode_change end
+
 	describe("getGlobalState", () => {
 		it("should return value from cache when it exists", async () => {
 			// Manually set a value in the cache

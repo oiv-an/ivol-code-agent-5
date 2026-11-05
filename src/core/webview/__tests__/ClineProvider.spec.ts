@@ -2173,7 +2173,7 @@ describe("ClineProvider", () => {
 			await provider.handleModeSwitch("architect")
 
 			// Verify mode was updated
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "architect")
 
 			// Verify saved config was loaded
 			expect(provider.providerSettingsManager.getModeConfigId).toHaveBeenCalledWith("architect")
@@ -2207,7 +2207,7 @@ describe("ClineProvider", () => {
 			await provider.handleModeSwitch("architect")
 
 			// Verify mode was updated
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "architect")
 
 			// Verify current config was saved as default for new mode
 			expect(provider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled() // kilocode_change
@@ -2312,7 +2312,7 @@ describe("ClineProvider", () => {
 			expect(getModeBySlug).toHaveBeenCalledWith("non-existent-mode", expect.any(Array))
 
 			// Verify fallback to default mode
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "code")
+			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "code")
 			expect(logSpy).toHaveBeenCalledWith(
 				"Mode 'non-existent-mode' from history no longer exists. Falling back to default mode 'code'.",
 			)
@@ -2387,7 +2387,7 @@ describe("ClineProvider", () => {
 			expect(getModeBySlug).toHaveBeenCalledWith("custom-mode", expect.any(Array))
 
 			// Verify mode was preserved
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "custom-mode")
+			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "custom-mode")
 			expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("no longer exists"))
 
 			// Verify history item mode was not changed
@@ -2438,7 +2438,7 @@ describe("ClineProvider", () => {
 			await provider.createTaskWithHistoryItem(historyItem)
 
 			// Verify mode was preserved
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "architect")
 
 			// Verify history item mode was not changed
 			expect(historyItem.mode).toBe("architect")
@@ -2472,7 +2472,7 @@ describe("ClineProvider", () => {
 			await provider.createTaskWithHistoryItem(historyItem)
 
 			// Verify no mode validation occurred (mode update not called)
-			expect(mockContext.globalState.update).not.toHaveBeenCalledWith("mode", expect.any(String))
+			expect(mockContext.workspaceState.update).not.toHaveBeenCalledWith("mode", expect.any(String))
 		})
 
 		test("continues with task restoration even if mode config loading fails", async () => {

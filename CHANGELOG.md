@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.131
+
+- The mode and provider profile selected in the chat bottom bar are now remembered separately for each project, so switching them in one project no longer changes other projects.
+
 ## 5.17.130
 
 - OpenAI - ChatGPT Plus/Pro no longer ships a built-in model list: models are loaded only from your OpenAI account, refreshed right after sign-in, with a hint to sign in again when the list cannot be loaded.

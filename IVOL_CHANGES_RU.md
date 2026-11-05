@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.130. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.131. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -16,6 +16,7 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - Choose reasoning beside the model selector, including **max** and **Ultra** where supported.
 - Model selection remains available while a task is running; changing it applies to subsequent
   requests without automatically restarting the current one.
+- The selected mode and provider profile are remembered per project and do not leak into other projects.
 - The OpenAI-compatible catalog is cached across restarts and temporary provider failures.
 - Codex models come only from the account catalog (no built-in list), reloaded after sign-in;
   the last working catalog is retained offline. Uses a 370k
