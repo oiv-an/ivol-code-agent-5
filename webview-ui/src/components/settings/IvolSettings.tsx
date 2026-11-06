@@ -16,6 +16,7 @@ import { PinnedToolSettings } from "./PinnedToolSettings" // kilocode_change
 import { TelegramSettings } from "./TelegramSettings"
 import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings"
 import { GlobalInstructionsSettings } from "./GlobalInstructionsSettings"
+import { BuiltInChatSettings } from "./BuiltInChatSettings" // kilocode_change
 
 export function IntelligentTaskSettings({
 	enabled,
@@ -86,6 +87,7 @@ export function IvolSettings({
 		<div data-testid="ivol-settings">
 			<SectionHeader description={t("settings:ivol.description")}>{t("settings:sections.ivol")}</SectionHeader>
 			<GlobalInstructionsSettings />
+			<BuiltInChatSettings /> {/* kilocode_change */}
 			<SectionHeader>{t("settings:ivol.profile", { name: profileName })}</SectionHeader>
 			<Section>
 				{/* kilocode_change start: choose which saved profile these settings edit */}

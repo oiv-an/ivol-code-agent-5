@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.131. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.132. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -75,6 +75,7 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - A notification reminds users about completed tasks when they leave the editor.
 - Explicitly connected tasks can continue in private Telegram topics, including approvals and Stop.
 - Autocomplete uses a separately chosen model and is off by default.
+- One checkbox in IVOL settings disables the built-in VS Code chat in all windows and projects.
 
 ## 8. Browser control
 

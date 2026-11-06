@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.132
+
+- New setting in Settings → IVOL: a checkbox to disable the built-in VS Code chat in all windows and projects at once.
+
 ## 5.17.131
 
 - The mode and provider profile selected in the chat bottom bar are now remembered separately for each project, so switching them in one project no longer changes other projects.

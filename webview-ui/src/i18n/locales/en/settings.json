@@ -4,6 +4,11 @@
 		"title": "Global rules",
 		"description": "One shared instruction file for all projects on this extension host, independent of the selected profile. Open it to read or edit; it is created if missing. Saved changes apply to subsequent model requests when the rule is enabled. Ask the agent to make specific rules global; existing rules are not moved automatically."
 	},
+	"builtInChat": {
+		"title": "Built-in VS Code chat",
+		"label": "Disable the built-in VS Code chat",
+		"description": "Hides the editor's own AI chat (Copilot Chat panel and its title bar button) in all VS Code windows and projects. Writes the global user setting chat.disableAIFeatures; unchecking removes it. Has no effect outside VS Code."
+	},
 	"telegram": {
 		"title": "Telegram",
 		"description": "Use a dedicated bot with private-chat topics enabled in BotFather. First open your bot in Telegram and press Start (it stays silent). Save its token and your numeric user ID here, then activate a task using the button below the chat. Tasks can only be created and opened in the plugin.",

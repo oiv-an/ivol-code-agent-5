@@ -550,6 +550,14 @@ export const webviewMessageHandler = async (
 			await handleTelegram(provider, message)
 			break
 		}
+		// kilocode_change start
+		case "getBuiltInChatDisabled":
+		case "setBuiltInChatDisabled": {
+			const { handleBuiltInChat } = await import("../kilocode/webview/builtInChatHandler")
+			await handleBuiltInChat(provider, message.type === "setBuiltInChatDisabled" ? !!message.bool : undefined)
+			break
+		}
+		// kilocode_change end
 		case "getGlobalInstructions":
 		case "openGlobalInstructions": {
 			const { handleGlobalInstructions } = await import("../kilocode/webview/globalInstructionsHandler")
