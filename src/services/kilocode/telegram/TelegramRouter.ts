@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import type { TelegramUpdate, TelegramImageFile } from "./TelegramApi"
+import type { TelegramUpdate, TelegramImageFile, TelegramMessage } from "./TelegramApi"
 import type { TelegramInput } from "./protocol"
 export type { TelegramInput } from "./protocol"
 
@@ -33,6 +33,7 @@ interface Approval {
 /** Independent of IDE state. The receiving host must revalidate the task and pending approval. */
 export class TelegramRouter {
 	private readonly routes = new Map<string, TelegramRoute>()
+	private readonly projects = new Map<string, TelegramRoute>()
 	private readonly approvals = new Map<string, Approval>()
 	private lastUpdateId = -1
 
@@ -81,8 +82,50 @@ export class TelegramRouter {
 
 	resetUpdateSequence(): void {
 		this.routes.clear()
+		this.projects.clear()
 		this.approvals.clear()
 		this.lastUpdateId = -1
+	}
+
+	/** One project control topic per client (IDE window). */
+	activateProject(route: Omit<TelegramRoute, "epoch">): TelegramRoute {
+		const topicKey = this.topicKey(route.chatId, route.threadId)
+		const existing = this.projects.get(topicKey)
+		if (existing && existing.clientId !== route.clientId) throw new Error("Project is connected in another window")
+		this.deactivateProject(route.clientId)
+		const active = { ...route, epoch: randomBytes(12).toString("hex") }
+		this.projects.set(topicKey, active)
+		return active
+	}
+
+	deactivateProject(clientId: string): void {
+		for (const [topicKey, route] of this.projects) if (route.clientId === clientId) this.projects.delete(topicKey)
+	}
+
+	private acceptProject(
+		route: TelegramRoute,
+		update: TelegramUpdate,
+		message: TelegramMessage,
+	): TelegramAcceptedInput | undefined {
+		if (update.update_id < route.minimumUpdateId) return
+		const callback = update.callback_query
+		const sender = callback?.from ?? message.from
+		if (sender?.id !== route.ownerId || sender.is_bot) return
+		const base = { kind: "project" as const, taskId: route.taskId, epoch: route.epoch, updateId: update.update_id }
+		if (callback) {
+			const data = callback.data ?? ""
+			if (!/^[omp]:[A-Za-z0-9_.:-]{1,56}$/.test(data)) return
+			return { clientId: route.clientId, callbackId: callback.id, input: { ...base, text: "", data } }
+		}
+		if (!Number.isFinite(message.date) || message.date * 1000 < route.activatedAt) return
+		if (message.voice)
+			return {
+				clientId: route.clientId,
+				input: { ...base, text: message.caption ?? "" },
+				voice: { file_id: message.voice.file_id, file_size: message.voice.file_size },
+			}
+		if (!message.text?.trim()) return
+		return { clientId: route.clientId, input: { ...base, text: message.text } }
 	}
 
 	accept(update: TelegramUpdate): TelegramAcceptedInput | undefined {
@@ -91,6 +134,8 @@ export class TelegramRouter {
 		const callback = update.callback_query
 		const message = callback?.message ?? update.message
 		if (!message || message.chat.type !== "private" || !message.message_thread_id) return
+		const project = this.projects.get(this.topicKey(message.chat.id, message.message_thread_id))
+		if (project) return this.acceptProject(project, update, message)
 		const route = this.routes.get(this.topicKey(message.chat.id, message.message_thread_id))
 		if (!route || update.update_id < route.minimumUpdateId) return
 		const sender = callback?.from ?? message.from

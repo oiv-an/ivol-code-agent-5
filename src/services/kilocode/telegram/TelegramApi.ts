@@ -236,6 +236,15 @@ export class TelegramApi {
 		return topic.message_thread_id
 	}
 
+	/** Command menu ("/" button) for the owner's private chat only. */
+	async setCommands(
+		chatId: number,
+		commands: { command: string; description: string }[],
+		signal?: AbortSignal,
+	): Promise<void> {
+		await this.write("setMyCommands", { commands, scope: { type: "chat", chat_id: chatId } }, signal)
+	}
+
 	async pinMessage(chatId: number, messageId: number, signal?: AbortSignal): Promise<void> {
 		await this.write(
 			"pinChatMessage",

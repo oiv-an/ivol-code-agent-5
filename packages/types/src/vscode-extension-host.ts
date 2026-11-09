@@ -193,6 +193,8 @@ export interface TelegramState {
 	botUsername?: string
 	taskId?: string
 	status: "inactive" | "connecting" | "active" | "error"
+	/** Project control topic of this window (commands, new tasks); independent of the task topic. */
+	projectStatus?: "inactive" | "connecting" | "active" // kilocode_change
 	error?: string
 }
 

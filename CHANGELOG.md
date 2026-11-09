@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.136
+
+- Telegram: the Telegram button now also opens a project control topic with the command list. From it you can start new tasks (text or voice), open recent tasks, switch mode and provider profile, stop the current task and check status.
+- Telegram: messages from Telegram reach the agent with its next request instead of waiting in the queue.
+- Telegram: while the button is on, messages typed in the IDE are mirrored to the topic, and tasks opened in the IDE get their own topic automatically.
+
 ## 5.17.135
 
 - Chat: queued messages now have a "Send now" button that delivers the message to the model with its next request, without stopping the task.

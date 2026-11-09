@@ -18,6 +18,36 @@
 			"telegram-rejected": "Telegram API rejected activation. Check bot permissions, owner ID and the bot chat, then retry.",
 			"local-runtime": "Telegram coordinator could not start locally. Check the IVOL Code output channel for the safe failure code.",
 			"startup-failed": "Telegram activation failed. Check the IVOL Code output channel for the safe failure code."
+		},
+		"project": {
+			"topicTitle": "📁 {{project}} · Control",
+			"helpTitle": "📁 Project control: {{project}}",
+			"helpFooter": "Plain text or a voice message here creates a new task with its own topic. Reply inside a task topic to talk to that task.",
+			"commands": {
+				"new": "new task: /new <text>",
+				"tasks": "recent project tasks (open/continue)",
+				"stop": "stop the current task",
+				"mode": "switch mode",
+				"profile": "switch provider profile",
+				"status": "current task, mode and profile",
+				"help": "show this command list"
+			},
+			"newUsage": "Write the task after the command: /new <text>",
+			"unknown": "Unknown command. Send /help for the list.",
+			"failed": "The command failed. Check IVOL Code in the IDE.",
+			"created": "✅ New task started: {{task}}",
+			"noTasks": "No tasks in this project yet.",
+			"tasksTitle": "Recent tasks — tap to open:",
+			"taskMissing": "This task is no longer available.",
+			"opened": "📂 Opened: {{task}}",
+			"modeTitle": "Choose a mode:",
+			"modeSet": "Mode: {{mode}}",
+			"profileTitle": "Choose a provider profile:",
+			"profileSet": "Profile: {{profile}}",
+			"noProfiles": "No available provider profiles.",
+			"noCurrent": "No task is running.",
+			"stopped": "⏹ Current task stopped.",
+			"statusText": "Project: {{project}}\nTask: {{task}}\nMode: {{mode}}\nProfile: {{profile}}"
 		}
 	},
 	"extension": {

@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.135. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.136. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -73,7 +73,7 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - YOLO mode has a timer. Stop remains available during tool execution.
 - Provider connection checks produce credential-free diagnostics; TLS exceptions are per profile.
 - A notification reminds users about completed tasks when they leave the editor.
-- Explicitly connected tasks can continue in private Telegram topics, including approvals, Stop and Groq-transcribed voice messages; topics are named "project / short task name".
+- Explicitly connected tasks can continue in private Telegram topics, including approvals, Stop and Groq-transcribed voice messages; topics are named "project / short task name". A per-project control topic lists commands and lets you start or open tasks and switch mode or profile; Telegram messages reach the agent immediately and IDE messages are mirrored while the button is on.
 - Autocomplete uses a separately chosen model and is off by default.
 - One checkbox in IVOL settings disables the built-in VS Code chat in all windows and projects.
 

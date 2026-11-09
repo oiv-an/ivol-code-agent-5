@@ -72,7 +72,7 @@ it("coalesces activity, edits streaming replies, resumes thinking and never leak
 		await vi.advanceTimersByTimeAsync(300)
 		expect(new Set(output().map((r) => r.messageId)).size).toBe(1)
 		emit({ ts: 1, type: "say", say: "api_req_finished", text: "SECRET" })
-		emit({ ts: 6, type: "say", say: "user_feedback", text: "SECRET" })
+		emit({ ts: 6, type: "say", say: "user_feedback", text: "typed in IDE" })
 		emit({ ts: 7, type: "ask", ask: "tool", text: "SECRET", partial: true })
 		await vi.advanceTimersByTimeAsync(300)
 		expect(output().at(-1)?.text).toBe("Thinking…")
@@ -101,6 +101,7 @@ it("coalesces activity, edits streaming replies, resumes thinking and never leak
 		expect(output()).toHaveLength(count)
 		expect(JSON.stringify(output())).not.toContain("suggest")
 		expect(JSON.stringify(client.request.mock.calls)).not.toContain("SECRET")
+		expect(JSON.stringify(client.request.mock.calls)).toContain("👤 typed in IDE")
 	} finally {
 		bridge.dispose()
 		vi.useRealTimers()

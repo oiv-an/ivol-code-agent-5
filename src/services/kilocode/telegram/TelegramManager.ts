@@ -1,4 +1,5 @@
 import * as path from "node:path"
+import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 import { z } from "zod"
 import { RooCodeEventName, type TelegramState, type ClineMessage, type TaskLike } from "@roo-code/types"
@@ -13,6 +14,7 @@ import { TelegramTaskBridge } from "./TelegramTaskBridge"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
 import { TelegramStartupError } from "./startupFailure"
 import { transcribeWithGroq } from "./groqTranscription"
+import { TelegramProjectControl, telegramProjectCommands, telegramProjectHelp } from "./TelegramProjectControl"
 
 import type { TelegramInput, TelegramRoute } from "./TelegramRouter"
 import type { Task } from "../../../core/task/Task"
@@ -36,6 +38,12 @@ const routeSchema = z.object({
 	epoch: z.string().min(1),
 })
 
+interface ProjectConnection {
+	client?: TelegramLocalClient
+	control?: TelegramProjectControl
+	generation: number
+}
+
 export class TelegramManager {
 	private state: TelegramState = { configured: false, status: "inactive" }
 	private generation = 0
@@ -48,11 +56,37 @@ export class TelegramManager {
 	private route?: TelegramRoute
 	private lineage: string[] = []
 	private transfer?: { from: string; cancel: () => void }
+	/** Project control topic: own coordinator connection, independent of the task topic lifecycle. */
+	private project?: ProjectConnection
+	private projectGeneration = 0
 
 	constructor(private readonly provider: ClineProvider) {
 		provider.on(RooCodeEventName.TaskUnfocused, this.onUnfocused)
 		provider.on(RooCodeEventName.TaskAborted, this.onUnfocused)
+		provider.on(RooCodeEventName.TaskFocused, this.onFocused)
 		provider.context.subscriptions.push(this)
+	}
+
+	/** While the button is on (project topic active), every task opened in the IDE follows into its own topic. */
+	private onFocused = (taskId: string): void => {
+		if (!this.project?.control || this.transfer) return
+		const generation = this.project.generation
+		void (async () => {
+			const task = this.provider.getCurrentTask()
+			if (!task || task.taskId !== taskId) return
+			// The topic is named from the first message; give a new task a moment to record it.
+			await pWaitFor(() => task.clineMessages.length > 0 || task.abort, { interval: 100, timeout: 5000 }).catch(
+				() => undefined,
+			)
+			if (
+				this.project?.generation !== generation ||
+				this.transfer ||
+				this.provider.getCurrentTask() !== task ||
+				(this.state.status === "active" && this.state.taskId === taskId)
+			)
+				return
+			await this.activate(taskId)
+		})().catch(() => this.provider.log("Telegram auto-follow failed"))
 	}
 
 	private onUnfocused = (taskId: string): void => {
@@ -116,11 +150,97 @@ export class TelegramManager {
 		return telegramBootstrapSchema.parse(JSON.parse(stored))
 	}
 
+	/** Opens (creating once) the project control topic and posts the command list there. */
+	async activateProject(): Promise<void> {
+		if (this.disposed || this.saving || this.project) return
+		if (!vscode.workspace.isTrusted) throw new Error("Untrusted workspace")
+		const generation = ++this.projectGeneration
+		const entry: ProjectConnection = { generation }
+		this.project = entry
+		const current = () => !this.disposed && this.project === entry && this.projectGeneration === generation
+		this.state = { ...this.state, projectStatus: "connecting", error: undefined }
+		await this.publishState()
+		try {
+			const credentials = await this.credentials()
+			if (!credentials) throw new Error("Telegram configuration unavailable")
+			if (!current()) return
+			const client = await launchTelegramCoordinator(
+				this.provider.context.extensionPath,
+				credentials.token,
+				credentials.ownerId,
+			)
+			if (!current()) {
+				client.close()
+				return
+			}
+			entry.client = client
+			const cwd = this.provider.cwd
+			const project = path.basename(cwd)
+			const projectId = readProjectTaskStorage(cwd)?.projectId ?? cwd
+			const route = routeSchema.parse(
+				await client.request({
+					operation: "activateProject",
+					projectId,
+					title: t("common:telegram.project.topicTitle", { project }),
+					help: telegramProjectHelp(project),
+					commands: telegramProjectCommands(),
+				}),
+			)
+			if (!current()) return
+			if (route.ownerId !== credentials.ownerId || route.chatId !== credentials.ownerId)
+				throw new Error("Invalid Telegram route")
+			entry.control = new TelegramProjectControl(this.provider, client, route, {
+				activateTask: async (taskId) => {
+					if (current()) await this.activate(taskId)
+				},
+				transcribe: this.transcribe,
+				fault: () => {
+					if (current()) void this.failProject()
+				},
+			})
+			this.state = { ...this.state, projectStatus: "active" }
+			await this.publishState()
+		} catch (error) {
+			if (current()) await this.failProject(error)
+		}
+	}
+
+	private resetProject(): void {
+		this.projectGeneration++
+		this.project?.control?.dispose()
+		this.project?.client?.close()
+		this.project = undefined
+		this.state = { ...this.state, projectStatus: "inactive" }
+	}
+
+	private async failProject(error?: unknown): Promise<void> {
+		const reason = error instanceof TelegramStartupError ? error.reason : "startup-failed"
+		this.provider.log(`Telegram project activation failed (${reason})`)
+		this.resetProject()
+		const message = t(`common:telegram.failure.${reason}`)
+		this.state = { ...this.state, error: message }
+		await this.publishState()
+		void vscode.window.showErrorMessage(message)
+	}
+
+	/** Button press: project topic always, plus the task topic when pressed inside a task. */
+	async activateAll(taskId?: string): Promise<void> {
+		const project = this.activateProject()
+		if (taskId) await this.activate(taskId)
+		await project
+	}
+
+	async deactivateAll(): Promise<void> {
+		this.resetProject()
+		await this.deactivate()
+	}
+
 	async save(token: string | undefined, ownerId: string): Promise<void> {
 		if (this.saving || this.disposed) throw new Error("Telegram settings unavailable")
 		this.saving = true
 		this.settingsRevision++
 		this.resetConnection()
+		this.resetProject()
 		const generation = this.generation
 		try {
 			const existing = await this.credentials()
@@ -186,6 +306,8 @@ export class TelegramManager {
 			this.state = {
 				configured: true,
 				ownerId: credentials.ownerId,
+				groqConfigured: this.state.groqConfigured,
+				projectStatus: this.state.projectStatus,
 				status: "connecting",
 				taskId,
 				rootTaskId: taskId,
@@ -468,6 +590,7 @@ export class TelegramManager {
 			configured: this.state.configured,
 			ownerId: this.state.ownerId,
 			groqConfigured: this.state.groqConfigured,
+			projectStatus: this.state.projectStatus,
 			status: "inactive",
 		}
 	}
@@ -483,6 +606,8 @@ export class TelegramManager {
 		this.disposed = true
 		this.provider.off(RooCodeEventName.TaskUnfocused, this.onUnfocused)
 		this.provider.off(RooCodeEventName.TaskAborted, this.onUnfocused)
+		this.provider.off(RooCodeEventName.TaskFocused, this.onFocused)
+		this.resetProject()
 		void this.deactivate()
 	}
 }

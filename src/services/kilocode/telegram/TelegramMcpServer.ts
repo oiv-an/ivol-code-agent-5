@@ -23,6 +23,9 @@ export async function connectTelegramMcpServer(
 							type: "string",
 							enum: [
 								"activate",
+								"activateProject",
+								"deactivateProject",
+								"projectSend",
 								"deactivate",
 								"heartbeat",
 								"publish",

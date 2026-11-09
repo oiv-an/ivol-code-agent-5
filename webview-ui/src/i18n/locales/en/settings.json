@@ -11,7 +11,7 @@
 	},
 	"telegram": {
 		"title": "Telegram",
-		"description": "Use a dedicated bot with private-chat topics enabled in BotFather. First open your bot in Telegram and press Start (it stays silent). Save its token and your numeric user ID here, then activate a task using the button below the chat. Tasks can only be created and opened in the plugin.",
+		"description": "Use a dedicated bot with private-chat topics enabled in BotFather. First open your bot in Telegram and press Start (it stays silent). Save its token and your numeric user ID here, then press the Telegram button below the chat: it opens the project control topic (command list, new tasks, /tasks, /mode, /profile, /stop, /status) and, inside a task, the task's own topic.",
 		"token": "Bot token",
 		"tokenSaved": "Token saved — leave blank to keep it",
 		"ownerId": "Your numeric Telegram user ID",

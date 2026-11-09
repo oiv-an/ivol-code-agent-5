@@ -44,11 +44,11 @@ export async function handleTelegram(provider: ClineProvider, message: WebviewMe
 				})
 				break
 			case "activateTelegram":
-				if (!message.telegramTaskId) throw new Error("Missing Telegram task")
-				await manager.activate(message.telegramTaskId)
+				// Project control topic always; the task topic too when pressed inside a task.
+				await manager.activateAll(message.telegramTaskId)
 				break
 			case "deactivateTelegram":
-				await manager.deactivate(message.telegramTaskId)
+				await manager.deactivateAll()
 				break
 		}
 	} catch {

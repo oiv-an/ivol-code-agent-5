@@ -9,8 +9,12 @@ import type { TelegramCoordinatorRequest } from "./protocol"
 
 type PublishRequest = Extract<TelegramCoordinatorRequest, { operation: "publish" }>
 
+/** Topic-store task id of a project control topic; real task ids never contain "__". */
+export const TELEGRAM_PROJECT_TOPIC_ID = "__project__"
+
 interface Connection {
 	route?: TelegramRoute
+	project?: { route: TelegramRoute; controller: AbortController; tail: Promise<void>; pending: number }
 	controller?: AbortController
 	incomingController?: AbortController
 	transferTimer?: NodeJS.Timeout
@@ -34,7 +38,7 @@ interface Connection {
 	}
 }
 
-/** One instance per bot, hosted by the elected local process. No task creation operations exist. */
+/** One instance per bot, hosted by the elected local process. Task creation is only owner input in a project topic. */
 export class TelegramCoordinator {
 	private readonly router = new TelegramRouter()
 	private readonly clients = new Map<string, Connection>()
@@ -93,7 +97,110 @@ export class TelegramCoordinator {
 
 	disconnect(clientId: string): void {
 		this.deactivate(clientId)
+		this.deactivateProject(clientId)
 		this.clients.delete(clientId)
+	}
+
+	deactivateProject(clientId: string): void {
+		const client = this.clients.get(clientId)
+		client?.project?.controller.abort()
+		if (client) client.project = undefined
+		this.router.deactivateProject(clientId)
+	}
+
+	/** Creates (once) and activates the project control topic, then posts the command help. */
+	async activateProject(
+		clientId: string,
+		projectId: string,
+		title: string,
+		help: string,
+		commands: { command: string; description: string }[],
+	): Promise<TelegramRoute> {
+		const client = this.connection(clientId)
+		this.deactivateProject(clientId)
+		let result: TelegramRoute | undefined
+		const operation = this.activating.then(async () => {
+			if (this.clients.get(clientId) !== client) throw new Error("Telegram activation cancelled")
+			if (!this.bot || !this.healthy) throw new Error("Telegram is not connected")
+			const key = TelegramTopicStore.key(this.bot.id, this.ownerId, projectId, TELEGRAM_PROJECT_TOPIC_ID)
+			const controller = new AbortController()
+			const signal = AbortSignal.any([controller.signal, this.controller.signal])
+			let threadId = this.store.get(key)
+			if (!threadId) {
+				await this.store.set(key, null)
+				threadId = await this.api.createTopic(this.ownerId, title, signal)
+				await this.store.set(key, threadId)
+			}
+			if (commands.length) {
+				// The "/" menu is cosmetic; a failure must not block the control topic.
+				await this.api.setCommands(this.ownerId, commands, signal).catch(() => undefined)
+			}
+			const ids = await this.api.sendText(this.ownerId, threadId, help, signal)
+			if (ids[0]) await this.api.pinMessage(this.ownerId, ids[0], signal).catch(() => undefined)
+			signal.throwIfAborted()
+			if (this.clients.get(clientId) !== client) throw new Error("Telegram activation cancelled")
+			result = this.router.activateProject({
+				key,
+				clientId,
+				taskId: TELEGRAM_PROJECT_TOPIC_ID,
+				chatId: this.ownerId,
+				ownerId: this.ownerId,
+				threadId,
+				activatedAt: Math.ceil(Date.now() / 1000) * 1000,
+				minimumUpdateId: this.offset,
+			})
+			client.project = { route: result, controller, tail: Promise.resolve(), pending: 0 }
+		})
+		this.activating = operation.then(
+			() => undefined,
+			() => undefined,
+		)
+		await operation
+		return result!
+	}
+
+	async projectSend(
+		clientId: string,
+		epoch: string,
+		text: string,
+		keyboard?: { text: string; callback_data: string }[][],
+	): Promise<void> {
+		const client = this.connection(clientId)
+		const project = client.project
+		if (!project || project.route.epoch !== epoch) throw new Error("Telegram project topic is no longer active")
+		const signal = AbortSignal.any([project.controller.signal, this.controller.signal])
+		await this.api.sendText(project.route.chatId, project.route.threadId, text, signal, keyboard)
+	}
+
+	private dispatchProject(accepted: TelegramAcceptedInput, client: Connection): void {
+		const project = client.project
+		const { input, voice, callbackId } = accepted
+		if (!project || input.epoch !== project.route.epoch) return
+		const signal = AbortSignal.any([project.controller.signal, this.controller.signal])
+		if (callbackId) void this.api.answerCallbackQuery(callbackId, signal).catch(() => undefined)
+		if (project.pending >= 16) return
+		project.pending++
+		project.tail = project.tail
+			.then(async () => {
+				if (signal.aborted || client.project !== project) return
+				let audio: string | undefined
+				if (voice) {
+					if (this.downloads >= 4) throw new Error("download limit")
+					this.downloads++
+					try {
+						audio = await this.api.downloadVoice(voice, signal)
+					} finally {
+						this.downloads--
+					}
+				}
+				if (!signal.aborted && client.project === project) client.send({ ...input, audio } as TelegramInput)
+			})
+			.catch(() => {
+				if (!signal.aborted) client.fault("Telegram project message failed (voice size, format or timeout)")
+			})
+			.finally(() => {
+				project.pending--
+			})
 	}
 
 	deactivate(clientId: string): void {
@@ -277,7 +384,10 @@ export class TelegramCoordinator {
 				// updates. Rotate the cursor before that boundary, with no active routes.
 				if (Date.now() - this.sequenceStartedAt > 6 * 24 * 60 * 60 * 1000) {
 					this.healthy = false
-					for (const clientId of this.clients.keys()) this.deactivate(clientId)
+					for (const clientId of this.clients.keys()) {
+						this.deactivate(clientId)
+						this.deactivateProject(clientId)
+					}
 					this.router.resetUpdateSequence()
 					this.offset = 0
 					this.report("Telegram long-running connection expired; reconnect from the plugin")
@@ -301,7 +411,10 @@ export class TelegramCoordinator {
 				if (this.controller.signal.aborted) return
 				this.healthy = false
 				// Fail closed on lost connectivity. Reactivation must be explicit in the IDE.
-				for (const clientId of this.clients.keys()) this.deactivate(clientId)
+				for (const clientId of this.clients.keys()) {
+					this.deactivate(clientId)
+					this.deactivateProject(clientId)
+				}
 				this.report(error instanceof TelegramApiError ? error.message : "Telegram polling failed")
 				if (error instanceof TelegramApiError && [401, 409].includes(error.code)) return
 				try {
@@ -314,6 +427,7 @@ export class TelegramCoordinator {
 	}
 
 	private dispatch(accepted: TelegramAcceptedInput, client: Connection): void {
+		if (accepted.input.kind === "project") return this.dispatchProject(accepted, client)
 		const { input, clientId, image, voice, callbackId } = accepted
 		const signal =
 			client.controller && client.incomingController

@@ -40,8 +40,47 @@ export const telegramInputSchema = z.discriminatedUnion("kind", [
 			updateId: z.number().int(),
 		})
 		.strict(),
+	/** Project control topic: commands, plain text/voice for a new task and menu button presses. */
+	z
+		.object({
+			kind: z.literal("project"),
+			text: z.string().max(100_000),
+			/** Validated menu button payload ("o:<taskId>", "m:<mode>", "p:<profileId>"). */
+			data: z
+				.string()
+				.max(64)
+				.regex(/^[omp]:[A-Za-z0-9_.:-]{1,56}$/)
+				.optional(),
+			audio: z
+				.string()
+				.max(14_000_000)
+				.regex(/^data:audio\/ogg;base64,[A-Za-z0-9+/=]+$/)
+				.optional(),
+			taskId: identifier,
+			epoch: identifier,
+			updateId: z.number().int(),
+		})
+		.strict(),
 ])
 export type TelegramInput = z.infer<typeof telegramInputSchema>
+
+const keyboardSchema = z
+	.array(
+		z
+			.array(
+				z
+					.object({
+						text: z.string().min(1).max(64),
+						callback_data: z
+							.string()
+							.max(64)
+							.regex(/^[omp]:[A-Za-z0-9_.:-]{1,56}$/),
+					})
+					.strict(),
+			)
+			.max(8),
+	)
+	.max(20)
 
 /** Bootstrap travels only over the parent/child IPC channel, never the shared listener. */
 export const telegramBootstrapSchema = z
@@ -54,7 +93,7 @@ export const telegramBootstrapSchema = z
 	})
 	.strict()
 
-/** The coordinator accepts no operation that creates, opens or resumes an IDE task. */
+/** Task creation from Telegram exists only as owner input in the project control topic; the host validates it. */
 export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation", [
 	z
 		.object({
@@ -64,6 +103,34 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 			title: z.string().min(1).max(256),
 			notice: z.string().min(1).max(2000),
 			taskText: z.string().max(2_000_000).optional(),
+		})
+		.strict(),
+	/** Persistent per-project control topic; the help text is posted on every activation. */
+	z
+		.object({
+			operation: z.literal("activateProject"),
+			projectId: identifier,
+			title: z.string().min(1).max(256),
+			help: z.string().min(1).max(4000),
+			commands: z
+				.array(
+					z
+						.object({
+							command: z.string().regex(/^[a-z0-9_]{1,32}$/),
+							description: z.string().min(1).max(256),
+						})
+						.strict(),
+				)
+				.max(20),
+		})
+		.strict(),
+	z.object({ operation: z.literal("deactivateProject") }).strict(),
+	z
+		.object({
+			operation: z.literal("projectSend"),
+			epoch: identifier,
+			text: z.string().min(1).max(20_000),
+			keyboard: keyboardSchema.optional(),
 		})
 		.strict(),
 	/** Lets the host skip AI title generation for tasks that already have a topic. */

@@ -106,6 +106,20 @@ export class TelegramLocalServer {
 									request.notice,
 									request.taskText,
 								)
+							case "activateProject":
+								return await this.coordinator.activateProject(
+									id,
+									request.projectId,
+									request.title,
+									request.help,
+									request.commands,
+								)
+							case "deactivateProject":
+								this.coordinator.deactivateProject(id)
+								return null
+							case "projectSend":
+								await this.coordinator.projectSend(id, request.epoch, request.text, request.keyboard)
+								return null
 							case "hasTopic":
 								return this.coordinator.hasTopic(id, request.projectId, request.taskId)
 							case "beginTransfer":

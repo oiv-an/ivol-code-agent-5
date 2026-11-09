@@ -25,6 +25,8 @@ export class TelegramTaskBridge {
 	/** Voice notes are transcribed asynchronously; later messages wait behind them to keep arrival order. */
 	private inputTail: Promise<void> = Promise.resolve()
 	private pendingVoice = 0
+	/** Texts delivered from Telegram, so their IDE echo is not sent back to the topic. */
+	private readonly remoteTexts = new Set<string>()
 
 	constructor(
 		private readonly task: Task,
@@ -60,6 +62,15 @@ export class TelegramTaskBridge {
 
 	private onMessage = ({ message }: { message: ClineMessage }): void => {
 		if (!this.active()) return
+		// Mirror what the owner types in the IDE; messages that came from Telegram are not echoed back.
+		if (message.type === "say" && message.say === "user_feedback" && !message.partial) {
+			const text = message.text?.trim() ?? ""
+			if (this.remoteTexts.delete(text)) return
+			if (!text && !message.images?.length) return
+			this.lastVisibleTs = Math.max(this.lastVisibleTs, message.ts)
+			this.dirty.set(message.ts, { ...message, say: "text", text: text ? `👤 ${text}` : "" })
+			return
+		}
 		const presentation = telegramPresentation(message)
 		if (presentation.kind === "ignore") return
 		if (
@@ -105,6 +116,8 @@ export class TelegramTaskBridge {
 	}
 
 	private deliver(text: string, images?: string[]): void {
+		this.remoteTexts.add(text.trim())
+		if (this.remoteTexts.size > 100) this.remoteTexts.delete(this.remoteTexts.values().next().value as string)
 		// Bound retained media while the task is busy. Text and images keep their arrival order.
 		const queued = this.task.messageQueueService.messages.filter((message) => message.source === "telegram")
 		const size = (value: string, media?: string[]) =>
@@ -117,8 +130,11 @@ export class TelegramTaskBridge {
 			return
 		}
 		// Never start/open/resume an IDE task and never synthesize approval from media.
-		if (!this.task.messageQueueService.isEmpty() || !this.task.respondToRemoteText(text, images))
-			this.task.messageQueueService.addMessage(text, images, "telegram")
+		if (!this.task.messageQueueService.isEmpty() || !this.task.respondToRemoteText(text, images)) {
+			const queued = this.task.messageQueueService.addMessage(text, images, "telegram")
+			// Same as the "Send now" button: reach the model with its next request instead of waiting for the task to finish.
+			if (queued) this.task.messageQueueService.markSendNow(queued.id)
+		}
 	}
 
 	private async notice(key: string, text: string): Promise<void> {
@@ -152,6 +168,7 @@ export class TelegramTaskBridge {
 	}
 
 	private onInput = (input: TelegramInput): void => {
+		if (input.kind === "project") return // Handled by the project control topic.
 		if (!this.active() || input.taskId !== this.task.taskId || input.epoch !== this.route.epoch) return
 		if (input.kind === "message") {
 			if (!Number.isSafeInteger(input.updateId) || input.updateId <= this.lastMessageUpdateId) return

@@ -17,14 +17,16 @@ export function TelegramButton() {
 		pending.current = undefined
 	}, [state, taskId])
 	// Never infer an active connection from the root alone: another descendant may own it.
-	const active = state?.status === "active" && state.taskId === taskId
-	const connecting = state?.status === "connecting"
+	const taskActive = state?.status === "active" && state.taskId === taskId
+	const projectActive = state?.projectStatus === "active"
+	// kilocode_change: the project control topic works without a task; inside a task both must be connected.
+	const active = projectActive && (!taskId || taskActive)
+	const connecting = state?.status === "connecting" || state?.projectStatus === "connecting"
 	const disconnect = active || connecting
 	const label = t(disconnect ? "settings:telegram.active" : "settings:telegram.activate")
 	const tooltip = disconnect
 		? label
-		: (state?.error ??
-			(!taskId ? t("settings:telegram.noTask") : !state?.configured ? t("settings:telegram.configure") : label))
+		: (state?.error ?? (!state?.configured ? t("settings:telegram.configure") : label))
 	return (
 		<StandardTooltip content={tooltip}>
 			<span className="inline-flex">
@@ -39,7 +41,7 @@ export function TelegramButton() {
 							? "border border-green-400 bg-green-700 text-white hover:bg-green-800 hover:text-white"
 							: "border border-transparent"
 					}
-					disabled={!disconnect && (!taskId || !state?.configured)}
+					disabled={!disconnect && !state?.configured}
 					onClick={(event) => {
 						const type = disconnect ? "deactivateTelegram" : "activateTelegram"
 						// A physical double click must not undo the first click after a fast backend ack.
