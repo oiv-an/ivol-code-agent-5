@@ -1,6 +1,6 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is an AI coding agent for VS Code, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). JetBrains packages for PhpStorm, IntelliJ IDEA, PyCharm and WebStorm were built in the past and are available as separate archives.
+IVOL Code Agent 5 is an AI coding agent for VS Code and JetBrains IDEs, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). Release **5.17.136** includes VS Code and nine separate packages for PhpStorm, IntelliJ IDEA, PyCharm and WebStorm.
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
@@ -8,17 +8,23 @@ This is an independent, unofficial fork. It is not affiliated with or endorsed b
 
 ## Install
 
-| Editor                    | Where to get it                                                                                                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code                   | [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5) or [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5)              |
-| PyCharm 2026.1 / 2026.2.3 | [GitHub release v5.17.114](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.114)                                                                                            |
-| Other JetBrains IDEs      | [GitHub release v5.17.81](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.81) (PhpStorm, IntelliJ IDEA 2026.2 / 2025.3, PyCharm 2025.1, WebStorm). These are older builds. |
+**[Download release 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** — all ten installers and SHA-256 checksums. [Choose your exact IDE package](DOWNLOADS.md).
+
+| Editor        | Packages                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5), [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5), or [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136.vsix)                                                                                                                     |
+| PhpStorm      | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                                                                                                                                                                                                                                                                            |
+| IntelliJ IDEA | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip), [2025.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip)                                                                                                                                |
+| PyCharm       | [2025.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2025.1.zip), [2026.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.1.zip), [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.2.zip)    |
+| WebStorm      | [2024.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-webstorm-2024.3.zip), [2026.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-webstorm-2026.1.zip), [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-webstorm-2026.2.zip) |
 
 The extension ID is `ivol.ivol-code-agent-5`, so an official upstream update cannot replace it. Updating over an existing install keeps task history, provider profiles and secure credentials.
 
-JetBrains ZIPs are installed through **Settings → Plugins → ⚙ → Install Plugin from Disk** without unpacking. They require Node.js 20.6.0 or newer, the bundled JCEF runtime and the Terminal plugin. Pick the archive that matches your IDE platform. Russian instructions: [DOWNLOADS.md](DOWNLOADS.md).
+JetBrains ZIPs are installed through **Settings → Plugins → ⚙ → Install Plugin from Disk** without unpacking. They require Node.js 20.6.0 or newer, the bundled JCEF runtime and the Terminal plugin. Pick the archive that matches your IDE platform; do not widen an archive's compatibility range manually. [Installation and compatibility details](DOWNLOADS.md).
 
-Active development and regular releases currently target VS Code only. New JetBrains packages are built only on request.
+Every JetBrains target passed compilation, 206 automated tests and Plugin Verifier against its target SDK. Shared extension files match the published VSIX byte for byte. Legacy API warnings remain; these checks do not replace interactive installation testing on each IDE/OS.
+
+Ordinary releases publish VS Code to both stores and GitHub Releases with updated download documentation. Full releases additionally refresh every existing JetBrains target; named-target builds remain available on request.
 
 ## What is different from upstream 5.16.2
 
