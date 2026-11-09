@@ -15,12 +15,12 @@ The full list of changes is in the [README on GitHub](https://github.com/oiv-an/
 - **Web search:** optional native web search that the model triggers on its own, with sources, plus a separate search window from the globe button.
 - **Long conversations:** incremental updates, a bounded live message window with history loading on scroll, a compact task history index and fast saves.
 - **Current Task memory:** `CURRENT_TASK.md` keeps the goal, checklist and next step. Work continues after successful context compression; failures require explicit retry without discarding a verified memory update. Frozen messages stay in context.
-- **Chat:** tool and command activity shown in chat, an always-available Stop button, conversation search, file attachments from anywhere on disk, a message queue that never loses input, per-task scheduled reminders, automatic shrinking of screenshots and attached images, image generation and editing through your provider, and a YOLO timer.
+- **Chat:** tool and command activity shown in chat, an always-available Stop button, conversation search, file attachments from anywhere on disk, a message queue that never loses input with a "Send now" button, per-task scheduled reminders, automatic shrinking of screenshots and attached images, image generation and editing through your provider, and a YOLO timer.
 - **Built-in chat switch:** disable the editor's own AI chat in all VS Code windows with one checkbox in IVOL settings.
 - **Global rules:** one shared instruction file for your projects, with its full path and an editor button in IVOL settings. Existing rules are not migrated automatically.
 - **Task history:** stored inside each project in `.ivol/` with atomic, recoverable writes and reliable checkpoint restore.
 - **Browser:** BrowserOS neo and personal Chrome control, with browser approval remembered per task.
-- **Telegram:** continue an explicitly connected task in a private Telegram topic.
+- **Telegram:** continue an explicitly connected task in a private Telegram topic, including voice messages transcribed through Groq.
 - **Autocomplete:** a separate model for autocomplete, off by default.
 
 ## Claude Code account access
@@ -35,7 +35,7 @@ Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-
 
 ## Versioning
 
-Version `5.17.132` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
+Version `5.17.135` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
 
 ## License and attribution
 

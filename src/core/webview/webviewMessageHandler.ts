@@ -544,6 +544,7 @@ export const webviewMessageHandler = async (
 		}
 		case "getTelegramState":
 		case "saveTelegramSettings":
+		case "saveGroqApiKey": // kilocode_change
 		case "activateTelegram":
 		case "deactivateTelegram": {
 			const { handleTelegram } = await import("../kilocode/webview/telegramHandler")
@@ -4558,6 +4559,12 @@ export const webviewMessageHandler = async (
 			provider.getCurrentTask()?.messageQueueService.removeMessage(message.text ?? "")
 			break
 		}
+		// kilocode_change start
+		case "sendQueuedMessageNow": {
+			provider.getCurrentTask()?.messageQueueService.markSendNow(message.text ?? "")
+			break
+		}
+		// kilocode_change end
 		case "editQueuedMessage": {
 			if (message.payload) {
 				const { id, text, images } = message.payload as EditQueuedMessagePayload

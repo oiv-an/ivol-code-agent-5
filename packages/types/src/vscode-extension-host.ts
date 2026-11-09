@@ -188,6 +188,8 @@ export interface TelegramState {
 	rootTaskId?: string
 	configured: boolean
 	ownerId?: number
+	/** A Groq API key for voice-message transcription is stored. */
+	groqConfigured?: boolean
 	botUsername?: string
 	taskId?: string
 	status: "inactive" | "connecting" | "active" | "error"
@@ -940,6 +942,7 @@ export interface WebviewMessage {
 	advisorExtensionId?: string // kilocode_change
 	projectTaskStorage?: { enabled: boolean; hide: boolean } // kilocode_change
 	telegramSettings?: { token?: string; ownerId: string; requestId: string } // kilocode_change
+	groqApiKey?: { apiKey: string; requestId: string } // kilocode_change: voice transcription key; empty removes it
 	telegramTaskId?: string // kilocode_change
 	type: // kilocode_change start
 	| "startAdvisorCheck"
@@ -948,6 +951,7 @@ export interface WebviewMessage {
 		| "openAdvisorExtension"
 		| "getTelegramState"
 		| "saveTelegramSettings"
+		| "saveGroqApiKey"
 		| "activateTelegram"
 		| "deactivateTelegram"
 		| "getGlobalInstructions" // kilocode_change
@@ -1207,6 +1211,7 @@ export interface WebviewMessage {
 		| "setTaskSchedule" // kilocode_change
 		| "removeQueuedMessage"
 		| "editQueuedMessage"
+		| "sendQueuedMessageNow" // kilocode_change
 		| "dismissUpsell"
 		| "getDismissedUpsells"
 		// kilocode_change start

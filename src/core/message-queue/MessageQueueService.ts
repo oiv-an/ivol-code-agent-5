@@ -84,6 +84,32 @@ export class MessageQueueService extends EventEmitter<QueueEvents> {
 		return true
 	}
 
+	// kilocode_change start - "Send now": deliver selected messages with the next API request.
+	public markSendNow(id: string): boolean {
+		const { message } = this.findMessage(id)
+
+		if (!message) {
+			return false
+		}
+
+		message.sendNow = true
+		this.emit("stateChanged", this._messages)
+		return true
+	}
+
+	public takeSendNowMessages(): QueuedMessage[] {
+		const taken = this._messages.filter((msg) => msg.sendNow)
+
+		if (taken.length === 0) {
+			return taken
+		}
+
+		this._messages = this._messages.filter((msg) => !msg.sendNow)
+		this.emit("stateChanged", this._messages)
+		return taken
+	}
+	// kilocode_change end
+
 	public dequeueMessage(): QueuedMessage | undefined {
 		const message = this._messages.shift()
 		this.emit("stateChanged", this._messages)

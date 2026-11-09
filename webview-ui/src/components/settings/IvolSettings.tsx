@@ -14,6 +14,7 @@ import { WebSearchSettings } from "./WebSearchSettings"
 import { OpenAiImageGenerationSettings } from "./OpenAiImageGenerationSettings" // kilocode_change
 import { PinnedToolSettings } from "./PinnedToolSettings" // kilocode_change
 import { TelegramSettings } from "./TelegramSettings"
+import { GroqSettings } from "./GroqSettings"
 import { ProjectTaskStorageSettings } from "./ProjectTaskStorageSettings"
 import { GlobalInstructionsSettings } from "./GlobalInstructionsSettings"
 import { BuiltInChatSettings } from "./BuiltInChatSettings" // kilocode_change
@@ -198,6 +199,9 @@ export function IvolSettings({
 			/>
 			<SearchableSetting settingId="telegram" section="ivol" label={t("settings:telegram.title")}>
 				<TelegramSettings />
+			</SearchableSetting>
+			<SearchableSetting settingId="groq" section="ivol" label={t("settings:groq.title")}>
+				<GroqSettings />
 			</SearchableSetting>
 		</div>
 	)

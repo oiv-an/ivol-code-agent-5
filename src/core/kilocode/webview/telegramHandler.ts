@@ -34,6 +34,15 @@ export async function handleTelegram(provider: ClineProvider, message: WebviewMe
 					telegramRequestId: message.telegramSettings.requestId,
 				})
 				break
+			case "saveGroqApiKey":
+				if (!message.groqApiKey) throw new Error("Missing Groq settings")
+				await manager.saveGroqKey(message.groqApiKey.apiKey)
+				await provider.postMessageToWebview({
+					type: "telegramSettingsSaved",
+					telegramSettingsSaved: true,
+					telegramRequestId: message.groqApiKey.requestId,
+				})
+				break
 			case "activateTelegram":
 				if (!message.telegramTaskId) throw new Error("Missing Telegram task")
 				await manager.activate(message.telegramTaskId)
@@ -45,11 +54,11 @@ export async function handleTelegram(provider: ClineProvider, message: WebviewMe
 	} catch {
 		// Never log the incoming message: it can contain the bot token.
 		provider.log("Telegram operation failed")
-		if (message.type === "saveTelegramSettings") {
+		if (message.type === "saveTelegramSettings" || message.type === "saveGroqApiKey") {
 			await provider.postMessageToWebview({
 				type: "telegramSettingsSaved",
 				telegramSettingsSaved: false,
-				telegramRequestId: message.telegramSettings?.requestId,
+				telegramRequestId: message.telegramSettings?.requestId ?? message.groqApiKey?.requestId,
 			})
 		}
 	}

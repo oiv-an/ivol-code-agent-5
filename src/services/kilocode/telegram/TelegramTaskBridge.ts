@@ -22,6 +22,9 @@ export class TelegramTaskBridge {
 	private lastVisibleTs = -Infinity
 	private readonly messageKeys = new Map<number, number>()
 	private lastMessageUpdateId = -1
+	/** Voice notes are transcribed asynchronously; later messages wait behind them to keep arrival order. */
+	private inputTail: Promise<void> = Promise.resolve()
+	private pendingVoice = 0
 
 	constructor(
 		private readonly task: Task,
@@ -29,8 +32,15 @@ export class TelegramTaskBridge {
 		private readonly route: TelegramRoute,
 		private readonly isCurrent: () => boolean,
 		private readonly onFault: (message: string) => void,
-		private readonly labels: { approve: string; deny: string; thinking: string; confirmation: string },
+		private readonly labels: {
+			approve: string
+			deny: string
+			thinking: string
+			confirmation: string
+			voiceFailed?: string
+		},
 		initialMessages: ClineMessage[] = [],
+		private readonly transcribe?: (audio: string) => Promise<string>,
 	) {
 		for (const message of initialMessages) this.onMessage({ message })
 		task.on(RooCodeEventName.Message, this.onMessage)
@@ -94,26 +104,84 @@ export class TelegramTaskBridge {
 		this.fail("Telegram coordinator disconnected")
 	}
 
+	private deliver(text: string, images?: string[]): void {
+		// Bound retained media while the task is busy. Text and images keep their arrival order.
+		const queued = this.task.messageQueueService.messages.filter((message) => message.source === "telegram")
+		const size = (value: string, media?: string[]) =>
+			value.length + (media?.reduce((n, image) => n + image.length, 0) ?? 0)
+		if (
+			queued.length >= 32 ||
+			queued.reduce((n, message) => n + size(message.text, message.images), size(text, images)) > 32 * 1024 * 1024
+		) {
+			this.fail("Telegram task input queue is full")
+			return
+		}
+		// Never start/open/resume an IDE task and never synthesize approval from media.
+		if (!this.task.messageQueueService.isEmpty() || !this.task.respondToRemoteText(text, images))
+			this.task.messageQueueService.addMessage(text, images, "telegram")
+	}
+
+	private async notice(key: string, text: string): Promise<void> {
+		await this.client.request({
+			operation: "publish",
+			taskId: this.task.taskId,
+			epoch: this.route.epoch,
+			messageId: `${this.route.epoch}:${key}`,
+			text,
+			partial: false,
+			markdown: false,
+			approvalRevision: this.approvalRevision,
+		})
+	}
+
+	private async transcribeVoice(audio: string, updateId: number): Promise<string | undefined> {
+		try {
+			if (!this.transcribe) throw new Error("Voice transcription is not configured")
+			const transcript = await this.transcribe(audio)
+			if (this.active()) await this.notice(`voice:${updateId}`, `🎙 ${transcript}`)
+			return transcript
+		} catch (error) {
+			const reason = error instanceof Error ? error.message.slice(0, 300) : "unknown error"
+			if (this.active())
+				await this.notice(
+					`voice:${updateId}`,
+					`⚠️ ${this.labels.voiceFailed ?? "Voice message could not be transcribed"}: ${reason}`,
+				).catch(() => this.fail("Telegram task delivery failed"))
+			return undefined
+		}
+	}
+
 	private onInput = (input: TelegramInput): void => {
 		if (!this.active() || input.taskId !== this.task.taskId || input.epoch !== this.route.epoch) return
 		if (input.kind === "message") {
 			if (!Number.isSafeInteger(input.updateId) || input.updateId <= this.lastMessageUpdateId) return
 			this.lastMessageUpdateId = input.updateId
-			// Bound retained media while the task is busy. Text and images keep their arrival order.
-			const queued = this.task.messageQueueService.messages.filter((message) => message.source === "telegram")
-			const size = (text: string, images?: string[]) =>
-				text.length + (images?.reduce((n, image) => n + image.length, 0) ?? 0)
-			if (
-				queued.length >= 32 ||
-				queued.reduce((n, message) => n + size(message.text, message.images), size(input.text, input.images)) >
-					32 * 1024 * 1024
-			) {
+			if (!input.audio && !this.pendingVoice) {
+				this.deliver(input.text, input.images)
+				return
+			}
+			if (this.pendingVoice >= 32) {
 				this.fail("Telegram task input queue is full")
 				return
 			}
-			// Never start/open/resume an IDE task and never synthesize approval from media.
-			if (!this.task.messageQueueService.isEmpty() || !this.task.respondToRemoteText(input.text, input.images))
-				this.task.messageQueueService.addMessage(input.text, input.images, "telegram")
+			this.pendingVoice++
+			const { audio, updateId } = input
+			this.inputTail = this.inputTail
+				.then(async () => {
+					if (!this.active()) return
+					let text = input.text
+					if (audio) {
+						const transcript = await this.transcribeVoice(audio, updateId)
+						// A failed transcription is reported in the topic and never reaches the model.
+						if (transcript === undefined) return
+						text = [input.text.trim(), transcript].filter(Boolean).join("\n\n")
+					}
+					if (this.active()) this.deliver(text, input.images)
+				})
+				.catch(() => this.fail("Telegram voice message handling failed"))
+				.finally(() => {
+					this.pendingVoice--
+				})
 		} else if (input.kind === "stop") {
 			const provider = this.task.providerRef.deref()
 			if (provider?.getCurrentTask() === this.task) {

@@ -8,9 +8,11 @@ import { readProjectTaskStorage } from "../project-task-storage"
 import { telegramBootstrapSchema } from "./protocol"
 import { launchTelegramCoordinator } from "./launchCoordinator"
 import { telegramTopicTitle } from "./presentation"
+import { generateTelegramTopicName } from "./topicTitle"
 import { TelegramTaskBridge } from "./TelegramTaskBridge"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
 import { TelegramStartupError } from "./startupFailure"
+import { transcribeWithGroq } from "./groqTranscription"
 
 import type { TelegramInput, TelegramRoute } from "./TelegramRouter"
 import type { Task } from "../../../core/task/Task"
@@ -21,6 +23,7 @@ export interface TelegramTransfer {
 }
 
 const SECRET_KEY = "ivol.telegram.credentials.v1"
+const GROQ_SECRET_KEY = "ivol.groq.apiKey.v1"
 const routeSchema = z.object({
 	key: z.string(),
 	clientId: z.string(),
@@ -76,10 +79,35 @@ export class TelegramManager {
 		const generation = this.generation
 		const revision = this.settingsRevision
 		const credentials = await this.credentials()
+		const groqConfigured = !!(await this.provider.context.secrets.get(GROQ_SECRET_KEY))
 		if (this.disposed || generation !== this.generation || revision !== this.settingsRevision || this.saving) return
 		this.state.configured = !!credentials
 		this.state.ownerId = credentials?.ownerId
+		this.state.groqConfigured = groqConfigured
 		await this.publishState()
+	}
+
+	/** An empty key removes the stored one. The key never leaves secret storage except in the Groq request. */
+	async saveGroqKey(apiKey: string | undefined): Promise<void> {
+		const value = apiKey?.trim()
+		if (value && (value.length > 512 || /\s/.test(value))) throw new Error("Invalid Groq API key")
+		if (value) await this.provider.context.secrets.store(GROQ_SECRET_KEY, value)
+		else await this.provider.context.secrets.delete(GROQ_SECRET_KEY)
+		this.state = { ...this.state, groqConfigured: !!value }
+		await this.publishState()
+	}
+
+	private transcribe = async (audio: string): Promise<string> =>
+		transcribeWithGroq(audio, await this.provider.context.secrets.get(GROQ_SECRET_KEY))
+
+	private bridgeLabels() {
+		return {
+			approve: t("common:telegram.approve"),
+			deny: t("common:telegram.deny"),
+			thinking: t("common:telegram.thinking"),
+			confirmation: t("common:telegram.confirmation"),
+			voiceFailed: t("common:telegram.voiceFailed"),
+		}
 	}
 
 	private async credentials(): Promise<z.infer<typeof telegramBootstrapSchema> | undefined> {
@@ -177,8 +205,18 @@ export class TelegramManager {
 			client.on("disconnected", captureFault)
 			const project = path.basename(task.cwd)
 			const taskText = task.clineMessages[0]?.text ?? ""
-			const title = telegramTopicTitle(taskText, t("common:telegram.taskTitle"))
+			const fallbackTitle = t("common:telegram.taskTitle")
+			const requestTitle = telegramTopicTitle(taskText, fallbackTitle)
+			let title = requestTitle
 			const projectId = readProjectTaskStorage(task.cwd)?.projectId ?? task.cwd
+			// Existing topics keep their name; only a new topic gets "<project> / <short AI name>".
+			if (!(await client.request({ operation: "hasTopic", projectId, taskId }))) {
+				title = await generateTelegramTopicName(project, taskText, task.apiConfiguration, fallbackTitle)
+				if (!current()) {
+					client.close()
+					return
+				}
+			}
 			const route = routeSchema.parse(
 				await client.request({
 					operation: "activate",
@@ -186,7 +224,7 @@ export class TelegramManager {
 					taskId,
 					title,
 					taskText,
-					notice: t("common:telegram.notice", { project, task: title }),
+					notice: t("common:telegram.notice", { project, task: requestTitle }),
 				}),
 			)
 			if (!current()) {
@@ -210,13 +248,9 @@ export class TelegramManager {
 				() => {
 					if (current()) void this.fail()
 				},
-				{
-					approve: t("common:telegram.approve"),
-					deny: t("common:telegram.deny"),
-					thinking: t("common:telegram.thinking"),
-					confirmation: t("common:telegram.confirmation"),
-				},
+				this.bridgeLabels(),
 				[...buffered.values()],
+				this.transcribe,
 			)
 			client.off("input", captureInput)
 			for (const input of inputs) client.emit("input", input)
@@ -385,13 +419,9 @@ export class TelegramManager {
 							() => {
 								if (current()) void this.fail()
 							},
-							{
-								approve: t("common:telegram.approve"),
-								deny: t("common:telegram.deny"),
-								thinking: t("common:telegram.thinking"),
-								confirmation: t("common:telegram.confirmation"),
-							},
+							this.bridgeLabels(),
 							[...buffered.values()],
+							this.transcribe,
 						)
 						cleanup()
 						this.transfer = undefined
@@ -434,7 +464,12 @@ export class TelegramManager {
 		this.bridge = undefined
 		this.client?.close()
 		this.client = undefined
-		this.state = { configured: this.state.configured, ownerId: this.state.ownerId, status: "inactive" }
+		this.state = {
+			configured: this.state.configured,
+			ownerId: this.state.ownerId,
+			groqConfigured: this.state.groqConfigured,
+			status: "inactive",
+		}
 	}
 
 	async deactivate(taskId?: string): Promise<void> {

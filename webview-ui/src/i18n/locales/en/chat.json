@@ -590,7 +590,9 @@
 	},
 	"queuedMessages": {
 		"title": "Queued Messages",
-		"clickToEdit": "Click to edit message"
+		"clickToEdit": "Click to edit message",
+		"sendNow": "Send now: deliver with the next request",
+		"sendNowPending": "Will be sent with the next request"
 	},
 	"contextMenu": {
 		"noResults": "No results",

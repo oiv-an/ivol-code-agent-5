@@ -13,9 +13,10 @@ interface QueuedMessagesProps {
 	queue: QueuedMessage[]
 	onRemove: (index: number) => void
 	onUpdate: (index: number, newText: string) => void
+	onSendNow?: (index: number) => void // kilocode_change
 }
 
-export const QueuedMessages = ({ queue, onRemove, onUpdate }: QueuedMessagesProps) => {
+export const QueuedMessages = ({ queue, onRemove, onUpdate, onSendNow }: QueuedMessagesProps) => {
 	const { t } = useTranslation("chat")
 	const [editingStates, setEditingStates] = useState<Record<string, { isEditing: boolean; value: string }>>({})
 
@@ -90,6 +91,34 @@ export const QueuedMessages = ({ queue, onRemove, onUpdate }: QueuedMessagesProp
 									)}
 								</div>
 								<div className="flex">
+									{/* kilocode_change start */}
+									{onSendNow && (
+										<Button
+											variant="ghost"
+											size="icon"
+											className="shrink-0"
+											disabled={message.sendNow}
+											title={
+												message.sendNow
+													? t("chat:queuedMessages.sendNowPending", {
+															defaultValue: "Will be sent with the next request",
+														})
+													: t("chat:queuedMessages.sendNow", { defaultValue: "Send now" })
+											}
+											data-testid="queued-message-send-now"
+											onClick={(e) => {
+												e.stopPropagation()
+												if (editState.isEditing) {
+													handleSaveEdit(index, message.id, editState.value)
+												}
+												onSendNow(index)
+											}}>
+											<span
+												className={`codicon ${message.sendNow ? "codicon-loading codicon-modifier-spin" : "codicon-send"}`}
+											/>
+										</Button>
+									)}
+									{/* kilocode_change end */}
 									<Button
 										variant="ghost"
 										size="icon"

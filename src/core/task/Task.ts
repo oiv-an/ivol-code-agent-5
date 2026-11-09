@@ -3820,6 +3820,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				maxReadFileLine = 500 /*kilocode_change*/,
 			} = (await this.providerRef.deref()?.getState()) ?? {}
 
+			// kilocode_change start - queued messages marked "Send now" join the next request.
+			if ((currentItem.retryAttempt ?? 0) === 0 && currentUserContent.length > 0) {
+				for (const queued of this.messageQueueService.takeSendNowMessages()) {
+					currentUserContent.push(
+						{
+							type: "text" as const,
+							text: `The user sent this message while you were working. Take it into account now:\n<user_message>\n${queued.text}\n</user_message>`,
+						},
+						...formatResponse.imageBlocks(queued.images),
+					)
+					await this.say("user_feedback", queued.text, queued.images)
+				}
+			}
+			// kilocode_change end
+
 			// kilocode_change start
 			const [parsedUserContent, needsRulesFileCheck] = await processKiloUserContentMentions({
 				context: this.getContext(),

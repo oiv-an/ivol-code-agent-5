@@ -19,6 +19,12 @@ export const telegramInputSchema = z.discriminatedUnion("kind", [
 				)
 				.max(1)
 				.optional(),
+			/** Telegram voice note; transcribed by the receiving host before reaching the task. */
+			audio: z
+				.string()
+				.max(14_000_000)
+				.regex(/^data:audio\/ogg;base64,[A-Za-z0-9+/=]+$/)
+				.optional(),
 			taskId: identifier,
 			epoch: identifier,
 			updateId: z.number().int(),
@@ -60,6 +66,8 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 			taskText: z.string().max(2_000_000).optional(),
 		})
 		.strict(),
+	/** Lets the host skip AI title generation for tasks that already have a topic. */
+	z.object({ operation: z.literal("hasTopic"), projectId: identifier, taskId: identifier }).strict(),
 	z.object({ operation: z.literal("beginTransfer"), taskId: identifier, epoch: identifier }).strict(),
 	z.object({ operation: z.literal("finishTransfer"), taskId: identifier, epoch: identifier }).strict(),
 	z.object({ operation: z.literal("deactivate") }).strict(),

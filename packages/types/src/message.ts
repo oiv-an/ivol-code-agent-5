@@ -363,6 +363,7 @@ export const queuedMessageSchema = z.object({
 	id: z.string(),
 	text: z.string(),
 	images: z.array(z.string()).optional(),
+	sendNow: z.boolean().optional(), // kilocode_change: user asked to deliver it with the next API request.
 })
 
 export type QueuedMessage = z.infer<typeof queuedMessageSchema>

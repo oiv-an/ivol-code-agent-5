@@ -215,6 +215,16 @@ export class TelegramCoordinator {
 		return result!
 	}
 
+	hasTopic(clientId: string, projectId: string, taskId: string): boolean {
+		this.connection(clientId)
+		if (!this.bot) throw new Error("Telegram is not connected")
+		try {
+			return this.store.get(TelegramTopicStore.key(this.bot.id, this.ownerId, projectId, taskId)) !== undefined
+		} catch {
+			return true // An unresolved creation is never named again; activation reports the recovery error.
+		}
+	}
+
 	/** Suspend input before the old Task is removed; retain the root topic and output queue. */
 	beginTransfer(clientId: string, taskId: string, epoch: string): TelegramRoute {
 		const client = this.connection(clientId)
@@ -304,7 +314,7 @@ export class TelegramCoordinator {
 	}
 
 	private dispatch(accepted: TelegramAcceptedInput, client: Connection): void {
-		const { input, clientId, image, callbackId } = accepted
+		const { input, clientId, image, voice, callbackId } = accepted
 		const signal =
 			client.controller && client.incomingController
 				? AbortSignal.any([client.controller.signal, client.incomingController.signal])
@@ -344,23 +354,25 @@ export class TelegramCoordinator {
 			.then(async () => {
 				if (!current()) return
 				let images: string[] | undefined
-				if (image) {
+				let audio: string | undefined
+				if (image || voice) {
 					// Bound aggregate memory and connections across all IDE windows too.
 					if (this.downloads >= 4) throw new Error("download limit")
 					this.downloads++
 					try {
-						images = [await this.api.downloadImage(image, signal)]
+						if (image) images = [await this.api.downloadImage(image, signal)]
+						else if (voice) audio = await this.api.downloadVoice(voice, signal)
 					} finally {
 						this.downloads--
 					}
 				}
-				if (current()) client.send({ ...input, images })
+				if (current()) client.send({ ...input, images, audio })
 			})
 			.catch(() => {
 				if (current()) {
 					this.deactivate(clientId)
 					client.fault(
-						"Telegram incoming message failed (image format, size, timeout or download limit); reconnect from the plugin",
+						"Telegram incoming message failed (media format, size, timeout or download limit); reconnect from the plugin",
 					)
 				}
 			})

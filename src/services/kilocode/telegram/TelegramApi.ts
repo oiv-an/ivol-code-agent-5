@@ -10,6 +10,8 @@ export interface TelegramUser {
 }
 
 export const TELEGRAM_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+/** Opus voice notes are small (~1 MB per 10 minutes); this bound keeps the IPC frame well below its limit. */
+export const TELEGRAM_VOICE_MAX_BYTES = 10 * 1024 * 1024
 
 export interface TelegramImageFile {
 	file_id: string
@@ -26,6 +28,7 @@ export interface TelegramMessage {
 	caption?: string
 	photo?: (TelegramImageFile & { width: number; height: number })[]
 	document?: TelegramImageFile & { mime_type?: string }
+	voice?: TelegramImageFile & { duration?: number; mime_type?: string }
 }
 
 export interface TelegramUpdate {
@@ -102,9 +105,35 @@ export class TelegramApi {
 
 	/** Only called after routing authorizes the owner and active connection epoch. */
 	async downloadImage(file: TelegramImageFile, signal: AbortSignal): Promise<string> {
-		const bounded = AbortSignal.any([signal, AbortSignal.timeout(20_000)])
+		return this.downloadFile(file, signal, TELEGRAM_IMAGE_MAX_BYTES, 20_000, (bytes) => {
+			const mime = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+				? "image/png"
+				: bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+					? "image/jpeg"
+					: undefined
+			if (!mime) throw new TelegramApiError(415)
+			return `data:${mime};base64,${bytes.toString("base64")}`
+		})
+	}
+
+	/** Voice notes are OGG/Opus containers; anything else is rejected before transcription. */
+	async downloadVoice(file: TelegramImageFile, signal: AbortSignal): Promise<string> {
+		return this.downloadFile(file, signal, TELEGRAM_VOICE_MAX_BYTES, 60_000, (bytes) => {
+			if (bytes.subarray(0, 4).toString("latin1") !== "OggS") throw new TelegramApiError(415)
+			return `data:audio/ogg;base64,${bytes.toString("base64")}`
+		})
+	}
+
+	private async downloadFile(
+		file: TelegramImageFile,
+		signal: AbortSignal,
+		maxBytes: number,
+		timeoutMs: number,
+		encode: (bytes: Buffer) => string,
+	): Promise<string> {
+		const bounded = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
 		const checkSize = (size?: number) => {
-			if (size !== undefined && (!Number.isSafeInteger(size) || size < 1 || size > TELEGRAM_IMAGE_MAX_BYTES))
+			if (size !== undefined && (!Number.isSafeInteger(size) || size < 1 || size > maxBytes))
 				throw new TelegramApiError(413)
 		}
 		try {
@@ -147,14 +176,7 @@ export class TelegramApi {
 					chunks.push(Buffer.from(chunk.value))
 				}
 				bounded.throwIfAborted()
-				const bytes = Buffer.concat(chunks, size)
-				const mime = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-					? "image/png"
-					: bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-						? "image/jpeg"
-						: undefined
-				if (!mime) throw new TelegramApiError(415)
-				return `data:${mime};base64,${bytes.toString("base64")}`
+				return encode(Buffer.concat(chunks, size))
 			} finally {
 				await reader.cancel().catch(() => undefined) // Best-effort cleanup, never expose transport errors.
 				reader.releaseLock()

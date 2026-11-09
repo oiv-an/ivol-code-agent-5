@@ -20,6 +20,7 @@ export interface TelegramAcceptedInput {
 	clientId: string
 	input: TelegramInput
 	image?: TelegramImageFile
+	voice?: TelegramImageFile
 	callbackId?: string
 }
 
@@ -121,6 +122,12 @@ export class TelegramRouter {
 				clientId: route.clientId,
 				input: { ...base, kind: "message", text: message.caption ?? "" },
 				image: { file_id: image.file_id, file_size: image.file_size },
+			}
+		if (message.voice)
+			return {
+				clientId: route.clientId,
+				input: { ...base, kind: "message", text: message.caption ?? "" },
+				voice: { file_id: message.voice.file_id, file_size: message.voice.file_size },
 			}
 		if (!message.text?.trim()) return
 		if (message.text.trim() === "/stop") return { clientId: route.clientId, input: { ...base, kind: "stop" } }

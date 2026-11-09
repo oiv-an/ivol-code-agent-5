@@ -1,6 +1,6 @@
 # IVOL improvements at a glance
 
-Updated for 5.17.132. This document was originally a Russian draft; its filename is retained for
+Updated for 5.17.135. This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
@@ -50,7 +50,7 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 
 ## 6. Reliability and performance
 
-- Messages submitted during work are queued; large files are read in resumable sections.
+- Messages submitted during work are queued and can be sent to the model immediately with "Send now"; large files are read in resumable sections.
 - Truncated write commands are not executed with partial file contents.
 - Streaming has cancellation, timeouts and bounded retries.
 - Long chats use incremental rendering and bounded live history. Task indexes cap oversized titles
@@ -73,7 +73,7 @@ See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGE
 - YOLO mode has a timer. Stop remains available during tool execution.
 - Provider connection checks produce credential-free diagnostics; TLS exceptions are per profile.
 - A notification reminds users about completed tasks when they leave the editor.
-- Explicitly connected tasks can continue in private Telegram topics, including approvals and Stop.
+- Explicitly connected tasks can continue in private Telegram topics, including approvals, Stop and Groq-transcribed voice messages; topics are named "project / short task name".
 - Autocomplete uses a separately chosen model and is off by default.
 - One checkbox in IVOL settings disables the built-in VS Code chat in all windows and projects.
 

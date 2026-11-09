@@ -1,10 +1,11 @@
 {
 	"telegram": {
-		"notice": "🟢 Work on this task has started in IVOL Code.\nProject: {{project}}\nTask: {{task}}\nReply with text, use the decision buttons, or send /stop to stop this task. Old history is not replayed. Files and voice messages sent to the bot are not supported.",
+		"notice": "🟢 Work on this task has started in IVOL Code.\nProject: {{project}}\nTask: {{task}}\nReply with text or a voice message, use the decision buttons, or send /stop to stop this task. Old history is not replayed. Other files sent to the bot are not supported.",
 		"approve": "Allow",
 		"deny": "Reject",
 		"thinking": "Thinking…",
 		"confirmation": "The agent needs permission to continue. Review the action in the IDE before allowing it.",
+		"voiceFailed": "Voice message was not sent to the agent: transcription failed",
 		"taskTitle": "Task",
 		"failed": "Telegram connection failed. Check the bot token, owner ID, private-chat topics in BotFather and that no other service uses this bot.",
 		"failure": {

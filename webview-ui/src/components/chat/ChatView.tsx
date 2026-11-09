@@ -2335,6 +2335,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						})
 					}
 				}}
+				// kilocode_change start
+				onSendNow={(index) => {
+					if (messageQueue[index]) {
+						vscode.postMessage({ type: "sendQueuedMessageNow", text: messageQueue[index].id })
+					}
+				}}
+				// kilocode_change end
 			/>
 			<ChatTextArea
 				ref={textAreaRef}

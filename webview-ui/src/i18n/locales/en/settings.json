@@ -17,7 +17,7 @@
 		"ownerId": "Your numeric Telegram user ID",
 		"botFather": "Create a bot / enable topics",
 		"findId": "Find my ID (third-party bot)",
-		"privacy": "Activating a task sends new text, available reasoning and supported images to Telegram, not old history. Reply with text, use approval buttons or /stop. Incoming files and voice messages are not supported. The computer and IDE must remain running. Other chats and inactive topics are ignored; disconnected messages are not replayed.",
+		"privacy": "Activating a task sends new text, available reasoning and supported images to Telegram, not old history. Reply with text, photos, voice messages, approval buttons or /stop. Voice messages require a Groq key (see below). Other incoming files are not supported. The computer and IDE must remain running. Other chats and inactive topics are ignored; disconnected messages are not replayed.",
 		"save": "Save Telegram settings",
 		"saved": "Telegram settings saved",
 		"activate": "Connect Telegram",
@@ -25,6 +25,15 @@
 		"connecting": "Connecting Telegram…",
 		"configure": "Configure Telegram in Settings → IVOL first",
 		"noTask": "Open a task in the plugin first"
+	},
+	"groq": {
+		"title": "Groq (speech recognition)",
+		"description": "Telegram voice messages are transcribed by Groq (whisper-large-v3) and sent to the agent as text. The recognized text is echoed in the topic. Audio is sent to Groq; without a key voice messages are not delivered.",
+		"apiKey": "Groq API key",
+		"keySaved": "Key saved — leave blank to keep it",
+		"getKey": "Get a Groq API key",
+		"save": "Save Groq key",
+		"remove": "Remove key"
 	},
 	"projectTaskStorage": {
 		"title": "Task storage",
