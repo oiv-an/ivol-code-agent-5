@@ -322,6 +322,20 @@ export class TelegramCoordinator {
 		return result!
 	}
 
+	/** Applies a user rename to an existing task topic; "not modified" and missing topics are ignored. */
+	async renameTopic(clientId: string, projectId: string, taskId: string, title: string): Promise<boolean> {
+		this.connection(clientId)
+		if (!this.bot || !this.healthy) throw new Error("Telegram is not connected")
+		const threadId = this.store.get(TelegramTopicStore.key(this.bot.id, this.ownerId, projectId, taskId))
+		if (!threadId) return false
+		try {
+			await this.api.renameTopic(this.ownerId, threadId, title, this.controller.signal)
+		} catch (error) {
+			if (!(error instanceof TelegramApiError) || error.code !== 400) throw error
+		}
+		return true
+	}
+
 	hasTopic(clientId: string, projectId: string, taskId: string): boolean {
 		this.connection(clientId)
 		if (!this.bot) throw new Error("Telegram is not connected")

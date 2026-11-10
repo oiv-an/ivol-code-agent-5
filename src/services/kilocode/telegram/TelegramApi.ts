@@ -236,6 +236,14 @@ export class TelegramApi {
 		return topic.message_thread_id
 	}
 
+	async renameTopic(chatId: number, threadId: number, name: string, signal?: AbortSignal): Promise<void> {
+		await this.write(
+			"editForumTopic",
+			{ chat_id: chatId, message_thread_id: threadId, name: Array.from(name).slice(0, 128).join("") },
+			signal,
+		)
+	}
+
 	/** Command menu ("/" button) for the owner's private chat only. */
 	async setCommands(
 		chatId: number,

@@ -3,6 +3,7 @@
 ## 5.17.138
 
 - Telegram: the project control topic now lists the three most recent tasks; tap /task1, /task2 or /task3 (or send /task N) to open and connect that task.
+- Telegram: renaming a task now renames its Telegram topic too (also applied on the next connection if the task was renamed offline).
 
 ## 5.17.137
 

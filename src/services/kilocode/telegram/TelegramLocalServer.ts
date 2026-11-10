@@ -122,6 +122,13 @@ export class TelegramLocalServer {
 								return null
 							case "hasTopic":
 								return this.coordinator.hasTopic(id, request.projectId, request.taskId)
+							case "renameTopic":
+								return await this.coordinator.renameTopic(
+									id,
+									request.projectId,
+									request.taskId,
+									request.title,
+								)
 							case "beginTransfer":
 								return this.coordinator.beginTransfer(id, request.taskId, request.epoch)
 							case "finishTransfer":

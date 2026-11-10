@@ -107,7 +107,7 @@ import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { applyMaxModelPreset, applyModelSelection, pickModelSelection } from "../config/kilocode/taskModelSelection" // kilocode_change
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
-import { disposeTelegram, beginTelegramTransfer } from "../kilocode/webview/telegramHandler" // kilocode_change
+import { disposeTelegram, beginTelegramTransfer, renameTelegramTopic } from "../kilocode/webview/telegramHandler" // kilocode_change
 import { TaskScheduleRunner } from "../kilocode/task-schedule/TaskScheduleRunner" // kilocode_change
 import { getSystemPromptFilePath } from "../prompts/sections/custom-system-prompt"
 // kilocode_change start
@@ -4049,6 +4049,7 @@ export class ClineProvider
 		// Routine task saves omit title and therefore preserve this display-only metadata.
 		await this.updateTaskHistory({ ...item, title: title.trim() })
 		await this.postStateToWebview()
+		renameTelegramTopic(this, id)
 	}
 
 	// Add new methods for favorite functionality

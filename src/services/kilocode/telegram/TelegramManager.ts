@@ -19,6 +19,7 @@ import {
 	telegramProjectCommands,
 	telegramProjectHelp,
 	telegramProjectTasks,
+	taskLabel,
 } from "./TelegramProjectControl"
 
 import type { TelegramInput, TelegramRoute } from "./TelegramRouter"
@@ -182,7 +183,7 @@ export class TelegramManager {
 			const cwd = this.provider.cwd
 			const project = path.basename(cwd)
 			const projectId = readProjectTaskStorage(cwd)?.projectId ?? cwd
-			const recent = telegramProjectTasks(this.provider).map((item) => item.task)
+			const recent = telegramProjectTasks(this.provider).map(taskLabel)
 			const route = routeSchema.parse(
 				await client.request({
 					operation: "activateProject",
@@ -337,9 +338,20 @@ export class TelegramManager {
 			const requestTitle = telegramTopicTitle(taskText, fallbackTitle)
 			let title = requestTitle
 			const projectId = readProjectTaskStorage(task.cwd)?.projectId ?? task.cwd
-			// Existing topics keep their name; only a new topic gets "<project> / <short AI name>".
+			const custom = this.customTopicName(taskId, project)
 			if (!(await client.request({ operation: "hasTopic", projectId, taskId }))) {
-				title = await generateTelegramTopicName(project, taskText, task.apiConfiguration, fallbackTitle)
+				// A new topic gets the user's task name, otherwise "<project> / <short AI name>".
+				title =
+					custom ?? (await generateTelegramTopicName(project, taskText, task.apiConfiguration, fallbackTitle))
+				if (!current()) {
+					client.close()
+					return
+				}
+			} else if (custom) {
+				// The task may have been renamed while it was not connected; "not modified" is ignored.
+				await client
+					.request({ operation: "renameTopic", projectId, taskId, title: custom })
+					.catch(() => this.provider.log("Telegram topic rename failed"))
 				if (!current()) {
 					client.close()
 					return
@@ -599,6 +611,26 @@ export class TelegramManager {
 			projectStatus: this.state.projectStatus,
 			status: "inactive",
 		}
+	}
+
+	/** "<project> / <user task name>" when the task was renamed in the history, otherwise undefined. */
+	private customTopicName(taskId: string, project: string): string | undefined {
+		const custom = this.provider
+			.getTaskHistory()
+			.find((item) => item.id === taskId)
+			?.title?.trim()
+		return custom ? Array.from(`${project} / ${custom}`).slice(0, 128).join("") : undefined
+	}
+
+	/** Called after a task rename: the existing topic of that task follows the new name. */
+	async renameTask(taskId: string): Promise<void> {
+		const client = this.client ?? this.project?.client
+		if (!client || this.disposed) return
+		const cwd = this.provider.cwd
+		const title = this.customTopicName(taskId, path.basename(cwd))
+		if (!title) return
+		const projectId = readProjectTaskStorage(cwd)?.projectId ?? cwd
+		await client.request({ operation: "renameTopic", projectId, taskId, title })
 	}
 
 	async deactivate(taskId?: string): Promise<void> {

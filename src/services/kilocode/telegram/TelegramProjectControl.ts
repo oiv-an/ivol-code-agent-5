@@ -20,6 +20,11 @@ export function telegramProjectTasks(provider: ClineProvider) {
 		.sort((a, b) => b.ts - a.ts)
 }
 
+/** The user's task name when renamed in the history, otherwise the first request text. */
+export function taskLabel(item: { task: string; title?: string }): string {
+	return item.title?.trim() || item.task
+}
+
 export function telegramProjectCommands() {
 	return TELEGRAM_PROJECT_COMMANDS.map((command) => ({
 		command,
@@ -122,12 +127,7 @@ export class TelegramProjectControl {
 		switch (match[1].toLowerCase()) {
 			case "start":
 			case "help":
-				return this.send(
-					telegramProjectHelp(
-						this.projectName(),
-						this.projectTasks().map((item) => item.task),
-					),
-				)
+				return this.send(telegramProjectHelp(this.projectName(), this.projectTasks().map(taskLabel)))
 			case "new":
 				return argument ? this.newTask(argument) : this.send(t("common:telegram.project.newUsage"))
 			case "tasks":
@@ -176,7 +176,7 @@ export class TelegramProjectControl {
 		const current = this.provider.getCurrentTask()?.taskId
 		const keyboard: Keyboard = tasks.map((item, index) => [
 			{
-				text: `${item.id === current ? "▶️ " : ""}${index + 1}. ${shorten(item.task, 44)}`,
+				text: `${item.id === current ? "▶️ " : ""}${index + 1}. ${shorten(taskLabel(item), 44)}`,
 				callback_data: `o:${item.id}`,
 			},
 		])
@@ -195,7 +195,7 @@ export class TelegramProjectControl {
 		const item = this.projectTasks().find((entry) => entry.id === id)
 		if (!item) return this.send(t("common:telegram.project.taskMissing"))
 		await this.provider.showTaskWithId(item.id)
-		await this.send(t("common:telegram.project.opened", { task: shorten(item.task, 80) }))
+		await this.send(t("common:telegram.project.opened", { task: shorten(taskLabel(item), 80) }))
 		const current = this.provider.getCurrentTask()
 		if (current?.taskId === item.id) await this.hooks.activateTask(item.id)
 	}

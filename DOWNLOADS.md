@@ -1,16 +1,16 @@
 # Download IVOL Code Agent 5
 
-**[VS Code 5.17.137](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.137)** is the latest VS Code release, with its VSIX and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.137/SHA256SUMS.txt). It adds custom task names, name/prompt search and deletion from recent-task cards without changing conversation content. The 72 focused automated checks and backend, webview and shared-types checks passed; interactive behavior remains a separate verification.
+**[VS Code 5.17.138](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.138)** is the latest VS Code release, with its VSIX and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.138/SHA256SUMS.txt). It adds Telegram `/task N` shortcuts to recent tasks and renames a task's Telegram topic when the task is renamed (5.17.137 added custom task names). Telegram tests and backend type checks passed; interactive behavior remains a separate verification.
 
-**[JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** remain unchanged. This release contains nine JetBrains ZIPs, the previous VSIX and its own checksums. No JetBrains builds or installations were performed for 5.17.137.
+**[JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** remain unchanged. This release contains nine JetBrains ZIPs, the previous VSIX and its own checksums. No JetBrains builds or installations were performed for 5.17.137 or 5.17.138.
 
 ## Choose your IDE version
 
-Find the IDE version and build number in **Help → About**. Plugin versions (**VS Code 5.17.137**, **JetBrains 5.17.136**) are independent of IDE versions. SDK verification below means automated checks, not an interactive installation test.
+Find the IDE version and build number in **Help → About**. Plugin versions (**VS Code 5.17.138**, **JetBrains 5.17.136**) are independent of IDE versions. SDK verification below means automated checks, not an interactive installation test.
 
 | IDE                  | SDK used for compilation and verification | Declared compatibility                                       | Download                                                                                                                                       |
 | -------------------- | ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.137/ivol-code-agent-5-5.17.137.vsix)                                |
+| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.138/ivol-code-agent-5-5.17.138.vsix)                                |
 | PhpStorm 2026.2      | 2026.2.3, PS-262.10968.76                 | 262–262.\*                                                   | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                |
 | IntelliJ IDEA 2026.2 | 2026.2.2, IU-262.10315.125                | 262–262.\*                                                   | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip)        |
 | IntelliJ IDEA 2025.3 | 2025.3.6.1, IU-253.33813.55               | 253.33813.55–253.\*                                          | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip) |

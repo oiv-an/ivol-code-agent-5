@@ -135,6 +135,15 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 		.strict(),
 	/** Lets the host skip AI title generation for tasks that already have a topic. */
 	z.object({ operation: z.literal("hasTopic"), projectId: identifier, taskId: identifier }).strict(),
+	/** Renames an existing task topic after the user renamed the task; no-op when it has no topic. */
+	z
+		.object({
+			operation: z.literal("renameTopic"),
+			projectId: identifier,
+			taskId: identifier,
+			title: z.string().min(1).max(256),
+		})
+		.strict(),
 	z.object({ operation: z.literal("beginTransfer"), taskId: identifier, epoch: identifier }).strict(),
 	z.object({ operation: z.literal("finishTransfer"), taskId: identifier, epoch: identifier }).strict(),
 	z.object({ operation: z.literal("deactivate") }).strict(),

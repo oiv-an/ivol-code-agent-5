@@ -9,6 +9,14 @@ export function beginTelegramTransfer(provider: ClineProvider, from: Task, retur
 
 const managers = new WeakMap<ClineProvider, TelegramManager>()
 
+/** After a task rename, its Telegram topic (if any) takes the new name; failures never block the rename. */
+export function renameTelegramTopic(provider: ClineProvider, taskId: string): void {
+	void managers
+		.get(provider)
+		?.renameTask(taskId)
+		.catch(() => provider.log("Telegram topic rename failed"))
+}
+
 export function disposeTelegram(provider: ClineProvider): void {
 	managers.get(provider)?.dispose()
 	managers.delete(provider)
