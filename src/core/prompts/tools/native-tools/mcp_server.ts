@@ -11,7 +11,10 @@ import { normalizeToolSchema, type JsonSchema } from "../../../../utils/json-sch
  * @param mcpHub The McpHub instance containing connected servers.
  * @returns An array of OpenAI.Chat.ChatCompletionTool definitions.
  */
-export function getMcpServerTools(mcpHub?: McpHub): OpenAI.Chat.ChatCompletionTool[] {
+export function getMcpServerTools(
+	mcpHub?: McpHub,
+	loadedServers?: ReadonlySet<string>, // kilocode_change: lazy MCP — only these servers' schemas are sent
+): OpenAI.Chat.ChatCompletionTool[] {
 	if (!mcpHub) {
 		return []
 	}
@@ -25,6 +28,7 @@ export function getMcpServerTools(mcpHub?: McpHub): OpenAI.Chat.ChatCompletionTo
 		if (!server.tools) {
 			continue
 		}
+		if (loadedServers && !loadedServers.has(server.name)) continue // kilocode_change
 		for (const tool of server.tools) {
 			// Filter tools where tool.enabledForPrompt is not explicitly false
 			if (tool.enabledForPrompt === false) {

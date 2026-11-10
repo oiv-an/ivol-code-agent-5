@@ -105,6 +105,7 @@ async function generatePrompt(
 					effectiveDiffStrategy,
 					enableMcpServerCreation,
 					!isNativeProtocol(effectiveProtocol),
+					settings?.lazyMcpTools === true, // kilocode_change
 				)
 			: Promise.resolve(""),
 		getSkillsSection(skillsManager, mode as string),

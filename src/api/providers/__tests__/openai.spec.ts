@@ -414,6 +414,58 @@ describe("OpenAiHandler", () => {
 			expect(JSON.stringify(mockCreate.mock.calls[2][0].messages)).not.toContain("cache_control")
 		})
 
+		// kilocode_change start: forced cache affinity
+		it("sends the task id as prompt_cache_key", async () => {
+			for await (const _chunk of handler.createMessage(systemPrompt, messages, { taskId: "task-cache" })) {
+				// consume
+			}
+			expect(mockCreate.mock.calls[0][0].prompt_cache_key).toBe("task-cache")
+		})
+
+		it("drops prompt_cache_key once when the endpoint rejects it", async () => {
+			mockCreate
+				.mockRejectedValueOnce({ status: 400, message: "Unrecognized request argument: prompt_cache_key" })
+				.mockResolvedValue({
+					[Symbol.asyncIterator]: async function* () {
+						yield { choices: [{ delta: { content: "ok" }, index: 0 }] }
+					},
+				})
+			for await (const _chunk of handler.createMessage(systemPrompt, messages, { taskId: "t" })) {
+				// consume
+			}
+			for await (const _chunk of handler.createMessage(systemPrompt, messages, { taskId: "t" })) {
+				// consume
+			}
+			expect(mockCreate).toHaveBeenCalledTimes(3)
+			expect(mockCreate.mock.calls[1][0]).not.toHaveProperty("prompt_cache_key")
+			expect(mockCreate.mock.calls[2][0]).not.toHaveProperty("prompt_cache_key")
+			expect(JSON.stringify(mockCreate.mock.calls[2][0].messages)).toContain("cache_control")
+		})
+
+		it("re-enables cache breakpoints after the back-off interval", async () => {
+			vi.useFakeTimers()
+			try {
+				mockCreate
+					.mockRejectedValueOnce({ status: 422, message: "cache_control is not permitted" })
+					.mockResolvedValue({
+						[Symbol.asyncIterator]: async function* () {
+							yield { choices: [{ delta: { content: "ok" }, index: 0 }] }
+						},
+					})
+				for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+					// consume
+				}
+				vi.advanceTimersByTime(11 * 60 * 1000)
+				for await (const _chunk of handler.createMessage(systemPrompt, messages)) {
+					// consume
+				}
+				expect(JSON.stringify(mockCreate.mock.calls[2][0].messages)).toContain("cache_control")
+			} finally {
+				vi.useRealTimers()
+			}
+		})
+		// kilocode_change end
+
 		it("falls back to the untouched string payload when structured cache content is rejected", async () => {
 			mockCreate
 				.mockRejectedValueOnce({ status: 400, message: "messages[0].content must be a string" })

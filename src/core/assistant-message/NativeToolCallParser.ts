@@ -506,6 +506,12 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "load_mcp_server": // kilocode_change
+				if (partialArgs.server_name !== undefined) {
+					nativeArgs = { server_name: partialArgs.server_name }
+				}
+				break
+
 			case "fetch_instructions":
 				if (partialArgs.task !== undefined) {
 					nativeArgs = {
@@ -820,6 +826,12 @@ export class NativeToolCallParser {
 						message_ts: args.message_ts,
 						before: args.before,
 					} as NativeArgsFor<TName>
+					break
+
+				case "load_mcp_server": // kilocode_change
+					if (args.server_name !== undefined) {
+						nativeArgs = { server_name: args.server_name } as NativeArgsFor<TName>
+					}
 					break
 
 				case "fetch_instructions":

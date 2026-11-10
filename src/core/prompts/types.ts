@@ -14,4 +14,6 @@ export interface SystemPromptSettings {
 	toolProtocol?: ToolProtocol
 	/** When true, model should hide vendor/company identity in responses */
 	isStealthModel?: boolean
+	/** kilocode_change: native MCP tools load lazily via load_mcp_server; servers listed briefly */
+	lazyMcpTools?: boolean
 }

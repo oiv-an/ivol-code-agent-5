@@ -34,6 +34,7 @@ export const toolNames = [
 	"new_task",
 	"fetch_instructions",
 	"search_chat_history", // kilocode_change
+	"load_mcp_server", // kilocode_change
 	"codebase_search",
 	"web_search",
 	// kilocode_change start

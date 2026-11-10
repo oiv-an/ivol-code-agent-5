@@ -138,6 +138,23 @@ function buildCacheMarkedOpenAiMessages(
 	return convertedMessages
 }
 
+const PROMPT_CACHE_RETRY_INTERVAL_MS = 10 * 60 * 1000
+
+function isUnsupportedPromptCacheKeyError(error: unknown): boolean {
+	const candidate = error as {
+		status?: number
+		message?: string
+		error?: { message?: string }
+		response?: { status?: number; data?: { error?: { message?: string }; message?: string } }
+	}
+	const status = candidate?.status ?? candidate?.response?.status
+	if (status !== 400 && status !== 422) return false
+	const message = [candidate?.message, candidate?.error?.message, candidate?.response?.data?.error?.message]
+		.filter(Boolean)
+		.join(" ")
+	return /prompt[_ ]cache[_ ]key/i.test(message)
+}
+
 function isUnsupportedPromptCacheError(error: unknown): boolean {
 	const candidate = error as {
 		status?: number
@@ -178,7 +195,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	protected options: ApiHandlerOptions
 	protected client: OpenAI
 	private readonly providerName = "OpenAI"
-	private promptCacheBreakpointsUnsupported = false // kilocode_change: remember incompatible endpoints for this profile
+	private promptCacheBreakpointsUnsupportedUntil = 0 // kilocode_change: back off from incompatible cache markers temporarily
+	private promptCacheKeyUnsupported = false // kilocode_change: endpoint rejected prompt_cache_key
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -322,6 +340,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 			this.applyAutocompletePolicy(requestOptions, metadata) // kilocode_change
+			this.applyPromptCacheKey(requestOptions, metadata) // kilocode_change: forced cache affinity
 
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const stream = await this.createChatCompletionWithCacheFallback(
@@ -393,6 +412,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// Add max_tokens if needed
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
 			this.applyAutocompletePolicy(requestOptions, metadata) // kilocode_change
+			this.applyPromptCacheKey(requestOptions, metadata) // kilocode_change: forced cache affinity
 
 			// kilocode_change start: retry unsupported cache payloads without cache metadata
 			const response = await this.createChatCompletionWithCacheFallback(
@@ -483,11 +503,17 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			return await this.client.chat.completions.create(requestOptions as any, requestConfig)
 		} catch (error) {
 			if (this.options.connectionTest) throw error // kilocode_change: one diagnostic request, with its original error.
+			if ("prompt_cache_key" in requestOptions && isUnsupportedPromptCacheKeyError(error)) {
+				this.promptCacheKeyUnsupported = true
+				const { prompt_cache_key: _dropped, ...withoutKey } = requestOptions as any
+				return this.createChatCompletionWithCacheFallback(withoutKey, requestConfig, plainMessages)
+			}
 			if (!plainMessages || !isUnsupportedPromptCacheError(error)) {
 				throw this.handleCompletionError(error)
 			}
 
-			this.promptCacheBreakpointsUnsupported = true
+			// Retry markers again later instead of disabling forced caching for the whole session.
+			this.promptCacheBreakpointsUnsupportedUntil = Date.now() + PROMPT_CACHE_RETRY_INTERVAL_MS
 			const fallbackOptions = {
 				...requestOptions,
 				// Use the untouched OpenAI-compatible payload. Merely removing the
@@ -502,8 +528,24 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 		}
 	}
 
+	/**
+	 * Forced cache affinity: every task request carries a stable
+	 * `prompt_cache_key` so gateways with key pools can keep one upstream
+	 * account (and its prompt cache) per task.
+	 */
+	private applyPromptCacheKey(
+		request: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+		metadata?: ApiHandlerCreateMessageMetadata,
+	): void {
+		if (this.promptCacheKeyUnsupported || !metadata?.taskId) return
+		if (this.options.openAiUseAzure || this._isAzureAiInference(this.options.openAiBaseUrl)) return
+		;(
+			request as OpenAI.Chat.Completions.ChatCompletionCreateParams & { prompt_cache_key?: string }
+		).prompt_cache_key = metadata.taskId
+	}
+
 	private shouldUseLegacyPromptCacheBreakpoints(modelUrl: string): boolean {
-		if (this.promptCacheBreakpointsUnsupported) return false
+		if (Date.now() < this.promptCacheBreakpointsUnsupportedUntil) return false
 
 		const effectiveUrl = modelUrl || "https://api.openai.com/v1"
 		const host = this._getUrlHost(effectiveUrl)
@@ -685,6 +727,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// but they do support max_completion_tokens (the modern OpenAI parameter)
 			// This allows O3 models to limit response length when includeMaxTokens is enabled
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
+			this.applyPromptCacheKey(requestOptions, metadata) // kilocode_change: forced cache affinity
 
 			let stream
 			try {
@@ -716,6 +759,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 			// but they do support max_completion_tokens (the modern OpenAI parameter)
 			// This allows O3 models to limit response length when includeMaxTokens is enabled
 			this.addMaxTokensIfNeeded(requestOptions, modelInfo)
+			this.applyPromptCacheKey(requestOptions, metadata) // kilocode_change: forced cache affinity
 
 			let response
 			try {

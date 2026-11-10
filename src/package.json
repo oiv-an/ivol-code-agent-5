@@ -3,7 +3,7 @@
 	"displayName": "IVOL Code Agent 5",
 	"description": "%extension.description%",
 	"publisher": "ivol",
-	"version": "5.17.138",
+	"version": "5.17.139",
 	"icon": "assets/icons/logo-outline-black.png",
 	"license": "Apache-2.0",
 	"galleryBanner": {
@@ -558,6 +558,11 @@
 					"minimum": 5000,
 					"maximum": 500000,
 					"description": "%settings.maximumIndexedFilesForFileSearch.description%"
+				},
+				"ivol-code-agent-5.lazyMcpTools": {
+					"type": "boolean",
+					"default": true,
+					"description": "Send MCP tool schemas only for servers the agent loads with load_mcp_server (saves context tokens). Disable to send all MCP tools in every request."
 				},
 				"ivol-code-agent-5.useAgentRules": {
 					"type": "boolean",

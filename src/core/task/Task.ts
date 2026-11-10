@@ -191,6 +191,8 @@ import {
 import { getAppUrl } from "@roo-code/types"
 import { getKilocodeDefaultModel } from "../../api/providers/kilocode/getKilocodeDefaultModel" // kilocode_change
 import { addOrMergeUserContent } from "./kilocode"
+import { correctInflatedPromptTokens, findPreviousPromptTokens } from "./kilocode/usageSanity" // kilocode_change
+import { collectLoadedMcpServers } from "./kilocode/lazyMcp" // kilocode_change
 import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
@@ -506,6 +508,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	consecutiveNoToolUseCount: number = 0
 	consecutiveNoAssistantMessagesCount: number = 0
 	toolUsage: ToolUsage = {}
+	// kilocode_change start: lazy MCP — servers whose tool schemas are sent (append-only)
+	loadedMcpServers: Set<string> = new Set()
+
+	/** Undefined when lazy MCP loading is disabled (all MCP schemas sent eagerly). */
+	getLazyMcpServers(): Set<string> | undefined {
+		const enabled = vscode.workspace.getConfiguration?.(Package.name)?.get<boolean>("lazyMcpTools", true) ?? true
+		if (!enabled) return undefined
+		const provider = this.providerRef?.deref() as { getMcpHub?: () => any } | undefined
+		collectLoadedMcpServers(
+			this.apiConversationHistory as any[],
+			typeof provider?.getMcpHub === "function" ? provider.getMcpHub() : undefined,
+			this.loadedMcpServers,
+		)
+		return this.loadedMcpServers
+	}
+	// kilocode_change end
 
 	// Checkpoints
 	enableCheckpoints: boolean
@@ -3957,7 +3975,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								)
 							: calculateApiCostOpenAI(
 									streamModelInfo,
-									inputTokens,
+									// kilocode_change start: drop gateway-inflated prompt counts on cache hits
+									correctInflatedPromptTokens({
+										inputTokens,
+										cacheReadTokens,
+										cacheWriteTokens,
+										previousInputTokens: findPreviousPromptTokens(
+											this.clineMessages,
+											lastApiReqIndex,
+										),
+									}),
+									// kilocode_change end
 									outputTokens,
 									cacheWriteTokens,
 									cacheReadTokens,
@@ -5407,6 +5435,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						.get<boolean>("newTaskRequireTodos", false),
 					toolProtocol,
 					isStealthModel: modelInfo?.isStealthModel,
+					lazyMcpTools: this.getLazyMcpServers() !== undefined, // kilocode_change
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -6004,6 +6033,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				modelInfo,
 				diffEnabled: this.diffEnabled,
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
+				loadedMcpServers: this.getLazyMcpServers(), // kilocode_change
 			})
 			allTools = toolsResult.tools
 			allowedFunctionNames = toolsResult.allowedFunctionNames

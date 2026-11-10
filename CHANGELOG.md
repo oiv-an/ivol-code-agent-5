@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.139
+
+- Fixed sudden context-counter jumps (e.g. 260k → 400k+) on cache hits through OpenAI-compatible gateways that double-count cached tokens; this no longer triggers premature condensing.
+- Prompt caching is now always requested for OpenAI-compatible providers (stable per-task cache key, cache markers are retried instead of being turned off for good).
+- MCP tools are now loaded lazily: the prompt lists servers briefly and full tool schemas are sent only after the agent loads or uses a server, saving tens of thousands of tokens per request (setting "Lazy MCP tools").
+
 ## 5.17.138
 
 - Telegram: the project control topic now lists the three most recent tasks; tap /task1, /task2 or /task3 (or send /task N) to open and connect that task.

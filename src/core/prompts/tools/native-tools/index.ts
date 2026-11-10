@@ -9,6 +9,7 @@ import codebaseSearch from "./codebase_search"
 import executeCommand from "./execute_command"
 import fetchInstructions from "./fetch_instructions"
 import searchChatHistory from "./kilocode/search_chat_history" // kilocode_change
+import loadMcpServer from "./kilocode/load_mcp_server" // kilocode_change
 import generateImage from "./generate_image"
 import listFiles from "./list_files"
 import newTask from "./new_task"
@@ -76,6 +77,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		executeCommand,
 		fetchInstructions,
 		searchChatHistory, // kilocode_change
+		loadMcpServer, // kilocode_change
 		generateImage,
 		listFiles,
 		newTask,

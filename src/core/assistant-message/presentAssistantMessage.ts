@@ -17,6 +17,7 @@ import { AskIgnoredError } from "../task/AskIgnoredError"
 import { Task } from "../task/Task"
 
 import { searchChatHistoryTool } from "../tools/kilocode/SearchChatHistoryTool" // kilocode_change
+import { loadMcpServerTool } from "../tools/kilocode/LoadMcpServerTool" // kilocode_change
 import { fetchInstructionsTool } from "../tools/FetchInstructionsTool"
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"
@@ -290,6 +291,7 @@ export async function presentAssistantMessage(cline: Task) {
 					resolvedServerName = originalName
 				}
 			}
+			cline.loadedMcpServers.add(resolvedServerName) // kilocode_change: lazy MCP — used ⇒ loaded
 
 			// Execute the MCP tool using the same handler as use_mcp_tool
 			// Create a synthetic ToolUse block that the useMcpToolTool can handle
@@ -429,6 +431,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return readFileTool.getReadFileToolDescription(block.name, block.params)
 					case "search_chat_history": // kilocode_change
 						return `[search_chat_history for '${block.params.query ?? ""}']`
+					case "load_mcp_server": // kilocode_change
+						return `[load_mcp_server for '${block.params.server_name ?? ""}']`
 					case "fetch_instructions":
 						return `[${block.name} for '${block.params.task}']`
 					case "write_to_file":
@@ -861,7 +865,7 @@ export async function presentAssistantMessage(cline: Task) {
 				const sessionActive = hasStarted && !isClosed
 				// kilocode_change: personal-browser consent outlives individual chat tool sequences.
 				const personalChrome =
-					cline.providerRef.deref()?.context.globalState.get("browserMode") === "chrome-extension"
+					cline.providerRef.deref()?.context?.globalState?.get("browserMode") === "chrome-extension"
 				// Only auto-close isolated sessions when no active browser session is present.
 				if (!personalChrome && !sessionActive && block.name !== "browser_action") {
 					await cline.browserSession.closeBrowser()
@@ -869,7 +873,7 @@ export async function presentAssistantMessage(cline: Task) {
 			} catch {
 				// kilocode_change: do not revoke personal-browser consent on a history parsing failure.
 				if (
-					cline.providerRef.deref()?.context.globalState.get("browserMode") !== "chrome-extension" &&
+					cline.providerRef.deref()?.context?.globalState?.get("browserMode") !== "chrome-extension" &&
 					block.name !== "browser_action"
 				) {
 					await cline.browserSession.closeBrowser()
@@ -1113,6 +1117,15 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "search_chat_history": // kilocode_change
 					await searchChatHistoryTool.handle(cline, block as ToolUse<"search_chat_history">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						removeClosingTag,
+						toolProtocol,
+					})
+					break
+				case "load_mcp_server": // kilocode_change
+					await loadMcpServerTool.handle(cline, block as ToolUse<"load_mcp_server">, {
 						askApproval,
 						handleError,
 						pushToolResult,

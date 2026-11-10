@@ -38,6 +38,10 @@ interface BuildToolsOptions {
 	 * to pass all tool definitions while restricting callable tools.
 	 */
 	includeAllToolsWithRestrictions?: boolean
+	// kilocode_change start: lazy MCP — when set, only these servers' tool schemas are sent;
+	// other servers are reachable through load_mcp_server. Undefined keeps eager loading.
+	loadedMcpServers?: ReadonlySet<string>
+	// kilocode_change end
 }
 
 interface BuildToolsResult {
@@ -131,7 +135,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	})
 
 	// Filter native tools based on mode restrictions.
-	const filteredNativeTools = filterNativeToolsForMode(
+	let filteredNativeTools = filterNativeToolsForMode(
 		nativeTools,
 		mode,
 		customModes,
@@ -144,8 +148,19 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		mcpHub,
 	)
 
+	// kilocode_change start: lazy MCP loading
+	const loadedMcpServers = options.loadedMcpServers
+	const hasConnectedMcpServer = !!mcpHub?.getServers().some((server) => server.status === "connected")
+	if (!loadedMcpServers || !hasConnectedMcpServer) {
+		filteredNativeTools = filteredNativeTools.filter((tool) => getToolName(tool) !== "load_mcp_server")
+	}
+	const visibleNativeTools = nativeTools.filter(
+		(tool) => getToolName(tool) !== "load_mcp_server" || (loadedMcpServers && hasConnectedMcpServer),
+	)
+	// kilocode_change end
+
 	// Filter MCP tools based on mode restrictions.
-	const mcpTools = getMcpServerTools(mcpHub)
+	const mcpTools = getMcpServerTools(mcpHub, loadedMcpServers) // kilocode_change
 	const filteredMcpTools = filterMcpToolsForMode(mcpTools, mode, customModes, experiments)
 
 	// Add custom tools if they are available and the experiment is enabled.
@@ -168,7 +183,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	// allowed names based on mode filtering
 	if (includeAllToolsWithRestrictions) {
 		// Combine ALL tools (unfiltered native + all MCP + custom)
-		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools]
+		const allTools = [...visibleNativeTools, ...mcpTools, ...nativeCustomTools] // kilocode_change
 
 		// Extract names of tools that are allowed based on mode filtering.
 		// Resolve any alias names to canonical names to ensure consistency with allTools

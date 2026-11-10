@@ -428,33 +428,46 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 		expect(f.events.filter((e) => e === "commit")).toHaveLength(1)
 	})
 
-	it("a rejected actual edit preserves the file and history until explicit continue", async () => {
-		const f = await create({
+	// kilocode_change start: compression is mandatory (5.17.106+); there is no
+	// "Continue without updating" bypass, so the user can only retry or stop.
+	const stopDecision = (getTask: () => Task) => async () => {
+		getTask().abort = true
+		return ""
+	}
+
+	it("a rejected actual edit preserves the file and history and never compresses without the update", async () => {
+		let f!: Awaited<ReturnType<typeof fixture>>
+		f = await create({
 			turns: [[edit()], [complete()]],
 			reject: true,
-			decision: "Continue without updating",
+			decision: stopDecision(() => f.task),
 			expectWrite: false,
 			expectedIds: ["write-current"],
 		})
-		await f.provider.condenseTaskContext(f.task.taskId, "task")
+		await f.provider.condenseTaskContext(f.task.taskId, "task").catch(() => undefined)
 		expect(f.ask).toHaveBeenCalledWith("followup", expect.stringContaining("Retry update"), false)
+		expect(f.ask).not.toHaveBeenCalledWith("followup", expect.stringContaining("Continue without"), false)
 		await expect(fs.readFile(f.currentPath)).rejects.toMatchObject({ code: "ENOENT" })
-		expect(f.events.indexOf("ask:followup")).toBeLessThan(f.events.indexOf("summarize"))
-		expect(f.events.filter((e) => e === "commit")).toHaveLength(1)
+		expect(f.events).not.toContain("summarize")
+		expect(f.events).not.toContain("commit")
+		expect((await f.durableHistory()).some((m) => m.isSummary)).toBe(false)
 	})
 
 	it("text claiming a save is not a write and cannot bypass the explicit decision", async () => {
-		const f = await create({
+		let f!: Awaited<ReturnType<typeof fixture>>
+		f = await create({
 			turns: [[{ type: "text", text: "I saved CURRENT_TASK.md." }], [complete()]],
-			decision: "Continue without updating",
+			decision: stopDecision(() => f.task),
 			expectWrite: false,
 			expectedIds: [],
 		})
-		await f.provider.condenseTaskContext(f.task.taskId, "task")
+		await f.provider.condenseTaskContext(f.task.taskId, "task").catch(() => undefined)
 		expect(f.ask).toHaveBeenCalledWith("followup", expect.stringContaining("not updated"), false)
 		await expect(fs.readFile(f.currentPath)).rejects.toMatchObject({ code: "ENOENT" })
-		expect(f.events.indexOf("ask:followup")).toBeLessThan(f.events.indexOf("commit"))
+		expect(f.events).not.toContain("summarize")
+		expect(f.events).not.toContain("commit")
 	})
+	// kilocode_change end
 
 	it("retries a failed actual edit in the same task without losing outcomes or reusing failed evidence", async () => {
 		const f = await create({
@@ -472,20 +485,20 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 
 	it("a concurrent edit causes the actual replacement to fail and preserves user content", async () => {
 		const concurrent = "User's concurrent plan\n"
-		let f: Awaited<ReturnType<typeof fixture>>
+		let f!: Awaited<ReturnType<typeof fixture>>
 		f = await create({
 			turns: [[read()], [edit(generatedBody, "Original plan")], [complete()]],
-			decision: "Continue without updating",
+			decision: stopDecision(() => f.task), // kilocode_change
 			expectWrite: false,
 			onGenerate: async () => {
 				if (f.events.filter((e) => e === "ordinary").length === 2) await fs.writeFile(f.currentPath, concurrent)
 			},
 		})
 		await fs.writeFile(f.currentPath, "Original plan")
-		await f.provider.condenseTaskContext(f.task.taskId, "task")
+		await f.provider.condenseTaskContext(f.task.taskId, "task").catch(() => undefined) // kilocode_change
 		expect(await fs.readFile(f.currentPath, "utf8")).toBe(concurrent)
 		expect(f.ask).toHaveBeenCalledWith("followup", expect.stringContaining("not updated"), false)
-		expect(f.events.indexOf("ask:followup")).toBeLessThan(f.events.indexOf("commit"))
+		expect(f.events).not.toContain("commit") // kilocode_change
 	})
 
 	it("an active-loop manual click queues preparation without approving or duplicating the pending tool", async () => {
@@ -575,15 +588,18 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 		},
 	)
 
-	it("manual compaction below the threshold still rejects a summary outside the actual model window", async () => {
+	// kilocode_change start: since 5.17.106 the configured window triggers compression
+	// but no longer blocks a valid summary.
+	it("manual compaction commits a valid summary even when it is counted above the model window", async () => {
 		const f = await create({ turns: [[edit()], [complete()]], expectedIds: ["write-current"] })
 		vi.mocked(f.task.api.countTokens).mockResolvedValue(400_000)
 		await f.provider.condenseTaskContext(f.task.taskId, "task")
 		expect(await fs.readFile(f.currentPath, "utf8")).toBe(generatedBody)
 		expect(f.events).toContain("summarize")
-		expect(f.events).not.toContain("commit")
-		expect((await f.durableHistory()).some((m) => m.isSummary)).toBe(false)
+		expect(f.events.filter((e) => e === "commit")).toHaveLength(1)
+		expect((await f.durableHistory()).some((m) => m.isSummary)).toBe(true)
 	})
+	// kilocode_change end
 
 	it.each(["transport", "cancel"] as const)(
 		"%s interruption in background drain must preserve completed writes and stop without compaction or replay",
@@ -671,22 +687,35 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 			},
 		})
 		Object.assign(f.provider, { clineStack: [restored] })
+		// kilocode_change start: compression is mandatory, so the explicit decision is
+		// "Retry update"; the retried ordinary turn performs the real write.
 		let approved = false
+		let followups = 0
 		const restoredAsk = vi.spyOn(restored, "ask").mockImplementation(async (kind) => {
 			if (kind === "completion_result") restored.abort = true
 			if (kind === "followup") {
+				// Guard against a decision loop exhausting the worker heap.
+				if (++followups > 3) {
+					restored.abort = true
+					throw new Error("Unexpected repeated preparation decision")
+				}
 				expect(restored.apiConversationHistory.some((m) => m.isSummary)).toBe(false)
 				approved = true
-				return { response: "messageResponse", text: "Continue without updating" }
+				return { response: "messageResponse", text: "Retry update" }
 			}
 			return { response: "yesButtonClicked" }
 		})
+		let wrote = false
 		const resumeTransport = vi.fn(async function* (system: string): AsyncGenerator<ApiStreamChunk> {
 			expect(approved).toBe(true)
 			if (system.startsWith("Your task is to create a detailed summary"))
 				yield { type: "text", text: summaryBody }
-			else yield complete()
+			else if (!wrote) {
+				wrote = true
+				yield edit()
+			} else yield complete()
 		})
+		// kilocode_change end
 		Object.assign(restored.api, { createMessage: resumeTransport })
 		try {
 			await (restored as unknown as { resumeTaskFromHistory(): Promise<void> }).resumeTaskFromHistory()
@@ -695,7 +724,8 @@ describe("manual intelligent task actual ordinary-loop integration", () => {
 				expect.stringContaining("previous preparation was interrupted"),
 				false,
 			)
-			expect(resumeTransport).toHaveBeenCalledTimes(2)
+			expect(followups).toBe(1) // kilocode_change
+			expect(await fs.readFile(f.currentPath, "utf8")).toBe(generatedBody) // kilocode_change
 			expect(getEffectiveApiHistory(await f.durableHistory()).some((m) => m.isSummary)).toBe(true)
 			expect(await readOrdinaryPreparation(f.storage, f.task.taskId)).toBeUndefined()
 		} finally {

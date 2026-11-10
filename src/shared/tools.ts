@@ -123,6 +123,7 @@ export type NativeToolArgs = {
 	web_search: { query: string }
 	fetch_instructions: { task: string }
 	search_chat_history: { query: string; message_ts?: number; before?: number } // kilocode_change
+	load_mcp_server: { server_name: string } // kilocode_change
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
@@ -302,6 +303,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	read_file: "read files",
 	fetch_instructions: "fetch instructions",
 	search_chat_history: "search current chat history", // kilocode_change
+	load_mcp_server: "load mcp server tools", // kilocode_change
 	write_to_file: "write files",
 	apply_diff: "apply changes",
 	// kilocode_change start
@@ -368,7 +370,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["execute_command"],
 	},
 	mcp: {
-		tools: ["use_mcp_tool", "access_mcp_resource"],
+		tools: ["use_mcp_tool", "access_mcp_resource", "load_mcp_server"], // kilocode_change
 	},
 	modes: {
 		tools: ["switch_mode", "new_task"],
