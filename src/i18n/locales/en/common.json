@@ -26,6 +26,7 @@
 			"commands": {
 				"new": "new task: /new <text>",
 				"tasks": "recent project tasks (open/continue)",
+				"task": "open a recent task by number: /task 1",
 				"stop": "stop the current task",
 				"mode": "switch mode",
 				"profile": "switch provider profile",
@@ -47,7 +48,9 @@
 			"noProfiles": "No available provider profiles.",
 			"noCurrent": "No task is running.",
 			"stopped": "⏹ Current task stopped.",
-			"statusText": "Project: {{project}}\nTask: {{task}}\nMode: {{mode}}\nProfile: {{profile}}"
+			"statusText": "Project: {{project}}\nTask: {{task}}\nMode: {{mode}}\nProfile: {{profile}}",
+			"taskUsage": "Send /task with a number from the recent list, e.g. /task 1 (see /tasks).",
+			"recentTitle": "Recent tasks:"
 		}
 	},
 	"extension": {

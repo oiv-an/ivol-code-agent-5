@@ -9,7 +9,16 @@ import type { TelegramInput, TelegramRoute } from "./TelegramRouter"
 
 type Keyboard = { text: string; callback_data: string }[][]
 
-export const TELEGRAM_PROJECT_COMMANDS = ["new", "tasks", "stop", "mode", "profile", "status", "help"] as const
+export const TELEGRAM_PROJECT_COMMANDS = ["new", "tasks", "task", "stop", "mode", "profile", "status", "help"] as const
+
+/** Root tasks of this window's project, newest first; `/task N`, the help and `/tasks` share this numbering. */
+export function telegramProjectTasks(provider: ClineProvider) {
+	const cwd = provider.cwd
+	return provider
+		.getTaskHistory()
+		.filter((item) => item.task && (!item.workspace || item.workspace === cwd) && !item.parentTaskId)
+		.sort((a, b) => b.ts - a.ts)
+}
 
 export function telegramProjectCommands() {
 	return TELEGRAM_PROJECT_COMMANDS.map((command) => ({
@@ -18,14 +27,16 @@ export function telegramProjectCommands() {
 	}))
 }
 
-export function telegramProjectHelp(project: string): string {
+export function telegramProjectHelp(project: string, recent: string[] = []): string {
 	const lines = TELEGRAM_PROJECT_COMMANDS.map(
 		(command) => `/${command} — ${t(`common:telegram.project.commands.${command}`)}`,
 	)
+	const tasks = recent.slice(0, 3).map((task, index) => `/task${index + 1} — ${shorten(task, 60)}`)
 	return [
 		t("common:telegram.project.helpTitle", { project }),
 		"",
 		...lines,
+		...(tasks.length ? ["", t("common:telegram.project.recentTitle"), ...tasks] : []),
 		"",
 		t("common:telegram.project.helpFooter"),
 	].join("\n")
@@ -103,17 +114,26 @@ export class TelegramProjectControl {
 			text = [text, transcript].filter(Boolean).join("\n\n")
 		}
 		if (!text) return
+		// "/task2" is clickable in Telegram as a whole; treat it as "/task 2".
+		text = text.replace(/^\/task(\d+)(?=@|\s|$)/i, "/task $1")
 		const match = /^\/([a-z_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/i.exec(text)
 		if (!match) return this.newTask(text)
 		const argument = (match[2] ?? "").trim()
 		switch (match[1].toLowerCase()) {
 			case "start":
 			case "help":
-				return this.send(telegramProjectHelp(this.projectName()))
+				return this.send(
+					telegramProjectHelp(
+						this.projectName(),
+						this.projectTasks().map((item) => item.task),
+					),
+				)
 			case "new":
 				return argument ? this.newTask(argument) : this.send(t("common:telegram.project.newUsage"))
 			case "tasks":
 				return this.listTasks()
+			case "task":
+				return this.openNumbered(argument)
 			case "stop":
 				return this.stop()
 			case "mode":
@@ -147,21 +167,37 @@ export class TelegramProjectControl {
 	}
 
 	private projectTasks() {
-		const cwd = this.provider.cwd
-		return this.provider
-			.getTaskHistory()
-			.filter((item) => item.task && (!item.workspace || item.workspace === cwd) && !item.parentTaskId)
-			.sort((a, b) => b.ts - a.ts)
+		return telegramProjectTasks(this.provider)
 	}
 
 	private async listTasks(): Promise<void> {
 		const tasks = this.projectTasks().slice(0, 10)
 		if (!tasks.length) return this.send(t("common:telegram.project.noTasks"))
 		const current = this.provider.getCurrentTask()?.taskId
-		const keyboard: Keyboard = tasks.map((item) => [
-			{ text: `${item.id === current ? "▶️ " : ""}${shorten(item.task, 48)}`, callback_data: `o:${item.id}` },
+		const keyboard: Keyboard = tasks.map((item, index) => [
+			{
+				text: `${item.id === current ? "▶️ " : ""}${index + 1}. ${shorten(item.task, 44)}`,
+				callback_data: `o:${item.id}`,
+			},
 		])
 		await this.send(t("common:telegram.project.tasksTitle"), keyboard)
+	}
+
+	/** `/task N`: open (and connect) the N-th most recent project task. */
+	private async openNumbered(argument: string): Promise<void> {
+		const number = /^\d{1,3}$/.test(argument) ? Number(argument) : 0
+		const item = number > 0 ? this.projectTasks()[number - 1] : undefined
+		if (!item) return this.send(t("common:telegram.project.taskUsage"))
+		return this.openTask(item.id)
+	}
+
+	private async openTask(id: string): Promise<void> {
+		const item = this.projectTasks().find((entry) => entry.id === id)
+		if (!item) return this.send(t("common:telegram.project.taskMissing"))
+		await this.provider.showTaskWithId(item.id)
+		await this.send(t("common:telegram.project.opened", { task: shorten(item.task, 80) }))
+		const current = this.provider.getCurrentTask()
+		if (current?.taskId === item.id) await this.hooks.activateTask(item.id)
 	}
 
 	private async listModes(): Promise<void> {
@@ -223,15 +259,8 @@ export class TelegramProjectControl {
 	private async handleButton(data: string): Promise<void> {
 		const value = data.slice(2)
 		switch (data[0]) {
-			case "o": {
-				const item = this.projectTasks().find((entry) => entry.id === value)
-				if (!item) return this.send(t("common:telegram.project.taskMissing"))
-				await this.provider.showTaskWithId(item.id)
-				await this.send(t("common:telegram.project.opened", { task: shorten(item.task, 80) }))
-				const current = this.provider.getCurrentTask()
-				if (current?.taskId === item.id) await this.hooks.activateTask(item.id)
-				return
-			}
+			case "o":
+				return this.openTask(value)
 			case "m": {
 				const customModes = await this.provider.customModesManager.getCustomModes()
 				const mode = getAllModes(customModes).find((item) => item.slug === value)

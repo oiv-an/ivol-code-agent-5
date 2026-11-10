@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.138
+
+- Telegram: the project control topic now lists the three most recent tasks; tap /task1, /task2 or /task3 (or send /task N) to open and connect that task.
+
 ## 5.17.137
 
 - Rename tasks directly in recent tasks and history without changing the conversation; search by custom name or original prompt, and delete tasks directly from recent-task cards.

@@ -14,7 +14,12 @@ import { TelegramTaskBridge } from "./TelegramTaskBridge"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
 import { TelegramStartupError } from "./startupFailure"
 import { transcribeWithGroq } from "./groqTranscription"
-import { TelegramProjectControl, telegramProjectCommands, telegramProjectHelp } from "./TelegramProjectControl"
+import {
+	TelegramProjectControl,
+	telegramProjectCommands,
+	telegramProjectHelp,
+	telegramProjectTasks,
+} from "./TelegramProjectControl"
 
 import type { TelegramInput, TelegramRoute } from "./TelegramRouter"
 import type { Task } from "../../../core/task/Task"
@@ -177,12 +182,13 @@ export class TelegramManager {
 			const cwd = this.provider.cwd
 			const project = path.basename(cwd)
 			const projectId = readProjectTaskStorage(cwd)?.projectId ?? cwd
+			const recent = telegramProjectTasks(this.provider).map((item) => item.task)
 			const route = routeSchema.parse(
 				await client.request({
 					operation: "activateProject",
 					projectId,
 					title: t("common:telegram.project.topicTitle", { project }),
-					help: telegramProjectHelp(project),
+					help: telegramProjectHelp(project, recent),
 					commands: telegramProjectCommands(),
 				}),
 			)
