@@ -4042,6 +4042,15 @@ export class ClineProvider
 	// end kilocode_change
 
 	// kilocode_change start
+	async renameTaskWithId(id: string, title: string) {
+		const item = (this.getGlobalState("taskHistory") ?? []).find((entry) => entry.id === id)
+		if (!item) throw new Error(`Task not found: ${id}`)
+		// Store an empty string when cleared so project-index deltas persist the reset.
+		// Routine task saves omit title and therefore preserve this display-only metadata.
+		await this.updateTaskHistory({ ...item, title: title.trim() })
+		await this.postStateToWebview()
+	}
+
 	// Add new methods for favorite functionality
 	async toggleTaskFavorite(id: string) {
 		const history = this.getGlobalState("taskHistory") ?? []

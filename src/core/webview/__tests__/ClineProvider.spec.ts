@@ -1,6 +1,37 @@
 // pnpm --filter roo-cline test core/webview/__tests__/ClineProvider.spec.ts
 
 // kilocode_change start
+describe("display-only task titles", () => {
+	it("preserves a renamed title through routine saves and persists clearing it", async () => {
+		let history = [{ id: "title-task", task: "Original prompt", tokensIn: 1 }]
+		const original = history[0]
+		const provider = {
+			getGlobalState: () => history,
+			updateGlobalState: vi.fn(async (_key, value) => {
+				history = value
+			}),
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			kiloCodeTaskHistoryVersion: 0,
+			recentTasksCache: {},
+			updateTaskHistory: ClineProvider.prototype.updateTaskHistory,
+		}
+		await ClineProvider.prototype.renameTaskWithId.call(provider as any, "title-task", "  Release plan  ")
+		expect(history[0]).toMatchObject({ task: "Original prompt", title: "Release plan" })
+		expect(original).not.toHaveProperty("title")
+		await provider.updateTaskHistory.call(provider as any, { ...original, tokensIn: 42 } as any)
+		expect(history[0]).toMatchObject({ title: "Release plan", tokensIn: 42 })
+		await ClineProvider.prototype.renameTaskWithId.call(provider as any, "title-task", " ")
+		expect(history[0]).toMatchObject({ task: "Original prompt", title: "", tokensIn: 42 })
+		expect(provider.postStateToWebview).toHaveBeenCalledTimes(2)
+		expect(provider.kiloCodeTaskHistoryVersion).toBe(3)
+		expect(provider.recentTasksCache).toBeUndefined()
+		await expect(
+			ClineProvider.prototype.renameTaskWithId.call(provider as any, "missing", "Title"),
+		).rejects.toThrow("Task not found")
+		expect(history).toHaveLength(1)
+	})
+})
+
 describe("reopening the current task after a lifecycle failure", () => {
 	it.each([true, false])("recreates only a failed current instance (%s)", async (lifecycleFailed) => {
 		const historyItem = { id: "same-task" }

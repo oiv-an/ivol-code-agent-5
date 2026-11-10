@@ -8,15 +8,26 @@ import { DeleteButton } from "./DeleteButton"
 import { FavoriteButton } from "../kilocode/history/FavoriteButton" // kilocode_change
 import { KiloShareSessionButton } from "./KiloShareSessionButton" // kilocode_change
 import { StandardTooltip } from "../ui/standard-tooltip"
+import { Button } from "@/components/ui" // kilocode_change
+import { useAppTranslation } from "@/i18n/TranslationContext" // kilocode_change
 
 export interface TaskItemFooterProps {
 	item: HistoryItem
 	variant: "compact" | "full"
 	isSelectionMode?: boolean
 	onDelete?: (taskId: string) => void
+	onRename?: () => void // kilocode_change
 }
 
-const TaskItemFooter: React.FC<TaskItemFooterProps> = ({ item, variant, isSelectionMode = false, onDelete }) => {
+const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
+	item,
+	variant,
+	isSelectionMode = false,
+	onDelete,
+	onRename,
+}) => {
+	// kilocode_change
+	const { t } = useAppTranslation() // kilocode_change
 	return (
 		<div className="text-xs text-vscode-descriptionForeground flex justify-between items-center">
 			<div className="flex gap-1 items-center text-vscode-descriptionForeground/60">
@@ -39,6 +50,23 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({ item, variant, isSelect
 					<CopyButton itemTask={item.task} />
 					<FavoriteButton isFavorited={item.isFavorited ?? false} id={item.id} />
 					<KiloShareSessionButton id={item.id} />
+					{/* kilocode_change start */}
+					{onRename && (
+						<StandardTooltip content={t("history:renameTask")}>
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label={t("history:renameTask")}
+								data-testid="rename-task-button"
+								onClick={(event) => {
+									event.stopPropagation()
+									onRename()
+								}}>
+								<span className="codicon codicon-edit size-4 align-middle text-vscode-descriptionForeground" />
+							</Button>
+						</StandardTooltip>
+					)}
+					{/* kilocode_change end */}
 					{variant === "full" && <ExportButton itemId={item.id} />}
 					{onDelete && <DeleteButton itemId={item.id} onDelete={onDelete} />}
 				</div>

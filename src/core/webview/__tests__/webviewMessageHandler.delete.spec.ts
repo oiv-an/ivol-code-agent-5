@@ -85,6 +85,23 @@ describe("webviewMessageHandler delete functionality", () => {
 		}
 	})
 
+	// kilocode_change start
+	it("routes title changes separately from conversation edits and reports save failures", async () => {
+		provider.renameTaskWithId = vi.fn().mockResolvedValue(undefined)
+		await webviewMessageHandler(provider, { type: "renameTaskWithId", taskId: "test-task-id", text: "New name" })
+		expect(provider.renameTaskWithId).toHaveBeenCalledWith("test-task-id", "New name")
+		await webviewMessageHandler(provider, { type: "renameTaskWithId", taskId: "test-task-id", text: "" })
+		expect(provider.renameTaskWithId).toHaveBeenLastCalledWith("test-task-id", "")
+		await webviewMessageHandler(provider, { type: "renameTaskWithId", text: "Invalid" })
+		expect(provider.renameTaskWithId).toHaveBeenCalledTimes(2)
+		expect(getCurrentTaskMock.overwriteClineMessages).not.toHaveBeenCalled()
+		expect(getCurrentTaskMock.overwriteApiConversationHistory).not.toHaveBeenCalled()
+		provider.renameTaskWithId.mockRejectedValue(new Error("Disk unavailable"))
+		await webviewMessageHandler(provider, { type: "renameTaskWithId", taskId: "test-task-id", text: "Name" })
+		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("Disk unavailable"))
+	})
+	// kilocode_change end
+
 	describe("handleDeleteMessageConfirm", () => {
 		it("should handle deletion when apiConversationHistoryIndex is -1 (message not in API history)", async () => {
 			// Setup test data with a user message and assistant response

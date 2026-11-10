@@ -995,6 +995,7 @@ export interface WebviewMessage {
 		| "shareCurrentTask"
 		| "showTaskWithId"
 		| "deleteTaskWithId"
+		| "renameTaskWithId" // kilocode_change: taskId identifies the task; text is its display title.
 		| "exportTaskWithId"
 		| "importSettings"
 		| "exportSettings"

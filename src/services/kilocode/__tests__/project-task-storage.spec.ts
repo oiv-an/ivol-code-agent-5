@@ -9,6 +9,7 @@ import type { HistoryItem, ProjectTaskCopyProgress } from "@roo-code/types"
 
 import type { ExtensionContext, TextDocumentWillSaveEvent } from "vscode"
 import { ContextProxy } from "../../../core/config/ContextProxy"
+import { getTaskHistory } from "../../../shared/kilocode/getTaskHistory"
 import { RepoPerTaskCheckpointService } from "../../checkpoints/RepoPerTaskCheckpointService"
 vi.mock("../../search/file-search", () => ({ executeRipgrep: vi.fn(async () => []) }))
 vi.mock("@roo-code/telemetry", () => ({ TelemetryService: { instance: { captureEvent: vi.fn() } } }))
@@ -277,6 +278,37 @@ describe("portable project task storage", () => {
 			tokensIn: 42,
 		})
 	})
+	it("persists display titles across index reloads, stale saves, searches and clearing", async () => {
+		await enable()
+		const entry = { ...item(), task: "Original prompt zebra" }
+		await save(entry)
+		const renamed = { ...entry, title: "<b>Release plan</b>" }
+		await updateProjectTaskHistory([entry], [renamed])
+		await updateProjectTaskHistory([entry], [{ ...entry, tokensIn: 42 }])
+		const loaded = mergeProjectTaskHistory([])
+		expect(loaded[0]).toMatchObject({ title: renamed.title, task: entry.task, tokensIn: 42 })
+		const request = {
+			requestId: "title-search",
+			workspace: "current" as const,
+			sort: "mostRelevant" as const,
+			favoritesOnly: false,
+			pageIndex: 0,
+		}
+		const titleResults = getTaskHistory(loaded, workspace, { ...request, search: "Release" })
+		expect(titleResults.historyItems).toHaveLength(1)
+		expect(titleResults.historyItems[0]).toMatchObject({
+			highlight: expect.stringContaining("\u0026lt;b\u0026gt;"),
+		})
+		expect(titleResults.historyItems[0]).toMatchObject({ highlight: expect.not.stringContaining("<b>") })
+		const promptResults = getTaskHistory(loaded, workspace, { ...request, search: "zebra" })
+		expect(promptResults.historyItems).toHaveLength(1)
+		expect(promptResults.historyItems[0]).toHaveProperty("highlight", undefined)
+		await updateProjectTaskHistory(loaded, [{ ...loaded[0], title: "" }])
+		expect(mergeProjectTaskHistory([])[0]).toMatchObject({ title: "", task: entry.task, tokensIn: 42 })
+		const disk = JSON.parse(await fs.readFile(path.join(workspace, ".ivol", "task-history.json"), "utf8"))
+		expect(disk.items[0].title).toBe("")
+	})
+
 	it("keeps tombstones so stale windows and global originals cannot resurrect deleted tasks", async () => {
 		await enable()
 		const entry = item()

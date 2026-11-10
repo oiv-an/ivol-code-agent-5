@@ -1,18 +1,18 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is an AI coding agent for VS Code and JetBrains IDEs, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). Release **5.17.136** includes VS Code and nine separate packages for PhpStorm, IntelliJ IDEA, PyCharm and WebStorm.
+IVOL Code Agent 5 is an AI coding agent for VS Code and JetBrains IDEs, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). The latest VS Code release is **5.17.137**; the nine separate PhpStorm, IntelliJ IDEA, PyCharm and WebStorm packages remain at **5.17.136**.
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current version: 5.17.136.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current VS Code version: 5.17.137. JetBrains packages: 5.17.136.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
-**[Download release 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** — all ten installers and SHA-256 checksums. [Choose your exact IDE package](DOWNLOADS.md).
+**[Download VS Code 5.17.137](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.137)** — VSIX and SHA-256 checksums. [JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136) remain available without rebuilding. [Choose your exact IDE package](DOWNLOADS.md).
 
 | Editor        | Packages                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5), [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5), or [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136.vsix)                                                                                                                     |
+| VS Code       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5), [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5), or [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.137/ivol-code-agent-5-5.17.137.vsix)                                                                                                                     |
 | PhpStorm      | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                                                                                                                                                                                                                                                                            |
 | IntelliJ IDEA | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip), [2025.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip)                                                                                                                                |
 | PyCharm       | [2025.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2025.1.zip), [2026.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.1.zip), [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.2.zip)    |
@@ -22,7 +22,7 @@ The extension ID is `ivol.ivol-code-agent-5`, so an official upstream update can
 
 JetBrains ZIPs are installed through **Settings → Plugins → ⚙ → Install Plugin from Disk** without unpacking. They require Node.js 20.6.0 or newer, the bundled JCEF runtime and the Terminal plugin. Pick the archive that matches your IDE platform; do not widen an archive's compatibility range manually. [Installation and compatibility details](DOWNLOADS.md).
 
-Every JetBrains target passed compilation, 206 automated tests and Plugin Verifier against its target SDK. Shared extension files match the published VSIX byte for byte. Legacy API warnings remain; these checks do not replace interactive installation testing on each IDE/OS.
+Every JetBrains 5.17.136 target passed compilation, 206 automated tests and Plugin Verifier against its target SDK. Its shared extension files match the 5.17.136 VSIX byte for byte; the newer VS Code-only release does not update those packages. Legacy API warnings remain; these checks do not replace interactive installation testing on each IDE/OS.
 
 Ordinary releases publish VS Code to both stores and GitHub Releases with updated download documentation. Full releases additionally refresh every existing JetBrains target; named-target builds remain available on request.
 
@@ -96,6 +96,7 @@ Ordinary releases publish VS Code to both stores and GitHub Releases with update
 
 ### Task history and checkpoints
 
+- **Custom task names:** rename tasks inline from recent tasks or full history without editing the conversation. Search matches both the custom name and original prompt; clearing the name restores the original preview. Recent-task cards also offer deletion with confirmation. Available in VS Code 5.17.137; existing JetBrains packages remain at 5.17.136.
 - New tasks are stored **inside each project** in a hidden `.ivol/` folder with automatic Git exclusion, so history and checkpoints move with the project. Older tasks in global storage can be copied with verification.
 - History writes are atomic and recover after interrupted window reloads. Incomplete restores cannot overwrite saved conversations.
 - When a task cannot start, an explicit **Retry** action is offered instead of a stuck chat.

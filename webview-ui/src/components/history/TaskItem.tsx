@@ -1,4 +1,6 @@
-import { memo } from "react"
+import { memo, useState } from "react" // kilocode_change
+import { Button, Input } from "@/components/ui" // kilocode_change
+import { useAppTranslation } from "@/i18n/TranslationContext" // kilocode_change
 import type { HistoryItem } from "@roo-code/types"
 
 import { vscode } from "@/utils/vscode"
@@ -32,7 +34,21 @@ const TaskItem = ({
 	onDelete,
 	className,
 }: TaskItemProps) => {
+	// kilocode_change start: keep the draft local until explicitly saved.
+	const { t } = useAppTranslation()
+	const [isRenaming, setIsRenaming] = useState(false)
+	const [titleDraft, setTitleDraft] = useState("")
+	const startRename = () => {
+		setTitleDraft(item.title || "")
+		setIsRenaming(true)
+	}
+	const saveTitle = () => {
+		vscode.postMessage({ type: "renameTaskWithId", taskId: item.id, text: titleDraft.trim() })
+		setIsRenaming(false)
+	}
+	// kilocode_change end
 	const handleClick = () => {
+		if (isRenaming) return // kilocode_change
 		if (isSelectionMode && onToggleSelection) {
 			onToggleSelection(item.id, !isSelected)
 		} else {
@@ -68,24 +84,65 @@ const TaskItem = ({
 				)}
 
 				<div className="flex-1 min-w-0">
-					<div
-						className={cn(
-							"overflow-hidden whitespace-pre-wrap font-light text-vscode-foreground text-ellipsis line-clamp-3",
-							{
-								"text-base": !isCompact,
-							},
-							!isCompact && isSelectionMode ? "mb-1" : "",
-						)}
-						data-testid="task-content"
-						{...(item.highlight ? { dangerouslySetInnerHTML: { __html: item.highlight } } : {})}>
-						{item.highlight ? undefined : item.task}
-					</div>
+					{/* kilocode_change start: separate title editor, never an edit to the prompt. */}
+					{isRenaming ? (
+						<form
+							onClick={(event) => event.stopPropagation()}
+							onSubmit={(event) => {
+								event.preventDefault()
+								saveTitle()
+							}}
+							className="flex flex-col gap-2 mb-2">
+							<Input
+								autoFocus
+								aria-label={t("history:renameTask")}
+								placeholder={item.task}
+								value={titleDraft}
+								onChange={(event) => setTitleDraft(event.target.value)}
+								onKeyDown={(event) => {
+									event.stopPropagation()
+									if (event.key === "Escape") {
+										event.preventDefault()
+										setIsRenaming(false)
+									}
+									if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault()
+								}}
+							/>
+							<div className="flex gap-2">
+								<Button type="submit" size="sm">
+									{t("settings:common.save")}
+								</Button>
+								<Button
+									type="button"
+									variant="secondary"
+									size="sm"
+									onClick={() => setIsRenaming(false)}>
+									{t("history:cancel")}
+								</Button>
+							</div>
+						</form>
+					) : (
+						<div
+							className={cn(
+								"overflow-hidden whitespace-pre-wrap font-light text-vscode-foreground text-ellipsis line-clamp-3",
+								{
+									"text-base": !isCompact,
+								},
+								!isCompact && isSelectionMode ? "mb-1" : "",
+							)}
+							data-testid="task-content"
+							{...(item.highlight ? { dangerouslySetInnerHTML: { __html: item.highlight } } : {})}>
+							{item.highlight ? undefined : item.title || item.task}
+						</div>
+					)}
+					{/* kilocode_change end */}
 
 					<TaskItemFooter
 						item={item}
 						variant={variant}
 						isSelectionMode={isSelectionMode}
 						onDelete={onDelete}
+						onRename={startRename} // kilocode_change
 					/>
 
 					{showWorkspace && item.workspace && (

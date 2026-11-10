@@ -1,14 +1,16 @@
 # Download IVOL Code Agent 5
 
-**[Release 5.17.136 — all installers](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** is the shareable download page. It contains one VS Code VSIX, nine JetBrains ZIPs and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/SHA256SUMS.txt).
+**[VS Code 5.17.137](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.137)** is the latest VS Code release, with its VSIX and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.137/SHA256SUMS.txt). It adds custom task names, name/prompt search and deletion from recent-task cards without changing conversation content. The 72 focused automated checks and backend, webview and shared-types checks passed; interactive behavior remains a separate verification.
+
+**[JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** remain unchanged. This release contains nine JetBrains ZIPs, the previous VSIX and its own checksums. No JetBrains builds or installations were performed for 5.17.137.
 
 ## Choose your IDE version
 
-Find the IDE version and build number in **Help → About**. The plugin version **5.17.136** is independent of the IDE version. SDK verification below means automated checks, not an interactive installation test.
+Find the IDE version and build number in **Help → About**. Plugin versions (**VS Code 5.17.137**, **JetBrains 5.17.136**) are independent of IDE versions. SDK verification below means automated checks, not an interactive installation test.
 
 | IDE                  | SDK used for compilation and verification | Declared compatibility                                       | Download                                                                                                                                       |
 | -------------------- | ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136.vsix)                                |
+| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.137/ivol-code-agent-5-5.17.137.vsix)                                |
 | PhpStorm 2026.2      | 2026.2.3, PS-262.10968.76                 | 262–262.\*                                                   | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                |
 | IntelliJ IDEA 2026.2 | 2026.2.2, IU-262.10315.125                | 262–262.\*                                                   | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip)        |
 | IntelliJ IDEA 2025.3 | 2025.3.6.1, IU-253.33813.55               | 253.33813.55–253.\*                                          | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip) |
@@ -48,7 +50,7 @@ In GitHub Assets, choose an installer rather than **Source code (zip)** / **Sour
 
 The earlier Windows history-saving fix remains included: `EPERM: operation not permitted, fsync` / `API conversation history could not be saved`. Temporary history files and backups are opened with write access without truncating existing content, and real disk-error protection remains. The earlier native-library parallel-start fix is retained too. The original history regression was reproduced automatically with Windows-style `fsync` restrictions, including create/update, preservation of the previous file and retry. These historical checks do not constitute a new interactive Windows test. Changing a server, API key or antivirus settings is not a remedy for that fixed defect.
 
-## Verification of this release
+## Verification of the unchanged multi-IDE release 5.17.136
 
 - Binary source revision: [ee8bfdf36](https://github.com/oiv-an/ivol-code-agent-5/commit/ee8bfdf36). The VSIX is the already accepted Marketplace/Open VSX artifact, not a replacement upload.
 - All nine JetBrains variants passed target configuration checks, compilation, packaging, **206 tests each with zero failures or skips**, and Plugin Verifier against the SDKs above: **1854 passing test executions** in total.

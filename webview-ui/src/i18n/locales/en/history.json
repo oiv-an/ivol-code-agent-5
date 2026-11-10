@@ -11,6 +11,7 @@
 	"mostTokens": "Most Tokens",
 	"mostRelevant": "Most Relevant",
 	"deleteTaskTitle": "Delete Task (Shift + Click to skip confirmation)",
+	"renameTask": "Rename task",
 	"copyPrompt": "Copy Prompt",
 	"exportTask": "Export Task",
 	"deleteTask": "Delete Task",

@@ -24,6 +24,7 @@ export const historyItemSchema = z.object({
 	number: z.number(),
 	ts: z.number(),
 	task: z.string(),
+	title: z.string().optional(), // kilocode_change: display-only name; never replaces the initial message.
 	tokensIn: z.number(),
 	tokensOut: z.number(),
 	cacheWrites: z.number().optional(),

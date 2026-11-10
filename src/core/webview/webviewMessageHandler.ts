@@ -980,6 +980,17 @@ export const webviewMessageHandler = async (
 		case "condenseTaskContextRequest":
 			await provider.condenseTaskContext(message.text!, message.contextMemoryMode) // kilocode_change: preserve explicit manual route.
 			break
+		// kilocode_change start: rename metadata without editing or resuming the conversation.
+		case "renameTaskWithId":
+			if (typeof message.taskId === "string" && typeof message.text === "string") {
+				try {
+					await provider.renameTaskWithId(message.taskId, message.text)
+				} catch (error) {
+					await vscode.window.showErrorMessage(`Failed to rename task: ${String(error)}`)
+				}
+			}
+			break
+		// kilocode_change end
 		case "deleteTaskWithId":
 			provider.deleteTaskWithId(message.text!)
 			break

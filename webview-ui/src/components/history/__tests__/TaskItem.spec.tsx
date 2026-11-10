@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
 import TaskItem from "../TaskItem"
+import { vscode } from "@/utils/vscode" // kilocode_change
 
 vi.mock("@src/utils/vscode")
 vi.mock("@src/i18n/TranslationContext", () => ({
@@ -30,6 +31,62 @@ describe("TaskItem", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
+
+	// kilocode_change start
+	it.each(["compact", "full"] as const)("renames a %s card without opening or editing its prompt", (variant) => {
+		const { rerender } = render(<TaskItem item={{ ...mockTask, title: "Custom title" }} variant={variant} />)
+		expect(screen.getByTestId("task-content")).toHaveTextContent("Custom title")
+		fireEvent.click(screen.getByTestId("rename-task-button"))
+		const input = screen.getByRole("textbox", { name: "history:renameTask" })
+		expect(input).toHaveValue("Custom title")
+		fireEvent.change(input, { target: { value: "  New title  " } })
+		fireEvent.submit(input.closest("form")!)
+		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "renameTaskWithId",
+			taskId: "1",
+			text: "New title",
+		})
+		expect(mockTask.task).toBe("Test task")
+		rerender(<TaskItem item={{ ...mockTask, title: "New title" }} variant={variant} />)
+		expect(screen.getByTestId("task-content")).toHaveTextContent("New title")
+	})
+
+	it("cancels a title draft with Escape and clears a title without changing the prompt", () => {
+		const { rerender } = render(<TaskItem item={{ ...mockTask, title: "Custom title" }} variant="compact" />)
+		fireEvent.click(screen.getByTestId("rename-task-button"))
+		fireEvent.change(screen.getByRole("textbox"), { target: { value: "Discard me" } })
+		fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" })
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		expect(screen.getByTestId("task-content")).toHaveTextContent("Custom title")
+		fireEvent.click(screen.getByTestId("rename-task-button"))
+		expect(screen.getByRole("textbox")).toHaveValue("Custom title")
+		fireEvent.change(screen.getByRole("textbox"), { target: { value: "  " } })
+		fireEvent.click(screen.getByRole("button", { name: "settings:common.save" }))
+		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "renameTaskWithId", taskId: "1", text: "" })
+		rerender(<TaskItem item={{ ...mockTask, title: "" }} variant="compact" />)
+		expect(screen.getByTestId("task-content")).toHaveTextContent("Test task")
+	})
+
+	it("renders a title as text, not HTML, and preserves compact delete behavior", () => {
+		const onDelete = vi.fn()
+		render(
+			<TaskItem
+				item={{ ...mockTask, title: "<img src=x onerror=alert(1)>" }}
+				variant="compact"
+				onDelete={onDelete}
+			/>,
+		)
+		expect(screen.getByTestId("task-content").querySelector("img")).toBeNull()
+		fireEvent.click(screen.getByTestId("delete-task-button"))
+		expect(onDelete).toHaveBeenCalledWith("1")
+		expect(vscode.postMessage).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByTestId("delete-task-button"), { shiftKey: true })
+		expect(vscode.postMessage).toHaveBeenCalledTimes(1)
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "deleteTaskWithId", text: "1" })
+	})
+	// kilocode_change end
 
 	it("does not render cost for zero cost", () => {
 		const zeroCostTask = { ...mockTask, totalCost: 0.0 }

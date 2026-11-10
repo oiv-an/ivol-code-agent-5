@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.137
+
+- Rename tasks directly in recent tasks and history without changing the conversation; search by custom name or original prompt, and delete tasks directly from recent-task cards.
+
 ## 5.17.136
 
 - Telegram: the Telegram button now also opens a project control topic with the command list. From it you can start new tasks (text or voice), open recent tasks, switch mode and provider profile, stop the current task and check status.

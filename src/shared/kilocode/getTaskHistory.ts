@@ -21,18 +21,17 @@ export function getTaskHistory(
 
 	if (request.search) {
 		const searchResults = new Fzf(tasks, {
-			selector: (item) => item.task,
+			selector: (item) => (item.title ? `${item.title}\n${item.task}` : item.task),
 		}).find(request.search)
 		tasks = searchResults.map((result) => {
 			const positions = Array.from(result.positions)
-			const taskEndIndex = result.item.task.length
+			const displayTitle = result.item.title || result.item.task
+			const titlePositions = positions.filter((p) => p < displayTitle.length)
 
 			return {
 				...result.item,
-				highlight: highlightFzfMatch(
-					result.item.task,
-					positions.filter((p) => p < taskEndIndex),
-				),
+				// No title match means render plain React text, not an unescaped HTML highlight.
+				highlight: titlePositions.length ? highlightFzfMatch(displayTitle, titlePositions) : undefined,
 				workspace: result.item.workspace,
 			}
 		})
