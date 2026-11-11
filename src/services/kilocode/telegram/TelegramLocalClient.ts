@@ -1,3 +1,4 @@
+import { telegramFailure, decodeTelegramFailure, TelegramStartupError, safeTelegramCode } from "./startupFailure"
 import * as net from "node:net"
 import { EventEmitter } from "node:events"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
@@ -34,9 +35,9 @@ export class TelegramLocalClient extends EventEmitter {
 			await client.authenticate(token, ownerId)
 			await client.mcp.connect(new TelegramMcpTransport(client.peer))
 			client.ready = true
-		} catch {
+		} catch (error) {
 			client.close()
-			throw new Error("Telegram coordinator connection failed")
+			throw telegramFailure(error, "mcp-connect")
 		}
 		client.heartbeat = setInterval(() => {
 			void client.request({ operation: "heartbeat" }).catch(() => client.close())
@@ -49,14 +50,23 @@ export class TelegramLocalClient extends EventEmitter {
 		return new Promise((resolve, reject) => {
 			const clientNonce = telegramNonce()
 			let serverNonce: string | undefined
+			let socketCode = "unavailable"
+			const socketError = (error: Error) => {
+				socketCode = safeTelegramCode(error)
+				fail()
+			}
 			const fail = () => {
 				clearTimeout(timer)
 				this.peer.off("frame", onFrame)
 				this.peer.off("closed", fail)
+				this.peer.socket.off("error", socketError)
 				this.close()
-				reject(new Error("Telegram coordinator authentication failed"))
+				reject(new TelegramStartupError("local-runtime", "authentication", socketCode))
 			}
-			const timer = setTimeout(fail, 5000)
+			const timer = setTimeout(() => {
+				socketCode = "ETIMEDOUT"
+				fail()
+			}, 5000)
 			const onFrame = (value: unknown) => {
 				if (!serverNonce) {
 					const challenge = telegramChallengeSchema.safeParse(value)
@@ -84,11 +94,13 @@ export class TelegramLocalClient extends EventEmitter {
 				clearTimeout(timer)
 				this.peer.off("frame", onFrame)
 				this.peer.off("closed", fail)
+				this.peer.socket.off("error", socketError)
 				this.peer.on("frame", (frame: unknown) => this.receive(frame))
 				resolve()
 			}
 			this.peer.on("frame", onFrame)
 			this.peer.once("closed", fail)
+			this.peer.socket.once("error", socketError)
 		})
 	}
 
@@ -102,21 +114,31 @@ export class TelegramLocalClient extends EventEmitter {
 	}
 
 	async request(request: TelegramCoordinatorRequest): Promise<unknown> {
-		if (!this.ready || this.pending >= 24) throw new Error("Telegram coordinator unavailable")
+		if (!this.ready || this.pending >= 24)
+			throw new TelegramStartupError("local-runtime", "operation", "unavailable")
 		this.pending++
 		try {
 			const result = await this.mcp.callTool({ name: "telegram_control", arguments: request }, undefined, {
 				timeout: 60_000,
 			})
 			const content = result.content as Array<{ type: string; text?: string }>
+			if (result.isError && content?.[0]?.type === "text" && content[0].text) {
+				let failure: TelegramStartupError | undefined
+				try {
+					failure = decodeTelegramFailure(JSON.parse(content[0].text))
+				} catch {
+					failure = undefined /* Legacy coordinator returns plain text. */
+				}
+				throw failure ?? new TelegramStartupError("startup-failed", "operation", "unknown")
+			}
 			if (result.isError || content?.[0]?.type !== "text" || !content[0].text) {
-				throw new Error("Telegram operation failed")
+				throw new TelegramStartupError("local-runtime", "operation", "invalid-response")
 			}
 			return JSON.parse(content[0].text)
-		} catch {
+		} catch (error) {
 			// Failed/timed-out activations must not accept input invisibly.
 			this.close()
-			throw new Error("Telegram operation failed")
+			throw telegramFailure(error, "operation")
 		} finally {
 			this.pending--
 		}

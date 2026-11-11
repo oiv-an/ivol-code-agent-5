@@ -4,7 +4,7 @@ import { TelegramLocalServer } from "./TelegramLocalServer"
 import { TelegramTopicStore } from "./TelegramTopicStore"
 import { telegramLocalPaths } from "./localPaths"
 import { telegramBootstrapSchema } from "./protocol"
-import { telegramStartupReason } from "./startupFailure"
+import { telegramStartupReason, telegramFailure } from "./startupFailure"
 
 import { acquireCoordinatorLock } from "./coordinatorLock"
 
@@ -69,7 +69,8 @@ process.once("message", (value: unknown) => {
 		const busy = ["EADDRINUSE", "ELOCKED"].includes((error as NodeJS.ErrnoException).code ?? "")
 		const reason = busy ? "already-running" : telegramStartupReason(error)
 		// Only a fixed code crosses IPC. Raw errors can contain the bot token or response URL.
-		const message = { type: "failed", reason }
+		const failure = telegramFailure(error, "startup")
+		const message = { type: "failed", reason, stage: failure.stage, code: failure.code }
 		if (process.connected) process.send?.(message, () => void shutdown())
 		else void shutdown()
 	})

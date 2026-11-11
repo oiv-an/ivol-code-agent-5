@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { TelegramLocalClient } from "./TelegramLocalClient"
 import { telegramLocalPaths } from "./localPaths"
 import { telegramBootstrapSchema } from "./protocol"
-import { isTelegramStartupReason, TelegramStartupError } from "./startupFailure"
+import { isTelegramStartupReason, TelegramStartupError, telegramFailure, decodeTelegramFailure } from "./startupFailure"
 
 /** Launch only on explicit task activation. Never persist the bot token or pass it in argv. */
 export async function launchTelegramCoordinator(
@@ -13,15 +13,21 @@ export async function launchTelegramCoordinator(
 	token: string,
 	ownerId: number,
 ): Promise<TelegramLocalClient> {
-	const config = telegramBootstrapSchema.parse({ token, ownerId })
-	const paths = await telegramLocalPaths(token.split(":")[0])
+	const parsed = telegramBootstrapSchema.safeParse({ token, ownerId })
+	if (!parsed.success) throw new TelegramStartupError("startup-failed", "configuration", "invalid-response")
+	const config = parsed.data
+	const paths = await telegramLocalPaths(token.split(":")[0]).catch((error) => {
+		throw telegramFailure(error, "runtime-path")
+	})
 	try {
 		return await TelegramLocalClient.connect(paths.socket, token, ownerId)
 	} catch {
 		// A missing listener is expected on first activation. Binding below elects one process.
 	}
 	const executable = path.join(extensionPath, "dist", "telegram-coordinator.js")
-	await fs.access(executable)
+	await fs.access(executable).catch((error) => {
+		throw telegramFailure(error, "bundle")
+	})
 	const child = fork(executable, [], {
 		detached: true,
 		stdio: ["ignore", "ignore", "ignore", "ipc"],
@@ -42,9 +48,12 @@ export async function launchTelegramCoordinator(
 				reject(error)
 			} else resolve(result!)
 		}
-		const timeout = setTimeout(() => finish(new TelegramStartupError("startup-failed")), 90_000)
-		const onError = () => finish(new TelegramStartupError("local-runtime"))
-		const onExit = () => finish(new TelegramStartupError("local-runtime"))
+		const timeout = setTimeout(
+			() => finish(new TelegramStartupError("startup-failed", "startup", "ETIMEDOUT")),
+			90_000,
+		)
+		const onError = (error: Error) => finish(telegramFailure(error, "spawn"))
+		const onExit = () => finish(new TelegramStartupError("local-runtime", "spawn", "unavailable"))
 		const onMessage = (value: unknown) => {
 			if (!value || typeof value !== "object") return
 			const message = value as { type?: string; reason?: string }
@@ -53,9 +62,10 @@ export async function launchTelegramCoordinator(
 				if (message.reason === "already-running") finish(undefined, "already-running")
 				else
 					finish(
-						new TelegramStartupError(
-							isTelegramStartupReason(message.reason) ? message.reason : "startup-failed",
-						),
+						decodeTelegramFailure(message) ??
+							new TelegramStartupError(
+								isTelegramStartupReason(message.reason) ? message.reason : "startup-failed",
+							),
 					)
 			}
 		}
@@ -63,7 +73,7 @@ export async function launchTelegramCoordinator(
 		child.once("error", onError)
 		child.once("exit", onExit)
 		child.send(config, (error) => {
-			if (error) onError()
+			if (error) onError(error)
 		})
 	})
 	child.unref()
@@ -75,5 +85,5 @@ export async function launchTelegramCoordinator(
 			await delay(1000)
 		}
 	}
-	throw new Error("Telegram coordinator unavailable; another token or a stale local listener may be present")
+	throw new TelegramStartupError("local-runtime", "reconnect", "unavailable")
 }

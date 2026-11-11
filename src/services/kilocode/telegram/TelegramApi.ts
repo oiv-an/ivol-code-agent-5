@@ -54,6 +54,7 @@ export class TelegramApiError extends Error {
 	constructor(
 		readonly code: number,
 		readonly retryAfter?: number,
+		readonly stage?: string,
 	) {
 		super(`Telegram request failed (${code})`)
 		this.name = "TelegramApiError"
@@ -204,12 +205,16 @@ export class TelegramApi {
 			})
 			const envelope = (await response.json()) as TelegramEnvelope<T>
 			if (!response.ok || !envelope.ok) {
-				throw new TelegramApiError(envelope.error_code ?? response.status, envelope.parameters?.retry_after)
+				throw new TelegramApiError(
+					envelope.error_code ?? response.status,
+					envelope.parameters?.retry_after,
+					method,
+				)
 			}
 			return envelope.result as T
 		} catch (error) {
 			if (error instanceof TelegramApiError) throw error
-			throw new TelegramApiError(signal?.aborted ? 499 : 503)
+			throw new TelegramApiError(signal?.aborted ? 499 : 503, undefined, method)
 		}
 	}
 

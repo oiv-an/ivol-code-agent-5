@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import * as path from "node:path"
 import { randomUUID } from "node:crypto"
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { TelegramApiError } from "../TelegramApi"
 import { TelegramLocalServer } from "../TelegramLocalServer"
 import { TelegramLocalClient } from "../TelegramLocalClient"
 import type { TelegramCoordinator } from "../TelegramCoordinator"
@@ -65,6 +66,18 @@ describe("Telegram server real MCP concurrency", () => {
 	})
 
 	const call = (sdk: Client) => sdk.callTool({ name: "telegram_control", arguments: activation })
+
+	it("preserves safe API diagnostics through the real MCP socket", async () => {
+		const error = new TelegramApiError(403, undefined, "createForumTopic")
+		error.message = "secret-token in upstream response"
+		coordinator.activate.mockRejectedValueOnce(error)
+		await expect(client.request({ ...activation, operation: "activate" })).rejects.toMatchObject({
+			reason: "telegram-rejected",
+			stage: "createForumTopic",
+			code: "403",
+			message: "telegram-rejected",
+		})
+	})
 
 	it("admits only 32 unresolved activations from a burst of 40, then disconnects", async () => {
 		let disconnected = false

@@ -1,3 +1,4 @@
+import { telegramFailure } from "./startupFailure"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { TelegramMcpTransport } from "./TelegramMcpTransport"
@@ -46,8 +47,17 @@ export async function connectTelegramMcpServer(
 		try {
 			const result = await execute(parsed.data)
 			return { content: [{ type: "text" as const, text: JSON.stringify(result ?? null) }] }
-		} catch {
-			return { isError: true, content: [{ type: "text" as const, text: "Telegram operation failed" }] }
+		} catch (error) {
+			const failure = telegramFailure(error, "operation")
+			return {
+				isError: true,
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({ reason: failure.reason, stage: failure.stage, code: failure.code }),
+					},
+				],
+			}
 		}
 	})
 	await server.connect(new TelegramMcpTransport(peer))

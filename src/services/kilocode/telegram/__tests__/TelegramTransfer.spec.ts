@@ -33,6 +33,7 @@ async function fixture() {
 			extensionPath: "/extension",
 			secrets: { get: async () => JSON.stringify({ token: "123:fixture", ownerId: 123 }) },
 		},
+		getTaskHistory: () => [],
 		getCurrentTask: () => current,
 		postMessageToWebview: vi.fn(async () => true),
 		log: vi.fn(),
@@ -52,6 +53,7 @@ async function fixture() {
 	const client = Object.assign(new EventEmitter(), {
 		close: vi.fn(),
 		request: vi.fn(async (request: any) => {
+			if (request.operation === "hasTopic") return true
 			if (["activate", "beginTransfer", "finishTransfer"].includes(request.operation))
 				return { ...route, taskId: request.taskId, epoch: `epoch${++epoch}` }
 			return null

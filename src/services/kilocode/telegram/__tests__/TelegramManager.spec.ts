@@ -2,7 +2,14 @@ import { EventEmitter } from "node:events"
 import * as vscode from "vscode"
 import { TelegramManager } from "../TelegramManager"
 import { launchTelegramCoordinator } from "../launchCoordinator"
-import { TelegramStartupError, telegramStartupReason, isTelegramStartupReason } from "../startupFailure"
+import {
+	TelegramStartupError,
+	telegramStartupReason,
+	isTelegramStartupReason,
+	telegramFailure,
+	telegramFailureDetails,
+	decodeTelegramFailure,
+} from "../startupFailure"
 import { TelegramApiError } from "../TelegramApi"
 import type { ClineProvider } from "../../../../core/webview/ClineProvider"
 
@@ -30,6 +37,7 @@ function fixture() {
 			extensionPath: "/extension",
 			secrets: { get: vi.fn(async () => credentials), store: vi.fn(async () => {}) },
 		},
+		getTaskHistory: () => [],
 		getCurrentTask: () => task,
 		postMessageToWebview: vi.fn(async () => true),
 		log: vi.fn(),
@@ -153,5 +161,32 @@ it("does not resurrect after cancelling an activation request already sent to th
 			telegramState: expect.objectContaining({ status: "inactive" }),
 		}),
 	)
+	manager.dispose()
+})
+
+it("preserves safe API stages and codes across IPC without response secrets", () => {
+	const failure = telegramFailure(new TelegramApiError(403, undefined, "createForumTopic"), "operation")
+	expect(decodeTelegramFailure(JSON.parse(JSON.stringify(failure)))).toMatchObject({
+		reason: "telegram-rejected",
+		stage: "createForumTopic",
+		code: "403",
+	})
+	expect(telegramFailureDetails(failure)).toBe(" [createForumTopic; 403]")
+	expect(telegramFailureDetails({ reason: "local-runtime", stage: "secret-token", code: "secret-token" })).toBe("")
+	expect(telegramFailure(Object.assign(new Error("secret-token"), { code: "ENOENT" }), "bundle")).toMatchObject({
+		stage: "bundle",
+		code: "ENOENT",
+	})
+})
+it("shows operation and safe code directly in the activation notification", async () => {
+	const notification = vi.spyOn(vscode.window, "showErrorMessage")
+	const { manager, provider } = fixture()
+	vi.mocked(launchTelegramCoordinator).mockRejectedValueOnce(
+		new TelegramStartupError("telegram-rejected", "createForumTopic", "403"),
+	)
+	await manager.activate("task")
+	expect(provider.log).toHaveBeenCalledWith("Telegram activation failed (telegram-rejected) [createForumTopic; 403]")
+	expect(notification).toHaveBeenCalledWith("common:telegram.failure.telegram-rejected [createForumTopic; 403]")
+	notification.mockRestore()
 	manager.dispose()
 })

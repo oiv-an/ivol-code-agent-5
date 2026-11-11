@@ -12,7 +12,7 @@ import { telegramTopicTitle } from "./presentation"
 import { generateTelegramTopicName } from "./topicTitle"
 import { TelegramTaskBridge } from "./TelegramTaskBridge"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
-import { TelegramStartupError } from "./startupFailure"
+import { TelegramStartupError, telegramFailure, telegramFailureDetails } from "./startupFailure"
 import { transcribeWithGroq } from "./groqTranscription"
 import {
 	TelegramProjectControl,
@@ -151,9 +151,15 @@ export class TelegramManager {
 	}
 
 	private async credentials(): Promise<z.infer<typeof telegramBootstrapSchema> | undefined> {
-		const stored = await this.provider.context.secrets.get(SECRET_KEY)
+		const stored = await this.provider.context.secrets.get(SECRET_KEY).then(undefined, (error) => {
+			throw telegramFailure(error, "configuration")
+		})
 		if (!stored) return undefined
-		return telegramBootstrapSchema.parse(JSON.parse(stored))
+		try {
+			return telegramBootstrapSchema.parse(JSON.parse(stored))
+		} catch (error) {
+			throw telegramFailure(error, "configuration")
+		}
 	}
 
 	/** Opens (creating once) the project control topic and posts the command list there. */
@@ -168,7 +174,7 @@ export class TelegramManager {
 		await this.publishState()
 		try {
 			const credentials = await this.credentials()
-			if (!credentials) throw new Error("Telegram configuration unavailable")
+			if (!credentials) throw new TelegramStartupError("startup-failed", "configuration", "unavailable")
 			if (!current()) return
 			const client = await launchTelegramCoordinator(
 				this.provider.context.extensionPath,
@@ -195,7 +201,7 @@ export class TelegramManager {
 			)
 			if (!current()) return
 			if (route.ownerId !== credentials.ownerId || route.chatId !== credentials.ownerId)
-				throw new Error("Invalid Telegram route")
+				throw new TelegramStartupError("local-runtime", "route", "invalid-response")
 			entry.control = new TelegramProjectControl(this.provider, client, route, {
 				activateTask: async (taskId) => {
 					if (current()) await this.activate(taskId)
@@ -222,9 +228,9 @@ export class TelegramManager {
 
 	private async failProject(error?: unknown): Promise<void> {
 		const reason = error instanceof TelegramStartupError ? error.reason : "startup-failed"
-		this.provider.log(`Telegram project activation failed (${reason})`)
+		this.provider.log(`Telegram project activation failed (${reason})${telegramFailureDetails(error)}`)
 		this.resetProject()
-		const message = t(`common:telegram.failure.${reason}`)
+		const message = t(`common:telegram.failure.${reason}`) + telegramFailureDetails(error)
 		this.state = { ...this.state, error: message }
 		await this.publishState()
 		void vscode.window.showErrorMessage(message)
@@ -309,7 +315,7 @@ export class TelegramManager {
 			await this.publishState()
 			const credentials = await this.credentials()
 			if (!current()) return
-			if (!credentials) throw new Error("Telegram configuration unavailable")
+			if (!credentials) throw new TelegramStartupError("startup-failed", "configuration", "unavailable")
 			this.state = {
 				configured: true,
 				ownerId: credentials.ownerId,
@@ -376,7 +382,7 @@ export class TelegramManager {
 				route.ownerId !== credentials.ownerId ||
 				route.chatId !== credentials.ownerId
 			)
-				throw new Error("Invalid Telegram route")
+				throw new TelegramStartupError("local-runtime", "route", "invalid-response")
 			if (overflow || connectionFault) throw new Error("Telegram activation interrupted")
 			this.route = route
 			this.lineage = [taskId]
@@ -584,9 +590,9 @@ export class TelegramManager {
 
 	async fail(error?: unknown, notify = false): Promise<void> {
 		const reason = error instanceof TelegramStartupError ? error.reason : "startup-failed"
-		const message = t(`common:telegram.failure.${reason}`)
+		const message = t(`common:telegram.failure.${reason}`) + telegramFailureDetails(error)
 		// A fixed reason is safe for the output channel; never log exceptions, IPC payloads or bot credentials.
-		this.provider.log(`Telegram activation failed (${reason})`)
+		this.provider.log(`Telegram activation failed (${reason})${telegramFailureDetails(error)}`)
 		this.resetConnection()
 		this.state.status = "error"
 		this.state.error = message

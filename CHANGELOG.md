@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.140
+
+- Telegram activation failures now show the failed operation and safe technical code directly, preserving diagnostics across the local coordinator without exposing credentials.
+
 ## 5.17.139
 
 - Fixed sudden context-counter jumps (e.g. 260k → 400k+) on cache hits through OpenAI-compatible gateways that double-count cached tokens; this no longer triggers premature condensing.
