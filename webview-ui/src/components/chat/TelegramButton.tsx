@@ -22,11 +22,9 @@ export function TelegramButton() {
 	// kilocode_change: the project control topic works without a task; inside a task both must be connected.
 	const active = projectActive && (!taskId || taskActive)
 	const connecting = state?.status === "connecting" || state?.projectStatus === "connecting"
-	const disconnect = active || connecting
+	const disconnect = state?.enabled || active || connecting
 	const label = t(disconnect ? "settings:telegram.active" : "settings:telegram.activate")
-	const tooltip = disconnect
-		? label
-		: (state?.error ?? (!state?.configured ? t("settings:telegram.configure") : label))
+	const tooltip = state?.error ?? (disconnect ? label : !state?.configured ? t("settings:telegram.configure") : label)
 	return (
 		<StandardTooltip content={tooltip}>
 			<span className="inline-flex">
@@ -34,10 +32,10 @@ export function TelegramButton() {
 					variant="ghost"
 					size="icon"
 					aria-label={label}
-					aria-pressed={active}
+					aria-pressed={!!disconnect}
 					aria-busy={connecting}
 					className={
-						active
+						disconnect
 							? "border border-green-400 bg-green-700 text-white hover:bg-green-800 hover:text-white"
 							: "border border-transparent"
 					}

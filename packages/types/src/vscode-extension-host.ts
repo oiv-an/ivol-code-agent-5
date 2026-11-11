@@ -184,6 +184,8 @@ export interface LanguageModelChatSelector {
  */
 // kilocode_change start
 export interface TelegramState {
+	/** Explicit button intent, retained during transport failures until the user switches it off. */
+	enabled?: boolean
 	/** Root topic identity; taskId is the current or pending handoff target. */
 	rootTaskId?: string
 	configured: boolean

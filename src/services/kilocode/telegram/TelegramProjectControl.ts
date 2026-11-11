@@ -73,7 +73,7 @@ export class TelegramProjectControl {
 			/** Connect the task topic for a task that is now current in this window. */
 			activateTask: (taskId: string) => Promise<void>
 			transcribe: (audio: string) => Promise<string>
-			fault: () => void
+			fault: (error?: unknown) => void
 		},
 	) {
 		client.on("input", this.onInput)
@@ -81,8 +81,8 @@ export class TelegramProjectControl {
 		client.on("disconnected", this.onFault)
 	}
 
-	private onFault = () => {
-		if (!this.disposed) this.hooks.fault()
+	private onFault = (error?: unknown) => {
+		if (!this.disposed) this.hooks.fault(error)
 	}
 
 	private onInput = (input: TelegramInput): void => {

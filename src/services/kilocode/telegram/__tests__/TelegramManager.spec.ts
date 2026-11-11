@@ -32,6 +32,7 @@ function fixture() {
 		getRemotePendingAsk: () => undefined,
 	})
 	const provider = Object.assign(new EventEmitter(), {
+		cwd: "/project",
 		context: {
 			subscriptions: [],
 			extensionPath: "/extension",
@@ -44,6 +45,27 @@ function fixture() {
 	})
 	return { provider, manager: new TelegramManager(provider as unknown as ClineProvider) }
 }
+function liveClient() {
+	const client = Object.assign(new EventEmitter(), {
+		close: vi.fn(),
+		request: vi.fn(async (request: { operation: string; taskId?: string }) => {
+			if (request.operation === "hasTopic") return true
+			return {
+				key: "key",
+				clientId: "client",
+				taskId: request.taskId ?? "__project__",
+				chatId: 123,
+				ownerId: 123,
+				threadId: 7,
+				activatedAt: Date.now(),
+				minimumUpdateId: 0,
+				epoch: "fresh",
+			}
+		}),
+	})
+	return client
+}
+
 beforeEach(() => {
 	vi.clearAllMocks()
 	Object.defineProperty(vscode.workspace, "isTrusted", { value: true, configurable: true })
@@ -189,4 +211,140 @@ it("shows operation and safe code directly in the activation notification", asyn
 	expect(notification).toHaveBeenCalledWith("common:telegram.failure.telegram-rejected [createForumTopic; 403]")
 	notification.mockRestore()
 	manager.dispose()
+})
+
+it("keeps the button enabled after startup failure, retries and stops retries on manual off", async () => {
+	vi.useFakeTimers()
+	const { provider, manager } = fixture()
+	const notification = vi.spyOn(vscode.window, "showErrorMessage")
+	try {
+		vi.mocked(launchTelegramCoordinator).mockRejectedValue(new TelegramStartupError("telegram-unreachable"))
+		await manager.activateAll("task")
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				telegramState: expect.objectContaining({
+					enabled: true,
+					status: "connecting",
+					projectStatus: "connecting",
+				}),
+			}),
+		)
+		expect(notification).not.toHaveBeenCalled()
+		const calls = vi.mocked(launchTelegramCoordinator).mock.calls.length
+		await vi.advanceTimersByTimeAsync(2000)
+		expect(launchTelegramCoordinator).toHaveBeenCalledTimes(calls + 2)
+		await manager.deactivateAll()
+		const stoppedCalls = vi.mocked(launchTelegramCoordinator).mock.calls.length
+		await vi.advanceTimersByTimeAsync(120_000)
+		expect(launchTelegramCoordinator).toHaveBeenCalledTimes(stoppedCalls)
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				telegramState: expect.objectContaining({
+					enabled: false,
+					status: "inactive",
+					projectStatus: "inactive",
+				}),
+			}),
+		)
+	} finally {
+		manager.dispose()
+		notification.mockRestore()
+		vi.useRealTimers()
+	}
+})
+
+it("recovers both topics after a runtime fault without another button press", async () => {
+	vi.useFakeTimers()
+	const { provider, manager } = fixture()
+	const clients: ReturnType<typeof liveClient>[] = []
+	vi.mocked(launchTelegramCoordinator).mockImplementation(async () => {
+		const client = liveClient()
+		clients.push(client)
+		return client as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>
+	})
+	try {
+		await manager.activateAll("task")
+		expect(clients).toHaveLength(2)
+		const fault = JSON.stringify(new TelegramStartupError("telegram-unreachable", "getUpdates", "503"))
+		for (const client of clients.slice()) client.emit("fault", fault)
+		await vi.advanceTimersByTimeAsync(2000)
+		expect(clients).toHaveLength(4)
+		expect(provider.log).toHaveBeenCalledWith(
+			"Telegram project activation failed (telegram-unreachable) [getUpdates; 503]",
+		)
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				telegramState: expect.objectContaining({ enabled: true, status: "active", projectStatus: "active" }),
+			}),
+		)
+		await manager.deactivateAll()
+		await vi.advanceTimersByTimeAsync(60_000)
+		expect(clients).toHaveLength(4)
+	} finally {
+		manager.dispose()
+		vi.useRealTimers()
+	}
+})
+
+it("follows the current task when it changes during a pending connection", async () => {
+	vi.useFakeTimers()
+	const { provider, manager } = fixture()
+	const old = provider.getCurrentTask()
+	const next = Object.assign(new EventEmitter(), { ...old, taskId: "next" })
+	let current = old
+	provider.getCurrentTask = () => current
+	const pending = deferred<Awaited<ReturnType<typeof launchTelegramCoordinator>>>()
+	vi.mocked(launchTelegramCoordinator).mockReturnValue(pending.promise)
+	try {
+		const first = manager.activateAll("task")
+		await vi.advanceTimersByTimeAsync(0)
+		current = next
+		pending.resolve(liveClient() as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>)
+		await first
+		vi.mocked(launchTelegramCoordinator).mockImplementation(
+			async () => liveClient() as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>,
+		)
+		await vi.advanceTimersByTimeAsync(3000)
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				telegramState: expect.objectContaining({ enabled: true, status: "active", taskId: "next" }),
+			}),
+		)
+	} finally {
+		manager.dispose()
+		vi.useRealTimers()
+	}
+})
+
+it("does not revive old launches or schedule retries after off, including off/on during a pending launch", async () => {
+	vi.useFakeTimers()
+	const { provider, manager } = fixture()
+	const pending = deferred<Awaited<ReturnType<typeof launchTelegramCoordinator>>>()
+	vi.mocked(launchTelegramCoordinator).mockReturnValue(pending.promise)
+	try {
+		const first = manager.activateAll("task")
+		await vi.advanceTimersByTimeAsync(0)
+		expect(launchTelegramCoordinator).toHaveBeenCalledTimes(2)
+		await manager.deactivateAll()
+		vi.mocked(launchTelegramCoordinator).mockImplementation(
+			async () => liveClient() as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>,
+		)
+		await manager.activateAll("task")
+		const late = liveClient()
+		pending.resolve(late as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>)
+		await first
+		expect(late.close).toHaveBeenCalledTimes(2)
+		expect(provider.postMessageToWebview).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				telegramState: expect.objectContaining({ enabled: true, status: "active", projectStatus: "active" }),
+			}),
+		)
+		await manager.deactivateAll()
+		const calls = vi.mocked(launchTelegramCoordinator).mock.calls.length
+		await vi.advanceTimersByTimeAsync(60_000)
+		expect(launchTelegramCoordinator).toHaveBeenCalledTimes(calls)
+	} finally {
+		manager.dispose()
+		vi.useRealTimers()
+	}
 })

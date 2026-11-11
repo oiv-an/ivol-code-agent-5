@@ -56,7 +56,7 @@ it("allows cancellation during connection and handoff even without a focused tas
 	state({ status: "connecting", taskId: "child", rootTaskId: "root" })
 	expect(button()).not.toBeDisabled()
 	expect(button()).toHaveAttribute("aria-busy", "true")
-	expect(button()).not.toHaveClass("bg-green-700")
+	expect(button()).toHaveClass("bg-green-700")
 	fireEvent.click(button())
 	expect(vscode.postMessage).toHaveBeenLastCalledWith({ type: "deactivateTelegram", telegramTaskId: "root" })
 	state({ status: "error", error: "Connection failed" })
@@ -83,6 +83,19 @@ it("does not retain another task's green or infer active from a shared root; ref
 	expect(button()).not.toBeDisabled()
 	fireEvent.click(button())
 	expect(vscode.postMessage).toHaveBeenLastCalledWith({ type: "activateTelegram", telegramTaskId: "child" })
+})
+it("keeps the enabled button pressed during recovery and lets the user stop it", () => {
+	render(<TelegramButton />)
+	state({ enabled: true, status: "connecting", projectStatus: "connecting", error: "Network unavailable" })
+	expect(button()).toHaveAttribute("aria-pressed", "true")
+	expect(button()).toHaveAttribute("aria-busy", "true")
+	expect(button()).toHaveClass("bg-green-700")
+	expect(button()).not.toBeDisabled()
+	expect(screen.getByTitle("Network unavailable")).toBeInTheDocument()
+	fireEvent.click(button())
+	expect(vscode.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: "deactivateTelegram" }))
+	state({ enabled: false })
+	expect(button()).toHaveAttribute("aria-pressed", "false")
 })
 it("connects the project control topic without a task and shows green once it is active", () => {
 	context.currentTaskId = ""

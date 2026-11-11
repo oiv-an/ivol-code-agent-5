@@ -6,6 +6,7 @@ import { TelegramTopicStore } from "./TelegramTopicStore"
 import { TelegramOutbox } from "./TelegramOutbox"
 import { TelegramMessageRenderer } from "./TelegramMessageRenderer"
 import type { TelegramCoordinatorRequest } from "./protocol"
+import { telegramFailure } from "./startupFailure"
 
 type PublishRequest = Extract<TelegramCoordinatorRequest, { operation: "publish" }>
 
@@ -392,6 +393,8 @@ export class TelegramCoordinator {
 	}
 
 	private async pollLoop(): Promise<void> {
+		let retryDelay = 1000
+		let recovering = false
 		while (!this.controller.signal.aborted) {
 			try {
 				// Telegram may choose a new random update sequence after a week without
@@ -409,7 +412,17 @@ export class TelegramCoordinator {
 					this.sequenceStartedAt = Date.now()
 				}
 				const updates = await this.api.updates(this.offset, this.controller.signal)
+				if (recovering) {
+					// Empty the entire offline backlog before permitting fresh routes, including menu callbacks.
+					for (const update of updates) this.offset = Math.max(this.offset, update.update_id + 1)
+					await this.drain()
+					recovering = false
+					this.healthy = true
+					retryDelay = 1000
+					continue
+				}
 				this.healthy = true
+				retryDelay = 1000
 				for (const update of updates) {
 					this.offset = Math.max(this.offset, update.update_id + 1)
 					const accepted = this.router.accept(update)
@@ -424,15 +437,16 @@ export class TelegramCoordinator {
 			} catch (error) {
 				if (this.controller.signal.aborted) return
 				this.healthy = false
-				// Fail closed on lost connectivity. Reactivation must be explicit in the IDE.
+				recovering = true
+				// Invalidate old commands/approvals; enabled IDE clients automatically obtain fresh routes.
 				for (const clientId of this.clients.keys()) {
 					this.deactivate(clientId)
 					this.deactivateProject(clientId)
 				}
-				this.report(error instanceof TelegramApiError ? error.message : "Telegram polling failed")
-				if (error instanceof TelegramApiError && [401, 409].includes(error.code)) return
+				this.report(JSON.stringify(telegramFailure(error, "getUpdates")))
 				try {
-					await delay(3000, undefined, { signal: this.controller.signal })
+					await delay(retryDelay, undefined, { signal: this.controller.signal })
+					retryDelay = Math.min(retryDelay * 2, 30_000)
 				} catch {
 					return // Shutdown interrupted the reconnect delay.
 				}

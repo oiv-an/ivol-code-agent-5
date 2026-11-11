@@ -12,7 +12,7 @@ import { telegramTopicTitle } from "./presentation"
 import { generateTelegramTopicName } from "./topicTitle"
 import { TelegramTaskBridge } from "./TelegramTaskBridge"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
-import { TelegramStartupError, telegramFailure, telegramFailureDetails } from "./startupFailure"
+import { TelegramStartupError, telegramFailure, telegramFailureDetails, decodeTelegramFailure } from "./startupFailure"
 import { transcribeWithGroq } from "./groqTranscription"
 import {
 	TelegramProjectControl,
@@ -66,6 +66,13 @@ export class TelegramManager {
 	private project?: ProjectConnection
 	private projectGeneration = 0
 
+	/** User intent is independent of socket health. Only the off button/disposal clears it. */
+	private enabled = false
+	private recoveryEpoch = 0
+	private recoveryTimer?: NodeJS.Timeout
+	private recoveryRunning = false
+	private retryDelay = 1000
+
 	constructor(private readonly provider: ClineProvider) {
 		provider.on(RooCodeEventName.TaskUnfocused, this.onUnfocused)
 		provider.on(RooCodeEventName.TaskAborted, this.onUnfocused)
@@ -75,6 +82,10 @@ export class TelegramManager {
 
 	/** While the button is on (project topic active), every task opened in the IDE follows into its own topic. */
 	private onFocused = (taskId: string): void => {
+		if (this.enabled) {
+			this.scheduleRecovery(0)
+			return
+		}
 		if (!this.project?.control || this.transfer) return
 		const generation = this.project.generation
 		void (async () => {
@@ -103,7 +114,12 @@ export class TelegramManager {
 
 	async publishState(): Promise<void> {
 		if (this.disposed) return
-		const state = { ...this.state }
+		const state = {
+			...this.state,
+			enabled: this.enabled,
+			...(this.enabled && this.state.status === "error" ? { status: "connecting" as const } : {}),
+			...(this.enabled && !this.project?.control ? { projectStatus: "connecting" as const } : {}),
+		}
 		this.stateDelivery = this.stateDelivery.then(async () => {
 			if (this.disposed) return
 			try {
@@ -172,11 +188,16 @@ export class TelegramManager {
 		const current = () => !this.disposed && this.project === entry && this.projectGeneration === generation
 		this.state = { ...this.state, projectStatus: "connecting", error: undefined }
 		await this.publishState()
+		let client: TelegramLocalClient | undefined
+		let interrupted = false
+		const captureFault = () => {
+			interrupted = true
+		}
 		try {
 			const credentials = await this.credentials()
 			if (!credentials) throw new TelegramStartupError("startup-failed", "configuration", "unavailable")
 			if (!current()) return
-			const client = await launchTelegramCoordinator(
+			client = await launchTelegramCoordinator(
 				this.provider.context.extensionPath,
 				credentials.token,
 				credentials.ownerId,
@@ -186,6 +207,8 @@ export class TelegramManager {
 				return
 			}
 			entry.client = client
+			client.on("fault", captureFault)
+			client.on("disconnected", captureFault)
 			const cwd = this.provider.cwd
 			const project = path.basename(cwd)
 			const projectId = readProjectTaskStorage(cwd)?.projectId ?? cwd
@@ -200,6 +223,7 @@ export class TelegramManager {
 				}),
 			)
 			if (!current()) return
+			if (interrupted) throw new TelegramStartupError("local-runtime", "reconnect", "unavailable")
 			if (route.ownerId !== credentials.ownerId || route.chatId !== credentials.ownerId)
 				throw new TelegramStartupError("local-runtime", "route", "invalid-response")
 			entry.control = new TelegramProjectControl(this.provider, client, route, {
@@ -207,14 +231,17 @@ export class TelegramManager {
 					if (current()) await this.activate(taskId)
 				},
 				transcribe: this.transcribe,
-				fault: () => {
-					if (current()) void this.failProject()
+				fault: (error) => {
+					if (current()) void this.failProject(this.runtimeFailure(error))
 				},
 			})
 			this.state = { ...this.state, projectStatus: "active" }
 			await this.publishState()
 		} catch (error) {
 			if (current()) await this.failProject(error)
+		} finally {
+			client?.off("fault", captureFault)
+			client?.off("disconnected", captureFault)
 		}
 	}
 
@@ -233,17 +260,81 @@ export class TelegramManager {
 		const message = t(`common:telegram.failure.${reason}`) + telegramFailureDetails(error)
 		this.state = { ...this.state, error: message }
 		await this.publishState()
-		void vscode.window.showErrorMessage(message)
+		if (!this.enabled) void vscode.window.showErrorMessage(message)
+		this.scheduleRecovery(this.retryDelay)
 	}
 
 	/** Button press: project topic always, plus the task topic when pressed inside a task. */
-	async activateAll(taskId?: string): Promise<void> {
-		const project = this.activateProject()
-		if (taskId) await this.activate(taskId)
-		await project
+	async activateAll(_taskId?: string): Promise<void> {
+		if (this.disposed || this.saving) return
+		this.enabled = true
+		await this.publishState()
+		await this.recover()
+	}
+
+	private scheduleRecovery(delay: number): void {
+		if (!this.enabled || this.disposed || this.recoveryTimer || this.recoveryRunning) return
+		this.recoveryTimer = setTimeout(() => {
+			this.recoveryTimer = undefined
+			void this.recover()
+		}, delay)
+		this.recoveryTimer.unref()
+	}
+
+	/** One recovery pass per intent epoch; late completions cannot revive a manually stopped connection. */
+	private async recover(): Promise<void> {
+		if (!this.enabled || this.disposed || this.recoveryRunning) return
+		if (this.recoveryTimer) clearTimeout(this.recoveryTimer)
+		this.recoveryTimer = undefined
+		this.recoveryRunning = true
+		const epoch = this.recoveryEpoch
+		try {
+			if (this.saving || this.transfer) return
+			const task = this.provider.getCurrentTask()
+			const operations: Promise<void>[] = []
+			if (!this.project) operations.push(this.activateProject())
+			if (task && !task.abort && (this.state.status !== "active" || this.state.taskId !== task.taskId)) {
+				operations.push(this.activate(task.taskId))
+			}
+			await Promise.all(operations)
+		} catch (error) {
+			if (epoch === this.recoveryEpoch && this.enabled) await this.fail(telegramFailure(error, "reconnect"))
+		} finally {
+			if (epoch === this.recoveryEpoch) {
+				this.recoveryRunning = false
+				const task = this.provider.getCurrentTask()
+				const healthy =
+					!!this.project?.control &&
+					(!task || task.abort || (this.state.status === "active" && this.state.taskId === task.taskId))
+				this.retryDelay = healthy ? 1000 : Math.min(this.retryDelay * 2, 30_000)
+				this.scheduleRecovery(this.retryDelay)
+			}
+		}
+	}
+
+	private stopRecovery(): void {
+		this.enabled = false
+		this.recoveryEpoch++
+		this.recoveryRunning = false
+		this.retryDelay = 1000
+		if (this.recoveryTimer) clearTimeout(this.recoveryTimer)
+		this.recoveryTimer = undefined
+	}
+
+	private runtimeFailure(value: unknown): TelegramStartupError {
+		if (typeof value === "string") {
+			try {
+				const failure = decodeTelegramFailure(JSON.parse(value))
+				if (failure) return failure
+			} catch {
+				// Legacy coordinators send plain text; never expose arbitrary IPC text.
+			}
+		}
+		return decodeTelegramFailure(value) ?? new TelegramStartupError("local-runtime", "reconnect", "unavailable")
 	}
 
 	async deactivateAll(): Promise<void> {
+		this.stopRecovery()
 		this.resetProject()
 		await this.deactivate()
 	}
@@ -391,8 +482,8 @@ export class TelegramManager {
 				client,
 				route,
 				current,
-				() => {
-					if (current()) void this.fail()
+				(error) => {
+					if (current()) void this.fail(this.runtimeFailure(error))
 				},
 				this.bridgeLabels(),
 				[...buffered.values()],
@@ -412,6 +503,11 @@ export class TelegramManager {
 			client?.off("disconnected", captureFault)
 			task.off(RooCodeEventName.Message, capture)
 			buffered.clear()
+			// A task can change/abort during an awaited launch without a matching unfocus event.
+			if (this.generation === generation && !current()) {
+				this.resetConnection()
+				await this.publishState()
+			}
 		}
 	}
 
@@ -562,8 +658,8 @@ export class TelegramManager {
 							client,
 							route,
 							current,
-							() => {
-								if (current()) void this.fail()
+							(error) => {
+								if (current()) void this.fail(this.runtimeFailure(error))
 							},
 							this.bridgeLabels(),
 							[...buffered.values()],
@@ -597,7 +693,8 @@ export class TelegramManager {
 		this.state.status = "error"
 		this.state.error = message
 		await this.publishState()
-		if (notify) void vscode.window.showErrorMessage(message)
+		if (notify && !this.enabled) void vscode.window.showErrorMessage(message)
+		this.scheduleRecovery(this.retryDelay)
 	}
 
 	private resetConnection(): void {
@@ -648,6 +745,7 @@ export class TelegramManager {
 	dispose(): void {
 		if (this.disposed) return
 		this.disposed = true
+		this.stopRecovery()
 		this.provider.off(RooCodeEventName.TaskUnfocused, this.onUnfocused)
 		this.provider.off(RooCodeEventName.TaskAborted, this.onUnfocused)
 		this.provider.off(RooCodeEventName.TaskFocused, this.onFocused)

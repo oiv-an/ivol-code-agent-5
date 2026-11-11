@@ -7,7 +7,7 @@ import { TelegramCoordinator } from "../TelegramCoordinator"
 import { TelegramTaskBridge } from "../TelegramTaskBridge"
 import { readTelegramImageAttachment } from "../TelegramAttachments"
 import type { TelegramUpdate } from "../TelegramApi"
-import type { TelegramApi } from "../TelegramApi"
+import { TelegramApiError, type TelegramApi } from "../TelegramApi"
 import type { TelegramTopicStore } from "../TelegramTopicStore"
 import type { Task } from "../../../../core/task/Task"
 import type { TelegramLocalClient } from "../TelegramLocalClient"
@@ -33,6 +33,62 @@ const route: TelegramRoute = {
 }
 
 describe("Telegram approval and media regressions", () => {
+	it("resumes polling after a rejected request and invalidates the old route before reconnecting", async () => {
+		let rejectPoll!: (error: Error) => void
+		let resolvePoll!: (updates: TelegramUpdate[]) => void
+		const api = {
+			verify: async () => ({ id: 1 }),
+			updates: vi.fn((_offset: number, signal: AbortSignal, timeout?: number) => {
+				if (timeout === 0) return Promise.resolve([])
+				return new Promise<TelegramUpdate[]>((resolve, reject) => {
+					rejectPoll = reject
+					resolvePoll = resolve
+					signal.addEventListener("abort", () => resolve([]), { once: true })
+				})
+			}),
+			sendText: vi.fn(async () => [1]),
+		}
+		const report = vi.fn()
+		const coordinator = new TelegramCoordinator(
+			api as unknown as TelegramApi,
+			123,
+			{ load: async () => {}, get: () => 5 } as unknown as TelegramTopicStore,
+			report,
+		)
+		try {
+			await coordinator.start()
+			coordinator.connect("client", vi.fn())
+			const old = await coordinator.activate("client", "project", "task", "title", "notice")
+			rejectPoll(new TelegramApiError(401, undefined, "getUpdates"))
+			await vi.waitFor(() => expect(report).toHaveBeenCalled())
+			expect(JSON.parse(report.mock.calls[0][0])).toMatchObject({
+				reason: "token-rejected",
+				stage: "getUpdates",
+				code: "401",
+			})
+			expect(() =>
+				coordinator.publish("client", {
+					operation: "publish",
+					taskId: "task",
+					epoch: old.epoch,
+					messageId: "old",
+					text: "old",
+					partial: false,
+					approvalRevision: 0,
+				}),
+			).toThrow("no longer active")
+			await vi.waitFor(() => expect(api.updates).toHaveBeenCalledTimes(3), { timeout: 2500 })
+			resolvePoll([{ update_id: 50 }])
+			await vi.waitFor(() => expect(api.updates).toHaveBeenCalledTimes(5))
+			expect(api.updates).toHaveBeenNthCalledWith(4, 51, expect.any(AbortSignal), 0)
+			const fresh = await coordinator.activate("client", "project", "task", "title", "notice")
+			expect(fresh.epoch).not.toBe(old.epoch)
+			expect(fresh.minimumUpdateId).toBe(51)
+		} finally {
+			await coordinator.stop()
+		}
+	})
+
 	it("does not resurrect invalidated queued approvals and keeps text/image order without waiting for delivery ack", async () => {
 		const gate = deferred()
 		const calls: string[] = []

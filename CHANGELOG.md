@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.141
+
+- Telegram stays enabled and reconnects automatically after connection failures until switched off, with visible recovery status and protection against replaying offline commands or stale approvals.
+
 ## 5.17.140
 
 - Telegram activation failures now show the failed operation and safe technical code directly, preserving diagnostics across the local coordinator without exposing credentials.
