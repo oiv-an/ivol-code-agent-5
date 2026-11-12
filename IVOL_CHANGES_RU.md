@@ -1,12 +1,14 @@
 # IVOL improvements at a glance
 
-Updated for VS Code 5.17.143 (JetBrains packages remain at 5.17.136). This document was originally a Russian draft; its filename is retained for
+Updated for VS Code 5.17.144 (JetBrains packages remain at 5.17.136). This document was originally a Russian draft; its filename is retained for
 existing local references, while the published content follows the repository's English documentation policy.
 See [README](README.md) for the complete feature overview and [CHANGELOG](CHANGELOG.md) for release history.
 
 - Telegram stays enabled through connection failures and automatically reconnects until switched off, without replaying offline commands or stale approvals. Each manual activation keeps one saved project introduction, edited with a reconnection count instead of duplicate messages.
 
 - Consecutive identical Telegram agent messages update one message with a call count; different text starts a new series without counting streaming updates as repeats.
+
+- Task renaming starts from a selected short editable excerpt even when the first message is very long, without changing the conversation.
 
 ## 1. Privacy and direct connections
 

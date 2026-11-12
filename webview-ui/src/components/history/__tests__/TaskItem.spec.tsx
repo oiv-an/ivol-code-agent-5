@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import TaskItem from "../TaskItem"
+import TaskItem, { defaultTitleDraft } from "../TaskItem" // kilocode_change
 import { vscode } from "@/utils/vscode" // kilocode_change
 
 vi.mock("@src/utils/vscode")
@@ -67,6 +67,22 @@ describe("TaskItem", () => {
 		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "renameTaskWithId", taskId: "1", text: "" })
 		rerender(<TaskItem item={{ ...mockTask, title: "" }} variant="compact" />)
 		expect(screen.getByTestId("task-content")).toHaveTextContent("Test task")
+	})
+
+	it("starts renaming an untitled task with a huge prompt from an editable short excerpt", () => {
+		const hugeTask = `\n  First line of the prompt  \n${"x".repeat(50_000)}`
+		render(<TaskItem item={{ ...mockTask, task: hugeTask }} variant="compact" />)
+		fireEvent.click(screen.getByTestId("rename-task-button"))
+		const input = screen.getByRole("textbox", { name: "history:renameTask" })
+		expect(input).toHaveValue("First line of the prompt")
+		fireEvent.change(input, { target: { value: "Short name" } })
+		fireEvent.submit(input.closest("form")!)
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "renameTaskWithId", taskId: "1", text: "Short name" })
+	})
+
+	it("bounds the default title draft for a single huge line", () => {
+		expect(defaultTitleDraft("y".repeat(10_000))).toHaveLength(200)
+		expect(defaultTitleDraft("")).toBe("")
 	})
 
 	it("renders a title as text, not HTML, and preserves compact delete behavior", () => {

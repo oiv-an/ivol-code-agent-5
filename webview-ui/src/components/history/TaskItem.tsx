@@ -39,7 +39,9 @@ const TaskItem = ({
 	const [isRenaming, setIsRenaming] = useState(false)
 	const [titleDraft, setTitleDraft] = useState("")
 	const startRename = () => {
-		setTitleDraft(item.title || "")
+		// Untitled tasks start from an editable short excerpt of the prompt: a placeholder
+		// with a huge prompt looked like editable text but could not be changed.
+		setTitleDraft(item.title || defaultTitleDraft(item.task))
 		setIsRenaming(true)
 	}
 	const saveTitle = () => {
@@ -95,8 +97,9 @@ const TaskItem = ({
 							className="flex flex-col gap-2 mb-2">
 							<Input
 								autoFocus
+								onFocus={(event) => event.currentTarget.select()}
 								aria-label={t("history:renameTask")}
-								placeholder={item.task}
+								placeholder={defaultTitleDraft(item.task)}
 								value={titleDraft}
 								onChange={(event) => setTitleDraft(event.target.value)}
 								onKeyDown={(event) => {
@@ -156,5 +159,19 @@ const TaskItem = ({
 		</div>
 	)
 }
+
+// kilocode_change start
+const TITLE_DRAFT_MAX_LENGTH = 200
+
+/** First non-empty line of the prompt, bounded so a huge prompt stays editable in a one-line field. */
+export function defaultTitleDraft(task: string): string {
+	const line =
+		task
+			.split(/\r?\n/)
+			.map((part) => part.trim())
+			.find(Boolean) ?? ""
+	return Array.from(line).slice(0, TITLE_DRAFT_MAX_LENGTH).join("")
+}
+// kilocode_change end
 
 export default memo(TaskItem)

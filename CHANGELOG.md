@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.144
+
+- Renaming a task whose first message is very long now starts from an editable short excerpt instead of an unusable placeholder containing the whole prompt.
+
 ## 5.17.143
 
 - Consecutive identical Telegram agent messages now update one message with a call count; different messages start a new series without counting streaming updates as repeats.
