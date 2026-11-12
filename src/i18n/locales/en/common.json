@@ -22,6 +22,7 @@
 		"project": {
 			"topicTitle": "📁 {{project}} · Control",
 			"helpTitle": "📁 Project control: {{project}}",
+			"reconnectCount": "Reconnections: {{count}}",
 			"helpFooter": "Plain text or a voice message here creates a new task with its own topic. Reply inside a task topic to talk to that task.",
 			"commands": {
 				"new": "new task: /new <text>",

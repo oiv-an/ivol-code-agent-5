@@ -3,15 +3,22 @@ import * as path from "node:path"
 import { randomBytes, createHash } from "node:crypto"
 import { z } from "zod"
 
+const projectMessageSchema = z.object({
+	sessionId: z.string().min(1).max(256),
+	messageId: z.number().int().positive().safe(),
+})
+
 const storeSchema = z.object({
 	version: z.literal(1),
 	topics: z.record(z.string(), z.number().int().positive().safe().nullable()),
+	projectMessages: z.record(z.string(), projectMessageSchema).default({}),
 })
 
 /** Only the elected coordinator writes this file. Tokens and conversation content are never persisted here. */
 export class TelegramTopicStore {
 	private topics: Record<string, number | null> = {}
 	private writes: Promise<void> = Promise.resolve()
+	private projectMessages: Record<string, z.infer<typeof projectMessageSchema>> = {}
 
 	constructor(private readonly filePath: string) {}
 
@@ -29,6 +36,7 @@ export class TelegramTopicStore {
 			}
 			const data = storeSchema.parse(JSON.parse(await fs.readFile(this.filePath, "utf8")))
 			this.topics = data.topics
+			this.projectMessages = data.projectMessages
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
 		}
@@ -43,8 +51,28 @@ export class TelegramTopicStore {
 		if ((threadId !== null && (!Number.isSafeInteger(threadId) || threadId <= 0)) || !/^[a-f0-9]{64}$/.test(key)) {
 			throw new Error("Invalid Telegram topic mapping")
 		}
+		await this.persist(() => ({
+			topics: { ...this.topics, [key]: threadId },
+			projectMessages: this.projectMessages,
+		}))
+	}
+
+	getProjectMessage(key: string, sessionId: string): number | undefined {
+		const entry = this.projectMessages[key]
+		return entry?.sessionId === sessionId ? entry.messageId : undefined
+	}
+
+	async setProjectMessage(key: string, sessionId: string, messageId: number): Promise<void> {
+		if (!/^[a-f0-9]{64}$/.test(key)) throw new Error("Invalid Telegram project mapping")
+		const entry = projectMessageSchema.parse({ sessionId, messageId })
+		await this.persist(() => ({ topics: this.topics, projectMessages: { ...this.projectMessages, [key]: entry } }))
+	}
+
+	private async persist(
+		snapshot: () => Pick<z.infer<typeof storeSchema>, "topics" | "projectMessages">,
+	): Promise<void> {
 		const write = this.writes.then(async () => {
-			const next = { ...this.topics, [key]: threadId }
+			const next = snapshot()
 			const directory = path.dirname(this.filePath)
 			await fs.mkdir(directory, { recursive: true, mode: 0o700 })
 			const parent = await fs.lstat(directory)
@@ -57,9 +85,10 @@ export class TelegramTopicStore {
 			}
 			const temporary = `${this.filePath}.${randomBytes(8).toString("hex")}.tmp`
 			try {
-				await fs.writeFile(temporary, JSON.stringify({ version: 1, topics: next }), { mode: 0o600, flag: "wx" })
+				await fs.writeFile(temporary, JSON.stringify({ version: 1, ...next }), { mode: 0o600, flag: "wx" })
 				await fs.rename(temporary, this.filePath)
-				this.topics = next
+				this.topics = next.topics
+				this.projectMessages = next.projectMessages
 			} finally {
 				await fs.rm(temporary, { force: true })
 			}

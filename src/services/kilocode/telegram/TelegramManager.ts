@@ -1,4 +1,5 @@
 import * as path from "node:path"
+import { randomUUID } from "node:crypto"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 import { z } from "zod"
@@ -65,6 +66,9 @@ export class TelegramManager {
 	/** Project control topic: own coordinator connection, independent of the task topic lifecycle. */
 	private project?: ProjectConnection
 	private projectGeneration = 0
+
+	/** Retained across socket/coordinator recovery, reset only for a new manual activation. */
+	private projectSession?: { id: string; reconnects: number }
 
 	/** User intent is independent of socket health. Only the off button/disposal clears it. */
 	private enabled = false
@@ -178,7 +182,7 @@ export class TelegramManager {
 		}
 	}
 
-	/** Opens (creating once) the project control topic and posts the command list there. */
+	/** Opens the project topic and updates this manual session's saved introduction. */
 	async activateProject(): Promise<void> {
 		if (this.disposed || this.saving || this.project) return
 		if (!vscode.workspace.isTrusted) throw new Error("Untrusted workspace")
@@ -218,7 +222,13 @@ export class TelegramManager {
 					operation: "activateProject",
 					projectId,
 					title: t("common:telegram.project.topicTitle", { project }),
-					help: telegramProjectHelp(project, recent),
+					help: [
+						telegramProjectHelp(project, recent),
+						...(this.projectSession
+							? [t("common:telegram.project.reconnectCount", { count: this.projectSession.reconnects })]
+							: []),
+					].join("\n\n"),
+					...(this.projectSession ? { sessionId: this.projectSession.id } : {}),
 					commands: telegramProjectCommands(),
 				}),
 			)
@@ -256,6 +266,8 @@ export class TelegramManager {
 	private async failProject(error?: unknown): Promise<void> {
 		const reason = error instanceof TelegramStartupError ? error.reason : "startup-failed"
 		this.provider.log(`Telegram project activation failed (${reason})${telegramFailureDetails(error)}`)
+		// Count interrupted established connections, not every failed recovery attempt.
+		if (this.project?.control && this.projectSession) this.projectSession.reconnects++
 		this.resetProject()
 		const message = t(`common:telegram.failure.${reason}`) + telegramFailureDetails(error)
 		this.state = { ...this.state, error: message }
@@ -267,6 +279,7 @@ export class TelegramManager {
 	/** Button press: project topic always, plus the task topic when pressed inside a task. */
 	async activateAll(_taskId?: string): Promise<void> {
 		if (this.disposed || this.saving) return
+		if (!this.enabled) this.projectSession = { id: randomUUID(), reconnects: 0 }
 		this.enabled = true
 		await this.publishState()
 		await this.recover()

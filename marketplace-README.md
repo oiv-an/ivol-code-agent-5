@@ -20,7 +20,7 @@ The full list of changes is in the [README on GitHub](https://github.com/oiv-an/
 - **Global rules:** one shared instruction file for your projects, with its full path and an editor button in IVOL settings. Existing rules are not migrated automatically.
 - **Task history:** custom task names editable directly in recent tasks and history without changing the conversation, search by name or original prompt, and deletion from recent-task cards. Stored inside each project in `.ivol/` with atomic, recoverable writes and reliable checkpoint restore.
 - **Browser:** BrowserOS neo and personal Chrome control, with browser approval remembered per task.
-- **Telegram:** continue an explicitly connected task in a private Telegram topic, including voice messages transcribed through Groq, plus a per-project control topic for starting and switching tasks, modes and profiles. The button stays enabled through failures and reconnects automatically until switched off, with visible recovery status and no replay of offline commands or stale approvals. Failures include safe diagnostics without exposing credentials.
+- **Telegram:** continue an explicitly connected task in a private Telegram topic, including voice messages transcribed through Groq, plus a per-project control topic for starting and switching tasks, modes and profiles. The button stays enabled through failures and reconnects automatically until switched off, with visible recovery status and no replay of offline commands or stale approvals. Each manual activation keeps one project introduction, updated with a reconnection counter instead of duplicate messages. Failures include safe diagnostics without exposing credentials.
 - **Autocomplete:** a separate model for autocomplete, off by default.
 
 ## Claude Code account access
@@ -35,7 +35,7 @@ Read the [IVOL Code Agent 5 Privacy Policy](https://github.com/oiv-an/ivol-code-
 
 ## Versioning
 
-Version `5.17.141` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
+Version `5.17.142` is based on upstream `5.16.2` plus the IVOL improvements and stability fixes.
 
 ## License and attribution
 

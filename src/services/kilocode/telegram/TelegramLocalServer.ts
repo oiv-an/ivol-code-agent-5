@@ -113,6 +113,7 @@ export class TelegramLocalServer {
 									request.title,
 									request.help,
 									request.commands,
+									request.sessionId,
 								)
 							case "deactivateProject":
 								this.coordinator.deactivateProject(id)

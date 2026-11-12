@@ -1,4 +1,9 @@
-import type { TelegramUpdate } from "../TelegramApi"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import * as path from "node:path"
+import { TelegramApi, TelegramApiError, type TelegramUpdate } from "../TelegramApi"
+import { TelegramCoordinator } from "../TelegramCoordinator"
+import { TelegramTopicStore } from "../TelegramTopicStore"
 import { TelegramRouter } from "../TelegramRouter"
 import { telegramInputSchema } from "../protocol"
 
@@ -15,6 +20,97 @@ function update(id: number, threadId: number, text?: string, data?: string): Tel
 		? { update_id: id, callback_query: { id: `cb${id}`, from: { id: 123 }, message, data } }
 		: { update_id: id, message }
 }
+
+describe("Telegram project introductions", () => {
+	it("reuses the saved message after coordinator restart, replaces only deleted messages and separates sessions", async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "telegram-project-"))
+		const file = path.join(directory, "topics.json")
+		const key = TelegramTopicStore.key(1, 123, "project", "__project__")
+		// Existing registries without projectMessages must still load.
+		await writeFile(file, JSON.stringify({ version: 1, topics: { [key]: 7 } }))
+		let nextId = 100
+		const api = {
+			verify: async () => ({ id: 1 }),
+			updates: (_offset: number, signal: AbortSignal, timeout?: number) =>
+				timeout === 0
+					? Promise.resolve([])
+					: new Promise<TelegramUpdate[]>((resolve) => {
+							signal.addEventListener("abort", () => resolve([]), { once: true })
+						}),
+			sendText: vi.fn(async () => [++nextId]),
+			editText: vi.fn(async () => {}),
+			pinMessage: vi.fn(async () => {}),
+		}
+		let coordinator = new TelegramCoordinator(
+			api as unknown as TelegramApi,
+			123,
+			new TelegramTopicStore(file),
+			vi.fn(),
+		)
+		const activate = (session = "session-a", help = "Help\n\nReconnections: 1") =>
+			coordinator.activateProject("client", "project", "title", help, [], session)
+		try {
+			await coordinator.start()
+			coordinator.connect("client", vi.fn())
+			await activate("session-a", "Help\n\nReconnections: 0")
+			expect(api.sendText).toHaveBeenCalledTimes(1)
+			await coordinator.stop()
+			coordinator = new TelegramCoordinator(
+				api as unknown as TelegramApi,
+				123,
+				new TelegramTopicStore(file),
+				vi.fn(),
+			)
+			await coordinator.start()
+			coordinator.connect("client", vi.fn())
+			await activate()
+			expect(api.editText).toHaveBeenLastCalledWith(123, 101, "Help\n\nReconnections: 1", expect.any(AbortSignal))
+			expect(api.sendText).toHaveBeenCalledTimes(1)
+			expect(api.pinMessage).toHaveBeenCalledTimes(1)
+
+			api.editText.mockRejectedValueOnce(
+				new TelegramApiError(400, undefined, "editMessageText", "message-not-modified"),
+			)
+			await activate()
+			for (const code of [400, 403, 429, 503]) {
+				api.editText.mockRejectedValueOnce(new TelegramApiError(code, undefined, "editMessageText"))
+				await expect(activate()).rejects.toThrow()
+			}
+			expect(api.sendText).toHaveBeenCalledTimes(1)
+
+			api.editText.mockRejectedValueOnce(
+				new TelegramApiError(400, undefined, "editMessageText", "message-not-found"),
+			)
+			await activate()
+			expect(api.sendText).toHaveBeenCalledTimes(2)
+			await activate()
+			expect(api.editText).toHaveBeenLastCalledWith(123, 102, expect.any(String), expect.any(AbortSignal))
+			await activate("session-b", "Help\n\nReconnections: 0")
+			expect(api.sendText).toHaveBeenCalledTimes(3)
+			const saved = new TelegramTopicStore(file)
+			await saved.load()
+			expect(saved.getProjectMessage(key, "session-b")).toBe(103)
+			expect(saved.getProjectMessage(key, "session-a")).toBeUndefined()
+		} finally {
+			await coordinator.stop()
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
+	it.each([
+		["Bad Request: message to edit not found", "message-not-found"],
+		["Bad Request: message is not modified: specified new message content is the same", "message-not-modified"],
+		["Bad Request: message can't be edited; secret", undefined],
+	])("classifies edit failures without retaining the response description: %s", async (description, reason) => {
+		const fetcher = vi.fn(
+			async () => new Response(JSON.stringify({ ok: false, error_code: 400, description }), { status: 400 }),
+		)
+		const api = new TelegramApi("123:fixture", fetcher as unknown as typeof fetch)
+		const error = await api.editText(123, 1, "help").catch((value: unknown) => value)
+		expect(error).toMatchObject({ code: 400, stage: "editMessageText", reason })
+		expect(JSON.stringify(error)).not.toContain(description)
+	})
+})
 
 describe("Telegram project control topic", () => {
 	const base = { chatId: 123, ownerId: 123, activatedAt: 0, minimumUpdateId: 0 }

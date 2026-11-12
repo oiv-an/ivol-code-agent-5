@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.142
+
+- Telegram reconnects now update one saved project message per manual activation, showing a reconnection count instead of sending duplicate introductions.
+
 ## 5.17.141
 
 - Telegram stays enabled and reconnects automatically after connection failures until switched off, with visible recovery status and protection against replaying offline commands or stale approvals.

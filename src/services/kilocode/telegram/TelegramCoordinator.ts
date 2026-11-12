@@ -109,13 +109,14 @@ export class TelegramCoordinator {
 		this.router.deactivateProject(clientId)
 	}
 
-	/** Creates (once) and activates the project control topic, then posts the command help. */
+	/** Creates the topic once; reconnects edit the introduction saved for this manual session. */
 	async activateProject(
 		clientId: string,
 		projectId: string,
 		title: string,
 		help: string,
 		commands: { command: string; description: string }[],
+		sessionId?: string,
 	): Promise<TelegramRoute> {
 		const client = this.connection(clientId)
 		this.deactivateProject(clientId)
@@ -136,8 +137,23 @@ export class TelegramCoordinator {
 				// The "/" menu is cosmetic; a failure must not block the control topic.
 				await this.api.setCommands(this.ownerId, commands, signal).catch(() => undefined)
 			}
-			const ids = await this.api.sendText(this.ownerId, threadId, help, signal)
-			if (ids[0]) await this.api.pinMessage(this.ownerId, ids[0], signal).catch(() => undefined)
+			let messageId = sessionId ? this.store.getProjectMessage(key, sessionId) : undefined
+			if (messageId) {
+				try {
+					await this.api.editText(this.ownerId, messageId, help, signal)
+				} catch (error) {
+					if (!(error instanceof TelegramApiError)) throw error
+					if (error.reason === "message-not-found") messageId = undefined
+					else if (error.reason !== "message-not-modified") throw error
+				}
+			}
+			if (!messageId) {
+				const ids = await this.api.sendText(this.ownerId, threadId, help, signal)
+				messageId = ids[0]
+				// Persist before pinning/route acknowledgement so a lost local response can reuse the message.
+				if (messageId && sessionId) await this.store.setProjectMessage(key, sessionId, messageId)
+				if (messageId) await this.api.pinMessage(this.ownerId, messageId, signal).catch(() => undefined)
+			}
 			signal.throwIfAborted()
 			if (this.clients.get(clientId) !== client) throw new Error("Telegram activation cancelled")
 			result = this.router.activateProject({

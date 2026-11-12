@@ -14,7 +14,9 @@ import { TelegramApiError } from "../TelegramApi"
 import type { ClineProvider } from "../../../../core/webview/ClineProvider"
 
 vi.mock("../launchCoordinator", () => ({ launchTelegramCoordinator: vi.fn() }))
-vi.mock("../../../../i18n", () => ({ t: (key: string) => key }))
+vi.mock("../../../../i18n", () => ({
+	t: (key: string, options?: { count?: number }) => (options?.count === undefined ? key : `${key}: ${options.count}`),
+}))
 vi.mock("../../project-task-storage", () => ({ readProjectTaskStorage: () => undefined }))
 function deferred<T>() {
 	let resolve!: (value: T) => void
@@ -48,7 +50,7 @@ function fixture() {
 function liveClient() {
 	const client = Object.assign(new EventEmitter(), {
 		close: vi.fn(),
-		request: vi.fn(async (request: { operation: string; taskId?: string }) => {
+		request: vi.fn(async (request: { operation: string; taskId?: string; sessionId?: string; help?: string }) => {
 			if (request.operation === "hasTopic") return true
 			return {
 				key: "key",
@@ -265,10 +267,16 @@ it("recovers both topics after a runtime fault without another button press", as
 	try {
 		await manager.activateAll("task")
 		expect(clients).toHaveLength(2)
+		const initial = clients[0].request.mock.calls.find(([request]) => request.operation === "activateProject")![0]
+		expect(initial.sessionId).toBeTruthy()
+		expect(initial.help).toContain("reconnectCount: 0")
 		const fault = JSON.stringify(new TelegramStartupError("telegram-unreachable", "getUpdates", "503"))
 		for (const client of clients.slice()) client.emit("fault", fault)
 		await vi.advanceTimersByTimeAsync(2000)
 		expect(clients).toHaveLength(4)
+		const restored = clients[2].request.mock.calls.find(([request]) => request.operation === "activateProject")![0]
+		expect(restored.sessionId).toBe(initial.sessionId)
+		expect(restored.help).toContain("reconnectCount: 1")
 		expect(provider.log).toHaveBeenCalledWith(
 			"Telegram project activation failed (telegram-unreachable) [getUpdates; 503]",
 		)
@@ -280,6 +288,10 @@ it("recovers both topics after a runtime fault without another button press", as
 		await manager.deactivateAll()
 		await vi.advanceTimersByTimeAsync(60_000)
 		expect(clients).toHaveLength(4)
+		await manager.activateAll("task")
+		const restarted = clients[4].request.mock.calls.find(([request]) => request.operation === "activateProject")![0]
+		expect(restarted.sessionId).not.toBe(initial.sessionId)
+		expect(restarted.help).toContain("reconnectCount: 0")
 	} finally {
 		manager.dispose()
 		vi.useRealTimers()

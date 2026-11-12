@@ -47,6 +47,7 @@ interface TelegramEnvelope<T> {
 	result?: T
 	error_code?: number
 	parameters?: { retry_after?: number }
+	description?: string
 }
 
 /** Never include request URLs, response descriptions or underlying fetch errors: they may contain the token. */
@@ -55,6 +56,7 @@ export class TelegramApiError extends Error {
 		readonly code: number,
 		readonly retryAfter?: number,
 		readonly stage?: string,
+		readonly reason?: "message-not-found" | "message-not-modified",
 	) {
 		super(`Telegram request failed (${code})`)
 		this.name = "TelegramApiError"
@@ -209,6 +211,13 @@ export class TelegramApi {
 					envelope.error_code ?? response.status,
 					envelope.parameters?.retry_after,
 					method,
+					envelope.error_code === 400 && method === "editMessageText"
+						? envelope.description === "Bad Request: message to edit not found"
+							? "message-not-found"
+							: envelope.description?.startsWith("Bad Request: message is not modified")
+								? "message-not-modified"
+								: undefined
+						: undefined,
 				)
 			}
 			return envelope.result as T

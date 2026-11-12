@@ -105,13 +105,14 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 			taskText: z.string().max(2_000_000).optional(),
 		})
 		.strict(),
-	/** Persistent per-project control topic; the help text is posted on every activation. */
+	/** One project introduction per manual session; recovery edits its saved message. */
 	z
 		.object({
 			operation: z.literal("activateProject"),
 			projectId: identifier,
 			title: z.string().min(1).max(256),
 			help: z.string().min(1).max(4000),
+			sessionId: identifier.optional(),
 			commands: z
 				.array(
 					z
