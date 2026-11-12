@@ -4,6 +4,7 @@
 		"approve": "Allow",
 		"deny": "Reject",
 		"thinking": "Thinking…",
+		"repetitions": "Calls: {{total}}",
 		"confirmation": "The agent needs permission to continue. Review the action in the IDE before allowing it.",
 		"voiceFailed": "Voice message was not sent to the agent: transcription failed",
 		"taskTitle": "Task",

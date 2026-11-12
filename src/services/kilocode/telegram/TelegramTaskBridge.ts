@@ -22,6 +22,9 @@ export class TelegramTaskBridge {
 	private lastVisibleTs = -Infinity
 	private readonly messageKeys = new Map<number, number>()
 	private lastMessageUpdateId = -1
+	private repeatRun?: { ts: number; key: number; text: string; count: number; partial: boolean }
+	private readonly completedMessages = new Set<number>()
+	private readonly userMessages = new Set<number>()
 	/** Voice notes are transcribed asynchronously; later messages wait behind them to keep arrival order. */
 	private inputTail: Promise<void> = Promise.resolve()
 	private pendingVoice = 0
@@ -40,6 +43,7 @@ export class TelegramTaskBridge {
 			thinking: string
 			confirmation: string
 			voiceFailed?: string
+			repetitions?: (count: number) => string
 		},
 		initialMessages: ClineMessage[] = [],
 		private readonly transcribe?: (audio: string) => Promise<string>,
@@ -68,6 +72,7 @@ export class TelegramTaskBridge {
 			if (this.remoteTexts.delete(text)) return
 			if (!text && !message.images?.length) return
 			this.lastVisibleTs = Math.max(this.lastVisibleTs, message.ts)
+			this.userMessages.add(message.ts)
 			this.dirty.set(message.ts, { ...message, say: "text", text: text ? `👤 ${text}` : "" })
 			return
 		}
@@ -138,6 +143,7 @@ export class TelegramTaskBridge {
 	}
 
 	private async notice(key: string, text: string): Promise<void> {
+		this.repeatRun = undefined
 		await this.client.request({
 			operation: "publish",
 			taskId: this.task.taskId,
@@ -173,6 +179,7 @@ export class TelegramTaskBridge {
 		if (input.kind === "message") {
 			if (!Number.isSafeInteger(input.updateId) || input.updateId <= this.lastMessageUpdateId) return
 			this.lastMessageUpdateId = input.updateId
+			this.repeatRun = undefined
 			if (!input.audio && !this.pendingVoice) {
 				this.deliver(input.text, input.images)
 				return
@@ -278,7 +285,50 @@ export class TelegramTaskBridge {
 					buttonAsks.has(message.ask ?? "")
 				// Recheck at flush time: an answered/obsolete ask must never reveal its raw payload.
 				if (presentation.kind === "approval" && !buttonAsk) continue
-				const text = presentation.kind === "approval" ? this.labels.confirmation : presentation.text
+				let text = presentation.kind === "approval" ? this.labels.confirmation : presentation.text
+				// A placeholder between two equal assistant messages must not create a duplicate of its own.
+				if (message.ts < 0 && this.repeatRun) continue
+				const repeatable =
+					message.type === "say" &&
+					message.say === "text" &&
+					message.ts >= 0 &&
+					!this.userMessages.has(message.ts) &&
+					!images.length &&
+					!!text
+				if (repeatable) {
+					// Replayed final events and late partial events are not new calls.
+					if (this.completedMessages.has(message.ts)) continue
+					const previous = this.repeatRun
+					const partial = message.partial === true
+					if (previous && previous.ts !== message.ts && !previous.partial) {
+						// Wait only while this stream could still be an exact repeat. A differing prefix streams normally.
+						if (partial && previous.text.startsWith(text!)) continue
+						if (!partial && previous.text === text) {
+							this.messageKeys.set(message.ts, previous.key)
+							this.repeatRun = { ...previous, ts: message.ts, count: previous.count + 1 }
+						} else {
+							this.repeatRun = undefined
+						}
+					} else if (previous?.ts === message.ts) {
+						this.repeatRun = { ...previous, text: text!, partial }
+					} else {
+						this.repeatRun = undefined
+					}
+					this.repeatRun ??= {
+						ts: message.ts,
+						key: this.messageKeys.get(message.ts) ?? message.ts,
+						text: text!,
+						count: 1,
+						partial,
+					}
+					if (this.repeatRun.count > 1) {
+						const count = this.repeatRun.count
+						text += `\n\n${this.labels.repetitions?.(count) ?? `Calls: ${count}`}`
+					}
+					if (!partial) this.completedMessages.add(message.ts)
+				} else {
+					this.repeatRun = undefined
+				}
 				if (text)
 					await this.client.request({
 						operation: "publish",

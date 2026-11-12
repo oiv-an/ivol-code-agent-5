@@ -165,6 +165,7 @@ export class TelegramManager {
 			approve: t("common:telegram.approve"),
 			deny: t("common:telegram.deny"),
 			thinking: t("common:telegram.thinking"),
+			repetitions: (total: number) => t("common:telegram.repetitions", { total }),
 			confirmation: t("common:telegram.confirmation"),
 			voiceFailed: t("common:telegram.voiceFailed"),
 		}

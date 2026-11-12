@@ -13,6 +13,8 @@ import type { Task } from "../../../../core/task/Task"
 import type { TelegramLocalClient } from "../TelegramLocalClient"
 import type { TelegramRoute } from "../TelegramRouter"
 
+import { TelegramMessageRenderer } from "../TelegramMessageRenderer"
+
 function deferred<T = void>() {
 	let resolve!: (value: T) => void
 	const promise = new Promise<T>((done) => {
@@ -387,6 +389,121 @@ describe("Telegram approval and media regressions", () => {
 			vi.useRealTimers()
 		}
 	})
+
+	it("edits consecutive equal messages, counts completed calls once and starts a new run after different text", async () => {
+		vi.useFakeTimers()
+		const task = Object.assign(new EventEmitter(), {
+			taskId: "task",
+			getRemotePendingAsk: () => undefined,
+		})
+		const api = {
+			sendText: vi.fn(async () => [api.sendText.mock.calls.length]),
+			editText: vi.fn(async () => {}),
+		}
+		const renderer = new TelegramMessageRenderer(
+			api as unknown as TelegramApi,
+			123,
+			5,
+			new AbortController().signal,
+		)
+		const client = Object.assign(new EventEmitter(), {
+			request: vi.fn(async (request) => {
+				if (request.operation === "publish")
+					await renderer.render(request.messageId, request.text, undefined, request.markdown)
+			}),
+			close: vi.fn(),
+		})
+		const fault = vi.fn()
+		const bridge = new TelegramTaskBridge(
+			task as unknown as Task,
+			client as unknown as TelegramLocalClient,
+			route,
+			() => true,
+			fault,
+			{
+				approve: "yes",
+				deny: "no",
+				thinking: "Thinking…",
+				confirmation: "Review",
+				repetitions: (n) => `Calls: ${n}`,
+			},
+		)
+		const emit = async (ts: number, text: string, partial = false, say: ClineMessage["say"] = "text") => {
+			task.emit(RooCodeEventName.Message, { message: { ts, type: "say", say, text, partial } })
+			await vi.advanceTimersByTimeAsync(300)
+		}
+		const sent = () => client.request.mock.calls.map(([r]) => r).filter((r) => r.operation === "publish")
+		try {
+			await emit(1, "Reading browser")
+			await emit(2, "", false, "api_req_started")
+			await emit(3, "Reading", true)
+			await emit(3, "Reading browser", true)
+			expect(api.sendText).toHaveBeenCalledTimes(1)
+			expect(api.editText).not.toHaveBeenCalled()
+			await emit(3, "Reading browser")
+			expect(sent().at(-1)).toMatchObject({ messageId: "epoch:1", text: "Reading browser\n\nCalls: 2" })
+			expect(api.sendText).toHaveBeenCalledTimes(1)
+			expect(api.editText).toHaveBeenCalledTimes(1)
+			await emit(3, "Reading browser")
+			await emit(3, "Reading", true)
+			expect(api.editText).toHaveBeenCalledTimes(1)
+			await emit(4, "Reading browser")
+			expect(sent().at(-1)?.text).toBe("Reading browser\n\nCalls: 3")
+			await emit(5, "Reading", true)
+			await emit(5, "Reading files", true)
+			await emit(5, "Reading files")
+			expect(api.sendText).toHaveBeenCalledTimes(2)
+			await emit(6, "Reading browser")
+			expect(api.sendText).toHaveBeenCalledTimes(3)
+			expect(sent().at(-1)?.text).toBe("Reading browser")
+			expect(fault).not.toHaveBeenCalled()
+		} finally {
+			bridge.dispose()
+			vi.useRealTimers()
+		}
+	})
+
+	it.each(["user_feedback", "completion_result", "image"] as const)(
+		"breaks repeated text runs at %s messages",
+		async (say) => {
+			vi.useFakeTimers()
+			const task = Object.assign(new EventEmitter(), { taskId: "task", getRemotePendingAsk: () => undefined })
+			const client = Object.assign(new EventEmitter(), {
+				request: vi.fn(async (_request) => null),
+				close: vi.fn(),
+			})
+			const bridge = new TelegramTaskBridge(
+				task as unknown as Task,
+				client as unknown as TelegramLocalClient,
+				route,
+				() => true,
+				vi.fn(),
+				{ approve: "yes", deny: "no", thinking: "Thinking…", confirmation: "Review" },
+			)
+			try {
+				for (const message of [
+					{ ts: 1, type: "say", say: "text", text: "Repeated" },
+					{
+						ts: 2,
+						type: "say",
+						say,
+						text: "Repeated",
+						...(say === "image" ? { images: ["data:image/png;base64,YQ=="] } : {}),
+					},
+					{ ts: 3, type: "say", say: "text", text: "Repeated" },
+				]) {
+					task.emit(RooCodeEventName.Message, { message })
+					await vi.advanceTimersByTimeAsync(300)
+				}
+				expect(client.request).toHaveBeenLastCalledWith(
+					expect.objectContaining({ messageId: "epoch:3", text: "Repeated" }),
+				)
+			} finally {
+				bridge.dispose()
+				vi.useRealTimers()
+			}
+		},
+	)
 
 	it("reads only explicit workspace image attachments and rejects symlink escape/non-images", async () => {
 		const root = await mkdtemp(path.join(tmpdir(), "ivol-telegram-media-"))

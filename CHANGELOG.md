@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.143
+
+- Consecutive identical Telegram agent messages now update one message with a call count; different messages start a new series without counting streaming updates as repeats.
+
 ## 5.17.142
 
 - Telegram reconnects now update one saved project message per manual activation, showing a reconnection count instead of sending duplicate introductions.

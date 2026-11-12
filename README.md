@@ -1,18 +1,18 @@
 # IVOL Code Agent 5
 
-IVOL Code Agent 5 is an AI coding agent for VS Code and JetBrains IDEs, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). The latest VS Code release is **5.17.142**; the nine separate PhpStorm, IntelliJ IDEA, PyCharm and WebStorm packages remain at **5.17.136**.
+IVOL Code Agent 5 is an AI coding agent for VS Code and JetBrains IDEs, built on the open-source upstream **v5.16.2** codebase (Kilo Code legacy, which is derived from Roo Code and Cline). The latest VS Code release is **5.17.143**; the nine separate PhpStorm, IntelliJ IDEA, PyCharm and WebStorm packages remain at **5.17.136**.
 
 This is an independent, unofficial fork. It is not affiliated with or endorsed by the original upstream authors.
 
-**Current VS Code version: 5.17.142. JetBrains packages: 5.17.136.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
+**Current VS Code version: 5.17.143. JetBrains packages: 5.17.136.** The full per-version history is in [CHANGELOG.md](CHANGELOG.md). This README summarizes everything that differs from upstream 5.16.2.
 
 ## Install
 
-**[Download VS Code 5.17.142](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.142)** — VSIX and SHA-256 checksums. [JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136) remain available without rebuilding. [Choose your exact IDE package](DOWNLOADS.md).
+**[Download VS Code 5.17.143](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.143)** — VSIX and SHA-256 checksums. [JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136) remain available without rebuilding. [Choose your exact IDE package](DOWNLOADS.md).
 
 | Editor        | Packages                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5), [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5), or [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.142/ivol-code-agent-5-5.17.142.vsix)                                                                                                                     |
+| VS Code       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ivol.ivol-code-agent-5), [Open VSX](https://open-vsx.org/extension/ivol/ivol-code-agent-5), or [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.143/ivol-code-agent-5-5.17.143.vsix)                                                                                                                     |
 | PhpStorm      | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                                                                                                                                                                                                                                                                            |
 | IntelliJ IDEA | [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip), [2025.3](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip)                                                                                                                                |
 | PyCharm       | [2025.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2025.1.zip), [2026.1](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.1.zip), [2026.2](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-pycharm-2026.2.zip)    |
@@ -112,6 +112,8 @@ Ordinary releases publish VS Code to both stores and GitHub Releases with update
 - Browser scripts (`run`, `evaluate`) are allowed after explicit approval. Element interactions still require a fresh page observation.
 
 ### Telegram
+
+- Consecutive identical agent messages update one Telegram message with a call count. Different text starts a new series; streaming updates do not count as separate calls.
 
 - The Telegram button stays enabled through connection failures and automatically reconnects until switched off. Recovery is visible and cancellable; offline commands and stale approvals are not replayed. Each manual activation has one saved project introduction: reconnections edit it with a counter instead of sending duplicates, and a deleted introduction is replaced.
 
