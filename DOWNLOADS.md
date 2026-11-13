@@ -1,16 +1,16 @@
 # Download IVOL Code Agent 5
 
-**[VS Code 5.17.144](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.144)** is the latest VS Code release, with its VSIX and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.144/SHA256SUMS.txt). Renaming tasks with very long first messages now opens a short editable excerpt selected for replacement, instead of displaying the whole prompt as a placeholder. Verification: all 13 task-card tests, the webview type check and targeted lint passed. Reload the VS Code window to activate the update.
+**[VS Code 5.17.145](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.145)** is the latest VS Code release, with its VSIX and [SHA256SUMS.txt](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.145/SHA256SUMS.txt). The task header now shows the custom task name when one is set, falling back to the first message otherwise. Verification: webview type check passed. Reload the VS Code window to activate the update.
 
-**[JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** remain unchanged. This release contains nine JetBrains ZIPs, the previous VSIX and its own checksums. No JetBrains builds or installations were performed for the subsequent VS Code-only releases through 5.17.144.
+**[JetBrains packages 5.17.136](https://github.com/oiv-an/ivol-code-agent-5/releases/tag/v5.17.136)** remain unchanged. This release contains nine JetBrains ZIPs, the previous VSIX and its own checksums. No JetBrains builds or installations were performed for the subsequent VS Code-only releases through 5.17.145.
 
 ## Choose your IDE version
 
-Find the IDE version and build number in **Help → About**. Plugin versions (**VS Code 5.17.144**, **JetBrains 5.17.136**) are independent of IDE versions. SDK verification below means automated checks, not an interactive installation test.
+Find the IDE version and build number in **Help → About**. Plugin versions (**VS Code 5.17.145**, **JetBrains 5.17.136**) are independent of IDE versions. SDK verification below means automated checks, not an interactive installation test.
 
 | IDE                  | SDK used for compilation and verification | Declared compatibility                                       | Download                                                                                                                                       |
 | -------------------- | ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.144/ivol-code-agent-5-5.17.144.vsix)                                |
+| VS Code              | VSIX package                              | See the VS Code engine requirement in the extension manifest | [VSIX](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.145/ivol-code-agent-5-5.17.145.vsix)                                |
 | PhpStorm 2026.2      | 2026.2.3, PS-262.10968.76                 | 262–262.\*                                                   | [PhpStorm ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-phpstorm.zip)                |
 | IntelliJ IDEA 2026.2 | 2026.2.2, IU-262.10315.125                | 262–262.\*                                                   | [IDEA 2026.2 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea.zip)        |
 | IntelliJ IDEA 2025.3 | 2025.3.6.1, IU-253.33813.55               | 253.33813.55–253.\*                                          | [IDEA 2025.3 ZIP](https://github.com/oiv-an/ivol-code-agent-5/releases/download/v5.17.136/ivol-code-agent-5-5.17.136-intellij-idea-2025.3.zip) |

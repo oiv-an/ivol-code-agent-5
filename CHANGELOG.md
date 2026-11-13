@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.145
+
+- The task header now shows the custom task name when one is set.
+
 ## 5.17.144
 
 - Renaming a task whose first message is very long now starts from an editable short excerpt instead of an unusable placeholder containing the whole prompt.

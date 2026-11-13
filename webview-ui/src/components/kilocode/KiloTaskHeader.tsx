@@ -122,7 +122,11 @@ const KiloTaskHeader = ({
 								{!isTaskExpanded && ":"}
 							</span>
 							{!isTaskExpanded && (
-								<span style={{ marginLeft: 4 }}>{highlightText(task.text, false, customModes)}</span>
+								<span style={{ marginLeft: 4 }}>
+									{currentTaskItem?.title?.trim()
+										? currentTaskItem.title.trim()
+										: highlightText(task.text, false, customModes)}
+								</span>
 							)}
 						</div>
 					</div>
