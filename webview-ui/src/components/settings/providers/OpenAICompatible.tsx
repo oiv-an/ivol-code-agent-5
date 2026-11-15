@@ -19,6 +19,7 @@ import { inputEventTransform, noTransform } from "../transforms"
 import { ModelPicker } from "../ModelPicker"
 import { R1FormatSetting } from "../R1FormatSetting"
 import { ThinkingBudget } from "../ThinkingBudget"
+import { OpenRouterPricing } from "./OpenRouterPricing" // kilocode_change
 
 type OpenAICompatibleProps = {
 	apiConfiguration: ProviderSettings
@@ -398,6 +399,12 @@ export const OpenAICompatible = ({
 					</div>
 				</div>
 				{/* kilocode_change end */}
+
+				{/* kilocode_change: automatic prices from the OpenRouter catalog */}
+				<OpenRouterPricing
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+				/>
 
 				<div>
 					<VSCodeTextField

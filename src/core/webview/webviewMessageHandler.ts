@@ -1480,6 +1480,28 @@ export const webviewMessageHandler = async (
 			break
 		}
 		// kilocode_change end
+		// kilocode_change start: OpenRouter price lookup for an OpenAI-compatible model ID
+		case "requestOpenRouterPricing": {
+			const modelId = typeof message.values?.modelId === "string" ? message.values.modelId.trim() : ""
+			const { ensureOpenRouterPriceCatalog, matchOpenRouterModel } = await import(
+				"../../api/providers/kilocode/openrouter-pricing"
+			)
+			const catalog = await ensureOpenRouterPriceCatalog({ force: message.values?.force === true })
+			const match = modelId && catalog ? matchOpenRouterModel(modelId, catalog.entries) : undefined
+			provider.postMessageToWebview({
+				type: "openRouterPricing",
+				requestId: message.requestId,
+				success: !!match,
+				error: !catalog
+					? "OpenRouter price catalog is unavailable"
+					: !match
+						? `No OpenRouter model matches "${modelId}"`
+						: undefined,
+				values: { modelId, fetchedAt: catalog?.fetchedAt, match },
+			})
+			break
+		}
+		// kilocode_change end
 		// kilocode_change start: hidden catalogs cannot initiate provider discovery
 		case "requestVsCodeLmModels":
 			provider.log("[Models] Ignored VS Code LM model request in personal build")

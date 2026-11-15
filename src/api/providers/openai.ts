@@ -31,6 +31,7 @@ import { handleOpenAIError } from "./utils/openai-error-handler"
 import { createOpenAiFetch } from "./utils/openai-fetch"
 import { createProviderFetch } from "./utils/provider-tls" // kilocode_change
 import { isOpenAiAbortError, normalizeOpenAiTransportError } from "./utils/openai-transport-error"
+import { applyOpenRouterPricing, warmOpenRouterPriceCatalog } from "./kilocode/openrouter-pricing"
 // kilocode_change end
 
 // kilocode_change start: keep normal OpenAI turns on Chat Completions and expose
@@ -201,6 +202,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	constructor(options: ApiHandlerOptions) {
 		super()
 		this.options = options
+		warmOpenRouterPriceCatalog() // kilocode_change: automatic pricing for unpriced models
 
 		const baseURL = this.options.openAiBaseUrl ?? "https://api.openai.com/v1"
 		const apiKey = this.options.openAiApiKey ?? "not-provided"
@@ -649,7 +651,8 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				: configuredInfo
 		const params = getModelParams({ format: "openai", modelId: id, model: requestInfo, settings: this.options })
 		// kilocode_change end
-		return { id, info: configuredInfo, ...params }
+		// kilocode_change: empty profile prices fall back to the cached OpenRouter catalog
+		return { id, info: applyOpenRouterPricing(configuredInfo, id), ...params }
 	}
 
 	async completePrompt(prompt: string): Promise<string> {

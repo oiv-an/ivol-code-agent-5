@@ -311,6 +311,7 @@ export interface ExtensionMessage {
 		| "routerModels"
 		| "openAiModels"
 		| "imageGenerationTestResult" // kilocode_change
+		| "openRouterPricing" // kilocode_change
 		| "ollamaModels"
 		| "lmStudioModels"
 		| "vsCodeLmModels"
@@ -1006,6 +1007,7 @@ export interface WebviewMessage {
 		| "requestRouterModels"
 		| "requestOpenAiModels"
 		| "testImageGeneration" // kilocode_change
+		| "requestOpenRouterPricing" // kilocode_change
 		| "requestPinnedProfileModels" // kilocode_change
 		| "requestOllamaModels"
 		| "requestLmStudioModels"

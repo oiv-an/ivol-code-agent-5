@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.147
+
+- OpenAI-compatible models without prices now take them automatically from OpenRouter (newest matching model, refreshed daily), so task cost is shown; a settings button copies these prices into the profile.
+
 ## 5.17.146
 
 - Switching modes no longer changes the selected model or profile using choices made in other projects.

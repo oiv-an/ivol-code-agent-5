@@ -114,6 +114,7 @@ import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 
 // utils
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
+import { waitForOpenRouterPriceCatalog } from "../../api/providers/kilocode/openrouter-pricing" // kilocode_change
 import { getWorkspacePath } from "../../utils/path"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 
@@ -4054,6 +4055,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				await this.diffViewProvider.reset()
 
+				// kilocode_change start: unpriced OpenAI-compatible models take prices from OpenRouter
+				if (this.apiConfiguration.apiProvider === "openai") {
+					await waitForOpenRouterPriceCatalog()
+				}
+				// kilocode_change end
 				// Cache model info once per API request to avoid repeated calls during streaming
 				// This is especially important for tools and background usage collection
 				this.cachedStreamingModel = this.api.getModel()

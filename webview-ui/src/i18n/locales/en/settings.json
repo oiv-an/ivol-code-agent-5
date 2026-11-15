@@ -774,7 +774,13 @@
 					"description": "Cost per million tokens for writing to the cache. This is the price charged when a prompt is cached for the first time."
 				}
 			},
-			"resetDefaults": "Reset to Defaults"
+			"resetDefaults": "Reset to Defaults",
+			"openRouterPricing": {
+				"loading": "Looking up OpenRouter prices…",
+				"auto": "Automatic prices from OpenRouter: {{id}} — input {{input}}, output {{output}}, cache read {{cacheRead}}, cache write {{cacheWrite}} per 1M tokens (refreshed daily).",
+				"manual": "Manual prices are used. OpenRouter match: {{id}} — input {{input}}, output {{output}} per 1M tokens.",
+				"apply": "Fetch prices from OpenRouter"
+			}
 		},
 		"rateLimitAfter": {
 			"label": "Rate limit on end",

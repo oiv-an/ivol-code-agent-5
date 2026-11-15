@@ -503,7 +503,10 @@ describe("OpenAICompatible immediate connection-test draft", () => {
 			target: { value: "unsaved-route" },
 		})
 		fireEvent.click(screen.getByRole("button", { name: "settings:providers.connectionTest.button" }))
-		const requests = vi.mocked(vscode.postMessage).mock.calls.map(([message]) => message)
+		const requests = vi
+			.mocked(vscode.postMessage)
+			.mock.calls.map(([message]) => message)
+			.filter((message) => message.type !== "requestOpenRouterPricing")
 		expect(requests).toEqual([
 			{
 				type: "testProviderConnection",
