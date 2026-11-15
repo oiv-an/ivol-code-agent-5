@@ -1553,39 +1553,11 @@ export class ClineProvider
 
 		this.emit(RooCodeEventName.ModeChanged, newMode)
 
-		// Load the saved API config for the new mode if it exists.
-		const savedConfigId = await this.providerSettingsManager.getModeConfigId(newMode)
-		const listApiConfig = await this.providerSettingsManager.listConfig()
-
-		// Update listApiConfigMeta first to ensure UI has latest data.
-		await this.updateGlobalState("listApiConfigMeta", listApiConfig)
-
-		// If this mode has a saved config, use it.
-		if (savedConfigId) {
-			const profile = listApiConfig.find(({ id }) => id === savedConfigId)
-
-			if (profile?.name) {
-				// Check if the profile has actual API configuration (not just an id).
-				// In CLI mode, the ProviderSettingsManager may return empty default profiles
-				// that only contain 'id' and 'name' fields. Activating such a profile would
-				// overwrite the CLI's working API configuration with empty settings.
-				// Skip activation if the profile has no apiProvider set - this indicates
-				// an unconfigured/empty profile.
-				const fullProfile = await this.providerSettingsManager.getProfile({ name: profile.name })
-				const hasActualSettings = !!fullProfile.apiProvider
-
-				// kilocode_change start: do not restore a hidden mode profile
-				if (hasActualSettings && isPersonalProvider(fullProfile.apiProvider)) {
-					await this.activateProviderProfile({ name: profile.name })
-				} else {
-					// The task will continue with the current/default configuration.
-				}
-				// kilocode_change end
-			} else {
-				// The task will continue with the current/default configuration.
-			}
-		}
-		// kilocode_change: without a mode default keep the local selection; never write shared defaults.
+		// kilocode_change start: a mode switch keeps this project's profile and model selection.
+		// The mode→profile map is shared by every project, so applying it here made one project's
+		// choice (profile, model preset, reasoning) leak into another project on each mode change.
+		await this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig())
+		// kilocode_change end
 
 		await this.postStateToWebview()
 

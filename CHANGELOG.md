@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.146
+
+- Switching modes no longer changes the selected model or profile using choices made in other projects.
+
 ## 5.17.145
 
 - The task header now shows the custom task name when one is set.

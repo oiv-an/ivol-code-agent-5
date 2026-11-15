@@ -560,6 +560,7 @@ describe("ClineProvider", () => {
 			listResources: vi.fn().mockResolvedValue([]),
 			readResource: vi.fn().mockResolvedValue({ contents: [] }),
 			getAllServers: vi.fn().mockReturnValue([]),
+			getBrowserTaskPermission: vi.fn().mockReturnValue(undefined), // kilocode_change
 		})
 	})
 
@@ -1449,7 +1450,8 @@ describe("ClineProvider", () => {
 		)
 	})
 
-	it("loads saved API config when switching modes", async () => {
+	// kilocode_change start: the shared mode→profile map must not change this project's model
+	it("keeps the project's profile when switching modes", async () => {
 		await provider.resolveWebviewView(mockWebviewView)
 		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as any).mock.calls[0][0]
 
@@ -1462,18 +1464,17 @@ describe("ClineProvider", () => {
 			setModeConfig: vi.fn(),
 			getProfile: vi.fn().mockResolvedValue(profile),
 		} as any
+		const activateSpy = vi.spyOn(provider, "activateProviderProfile")
 
 		// Switch to architect mode
 		await messageHandler({ type: "mode", text: "architect" })
 
-		// Should load the saved config for architect mode
-		expect(provider.providerSettingsManager.getModeConfigId).toHaveBeenCalledWith("architect")
-		// kilocode_change: activation is local to this conversation.
-		expect(provider.providerSettingsManager.getProfile).toHaveBeenCalledWith({ name: "test-config" })
-		expect(provider.providerSettingsManager.activateProfile).not.toHaveBeenCalled()
-		expect(provider.contextProxy.getValue("currentApiConfigName")).toBe("test-config")
+		expect(provider.providerSettingsManager.getModeConfigId).not.toHaveBeenCalled()
+		expect(provider.providerSettingsManager.getProfile).not.toHaveBeenCalledWith({ name: "test-config" })
+		expect(activateSpy).not.toHaveBeenCalled()
 		expect(mockContext.globalState.update).not.toHaveBeenCalledWith("currentApiConfigName", "test-config")
 	})
+	// kilocode_change end
 
 	it("saves current config when switching to mode without config", async () => {
 		await provider.resolveWebviewView(mockWebviewView)
@@ -2185,7 +2186,8 @@ describe("ClineProvider", () => {
 			await provider.resolveWebviewView(mockWebviewView)
 		})
 
-		it("loads saved API config when switching modes", async () => {
+		// kilocode_change start: a mode switch keeps the project's profile and model selection
+		it("does not apply the shared mode profile when switching modes", async () => {
 			const profile: ProviderSettingsEntry = {
 				name: "saved-config",
 				id: "saved-config-id",
@@ -2199,6 +2201,7 @@ describe("ClineProvider", () => {
 				setModeConfig: vi.fn(),
 				getProfile: vi.fn().mockResolvedValue(profile),
 			} as any
+			const activateSpy = vi.spyOn(provider, "activateProviderProfile")
 
 			// Switch to architect mode
 			await provider.handleModeSwitch("architect")
@@ -2206,12 +2209,10 @@ describe("ClineProvider", () => {
 			// Verify mode was updated
 			expect(mockContext.workspaceState.update).toHaveBeenCalledWith("mode", "architect")
 
-			// Verify saved config was loaded
-			expect(provider.providerSettingsManager.getModeConfigId).toHaveBeenCalledWith("architect")
-			// kilocode_change: a mode switch reads the profile without changing shared defaults.
-			expect(provider.providerSettingsManager.getProfile).toHaveBeenCalledWith({ name: "saved-config" })
+			expect(provider.providerSettingsManager.getModeConfigId).not.toHaveBeenCalled()
+			expect(activateSpy).not.toHaveBeenCalled()
 			expect(provider.providerSettingsManager.activateProfile).not.toHaveBeenCalled()
-			expect(provider.contextProxy.getValue("currentApiConfigName")).toBe("saved-config")
+			// kilocode_change end
 
 			// Verify state was posted to webview
 			expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state" }))
