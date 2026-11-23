@@ -102,6 +102,7 @@ export class TelegramApi {
 		const form = new FormData()
 		form.set("chat_id", String(chatId))
 		form.set("message_thread_id", String(threadId))
+		form.set("disable_notification", "true")
 		form.set("document", new Blob([new Uint8Array(bytes)], { type: match[1] }), `image.${match[1].split("/")[1]}`)
 		await this.write("sendDocument", form, signal)
 	}
@@ -267,6 +268,11 @@ export class TelegramApi {
 		await this.write("setMyCommands", { commands, scope: { type: "chat", chat_id: chatId } }, signal)
 	}
 
+	/** Best-effort removal of an own message (e.g. a silent placeholder replaced by an audible final answer). */
+	async deleteMessage(chatId: number, messageId: number, signal?: AbortSignal): Promise<void> {
+		await this.write("deleteMessage", { chat_id: chatId, message_id: messageId }, signal)
+	}
+
 	async pinMessage(chatId: number, messageId: number, signal?: AbortSignal): Promise<void> {
 		await this.write(
 			"pinChatMessage",
@@ -296,7 +302,10 @@ export class TelegramApi {
 		)
 	}
 
-	/** Explicit entities only; callers cannot inject Telegram markup or parse_mode. */
+	/**
+	 * Explicit entities only; callers cannot inject Telegram markup or parse_mode.
+	 * Messages are silent unless `notify` is set; then only the first chunk plays a sound.
+	 */
 	async sendText(
 		chatId: number,
 		threadId: number,
@@ -304,6 +313,7 @@ export class TelegramApi {
 		signal?: AbortSignal,
 		keyboard?: { text: string; callback_data: string }[][],
 		entities?: TelegramEntity[],
+		notify = false,
 	): Promise<number[]> {
 		const ids: number[] = []
 		const chunks = splitTelegramEntities(text, entities)
@@ -312,6 +322,7 @@ export class TelegramApi {
 				chat_id: chatId,
 				message_thread_id: threadId,
 				text: chunks[index].text,
+				disable_notification: !(notify && index === 0),
 				...(entities ? { entities: chunks[index].entities } : {}),
 			}
 			if (keyboard && index === chunks.length - 1) body.reply_markup = { inline_keyboard: keyboard }

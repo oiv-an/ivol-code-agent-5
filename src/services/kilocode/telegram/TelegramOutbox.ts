@@ -4,6 +4,8 @@ export interface TelegramOutboxItem {
 	partial: boolean
 	image?: boolean
 	markdown?: boolean
+	/** Audible delivery; sticky across coalesced versions of the same message. */
+	notify?: boolean
 	generation: number
 }
 
@@ -20,7 +22,7 @@ export class TelegramOutbox {
 		private readonly maximumBytes = 32 * 1024 * 1024,
 	) {}
 
-	enqueue(key: string, text: string, partial: boolean, image = false, markdown = false): void {
+	enqueue(key: string, text: string, partial: boolean, image = false, markdown = false, notify = false): void {
 		const old = this.pending.get(key)
 		if (old && !old.partial && partial) return
 		const bytes = this.bytes - Buffer.byteLength(old?.text ?? "") + Buffer.byteLength(text)
@@ -28,7 +30,15 @@ export class TelegramOutbox {
 			throw new Error("Telegram delivery queue is full")
 		}
 		this.bytes = bytes
-		this.pending.set(key, { key, text, partial, image, markdown, generation: this.generation })
+		this.pending.set(key, {
+			key,
+			text,
+			partial,
+			image,
+			markdown,
+			notify: notify || old?.notify === true,
+			generation: this.generation,
+		})
 		this.start()
 	}
 

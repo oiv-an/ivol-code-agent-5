@@ -298,6 +298,40 @@ it("recovers both topics after a runtime fault without another button press", as
 	}
 })
 
+it("announces the task only on a button press, not on automatic reconnection", async () => {
+	vi.useFakeTimers()
+	const { manager } = fixture()
+	const clients: ReturnType<typeof liveClient>[] = []
+	vi.mocked(launchTelegramCoordinator).mockImplementation(async () => {
+		const client = liveClient()
+		clients.push(client)
+		return client as unknown as Awaited<ReturnType<typeof launchTelegramCoordinator>>
+	})
+	const activations = () =>
+		clients.flatMap((client) =>
+			client.request.mock.calls
+				.map(([request]) => request as { operation: string; notice?: string })
+				.filter((request) => request.operation === "activate"),
+		)
+	try {
+		await manager.activateAll("task")
+		expect(activations()).toHaveLength(1)
+		expect(activations()[0].notice).toBeTruthy()
+		const fault = JSON.stringify(new TelegramStartupError("telegram-unreachable", "getUpdates", "503"))
+		for (const client of clients.slice()) client.emit("fault", fault)
+		await vi.advanceTimersByTimeAsync(2000)
+		expect(activations()).toHaveLength(2)
+		expect(activations()[1].notice).toBeUndefined()
+		await manager.deactivateAll()
+		await manager.activateAll("task")
+		expect(activations()).toHaveLength(3)
+		expect(activations()[2].notice).toBeTruthy()
+	} finally {
+		manager.dispose()
+		vi.useRealTimers()
+	}
+})
+
 it("follows the current task when it changes during a pending connection", async () => {
 	vi.useFakeTimers()
 	const { provider, manager } = fixture()

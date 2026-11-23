@@ -13,6 +13,15 @@ type PublishRequest = Extract<TelegramCoordinatorRequest, { operation: "publish"
 /** Topic-store task id of a project control topic; real task ids never contain "__". */
 export const TELEGRAM_PROJECT_TOPIC_ID = "__project__"
 
+/** Short network blips keep routes and the update backlog; only a longer outage resets every connection. */
+export const TELEGRAM_POLL_GRACE_MS = 120_000
+
+/** Network failures, 5xx and rate limits are worth a quiet retry; token/conflict/other 4xx errors are not. */
+export function isTransientPollFailure(error: unknown): boolean {
+	if (!(error instanceof TelegramApiError)) return true
+	return error.code >= 500 || error.code === 429
+}
+
 interface Connection {
 	route?: TelegramRoute
 	project?: { route: TelegramRoute; controller: AbortController; tail: Promise<void>; pending: number }
@@ -51,6 +60,7 @@ export class TelegramCoordinator {
 	private healthy = false
 	private maintenance?: NodeJS.Timeout
 	private sequenceStartedAt = Date.now()
+	private lastPollSuccess = Date.now()
 
 	private downloads = 0
 
@@ -67,6 +77,7 @@ export class TelegramCoordinator {
 		// Drain with no routes before accepting clients; offline commands never execute.
 		await this.drain()
 		this.healthy = true
+		this.lastPollSuccess = Date.now()
 		this.maintenance = setInterval(() => {
 			for (const [id, client] of this.clients) {
 				if (Date.now() - client.lastSeen > 15_000) this.disconnect(id)
@@ -246,7 +257,7 @@ export class TelegramCoordinator {
 		projectId: string,
 		taskId: string,
 		title: string,
-		notice: string,
+		notice: string | undefined,
 		taskText?: string,
 	): Promise<TelegramRoute> {
 		const client = this.connection(clientId)
@@ -278,7 +289,8 @@ export class TelegramCoordinator {
 				}
 			}
 			// Topic stays inactive throughout setup. A notice does not invoke the model.
-			await this.api.sendText(this.ownerId, threadId, notice, signal)
+			// Automatic reconnections omit it, so network blips do not repeat "work started".
+			if (notice) await this.api.sendText(this.ownerId, threadId, notice, signal)
 			signal.throwIfAborted()
 			if (this.clients.get(clientId) !== client || client.generation !== generation) {
 				throw new Error("Telegram activation cancelled")
@@ -320,7 +332,7 @@ export class TelegramCoordinator {
 								]
 							: undefined
 					}
-					await renderer.render(item.key, item.text, keyboard, item.markdown)
+					await renderer.render(item.key, item.text, keyboard, item.markdown, item.notify)
 				},
 				() => {
 					if (!signal.aborted) {
@@ -428,6 +440,7 @@ export class TelegramCoordinator {
 					this.sequenceStartedAt = Date.now()
 				}
 				const updates = await this.api.updates(this.offset, this.controller.signal)
+				this.lastPollSuccess = Date.now()
 				if (recovering) {
 					// Empty the entire offline backlog before permitting fresh routes, including menu callbacks.
 					for (const update of updates) this.offset = Math.max(this.offset, update.update_id + 1)
@@ -452,6 +465,21 @@ export class TelegramCoordinator {
 				}
 			} catch (error) {
 				if (this.controller.signal.aborted) return
+				if (
+					!recovering &&
+					isTransientPollFailure(error) &&
+					Date.now() - this.lastPollSuccess < TELEGRAM_POLL_GRACE_MS
+				) {
+					// Keep routes and the offset: the next successful poll returns everything sent meanwhile.
+					const retryAfter = error instanceof TelegramApiError ? (error.retryAfter ?? 0) * 1000 : 0
+					try {
+						await delay(Math.max(retryDelay, retryAfter), undefined, { signal: this.controller.signal })
+						retryDelay = Math.min(retryDelay * 2, 10_000)
+					} catch {
+						return
+					}
+					continue
+				}
 				this.healthy = false
 				recovering = true
 				// Invalidate old commands/approvals; enabled IDE clients automatically obtain fresh routes.
@@ -621,6 +649,8 @@ export class TelegramCoordinator {
 				request.partial,
 				false,
 				request.markdown === true && !request.approval,
+				// Only the finished version rings; streaming prefixes stay silent.
+				request.notify === true && !request.partial,
 			)
 		} catch (error) {
 			this.deactivate(clientId)

@@ -2,6 +2,7 @@ import { telegramFailure, decodeTelegramFailure, TelegramStartupError, safeTeleg
 import * as net from "node:net"
 import { EventEmitter } from "node:events"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import { TelegramMcpTransport } from "./TelegramMcpTransport"
 import { z } from "zod"
 import { JsonLineConnection } from "./JsonLineConnection"
@@ -136,6 +137,13 @@ export class TelegramLocalClient extends EventEmitter {
 			}
 			return JSON.parse(content[0].text)
 		} catch (error) {
+			// The coordinator rejected the request itself (schema of an older build) before doing anything:
+			// keep the connection so the caller can fall back to the older request shape.
+			if (
+				error instanceof McpError &&
+				(error.code === ErrorCode.InvalidParams || error.code === ErrorCode.InternalError)
+			)
+				throw new TelegramStartupError("local-runtime", "operation", "invalid-response")
 			// Failed/timed-out activations must not accept input invisibly.
 			this.close()
 			throw telegramFailure(error, "operation")

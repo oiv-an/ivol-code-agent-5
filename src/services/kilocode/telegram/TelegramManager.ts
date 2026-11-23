@@ -76,6 +76,8 @@ export class TelegramManager {
 	private recoveryTimer?: NodeJS.Timeout
 	private recoveryRunning = false
 	private retryDelay = 1000
+	/** Task that already received a "work started" notice in this manual session; reconnects stay silent. */
+	private notifiedTaskId?: string
 
 	constructor(private readonly provider: ClineProvider) {
 		provider.on(RooCodeEventName.TaskUnfocused, this.onUnfocused)
@@ -282,6 +284,7 @@ export class TelegramManager {
 		if (this.disposed || this.saving) return
 		if (!this.enabled) this.projectSession = { id: randomUUID(), reconnects: 0 }
 		this.enabled = true
+		this.notifiedTaskId = undefined // An explicit button press announces the task again.
 		await this.publishState()
 		await this.recover()
 	}
@@ -328,6 +331,7 @@ export class TelegramManager {
 
 	private stopRecovery(): void {
 		this.enabled = false
+		this.notifiedTaskId = undefined
 		this.recoveryEpoch++
 		this.recoveryRunning = false
 		this.retryDelay = 1000
@@ -468,15 +472,23 @@ export class TelegramManager {
 					return
 				}
 			}
+			const announce = this.notifiedTaskId !== taskId
 			const route = routeSchema.parse(
-				await client.request({
-					operation: "activate",
-					projectId,
-					taskId,
-					title,
-					taskText,
-					notice: t("common:telegram.notice", { project, task: requestTitle }),
-				}),
+				await client
+					.request({
+						operation: "activate",
+						projectId,
+						taskId,
+						title,
+						taskText,
+						...(announce ? { notice: t("common:telegram.notice", { project, task: requestTitle }) } : {}),
+					})
+					.catch((error: unknown) => {
+						// A coordinator started by an older build rejects a request without a notice; announce next time.
+						if (!announce && error instanceof TelegramStartupError && error.code === "invalid-response")
+							this.notifiedTaskId = undefined
+						throw error
+					}),
 			)
 			if (!current()) {
 				client.close()
@@ -491,6 +503,7 @@ export class TelegramManager {
 			if (overflow || connectionFault) throw new Error("Telegram activation interrupted")
 			this.route = route
 			this.lineage = [taskId]
+			this.notifiedTaskId = taskId
 			this.bridge = new TelegramTaskBridge(
 				task,
 				client,

@@ -101,7 +101,8 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 			projectId: identifier,
 			taskId: identifier,
 			title: z.string().min(1).max(256),
-			notice: z.string().min(1).max(2000),
+			/** Omitted on automatic reconnection: only an explicit activation announces the task. */
+			notice: z.string().min(1).max(2000).optional(),
 			taskText: z.string().max(2_000_000).optional(),
 		})
 		.strict(),
@@ -170,6 +171,8 @@ export const telegramCoordinatorRequestSchema = z.discriminatedUnion("operation"
 			text: z.string().max(2_000_000),
 			partial: z.boolean(),
 			markdown: z.boolean().optional(),
+			/** Play a sound (completion, question, approval). Everything else is delivered silently. */
+			notify: z.boolean().optional(),
 			approvalRevision: z.number().int().nonnegative().default(0),
 			approval: z
 				.object({

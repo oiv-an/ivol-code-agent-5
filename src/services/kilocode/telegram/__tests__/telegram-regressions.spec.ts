@@ -91,6 +91,61 @@ describe("Telegram approval and media regressions", () => {
 		}
 	})
 
+	it("keeps the route and delivers messages sent during a short network failure", async () => {
+		let rejectPoll!: (error: Error) => void
+		let resolvePoll!: (updates: TelegramUpdate[]) => void
+		const api = {
+			verify: async () => ({ id: 1 }),
+			updates: vi.fn((_offset: number, signal: AbortSignal, timeout?: number) => {
+				if (timeout === 0) return Promise.resolve([])
+				return new Promise<TelegramUpdate[]>((resolve, reject) => {
+					rejectPoll = reject
+					resolvePoll = resolve
+					signal.addEventListener("abort", () => resolve([]), { once: true })
+				})
+			}),
+			sendText: vi.fn(async () => [1]),
+		}
+		const report = vi.fn()
+		const send = vi.fn()
+		const coordinator = new TelegramCoordinator(
+			api as unknown as TelegramApi,
+			123,
+			{ load: async () => {}, get: () => 5 } as unknown as TelegramTopicStore,
+			report,
+		)
+		try {
+			await coordinator.start()
+			coordinator.connect("client", send)
+			const active = await coordinator.activate("client", "project", "task", "title", undefined)
+			expect(api.sendText).not.toHaveBeenCalled() // no notice requested, none sent
+			rejectPoll(new TelegramApiError(503, undefined, "getUpdates"))
+			await vi.waitFor(() => expect(api.updates).toHaveBeenCalledTimes(3), { timeout: 2500 })
+			expect(report).not.toHaveBeenCalled()
+			expect(api.updates).toHaveBeenLastCalledWith(0, expect.any(AbortSignal))
+			resolvePoll([
+				{
+					update_id: 60,
+					message: {
+						message_id: 60,
+						date: Math.ceil(Date.now() / 1000) + 1,
+						chat: { id: 123, type: "private" },
+						from: { id: 123 },
+						message_thread_id: 5,
+						text: "sent while offline",
+					},
+				},
+			])
+			await vi.waitFor(() =>
+				expect(send).toHaveBeenCalledWith(
+					expect.objectContaining({ kind: "message", text: "sent while offline", epoch: active.epoch }),
+				),
+			)
+		} finally {
+			await coordinator.stop()
+		}
+	})
+
 	it("does not resurrect invalidated queued approvals and keeps text/image order without waiting for delivery ack", async () => {
 		const gate = deferred()
 		const calls: string[] = []
@@ -457,6 +512,65 @@ describe("Telegram approval and media regressions", () => {
 			expect(api.sendText).toHaveBeenCalledTimes(3)
 			expect(sent().at(-1)?.text).toBe("Reading browser")
 			expect(fault).not.toHaveBeenCalled()
+		} finally {
+			bridge.dispose()
+			vi.useRealTimers()
+		}
+	})
+
+	it("keeps progress silent and rings once for the finished completion result", async () => {
+		vi.useFakeTimers()
+		const task = Object.assign(new EventEmitter(), { taskId: "task", getRemotePendingAsk: () => undefined })
+		let id = 0
+		const api = {
+			sendText: vi.fn(async (..._args: unknown[]) => [++id]),
+			editText: vi.fn(async () => {}),
+			deleteMessage: vi.fn(async () => {}),
+		}
+		const renderer = new TelegramMessageRenderer(
+			api as unknown as TelegramApi,
+			123,
+			5,
+			new AbortController().signal,
+		)
+		const client = Object.assign(new EventEmitter(), {
+			request: vi.fn(async (request) => {
+				if (request.operation === "publish")
+					await renderer.render(
+						request.messageId,
+						request.text,
+						undefined,
+						request.markdown,
+						request.notify === true && !request.partial,
+					)
+			}),
+			close: vi.fn(),
+		})
+		const bridge = new TelegramTaskBridge(
+			task as unknown as Task,
+			client as unknown as TelegramLocalClient,
+			route,
+			() => true,
+			vi.fn(),
+			{ approve: "yes", deny: "no", thinking: "Thinking…", confirmation: "Review" },
+		)
+		const emit = async (ts: number, text: string, partial: boolean, say: ClineMessage["say"]) => {
+			task.emit(RooCodeEventName.Message, { message: { ts, type: "say", say, text, partial } })
+			await vi.advanceTimersByTimeAsync(300)
+		}
+		const sound = () => api.sendText.mock.calls.map((call) => call[6])
+		try {
+			await emit(1, "Opening the browser", false, "text")
+			expect(sound()).toEqual([false])
+			await emit(2, "Done", true, "completion_result")
+			expect(sound()).toEqual([false, false])
+			await emit(2, "Done, all checked", false, "completion_result")
+			// The silent streaming message is replaced by one audible message.
+			expect(api.deleteMessage).toHaveBeenCalledWith(123, 2, expect.anything())
+			expect(sound()).toEqual([false, false, true])
+			await emit(2, "Done, all checked", false, "completion_result")
+			expect(sound()).toEqual([false, false, true])
+			expect(api.deleteMessage).toHaveBeenCalledTimes(1)
 		} finally {
 			bridge.dispose()
 			vi.useRealTimers()

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import type { TelegramCoordinatorRequest } from "./protocol"
+import { TelegramStartupError } from "./startupFailure"
 import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
 import type { Task } from "../../../core/task/Task"
 import type { TelegramLocalClient } from "./TelegramLocalClient"
@@ -30,6 +32,8 @@ export class TelegramTaskBridge {
 	private pendingVoice = 0
 	/** Texts delivered from Telegram, so their IDE echo is not sent back to the topic. */
 	private readonly remoteTexts = new Set<string>()
+	/** Set when the running coordinator predates audible notifications; publish silently from then on. */
+	private legacyCoordinator = false
 
 	constructor(
 		private readonly task: Task,
@@ -142,9 +146,25 @@ export class TelegramTaskBridge {
 		}
 	}
 
-	private async notice(key: string, text: string): Promise<void> {
+	private async publish(request: Extract<TelegramCoordinatorRequest, { operation: "publish" }>): Promise<void> {
+		if (!request.notify || this.legacyCoordinator) {
+			const { notify: _notify, ...silent } = request
+			await this.client.request(silent)
+			return
+		}
+		try {
+			await this.client.request(request)
+		} catch (error) {
+			if (!(error instanceof TelegramStartupError) || error.code !== "invalid-response") throw error
+			this.legacyCoordinator = true
+			const { notify: _notify, ...silent } = request
+			await this.client.request(silent)
+		}
+	}
+
+	private async notice(key: string, text: string, notify = false): Promise<void> {
 		this.repeatRun = undefined
-		await this.client.request({
+		await this.publish({
 			operation: "publish",
 			taskId: this.task.taskId,
 			epoch: this.route.epoch,
@@ -152,6 +172,7 @@ export class TelegramTaskBridge {
 			text,
 			partial: false,
 			markdown: false,
+			...(notify ? { notify } : {}),
 			approvalRevision: this.approvalRevision,
 		})
 	}
@@ -168,6 +189,7 @@ export class TelegramTaskBridge {
 				await this.notice(
 					`voice:${updateId}`,
 					`⚠️ ${this.labels.voiceFailed ?? "Voice message could not be transcribed"}: ${reason}`,
+					true,
 				).catch(() => this.fail("Telegram task delivery failed"))
 			return undefined
 		}
@@ -329,8 +351,13 @@ export class TelegramTaskBridge {
 				} else {
 					this.repeatRun = undefined
 				}
+				// Sound only when the owner is needed: finished task, a question or an approval. Progress stays silent.
+				const notify =
+					buttonAsk ||
+					(message.type === "say" && message.say === "completion_result") ||
+					(message.type === "ask" && (message.ask === "completion_result" || message.ask === "followup"))
 				if (text)
-					await this.client.request({
+					await this.publish({
 						operation: "publish",
 						taskId: this.task.taskId,
 						epoch: this.route.epoch,
@@ -338,6 +365,7 @@ export class TelegramTaskBridge {
 						text,
 						partial: message.partial === true,
 						markdown: presentation.kind === "text" && message.ts >= 0,
+						...(notify ? { notify } : {}),
 						approvalRevision: this.approvalRevision,
 						approval: buttonAsk
 							? {

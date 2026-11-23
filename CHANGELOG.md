@@ -1,5 +1,11 @@
 # IVOL Code Agent 5
 
+## 5.17.148
+
+- Telegram: short network drops no longer resend the "work started" notice; it appears only when you press the Telegram button.
+- Telegram: messages and voice notes sent during a brief connection loss (up to 2 minutes) are now delivered instead of being dropped.
+- Telegram: only finished tasks, questions and approval requests play a sound; progress messages (thinking, browser steps) arrive silently.
+
 ## 5.17.147
 
 - OpenAI-compatible models without prices now take them automatically from OpenRouter (newest matching model, refreshed daily), so task cost is shown; a settings button copies these prices into the profile.
