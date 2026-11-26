@@ -1,5 +1,9 @@
 # IVOL Code Agent 5
 
+## 5.17.149
+
+- Model picker: model names with several path parts (for example `#router/free/model`) are shown in full instead of being cut to the first two parts, so different models no longer look identical.
+
 ## 5.17.148
 
 - Telegram: short network drops no longer resend the "work started" notice; it appears only when you press the Telegram button.
