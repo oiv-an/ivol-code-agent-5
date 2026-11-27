@@ -194,7 +194,7 @@ import { getKilocodeDefaultModel } from "../../api/providers/kilocode/getKilocod
 import { addOrMergeUserContent } from "./kilocode"
 import { correctInflatedPromptTokens, findPreviousPromptTokens } from "./kilocode/usageSanity" // kilocode_change
 import { collectLoadedMcpServers } from "./kilocode/lazyMcp" // kilocode_change
-import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
+import { AutoApprovalHandler, checkAutoApproval, getOutsideWorkspaceBlock } from "../auto-approval" // kilocode_change
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { deduplicateToolUseBlocks } from "./deduplicateToolUseBlocks"
@@ -1919,14 +1919,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Automatically approve if the ask according to the user's settings.
 		const provider = this.providerRef.deref()
 		const state = provider ? await provider.getState() : undefined
-		const approval = this.ordinaryPreparationDecision
-			? ({ decision: "ask" } as const)
-			: await checkAutoApproval({ state, ask: type, text, isProtected }) // kilocode_change
+		// kilocode_change start: project bans on outside paths win over every other decision
+		const outsideBlock = getOutsideWorkspaceBlock(state, type, text)
+		const approval = outsideBlock
+			? ({ decision: "deny", reason: outsideBlock } as const)
+			: this.ordinaryPreparationDecision
+				? ({ decision: "ask" } as const)
+				: await checkAutoApproval({ state, ask: type, text, isProtected })
+		// kilocode_change end
 
 		if (approval.decision === "approve") {
 			this.approveAsk()
 		} else if (approval.decision === "deny") {
-			this.denyAsk()
+			this.denyAsk(approval.reason ? { text: approval.reason } : undefined) // kilocode_change
 		} else if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
 			this.autoApprovalTimeoutRef = setTimeout(() => {

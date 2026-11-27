@@ -2557,6 +2557,12 @@ export const webviewMessageHandler = async (
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
+		// kilocode_change start: current project's auto-approve choices become every project's default
+		case "saveAutoApproveForAllProjects":
+			await provider.contextProxy.saveAutoApproveForAllProjects()
+			await provider.postStateToWebview()
+			break
+		// kilocode_change end
 		// kilocode_change start: yolo mode
 		case "yoloMode":
 		case "startYoloModeTimer":

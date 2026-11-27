@@ -686,6 +686,8 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWriteOutsideWorkspace"
 	| "alwaysAllowWriteProtected"
 	| "alwaysAllowDelete" // kilocode_change
+	| "blockReadOutsideWorkspace" // kilocode_change
+	| "blockWriteOutsideWorkspace" // kilocode_change
 	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowModeSwitch"
@@ -1232,6 +1234,7 @@ export interface WebviewMessage {
 		// kilocode_change end
 		| "openMarkdownPreview"
 		| "updateSettings"
+		| "saveAutoApproveForAllProjects" // kilocode_change
 		| "requestManagedIndexerState" // kilocode_change
 		| "allowedCommands"
 		| "getTaskWithAggregatedCosts"

@@ -31,6 +31,8 @@ export type AutoApprovalStateOptions =
 	| "alwaysAllowReadOnlyOutsideWorkspace" // For `alwaysAllowReadOnly`.
 	| "alwaysAllowWriteOutsideWorkspace" // For `alwaysAllowWrite`.
 	| "alwaysAllowWriteProtected"
+	| "blockReadOutsideWorkspace" // kilocode_change
+	| "blockWriteOutsideWorkspace" // kilocode_change
 	| "followupAutoApproveTimeoutMs" // For `alwaysAllowFollowupQuestions`.
 	| "mcpServers" // For `alwaysAllowMcp`.
 	| "allowedCommands" // For `alwaysAllowExecute`.
@@ -38,7 +40,7 @@ export type AutoApprovalStateOptions =
 
 export type CheckAutoApprovalResult =
 	| { decision: "approve" }
-	| { decision: "deny" }
+	| { decision: "deny"; reason?: string } // kilocode_change: reason is returned to the model
 	| { decision: "ask" }
 	| {
 			decision: "timeout"
@@ -60,6 +62,10 @@ export async function checkAutoApproval({
 	if (isNonBlockingAsk(ask)) {
 		return { decision: "approve" }
 	}
+
+	// kilocode_change: project bans apply regardless of auto-approval, YOLO or manual approval.
+	const blocked = getOutsideWorkspaceBlock(state, ask, text)
+	if (blocked) return { decision: "deny", reason: blocked }
 
 	if (!state || !state.autoApprovalEnabled) {
 		return { decision: "ask" }
@@ -208,5 +214,33 @@ export async function checkAutoApproval({
 
 	return { decision: "ask" }
 }
+
+// kilocode_change start
+export const OUTSIDE_WORKSPACE_READ_BLOCKED =
+	"Access denied: reading files outside the current project is disabled for this project. Work only with files inside the project folder."
+export const OUTSIDE_WORKSPACE_WRITE_BLOCKED =
+	"Access denied: changing files outside the current project is disabled for this project. Write only inside the project folder."
+
+/** Returns the denial text when a file tool targets a path outside the project that the project bans. */
+export function getOutsideWorkspaceBlock(
+	state: Pick<ExtensionState, "blockReadOutsideWorkspace" | "blockWriteOutsideWorkspace"> | undefined,
+	ask: ClineAsk,
+	text?: string,
+): string | undefined {
+	if (ask !== "tool" || !text || (!state?.blockReadOutsideWorkspace && !state?.blockWriteOutsideWorkspace)) return
+	let tool: ClineSayTool
+	try {
+		tool = JSON.parse(text)
+	} catch {
+		return
+	}
+	const outside = !!tool.isOutsideWorkspace || !!tool.batchFiles?.some((file) => file.isOutsideWorkspace)
+	if (!outside) return
+	if (state.blockReadOutsideWorkspace && isReadOnlyToolAction(tool)) return OUTSIDE_WORKSPACE_READ_BLOCKED
+	if (state.blockWriteOutsideWorkspace && (isWriteToolAction(tool) || tool.tool === "deleteFile"))
+		return OUTSIDE_WORKSPACE_WRITE_BLOCKED
+	return
+}
+// kilocode_change end
 
 export { AutoApprovalHandler } from "./AutoApprovalHandler"

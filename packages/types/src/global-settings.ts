@@ -93,6 +93,10 @@ export const globalSettingsSchema = z.object({
 	alwaysAllowWriteOutsideWorkspace: z.boolean().optional(),
 	alwaysAllowWriteProtected: z.boolean().optional(),
 	alwaysAllowDelete: z.boolean().optional(), // kilocode_change
+	// kilocode_change start: hard per-project bans on file access outside the open project
+	blockReadOutsideWorkspace: z.boolean().optional(),
+	blockWriteOutsideWorkspace: z.boolean().optional(),
+	// kilocode_change end
 	writeDelayMs: z.number().min(0).optional(),
 	alwaysAllowBrowser: z.boolean().optional(),
 	requestDelaySeconds: z.number().optional(),

@@ -234,6 +234,63 @@ describe("ContextProxy", () => {
 			expect(projectProxy.getProjectProviderProfileName()).toBe("PROX_VS")
 			expect(mockGlobalState.update).not.toHaveBeenCalledWith("mode", expect.anything())
 		})
+
+		const makeProject = async (globalStore: Map<string, unknown>) => {
+			const store = new Map<string, unknown>()
+			const context = {
+				...mockContext,
+				globalState: {
+					get: vi.fn((key: string) => globalStore.get(key)),
+					update: vi.fn(async (key: string, value: unknown) => void globalStore.set(key, value)),
+				},
+				workspaceState: {
+					get: vi.fn((key: string) => store.get(key)),
+					update: vi.fn(async (key: string, value: unknown) => void store.set(key, value)),
+				},
+			}
+			const projectProxy = new ContextProxy(context as any)
+			await projectProxy.initialize()
+			return projectProxy
+		}
+
+		it("keeps auto-approve choices per project and shares them only via save for all projects", async () => {
+			const globalStore = new Map<string, unknown>([
+				["alwaysAllowExecute", true],
+				["allowedMaxRequests", 20],
+			])
+			const a = await makeProject(globalStore)
+			const b = await makeProject(globalStore)
+
+			await a.setValue("alwaysAllowExecute", false)
+			await a.setValue("blockWriteOutsideWorkspace", true)
+			await a.setValue("allowedMaxRequests", undefined)
+
+			expect(a.getValue("alwaysAllowExecute")).toBe(false)
+			expect(a.getValue("blockWriteOutsideWorkspace")).toBe(true)
+			expect(a.getValue("allowedMaxRequests")).toBeUndefined()
+			// Another project still sees the shared defaults.
+			expect(b.getValue("alwaysAllowExecute")).toBe(true)
+			expect(b.getValue("blockWriteOutsideWorkspace")).toBeUndefined()
+			expect(b.getValue("allowedMaxRequests")).toBe(20)
+			expect(globalStore.get("alwaysAllowExecute")).toBe(true)
+
+			// b has its own change before the save; the save must replace it.
+			await b.setValue("alwaysAllowMcp", true)
+			await new Promise((resolve) => setTimeout(resolve, 2))
+			await a.saveAutoApproveForAllProjects()
+
+			expect(b.getValue("alwaysAllowExecute")).toBe(false)
+			expect(b.getValue("blockWriteOutsideWorkspace")).toBe(true)
+			expect(b.getValue("allowedMaxRequests")).toBeUndefined()
+			expect(b.getValue("alwaysAllowMcp")).toBeUndefined()
+
+			// A later own change in b stays local and keeps the other new defaults.
+			await new Promise((resolve) => setTimeout(resolve, 2))
+			await b.setValue("blockReadOutsideWorkspace", true)
+			expect(b.getValue("blockReadOutsideWorkspace")).toBe(true)
+			expect(b.getValue("blockWriteOutsideWorkspace")).toBe(true)
+			expect(a.getValue("blockReadOutsideWorkspace")).toBeUndefined()
+		})
 	})
 	// kilocode_change end
 

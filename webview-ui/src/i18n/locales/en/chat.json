@@ -442,7 +442,15 @@
 		"triggerLabel_zero": "0 auto-approve",
 		"triggerLabel_one": "1 auto-approved",
 		"triggerLabel_other": "{{count}} auto-approved",
-		"triggerLabelAll": "BRRR"
+		"triggerLabelAll": "BRRR",
+		"projectBans": "Bans for this project",
+		"blockRead": "No reading outside project",
+		"blockReadDescription": "The model cannot read, list or search files outside the project folder. Such requests are denied without asking.",
+		"blockWrite": "No writing outside project",
+		"blockWriteDescription": "The model cannot create, change or delete files outside the project folder. Such requests are denied without asking.",
+		"saveForAllProjects": "Save for all projects",
+		"saveForAllProjectsDescription": "Make the current auto-approve and ban settings the starting point for every project. Earlier per-project changes are replaced.",
+		"savedForAllProjects": "Saved"
 	},
 	"announcement": {
 		"title": "IVOL Code {{version}} Released",

@@ -57,6 +57,26 @@ const YOLO_STATE_KEYS = [
 // kilocode_change start: selections that belong to the open project, not to every window
 const PROJECT_SCOPED_STATE_KEYS = ["mode"]
 const PROJECT_PROVIDER_PROFILE_KEY = "ivolProjectProviderProfile"
+// Auto-approve choices are remembered per project. The shared value is only the default for
+// projects that never changed them, or that were reset by "save for all projects".
+export const PROJECT_AUTO_APPROVE_KEYS: readonly string[] = [
+	"autoApprovalEnabled",
+	"alwaysAllowReadOnly",
+	"alwaysAllowWrite",
+	"alwaysAllowDelete",
+	"alwaysAllowBrowser",
+	"alwaysAllowMcp",
+	"alwaysAllowModeSwitch",
+	"alwaysAllowSubtasks",
+	"alwaysAllowExecute",
+	"alwaysAllowFollowupQuestions",
+	"allowedMaxRequests",
+	"allowedMaxCost",
+	"blockReadOutsideWorkspace",
+	"blockWriteOutsideWorkspace",
+]
+const AUTO_APPROVE_DEFAULTS_AT_KEY = "ivolAutoApproveDefaultsAt" // globalState: last "save for all projects"
+const AUTO_APPROVE_PROJECT_AT_KEY = "ivolAutoApproveProjectAt" // workspaceState: first own change after it
 // kilocode_change end
 
 export const isPassThroughStateKey = (key: string) => PASS_THROUGH_STATE_KEYS.includes(key)
@@ -257,6 +277,17 @@ export class ContextProxy {
 			const projectValue = this.originalContext.workspaceState?.get<unknown>(key)
 			if (typeof projectValue === "string") return projectValue as GlobalState[K]
 		}
+		if (PROJECT_AUTO_APPROVE_KEYS.includes(key) && this.originalContext.workspaceState) {
+			if (this.hasCurrentProjectAutoApprove()) {
+				const projectValue = this.originalContext.workspaceState.get<unknown>(key)
+				// null records an explicit "unset" (for example an unlimited Max Count) in this project
+				if (projectValue === null) return defaultValue as GlobalState[K]
+				if (projectValue !== undefined) return projectValue as GlobalState[K]
+			}
+			// Read the shared default live: another window may have saved it for all projects.
+			const value = this.originalContext.globalState.get<GlobalState[K]>(key)
+			return value === undefined || value === null ? (defaultValue as GlobalState[K]) : value
+		}
 		// kilocode_change end
 		// kilocode_change start: another window's timer/stop must not be hidden by the startup cache
 		if (YOLO_STATE_KEYS.includes(key)) {
@@ -292,6 +323,9 @@ export class ContextProxy {
 		if (PROJECT_SCOPED_STATE_KEYS.includes(key) && this.originalContext.workspaceState) {
 			this.stateCache[key] = value // window-local cache only; shared storage stays untouched
 			return this.originalContext.workspaceState.update(key, value)
+		}
+		if (PROJECT_AUTO_APPROVE_KEYS.includes(key) && this.originalContext.workspaceState) {
+			return this.updateProjectAutoApprove(key, value)
 		}
 		// kilocode_change end
 		if (isPassThroughStateKey(key)) {
@@ -330,6 +364,46 @@ export class ContextProxy {
 				else latest.delete(id)
 			}
 			await this.originalContext.globalState.update("taskHistory", [...latest.values()].map(capHistoryItemTitle))
+		}
+	}
+
+	/** Project values count only when they were changed after the last "save for all projects". */
+	private hasCurrentProjectAutoApprove(): boolean {
+		const workspaceState = this.originalContext.workspaceState
+		if (!workspaceState) return false
+		const projectAt = workspaceState.get<unknown>(AUTO_APPROVE_PROJECT_AT_KEY)
+		if (typeof projectAt !== "number") return false
+		const defaultsAt = this.originalContext.globalState.get<unknown>(AUTO_APPROVE_DEFAULTS_AT_KEY)
+		return projectAt >= (typeof defaultsAt === "number" ? defaultsAt : 0)
+	}
+
+	private async updateProjectAutoApprove(key: string, value: unknown) {
+		const workspaceState = this.originalContext.workspaceState
+		if (!this.hasCurrentProjectAutoApprove()) {
+			// Values from before the last "save for all projects" are obsolete: start from the new defaults.
+			const stale = PROJECT_AUTO_APPROVE_KEYS.filter((name) => name !== key)
+			await Promise.all([
+				workspaceState.update(AUTO_APPROVE_PROJECT_AT_KEY, Date.now()),
+				...stale.map((name) => workspaceState.update(name, undefined)),
+			])
+		}
+		await workspaceState.update(key, value === undefined ? null : value)
+	}
+
+	/** Makes the current project's auto-approve choices the starting point of every project. */
+	public async saveAutoApproveForAllProjects(): Promise<void> {
+		const values = PROJECT_AUTO_APPROVE_KEYS.map(
+			(key) => [key, this.getGlobalState(key as GlobalStateKey)] as const,
+		)
+		for (const [key, value] of values) {
+			this.stateCache[key as GlobalStateKey] = value as never
+			await this.originalContext.globalState.update(key, value)
+		}
+		await this.originalContext.globalState.update(AUTO_APPROVE_DEFAULTS_AT_KEY, Date.now())
+		const workspaceState = this.originalContext.workspaceState
+		if (workspaceState) {
+			await Promise.all(PROJECT_AUTO_APPROVE_KEYS.map((name) => workspaceState.update(name, undefined)))
+			await workspaceState.update(AUTO_APPROVE_PROJECT_AT_KEY, undefined)
 		}
 	}
 

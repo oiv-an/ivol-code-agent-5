@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react" // kilocode_change
 import { Trans } from "react-i18next"
 import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
@@ -8,7 +8,8 @@ import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { AutoApproveToggle, AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoApproveToggle"
 import { MaxRequestsInput } from "../settings/MaxRequestsInput" // kilocode_change
 import { MaxCostInput } from "../settings/MaxCostInput" // kilocode_change
-import { StandardTooltip, Popover, PopoverTrigger, PopoverContent } from "@src/components/ui" // kilocode_change
+import { StandardTooltip, Popover, PopoverTrigger, PopoverContent, Button } from "@src/components/ui" // kilocode_change
+import { cn } from "@src/lib/utils" // kilocode_change
 import { useAutoApprovalState } from "@src/hooks/useAutoApprovalState"
 import { useAutoApprovalToggles } from "@src/hooks/useAutoApprovalToggles"
 import { useYoloModeState } from "@src/hooks/useYoloModeState" // kilocode_change
@@ -27,6 +28,8 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 		setAutoApprovalEnabled,
 		allowedMaxRequests, // kilocode_change
 		allowedMaxCost, // kilocode_change
+		blockReadOutsideWorkspace, // kilocode_change
+		blockWriteOutsideWorkspace, // kilocode_change
 		setAlwaysAllowReadOnly,
 		setAlwaysAllowWrite,
 		setAlwaysAllowDelete, // kilocode_change
@@ -123,6 +126,49 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 		],
 	)
 
+	// kilocode_change start: per-project limits and bans are persisted like the toggles above
+	const updateLimit = useCallback(
+		(key: "allowedMaxRequests" | "allowedMaxCost", value: number | undefined) => {
+			if (key === "allowedMaxRequests") setAllowedMaxRequests(value)
+			else setAllowedMaxCost(value)
+			vscode.postMessage({ type: "updateSettings", updatedSettings: { [key]: value ?? null } })
+		},
+		[setAllowedMaxRequests, setAllowedMaxCost],
+	)
+
+	const toggleBan = useCallback((key: "blockReadOutsideWorkspace" | "blockWriteOutsideWorkspace", value: boolean) => {
+		vscode.postMessage({ type: "updateSettings", updatedSettings: { [key]: value } })
+	}, [])
+
+	const [savedForAll, setSavedForAll] = useState(false)
+	useEffect(() => {
+		if (!savedForAll) return
+		const timer = setTimeout(() => setSavedForAll(false), 2000)
+		return () => clearTimeout(timer)
+	}, [savedForAll])
+	const saveForAllProjects = useCallback(() => {
+		vscode.postMessage({ type: "saveAutoApproveForAllProjects" })
+		setSavedForAll(true)
+	}, [])
+
+	const banButtons = [
+		{
+			key: "blockReadOutsideWorkspace" as const,
+			enabled: !!blockReadOutsideWorkspace,
+			label: t("chat:autoApprove.blockRead"),
+			description: t("chat:autoApprove.blockReadDescription"),
+			icon: "eye-closed",
+		},
+		{
+			key: "blockWriteOutsideWorkspace" as const,
+			enabled: !!blockWriteOutsideWorkspace,
+			label: t("chat:autoApprove.blockWrite"),
+			description: t("chat:autoApprove.blockWriteDescription"),
+			icon: "lock",
+		},
+	]
+	// kilocode_change end
+
 	const toggleExpanded = useCallback(() => {
 		setIsExpanded((prev) => !prev)
 	}, [])
@@ -169,15 +215,48 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 			<AutoApproveToggle {...toggles} onToggle={onAutoApproveToggle} />
 
 			{/* kilocode_change start */}
+			<div className="text-xs text-vscode-descriptionForeground">{t("chat:autoApprove.projectBans")}</div>
+			<div className="flex flex-row flex-wrap gap-2 pb-2" data-testid="project-bans">
+				{banButtons.map(({ key, enabled, label, description, icon }) => (
+					<StandardTooltip key={key} content={description}>
+						<Button
+							variant={enabled ? "primary" : "secondary"}
+							onClick={() => toggleBan(key, !enabled)}
+							aria-label={label}
+							aria-pressed={enabled}
+							data-testid={`${key}-toggle`}
+							className={cn("gap-1.5 text-xs whitespace-nowrap", !enabled && "opacity-50")}>
+							<span className={`codicon codicon-${icon} text-sm`} />
+							<span>{label}</span>
+						</Button>
+					</StandardTooltip>
+				))}
+			</div>
 			<div className="flex gap-2 w-full justify-stretch mb-2">
 				<MaxRequestsInput
 					allowedMaxRequests={allowedMaxRequests ?? undefined}
-					onValueChange={(value) => setAllowedMaxRequests(value)}
+					onValueChange={(value) => updateLimit("allowedMaxRequests", value)}
 				/>
 				<MaxCostInput
 					allowedMaxCost={allowedMaxCost ?? undefined}
-					onValueChange={(value) => setAllowedMaxCost(value)}
+					onValueChange={(value) => updateLimit("allowedMaxCost", value)}
 				/>
+			</div>
+			<div className="flex justify-end">
+				<StandardTooltip content={t("chat:autoApprove.saveForAllProjectsDescription")}>
+					<Button
+						variant="secondary"
+						onClick={saveForAllProjects}
+						data-testid="save-auto-approve-all-projects"
+						className="gap-1.5 text-xs whitespace-nowrap">
+						<span className={`codicon codicon-${savedForAll ? "check" : "save-all"} text-sm`} />
+						<span>
+							{savedForAll
+								? t("chat:autoApprove.savedForAllProjects")
+								: t("chat:autoApprove.saveForAllProjects")}
+						</span>
+					</Button>
+				</StandardTooltip>
 			</div>
 			{/* kilocode_change end */}
 		</div>

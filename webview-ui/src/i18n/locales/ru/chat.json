@@ -382,7 +382,15 @@
 		"triggerLabel_zero": "0 авто-утвержденных",
 		"triggerLabel_one": "1 авто-утвержден",
 		"triggerLabel_other": "{{count}} авто-утвержденных",
-		"triggerLabelAll": "BRRR"
+		"triggerLabelAll": "BRRR",
+		"projectBans": "Запреты для этого проекта",
+		"blockRead": "Запрет чтения вне проекта",
+		"blockReadDescription": "Модель не может читать, просматривать и искать файлы за пределами папки проекта. Запрос отклоняется без вопроса.",
+		"blockWrite": "Запрет записи вне проекта",
+		"blockWriteDescription": "Модель не может создавать, менять и удалять файлы за пределами папки проекта. Запрос отклоняется без вопроса.",
+		"saveForAllProjects": "Сохранить для всех проектов",
+		"saveForAllProjectsDescription": "Сделать текущие настройки автоодобрения и запретов исходными для всех проектов. Своя настройка проекта, изменённая раньше, будет заменена.",
+		"savedForAllProjects": "Сохранено"
 	},
 	"announcement": {
 		"title": "Выпущен Roo Code {{version}}",

@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.150
+
+- Auto-approve: two new per-project bans, "No reading outside project" and "No writing outside project"; matching requests are denied without asking, even with auto-approve or YOLO on.
+- Auto-approve settings (toggles, Max Count, Max Cost and bans) are now remembered per project and no longer change other open windows; "Save for all projects" makes the current choice the starting point everywhere.
+
 ## 5.17.149
 
 - Model picker: model names with several path parts (for example `#router/free/model`) are shown in full instead of being cut to the first two parts, so different models no longer look identical.

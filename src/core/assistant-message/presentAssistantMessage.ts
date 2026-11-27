@@ -55,6 +55,7 @@ import { newRuleTool } from "../tools/kilocode/newRuleTool"
 import { reportBugTool } from "../tools/kilocode/reportBugTool"
 import { condenseTool } from "../tools/kilocode/condenseTool"
 import { captureAskApproval } from "./kilocode/captureAskApprovalEvent"
+import { getOutsideWorkspaceBlock } from "../auto-approval" // kilocode_change
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -725,6 +726,14 @@ export async function presentAssistantMessage(cline: Task) {
 			) => {
 				// kilocode_change start: YOLO mode with AI gatekeeper
 				const state = await cline.providerRef.deref()?.getState()
+				// Project bans on outside paths apply before YOLO and before any prompt.
+				const outsideBlock = getOutsideWorkspaceBlock(state, type, partialMessage)
+				if (outsideBlock) {
+					await cline.say("error", outsideBlock)
+					pushToolResult(formatResponse.toolError(outsideBlock, toolProtocol))
+					captureAskApproval(block.name, false)
+					return false
+				}
 				if (isYoloModeActive(state)) {
 					// If gatekeeper is configured, use it to evaluate the approval
 					const approved = await evaluateGatekeeperApproval(cline, block.name, block.params)

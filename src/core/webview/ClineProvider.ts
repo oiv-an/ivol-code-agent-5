@@ -2383,6 +2383,8 @@ export class ClineProvider
 			alwaysAllowWriteOutsideWorkspace,
 			alwaysAllowWriteProtected,
 			alwaysAllowDelete, // kilocode_change
+			blockReadOutsideWorkspace, // kilocode_change
+			blockWriteOutsideWorkspace, // kilocode_change
 			alwaysAllowExecute,
 			allowedCommands,
 			deniedCommands,
@@ -2594,6 +2596,8 @@ export class ClineProvider
 			alwaysAllowWriteOutsideWorkspace: alwaysAllowWriteOutsideWorkspace ?? false,
 			alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? false,
 			alwaysAllowDelete: alwaysAllowDelete ?? false, // kilocode_change
+			blockReadOutsideWorkspace: blockReadOutsideWorkspace ?? false, // kilocode_change
+			blockWriteOutsideWorkspace: blockWriteOutsideWorkspace ?? false, // kilocode_change
 			alwaysAllowExecute: alwaysAllowExecute ?? false,
 			alwaysAllowBrowser: alwaysAllowBrowser ?? false,
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
@@ -2944,6 +2948,8 @@ export class ClineProvider
 			alwaysAllowWriteOutsideWorkspace: stateValues.alwaysAllowWriteOutsideWorkspace ?? false,
 			alwaysAllowWriteProtected: stateValues.alwaysAllowWriteProtected ?? false,
 			alwaysAllowDelete: stateValues.alwaysAllowDelete ?? false, // kilocode_change
+			blockReadOutsideWorkspace: stateValues.blockReadOutsideWorkspace ?? false, // kilocode_change
+			blockWriteOutsideWorkspace: stateValues.blockWriteOutsideWorkspace ?? false, // kilocode_change
 			alwaysAllowExecute: stateValues.alwaysAllowExecute ?? true,
 			alwaysAllowBrowser: stateValues.alwaysAllowBrowser ?? true,
 			alwaysAllowMcp: stateValues.alwaysAllowMcp ?? true,
