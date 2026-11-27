@@ -30,6 +30,7 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 		allowedMaxCost, // kilocode_change
 		blockReadOutsideWorkspace, // kilocode_change
 		blockWriteOutsideWorkspace, // kilocode_change
+		alwaysAllowAllCommands, // kilocode_change
 		setAlwaysAllowReadOnly,
 		setAlwaysAllowWrite,
 		setAlwaysAllowDelete, // kilocode_change
@@ -136,9 +137,16 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 		[setAllowedMaxRequests, setAllowedMaxCost],
 	)
 
-	const toggleBan = useCallback((key: "blockReadOutsideWorkspace" | "blockWriteOutsideWorkspace", value: boolean) => {
-		vscode.postMessage({ type: "updateSettings", updatedSettings: { [key]: value } })
-	}, [])
+	const toggleBan = useCallback(
+		(
+			key: "blockReadOutsideWorkspace" | "blockWriteOutsideWorkspace" | "alwaysAllowAllCommands",
+			value: boolean,
+		) => {
+			vscode.postMessage({ type: "updateSettings", updatedSettings: { [key]: value } })
+		},
+		[],
+	)
+	const allCommandsEnabled = !!alwaysAllowAllCommands
 
 	const [savedForAll, setSavedForAll] = useState(false)
 	useEffect(() => {
@@ -215,6 +223,21 @@ const AutoApproveMenu = ({ style, compact = false }: AutoApproveMenuProps) => {
 			<AutoApproveToggle {...toggles} onToggle={onAutoApproveToggle} />
 
 			{/* kilocode_change start */}
+			<div className="text-xs text-vscode-descriptionForeground">{t("chat:autoApprove.projectCommands")}</div>
+			<div className="flex flex-row flex-wrap gap-2 pb-2">
+				<StandardTooltip content={t("chat:autoApprove.allCommandsDescription")}>
+					<Button
+						variant={allCommandsEnabled ? "primary" : "secondary"}
+						onClick={() => toggleBan("alwaysAllowAllCommands", !allCommandsEnabled)}
+						aria-label={t("chat:autoApprove.allCommands")}
+						aria-pressed={allCommandsEnabled}
+						data-testid="alwaysAllowAllCommands-toggle"
+						className={cn("gap-1.5 text-xs whitespace-nowrap", !allCommandsEnabled && "opacity-50")}>
+						<span className="codicon codicon-terminal-bash text-sm" />
+						<span>{t("chat:autoApprove.allCommands")}</span>
+					</Button>
+				</StandardTooltip>
+			</div>
 			<div className="text-xs text-vscode-descriptionForeground">{t("chat:autoApprove.projectBans")}</div>
 			<div className="flex flex-row flex-wrap gap-2 pb-2" data-testid="project-bans">
 				{banButtons.map(({ key, enabled, label, description, icon }) => (

@@ -165,7 +165,9 @@
 	},
 	"runCommand": {
 		"title": "Run",
-		"tooltip": "Execute this command"
+		"tooltip": "Execute this command",
+		"allowProject": "Allow in project",
+		"allowProjectTooltip": "Run this command and every later command in this project without asking"
 	},
 	"proceedWhileRunning": {
 		"title": "Continue While Running",
@@ -443,6 +445,9 @@
 		"triggerLabel_one": "1 auto-approved",
 		"triggerLabel_other": "{{count}} auto-approved",
 		"triggerLabelAll": "BRRR",
+		"projectCommands": "Commands in this project",
+		"allCommands": "Allow any command",
+		"allCommandsDescription": "Every terminal command in this project runs without asking. Only commands from the denied list are still blocked. YOLO stays off.",
 		"projectBans": "Bans for this project",
 		"blockRead": "No reading outside project",
 		"blockReadDescription": "The model cannot read, list or search files outside the project folder. Such requests are denied without asking.",

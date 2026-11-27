@@ -74,6 +74,7 @@ export const PROJECT_AUTO_APPROVE_KEYS: readonly string[] = [
 	"allowedMaxCost",
 	"blockReadOutsideWorkspace",
 	"blockWriteOutsideWorkspace",
+	"alwaysAllowAllCommands",
 ]
 const AUTO_APPROVE_DEFAULTS_AT_KEY = "ivolAutoApproveDefaultsAt" // globalState: last "save for all projects"
 const AUTO_APPROVE_PROJECT_AT_KEY = "ivolAutoApproveProjectAt" // workspaceState: first own change after it

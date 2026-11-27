@@ -2271,6 +2271,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 											</Button>
 										</StandardTooltip>
 									)}
+									{/* kilocode_change start: one consent covers every later command in this project */}
+									{clineAsk === "command" && primaryButtonText && !isStreaming && (
+										<StandardTooltip content={t("chat:runCommand.allowProjectTooltip")}>
+											<Button
+												disabled={!enableButtons}
+												appearance="secondary"
+												data-testid="allow-commands-for-project"
+												className="flex-1 whitespace-nowrap"
+												onClick={() => {
+													vscode.postMessage({
+														type: "updateSettings",
+														updatedSettings: { alwaysAllowAllCommands: true },
+													})
+													handlePrimaryButtonClick(inputValue, selectedImages)
+												}}>
+												{t("chat:runCommand.allowProject")}
+											</Button>
+										</StandardTooltip>
+									)}
+									{/* kilocode_change end */}
 									{/* kilocode_change start */}
 									{(secondaryButtonText || isStreaming) && (
 										<StandardTooltip

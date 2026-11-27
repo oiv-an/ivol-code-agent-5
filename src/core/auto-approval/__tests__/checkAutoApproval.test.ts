@@ -68,6 +68,32 @@ describe("checkAutoApproval", () => {
 		expect(result).toEqual({ decision: "ask" })
 	})
 
+	// kilocode_change start: per-project "allow any command"
+	describe("allow any command in this project", () => {
+		it("approves any command even when the master switch is off", async () => {
+			const state = { alwaysAllowAllCommands: true, autoApprovalEnabled: false } as ExtensionState
+			const result = await checkAutoApproval({ state, ask: "command", text: "grep -n foo README.md | head -3" })
+			expect(result.decision).toBe("approve")
+		})
+
+		it("still denies explicitly denied commands", async () => {
+			const state = { alwaysAllowAllCommands: true, deniedCommands: ["rm"] } as ExtensionState
+			const result = await checkAutoApproval({ state, ask: "command", text: "ls && rm -rf build" })
+			expect(result.decision).toBe("deny")
+		})
+
+		it("asks for unknown commands when the setting is off", async () => {
+			const state = {
+				autoApprovalEnabled: true,
+				alwaysAllowExecute: true,
+				allowedCommands: ["git"],
+			} as ExtensionState
+			const result = await checkAutoApproval({ state, ask: "command", text: "adb devices" })
+			expect(result.decision).toBe("ask")
+		})
+	})
+	// kilocode_change end
+
 	// kilocode_change start: project bans on paths outside the workspace
 	describe("outside-project bans", () => {
 		const outsideRead = JSON.stringify({ tool: "readFile", path: "../x", isOutsideWorkspace: true })

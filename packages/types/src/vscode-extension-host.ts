@@ -688,6 +688,7 @@ export type ExtensionState = Pick<
 	| "alwaysAllowDelete" // kilocode_change
 	| "blockReadOutsideWorkspace" // kilocode_change
 	| "blockWriteOutsideWorkspace" // kilocode_change
+	| "alwaysAllowAllCommands" // kilocode_change
 	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowModeSwitch"

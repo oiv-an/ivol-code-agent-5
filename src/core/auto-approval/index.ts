@@ -33,6 +33,7 @@ export type AutoApprovalStateOptions =
 	| "alwaysAllowWriteProtected"
 	| "blockReadOutsideWorkspace" // kilocode_change
 	| "blockWriteOutsideWorkspace" // kilocode_change
+	| "alwaysAllowAllCommands" // kilocode_change
 	| "followupAutoApproveTimeoutMs" // For `alwaysAllowFollowupQuestions`.
 	| "mcpServers" // For `alwaysAllowMcp`.
 	| "allowedCommands" // For `alwaysAllowExecute`.
@@ -66,6 +67,14 @@ export async function checkAutoApproval({
 	// kilocode_change: project bans apply regardless of auto-approval, YOLO or manual approval.
 	const blocked = getOutsideWorkspaceBlock(state, ask, text)
 	if (blocked) return { decision: "deny", reason: blocked }
+
+	// kilocode_change start: per-project consent to every command; only explicitly denied commands still stop
+	if (ask === "command" && text && state?.alwaysAllowAllCommands === true) {
+		return getCommandDecision(text, ["*"], state.deniedCommands || []) === "auto_deny"
+			? { decision: "deny" }
+			: { decision: "approve" }
+	}
+	// kilocode_change end
 
 	if (!state || !state.autoApprovalEnabled) {
 		return { decision: "ask" }

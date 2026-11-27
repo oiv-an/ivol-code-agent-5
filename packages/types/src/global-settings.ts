@@ -96,6 +96,8 @@ export const globalSettingsSchema = z.object({
 	// kilocode_change start: hard per-project bans on file access outside the open project
 	blockReadOutsideWorkspace: z.boolean().optional(),
 	blockWriteOutsideWorkspace: z.boolean().optional(),
+	// Per-project: run every terminal command without asking (denied commands still win)
+	alwaysAllowAllCommands: z.boolean().optional(),
 	// kilocode_change end
 	writeDelayMs: z.number().min(0).optional(),
 	alwaysAllowBrowser: z.boolean().optional(),

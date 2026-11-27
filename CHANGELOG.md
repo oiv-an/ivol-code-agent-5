@@ -1,5 +1,10 @@
 # IVOL Code Agent 5
 
+## 5.17.151
+
+- Auto-approve: new per-project "Allow any command" button; every terminal command in this project runs without asking (denied commands are still blocked), without turning on YOLO.
+- Command approvals get a third button, "Allow in project": it runs the command and stops asking about commands in this project.
+
 ## 5.17.150
 
 - Auto-approve: two new per-project bans, "No reading outside project" and "No writing outside project"; matching requests are denied without asking, even with auto-approve or YOLO on.
